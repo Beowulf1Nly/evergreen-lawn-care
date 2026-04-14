@@ -1235,6 +1235,19 @@ function validateZip() {
 
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('customerZip').addEventListener('input', validateZip);
+
+  // Auto-open modal if ?service= param is in the URL
+  const params = new URLSearchParams(window.location.search);
+  const serviceParam = params.get('service');
+  if (serviceParam && FREQ_DATA[serviceParam === 'mow-blow' ? 'one-time' : serviceParam]) {
+    const map = {
+      'mow-blow': ['mow-blow', 'Cut & Clean',    45,  'one-time'],
+      'biweekly': ['biweekly', 'Bi-Weekly Plan', 80,  'recurring'],
+      'weekly':   ['weekly',   'Weekly Plan',    140, 'recurring'],
+    };
+    const s = map[serviceParam];
+    if (s) openModal(...s);
+  }
 });
 
 // ─────────────────────────────────────────────
