@@ -3,6 +3,6 @@
 // Just add the filename — keep all photos in this same folder.
 // ─────────────────────────────────────────────
 const PHOTOS = [
-  "Photos/imageexample.webp",
-  "Photos/imageexample.webp"
+  "Photos/image1.webp",
+  "Photos/image2.webp"
 ];
