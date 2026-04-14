@@ -1,0 +1,1468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Evergreen Lawn Care</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://js.stripe.com/v3/"></script>
+<style>
+  :root {
+    --green-deep: #1a3a1a;
+    --green-mid: #2d6a2d;
+    --green-bright: #4caf50;
+    --green-light: #7ec87e;
+    --green-pale: #e8f5e9;
+    --cream: #faf9f6;
+    --earth: #5c4a2a;
+    --gold: #c9a84c;
+    --white: #ffffff;
+    --text: #1a1a1a;
+    --text-muted: #6b7280;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--cream);
+    color: var(--text);
+    overflow-x: hidden;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 60px;
+    background: rgba(250,249,246,0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(26,58,26,0.08);
+    transition: box-shadow .3s;
+  }
+  nav.scrolled { box-shadow: 0 2px 20px rgba(0,0,0,0.08); }
+  .nav-logo img { height: 52px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25)); }
+  .nav-links { display: flex; gap: 36px; list-style: none; }
+  .nav-links a {
+    text-decoration: none;
+    font-size: 14px; font-weight: 500; letter-spacing: .03em;
+    color: var(--green-deep);
+    transition: color .2s;
+  }
+  .nav-links a:hover { color: var(--green-bright); }
+  .nav-cta {
+    background: var(--green-mid);
+    color: #fff !important;
+    padding: 10px 24px;
+    border-radius: 6px;
+    transition: background .2s !important;
+  }
+  .nav-cta:hover { background: var(--green-deep) !important; color: #fff !important; }
+
+  /* ── HERO ── */
+  .hero {
+    min-height: auto;
+    display: flex; align-items: center;
+    justify-content: space-between;
+    padding: 140px 80px 80px;
+    position: relative;
+    overflow: hidden;
+    gap: 60px;
+  }
+  .hero-bg {
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 40%, #faf9f6 100%);
+    z-index: 0;
+  }
+  .hero-grass {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 120px;
+    background: linear-gradient(180deg, transparent 0%, rgba(76,175,80,0.08) 100%);
+    z-index: 1;
+  }
+  /* Decorative circles */
+  .hero-circle-1 {
+    position: absolute; top: 10%; right: 5%;
+    width: 400px; height: 400px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(76,175,80,0.12) 0%, transparent 70%);
+    z-index: 0;
+  }
+  .hero-circle-2 {
+    position: absolute; bottom: 15%; left: -5%;
+    width: 300px; height: 300px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(45,106,45,0.08) 0%, transparent 70%);
+    z-index: 0;
+  }
+
+  .hero-content {
+    position: relative; z-index: 2;
+    flex: 1;
+    max-width: 600px;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--green-pale);
+    border: 1px solid rgba(76,175,80,0.3);
+    padding: 6px 16px;
+    border-radius: 100px;
+    font-size: 13px; font-weight: 500;
+    color: var(--green-mid);
+    margin-bottom: 28px;
+    animation: fadeUp .6s ease both;
+  }
+  .hero-badge::before {
+    content: '';
+    width: 8px; height: 8px;
+    background: var(--green-bright);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50% { opacity:.6; transform:scale(1.3); }
+  }
+
+  .hero h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(52px, 6.5vw, 88px);
+    font-weight: 900;
+    line-height: 1.05;
+    color: var(--green-deep);
+    margin-bottom: 24px;
+    animation: fadeUp .7s .1s ease both;
+  }
+  .hero h1 em {
+    font-style: normal;
+    color: var(--green-bright);
+  }
+  .hero p {
+    font-size: 20px; line-height: 1.7;
+    color: var(--text-muted);
+    margin-bottom: 40px;
+    max-width: 520px;
+    animation: fadeUp .7s .2s ease both;
+  }
+  .hero-btns {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    animation: fadeUp .7s .3s ease both;
+  }
+  .btn-primary {
+    background: var(--green-mid);
+    color: #fff;
+    padding: 16px 36px;
+    border-radius: 8px;
+    font-size: 15px; font-weight: 600;
+    text-decoration: none;
+    border: none; cursor: pointer;
+    transition: background .2s, transform .15s;
+    display: inline-block;
+  }
+  .btn-primary:hover { background: var(--green-deep); transform: translateY(-2px); }
+  .btn-secondary {
+    background: transparent;
+    color: var(--green-mid);
+    padding: 16px 36px;
+    border-radius: 8px;
+    font-size: 15px; font-weight: 600;
+    text-decoration: none;
+    border: 2px solid var(--green-mid);
+    cursor: pointer;
+    transition: all .2s;
+    display: inline-block;
+  }
+  .btn-secondary:hover { background: var(--green-pale); transform: translateY(-2px); }
+
+  .hero-image {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn .9s .2s ease both;
+  }
+  .hero-image img {
+    width: 100%;
+    max-width: 780px;
+    filter: drop-shadow(0 0 6px rgba(0,0,0,0.3)) drop-shadow(0 4px 16px rgba(0,0,0,0.2));
+  }
+
+  .hero-stats {
+    display: flex; gap: 48px;
+    margin-top: 56px;
+    padding-top: 32px;
+    border-top: 1px solid rgba(26,58,26,0.1);
+    animation: fadeUp .7s .4s ease both;
+  }
+  .stat-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 40px; font-weight: 700;
+    color: var(--green-deep);
+  }
+  .stat-label { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+  /* ── SERVICES ── */
+  .services {
+    padding: 100px 60px;
+    background: var(--white);
+  }
+  .section-label {
+    text-align: center;
+    font-size: 13px; font-weight: 600; letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--green-bright);
+    margin-bottom: 12px;
+  }
+  .section-title {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(32px, 3.5vw, 48px);
+    font-weight: 700;
+    text-align: center;
+    color: var(--green-deep);
+    margin-bottom: 16px;
+  }
+  .section-sub {
+    text-align: center;
+    font-size: 17px;
+    color: var(--text-muted);
+    max-width: 520px;
+    margin: 0 auto 64px;
+    line-height: 1.7;
+  }
+
+  .services-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 28px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .service-card {
+    border: 1px solid rgba(26,58,26,0.1);
+    border-radius: 16px;
+    padding: 40px 36px;
+    background: var(--cream);
+    transition: transform .2s, box-shadow .2s, border-color .2s;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .service-card .btn-book {
+    margin-top: auto;
+  }
+  .service-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 48px rgba(45,106,45,0.12);
+    border-color: var(--green-bright);
+  }
+  .service-card.featured {
+    background: var(--green-deep);
+    border-color: var(--green-deep);
+    color: #fff;
+  }
+  .service-card.featured .service-price,
+  .service-card.featured .service-desc,
+  .service-card.featured .service-name { color: #fff; }
+  .service-card.featured .service-desc { color: rgba(255,255,255,0.7); }
+  .featured-badge {
+    position: absolute; top: 20px; right: 20px;
+    background: var(--gold);
+    color: #fff;
+    font-size: 11px; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 100px;
+  }
+  .service-icon {
+    width: 56px; height: 56px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px;
+    margin-bottom: 24px;
+    background: var(--green-pale);
+  }
+  .service-card.featured .service-icon { background: rgba(255,255,255,0.15); }
+  .service-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px; font-weight: 700;
+    color: var(--green-deep);
+    margin-bottom: 10px;
+  }
+  .service-desc {
+    font-size: 14px; line-height: 1.7;
+    color: var(--text-muted);
+    margin-bottom: 24px;
+  }
+  .service-includes {
+    list-style: none;
+    margin-bottom: 28px;
+  }
+  .service-includes li {
+    font-size: 14px;
+    padding: 6px 0;
+    display: flex; align-items: center; gap: 10px;
+    color: inherit;
+    opacity: .85;
+  }
+  .service-includes li::before {
+    content: '✓';
+    width: 20px; height: 20px;
+    background: var(--green-pale);
+    color: var(--green-mid);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .service-card.featured .service-includes li::before {
+    background: rgba(255,255,255,0.2);
+    color: #fff;
+  }
+  .service-price {
+    font-family: 'Playfair Display', serif;
+    font-size: 30px; font-weight: 700;
+    color: var(--green-deep);
+    margin-top: auto;
+    margin-bottom: 20px;
+  }
+  .service-price span { font-size: 16px; font-weight: 400; font-family: 'DM Sans', sans-serif; opacity: .7; }
+  .service-savings {
+    display: inline-block;
+    background: #e6f4ea;
+    color: #2d6a2d;
+    font-size: 13px; font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 100px;
+    margin-bottom: 20px;
+  }
+  .service-card.featured .service-savings {
+    background: rgba(255,255,255,0.18);
+    color: #fff;
+  }
+  .btn-book {
+    width: 100%;
+    padding: 14px;
+    border-radius: 8px;
+    font-size: 14px; font-weight: 600;
+    cursor: pointer;
+    border: none;
+    background: var(--green-mid);
+    color: #fff;
+    transition: background .2s, transform .15s;
+  }
+  .btn-book:hover { background: var(--green-deep); transform: translateY(-1px); }
+  .service-card.featured .btn-book {
+    background: #fff;
+    color: var(--green-deep);
+  }
+  .service-card.featured .btn-book:hover { background: var(--green-pale); }
+
+  /* ── HOW IT WORKS ── */
+  .how {
+    padding: 100px 60px;
+    background: var(--green-pale);
+  }
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 48px;
+    max-width: 960px;
+    margin: 0 auto;
+    position: relative;
+  }
+  .steps::before {
+    content: '';
+    position: absolute; top: 36px; left: 10%; right: 10%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--green-light), transparent);
+  }
+  .step { text-align: center; }
+  .step-num {
+    width: 72px; height: 72px;
+    border-radius: 50%;
+    background: var(--green-mid);
+    color: #fff;
+    font-family: 'Playfair Display', serif;
+    font-size: 28px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 20px;
+    box-shadow: 0 8px 24px rgba(45,106,45,0.25);
+  }
+  .step h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px; font-weight: 700;
+    color: var(--green-deep);
+    margin-bottom: 10px;
+  }
+  .step p { font-size: 14px; line-height: 1.7; color: var(--text-muted); }
+
+  /* ── TRUST / TESTIMONIALS ── */
+  .trust {
+    padding: 100px 60px;
+    background: var(--white);
+  }
+
+  /* ── CAROUSEL ── */
+  .carousel-container {
+    position: relative;
+    max-width: 800px;
+    margin: 0 auto 80px;
+    background: var(--cream);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .carousel-track {
+    display: flex;
+    transition: transform .5s ease;
+  }
+
+  .carousel-slide {
+    min-width: 100%;
+    aspect-ratio: 4/3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #e8e8e8;
+  }
+
+  .carousel-slide img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .carousel-controls {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    z-index: 10;
+  }
+
+  .carousel-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.5);
+    cursor: pointer;
+    transition: all .2s;
+    border: 2px solid transparent;
+  }
+
+  .carousel-dot.active {
+    background: #fff;
+    border-color: var(--green-mid);
+  }
+
+  .carousel-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 48px;
+    height: 48px;
+    background: rgba(26,58,26,0.7);
+    border: none;
+    color: #fff;
+    font-size: 24px;
+    cursor: pointer;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .2s;
+    z-index: 10;
+  }
+
+  .carousel-arrow:hover {
+    background: rgba(26,58,26,0.9);
+  }
+
+  .carousel-arrow.prev {
+    left: 16px;
+  }
+
+  .carousel-arrow.next {
+    right: 16px;
+  }
+
+  .testimonials {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 28px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .testimonial-card {
+    background: var(--cream);
+    border: 1px solid rgba(26,58,26,0.1);
+    border-radius: 16px;
+    padding: 32px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .testimonial-card::before {
+    content: '"';
+    position: absolute;
+    top: -10px;
+    left: 20px;
+    font-size: 80px;
+    opacity: 0.1;
+    font-family: 'Playfair Display', serif;
+    color: var(--green-mid);
+  }
+
+  .testimonial-stars {
+    font-size: 16px;
+    color: #ffd700;
+    margin-bottom: 12px;
+  }
+
+  .testimonial-text {
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--text);
+    margin-bottom: 20px;
+  }
+
+  .testimonial-author {
+    font-weight: 600;
+    color: var(--green-deep);
+    margin-bottom: 4px;
+  }
+
+  .testimonial-location {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .edit-gallery-btn {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 12px 24px;
+    background: var(--green-mid);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .2s;
+  }
+
+  .edit-gallery-btn:hover {
+    background: var(--green-deep);
+  }
+
+  /* ── BOOKING MODAL ── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(26,58,26,0.5);
+    backdrop-filter: blur(4px);
+    align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: #fff;
+    border-radius: 20px;
+    padding: 48px;
+    max-width: 520px; width: 100%;
+    max-height: 90vh; overflow-y: auto;
+    position: relative;
+    animation: modalIn .3s ease both;
+  }
+  @keyframes modalIn {
+    from { opacity:0; transform: scale(.95) translateY(10px); }
+    to   { opacity:1; transform: scale(1) translateY(0); }
+  }
+  .modal-close {
+    position: absolute; top: 20px; right: 20px;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: var(--green-pale);
+    cursor: pointer;
+    font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--green-deep);
+    transition: background .2s;
+  }
+  .modal-close:hover { background: #d5ecd5; }
+  .modal h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 26px; font-weight: 700;
+    color: var(--green-deep);
+    margin-bottom: 6px;
+  }
+  .modal-service-name {
+    font-size: 14px; color: var(--green-bright); font-weight: 600;
+    margin-bottom: 28px;
+  }
+  .form-row { margin-bottom: 18px; }
+  .form-row label {
+    display: block;
+    font-size: 13px; font-weight: 600;
+    color: var(--green-deep);
+    margin-bottom: 7px;
+    letter-spacing: .02em;
+  }
+  .form-row input,
+  .form-row select,
+  .form-row textarea {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1.5px solid rgba(26,58,26,0.15);
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    color: var(--text);
+    background: var(--cream);
+    outline: none;
+    transition: border-color .2s;
+  }
+  .form-row input:focus,
+  .form-row select:focus,
+  .form-row textarea:focus { border-color: var(--green-bright); }
+  .form-row textarea { height: 80px; resize: vertical; }
+
+  .frequency-toggle {
+    display: flex; gap: 10px;
+    margin-bottom: 24px;
+  }
+  .freq-btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1.5px solid rgba(26,58,26,0.15);
+    background: var(--cream);
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px; font-weight: 600;
+    color: var(--text-muted);
+    transition: all .2s;
+    text-align: center;
+  }
+  .freq-btn.active {
+    border-color: var(--green-bright);
+    background: var(--green-pale);
+    color: var(--green-deep);
+  }
+
+  #card-element {
+    padding: 14px 16px;
+    border: 1.5px solid rgba(26,58,26,0.15);
+    border-radius: 8px;
+    background: var(--cream);
+    transition: border-color .2s;
+  }
+  #card-element.StripeElement--focus { border-color: var(--green-bright); }
+  #card-errors {
+    color: #e53e3e; font-size: 13px;
+    margin-top: 8px; min-height: 18px;
+  }
+
+  .price-summary {
+    background: var(--green-pale);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 20px 0;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .price-summary .label { font-size: 14px; color: var(--text-muted); }
+  .price-summary .amount {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px; font-weight: 700;
+    color: var(--green-deep);
+  }
+  .price-summary .freq-label {
+    font-size: 12px; color: var(--green-mid); font-weight: 500;
+  }
+
+  .btn-pay {
+    width: 100%; padding: 16px;
+    background: var(--green-mid);
+    color: #fff; border: none;
+    border-radius: 10px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 16px; font-weight: 600;
+    cursor: pointer;
+    transition: background .2s, transform .15s;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+  .btn-pay:hover { background: var(--green-deep); transform: translateY(-1px); }
+  .btn-pay:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+  .btn-pay .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    display: none;
+  }
+  .btn-pay.loading .spinner { display: block; }
+  .btn-pay.loading .pay-text { display: none; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .stripe-note {
+    text-align: center; font-size: 12px; color: var(--text-muted);
+    margin-top: 14px;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .stripe-note svg { width: 14px; height: 14px; opacity: .5; }
+
+  /* ── SUCCESS STATE ── */
+  .success-state {
+    display: none;
+    text-align: center;
+    padding: 20px 0;
+  }
+  .success-icon {
+    width: 72px; height: 72px;
+    background: var(--green-pale);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px;
+    margin: 0 auto 20px;
+  }
+  .success-state h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 24px; font-weight: 700;
+    color: var(--green-deep);
+    margin-bottom: 10px;
+  }
+  .success-state p { font-size: 15px; color: var(--text-muted); line-height: 1.7; }
+
+  /* ── FOOTER ── */
+  footer {
+    background: var(--green-deep);
+    color: rgba(255,255,255,0.7);
+    padding: 48px 80px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 32px;
+    border-top: 3px solid var(--green-mid);
+  }
+  .footer-brand-text {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px; font-weight: 700;
+    color: #fff; margin-bottom: 6px;
+  }
+  .footer-brand-text span { color: var(--green-light); }
+  .footer-tagline { font-size: 13px; color: rgba(255,255,255,0.45); }
+  .footer-links {
+    display: flex; gap: 24px; flex-wrap: wrap; list-style: none;
+  }
+  .footer-links a {
+    color: rgba(255,255,255,0.65);
+    text-decoration: none; font-size: 14px;
+    transition: color .2s;
+  }
+  .footer-links a:hover { color: var(--green-light); }
+  .footer-contact-info { text-align: right; }
+  .footer-contact-info a {
+    display: block;
+    color: var(--green-light);
+    text-decoration: none; font-size: 14px;
+    margin-bottom: 6px; transition: color .2s;
+  }
+  .footer-contact-info a:hover { color: #fff; }
+  .footer-copy {
+    width: 100%; text-align: center;
+    font-size: 12px; color: rgba(255,255,255,0.3);
+    padding-top: 24px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp {
+    from { opacity:0; transform: translateY(20px); }
+    to   { opacity:1; transform: translateY(0); }
+  }
+  @keyframes fadeIn {
+    from { opacity:0; }
+    to   { opacity:1; }
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 900px) {
+    nav { padding: 16px 24px; }
+    .nav-links { display: none; }
+    .hero { padding: 100px 24px 60px; }
+    .hero-image { display: none; }
+    .services { padding: 70px 24px; }
+    .how { padding: 70px 24px; }
+    .steps::before { display: none; }
+    footer { padding: 40px 24px; flex-direction: column; text-align: center; }
+    .modal { padding: 32px 24px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav id="navbar">
+  <div class="nav-logo">
+    <span style="font-family:'Playfair Display',serif; font-size:20px; font-weight:700; color:var(--green-deep);">🌿 Evergreen <span style="color:var(--green-bright);">Lawn Care</span></span>
+  </div>
+  <ul class="nav-links">
+    <li><a href="#services">Services</a></li>
+    <li><a href="#how">How It Works</a></li>
+    <li><a href="#trust">Why Us</a></li>
+    <li><a href="tel:+13520000000" class="nav-cta">Call Us</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-circle-1"></div>
+  <div class="hero-circle-2"></div>
+  <div class="hero-grass"></div>
+
+  <div class="hero-content">
+    <div class="hero-badge">Serving Citrus Springs, FL</div>
+    <h1>Fast, Reliable<br/><em>Lawn Care</em></h1>
+    <p>We show up on time. Every time. Professional mowing and blowing in Citrus Springs with same-day and next-day availability. Book online or call — we make it easy.</p>
+    <div class="hero-btns">
+      <a href="#services" class="btn-primary">View Services & Book</a>
+    </div>
+    <div class="hero-stats">
+      <div>
+        <div class="stat-num">5.0★</div>
+        <div class="stat-label">Rated 5-Star Service</div>
+      </div>
+      <div>
+        <div class="stat-num">200+</div>
+        <div class="stat-label">Happy Customers</div>
+      </div>
+      <div>
+        <div class="stat-num">Same Day</div>
+        <div class="stat-label">Often Available</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hero-image">
+    <img src="../Images/Evergreen Logo Transparent.png" alt="Evergreen Lawn Care"/>
+  </div>
+</section>
+
+<!-- SERVICES -->
+<section class="services" id="services">
+  <div class="section-label">What We Offer</div>
+  <h2 class="section-title">Simple, Honest Pricing</h2>
+  <p class="section-sub">No hidden fees. Book once or set it and forget it with a recurring plan — we'll show up every time.</p>
+
+  <div class="services-grid">
+
+    <!-- Cut & Clean -->
+    <div class="service-card featured">
+      <div class="featured-badge">Most Popular</div>
+      <div class="service-icon">🌿</div>
+      <div class="service-name">Cut & Clean</div>
+      <div class="service-desc">A clean cut every time. We mow your lawn and blow all clippings off your driveway and walkways — done right, every visit.</div>
+      <ul class="service-includes">
+        <li>Full lawn mow</li>
+        <li>Blowing clippings clear</li>
+        <li>Driveway & walkway cleanup</li>
+      </ul>
+      <div class="service-price">$45 <span>/ visit</span></div>
+      <div style="display:inline-block;background:#e8f5e9;color:#2e7d32;font-size:12px;font-weight:700;letter-spacing:0.05em;padding:4px 10px;border-radius:20px;margin-bottom:14px;">One-time · No commitment</div>
+      <button class="btn-book" onclick="openModal('mow-blow', 'Cut & Clean', 45, 'one-time')">Book Now →</button>
+    </div>
+
+    <!-- Bi-Weekly Plan -->
+    <div class="service-card">
+      <div class="service-icon">📅</div>
+      <div class="service-name">Bi-Weekly Plan</div>
+      <div class="service-desc">Consistent care every two weeks. We mow and blow every visit — lock in your spot and never think about it again.</div>
+      <ul class="service-includes">
+        <li>Full lawn mow</li>
+        <li>Blowing clippings clear</li>
+        <li>Driveway & walkway cleanup</li>
+        <li>Cancel anytime</li>
+      </ul>
+      <div class="service-price">$80 <span>/ month</span></div>
+      <div class="service-savings">💰 Save $10/mo vs one-time</div>
+      <button class="btn-book" onclick="openModal('biweekly', 'Bi-Weekly Plan', 80, 'recurring')">Subscribe →</button>
+    </div>
+
+    <!-- Weekly Plan -->
+    <div class="service-card">
+      <div class="service-icon">⚡</div>
+      <div class="service-name">Weekly Plan</div>
+      <div class="service-desc">For yards that demand the best. We mow and blow every single week — keeping your lawn tight and clean year-round.</div>
+      <ul class="service-includes">
+        <li>Full lawn mow</li>
+        <li>Blowing clippings clear</li>
+        <li>Driveway & walkway cleanup</li>
+        <li>Cancel anytime</li>
+      </ul>
+      <div class="service-price">$140 <span>/ month</span></div>
+      <div class="service-savings">💰 Save $40/mo vs one-time</div>
+      <button class="btn-book" onclick="openModal('weekly', 'Weekly Plan', 140, 'recurring')">Subscribe →</button>
+    </div>
+
+
+  </div>
+</section>
+
+<!-- TRUST / TESTIMONIALS -->
+<section class="trust" id="trust">
+  <div class="section-label">Why Choose Us</div>
+  <h2 class="section-title">Trusted by Citrus Springs</h2>
+  <p class="section-sub">See our work and read what our neighbors say about us.</p>
+
+  <!-- CAROUSEL SECTION -->
+  <div class="carousel-container">
+    <div class="carousel-track" id="carouselTrack">
+      <!-- Slides will be populated by JavaScript -->
+    </div>
+    <button class="carousel-arrow prev" onclick="prevSlide()">‹</button>
+    <button class="carousel-arrow next" onclick="nextSlide()">›</button>
+    <div class="carousel-controls" id="carouselDots">
+      <!-- Dots will be populated by JavaScript -->
+    </div>
+  </div>
+
+
+  <!-- TESTIMONIALS SECTION -->
+  <h3 style="font-family:'Playfair Display',serif; font-size:28px; font-weight:700; text-align:center; color:var(--green-deep); margin-bottom:12px;">What Our Neighbors Say</h3>
+
+  <div class="testimonials" id="testimonialsContainer">
+    <!-- Testimonials will be loaded from data.json via JavaScript -->
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how" id="how">
+  <div class="section-label">Process</div>
+  <h2 class="section-title">Book in 60 Seconds</h2>
+  <p class="section-sub">No phone tag, no waiting for quotes. Pick your service and we take care of the rest.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <h3>Choose a Service</h3>
+      <p>Pick a one-time visit or a recurring plan that fits your lawn and budget.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <h3>Enter Your Info</h3>
+      <p>Your address, preferred day, and a quick note about your yard if needed.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <h3>Secure Checkout</h3>
+      <p>Pay safely with Stripe. One-time or auto-billed monthly — your choice.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <h3>We Show Up</h3>
+      <p>You get a confirmation, we arrive on time and leave your lawn spotless.</p>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div>
+    <div class="footer-brand-text">🌿 Evergreen <span>Lawn Care</span></div>
+    <div class="footer-tagline">We mow. You relax.</div>
+  </div>
+  <ul class="footer-links">
+    <li><a href="#services">Services</a></li>
+    <li><a href="#how">How It Works</a></li>
+    <li><a href="#services" onclick="openModal('mow-blow','Cut & Clean',45,'one-time')">Book Now</a></li>
+    <li><a href="refund-policy.html">Refund Policy</a></li>
+    <li><a href="privacy-policy.html">Privacy Policy</a></li>
+    <li><a href="terms-of-service.html">Terms of Service</a></li>
+  </ul>
+  <div class="footer-contact-info">
+    <a href="tel:+13520000000">(352) 000-0000</a>
+    <a href="mailto:evergreenlawncareflorida@gmail.com">evergreenlawncareflorida@gmail.com</a>
+  </div>
+  <div class="footer-copy">© 2025 Evergreen Lawn Care LLC — Citrus County, FL</div>
+</footer>
+
+<!-- BOOKING MODAL -->
+<div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+
+    <!-- FORM STATE -->
+    <div id="formState">
+      <h2>Book Your Service</h2>
+      <div class="modal-service-name" id="modalServiceName">Cut & Clean</div>
+
+      <!-- Frequency toggle -->
+      <div id="frequencySection">
+        <div style="font-size:13px;font-weight:600;color:var(--green-deep);margin-bottom:10px;letter-spacing:.02em;">BILLING FREQUENCY</div>
+        <div class="frequency-toggle" style="display:flex;gap:8px;">
+          <button class="freq-btn active" id="btn-onetime" onclick="setFrequency('one-time')" style="flex:1;font-size:13px;">One-Time Visit</button>
+          <button class="freq-btn" id="btn-biweekly" onclick="setFrequency('biweekly')" style="flex:1;font-size:13px;">Bi-Weekly</button>
+          <button class="freq-btn" id="btn-weekly" onclick="setFrequency('weekly')" style="flex:1;font-size:13px;">Weekly</button>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label>Full Name</label>
+        <input type="text" id="customerName" placeholder="Jane Smith"/>
+      </div>
+      <div class="form-row">
+        <label>Email Address</label>
+        <input type="email" id="customerEmail" placeholder="jane@email.com"/>
+      </div>
+      <div class="form-row">
+        <label>Phone Number</label>
+        <input type="tel" id="customerPhone" placeholder="(352) 000-0000"/>
+      </div>
+      <div class="form-row">
+        <label>Property Address</label>
+        <input type="text" id="customerAddress" placeholder="123 Oak St, Citrus Springs, FL"/>
+      </div>
+      <div class="form-row">
+        <label>Zip Code</label>
+        <input type="text" id="customerZip" placeholder="34433" maxlength="5"/>
+        <div id="zip-error" style="color:#e53e3e;font-size:13px;margin-top:6px;display:none;">Sorry, we currently only serve Citrus County, FL. Please call us at <a href="tel:+13520000000">(352) 000-0000</a> to discuss service availability.</div>
+      </div>
+
+      <!-- YARD SIZE CHECK -->
+      <div style="background:var(--green-pale);border-radius:10px;padding:16px 18px;margin-bottom:18px;">
+        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;font-size:14px;font-weight:600;color:var(--green-deep);">
+          <input type="checkbox" id="largeYard" onchange="handleYardSize()" style="width:18px;height:18px;margin-top:1px;accent-color:var(--green-mid);flex-shrink:0;"/>
+          My yard is larger than ½ acre
+        </label>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:6px;margin-left:30px;">Large properties need a custom quote — check this if you're unsure.</div>
+      </div>
+
+      <!-- BOOKING SECTION (standard yards) -->
+      <div id="bookingSection">
+        <div class="form-row">
+          <label>Preferred Day(s)</label>
+          <select id="preferredDay">
+            <option value="">-- Select a day --</option>
+            <option>Monday</option>
+            <option>Tuesday</option>
+            <option>Wednesday</option>
+            <option>Thursday</option>
+            <option>Friday</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Notes (gate code, special instructions, etc.)</label>
+          <textarea id="notes" placeholder="e.g. Gate code is 1234, avoid the back corner..."></textarea>
+        </div>
+
+        <div class="price-summary">
+          <div>
+            <div class="label">Total Due Today</div>
+            <div class="freq-label" id="freqLabel">One-time visit</div>
+          </div>
+          <div class="amount" id="priceDisplay">$44.99</div>
+        </div>
+
+        <button class="btn-pay" id="payBtn" onclick="handlePayment()">
+          <div class="spinner"></div>
+          <span class="pay-text">Proceed to Payment →</span>
+        </button>
+
+        <div class="stripe-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          Secured by Stripe · SSL encrypted
+        </div>
+      </div>
+
+      <!-- QUOTE SECTION (large yards) -->
+      <div id="quoteSection" style="display:none;">
+        <div style="background:#fff8e1;border:1px solid #f59e0b;border-radius:10px;padding:14px 16px;margin-bottom:18px;font-size:13px;color:#92400e;line-height:1.6;">
+          🌿 No problem! Large properties get a custom quote. Fill in your details and we'll reach out within 24 hours.
+        </div>
+        <div class="form-row">
+          <label>Yard Size (approximate)</label>
+          <select id="yardSize">
+            <option value="">-- Select a size --</option>
+            <option>½ – 1 acre</option>
+            <option>1 – 2 acres</option>
+            <option>2 – 5 acres</option>
+            <option>5+ acres</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Notes (anything we should know)</label>
+          <textarea id="quoteNotes" placeholder="e.g. Lots of trees, steep slope, needs trimming too..."></textarea>
+        </div>
+        <button class="btn-pay" id="quoteBtn" onclick="handleQuoteRequest()" style="background:var(--green-mid);">
+          <div class="spinner"></div>
+          <span class="pay-text">Request a Quote →</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- SUCCESS STATE -->
+    <div class="success-state" id="successState">
+      <div class="success-icon">✅</div>
+      <h3>You're on the books!</h3>
+      <p>Thanks for booking with Evergreen Lawn Care. You'll receive a confirmation email shortly. We'll see you soon!</p>
+      <br/>
+      <button class="btn-primary" onclick="closeModal()" style="width:100%;margin-top:8px;">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// STRIPE CONFIG
+// Replace with your real key from dashboard.stripe.com
+// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// STRIPE PAYMENT LINKS
+// ─────────────────────────────────────────────
+const PAYMENT_LINKS = {
+  'mow-blow': 'https://buy.stripe.com/bJeeV6a9X0nm0saa3d1gs03',
+  'biweekly': 'https://buy.stripe.com/5kQdR281P6LK7UC5MX1gs04',
+  'weekly':   'https://buy.stripe.com/8x2dR2ci59XW1wefnx1gs05',
+  'test':     'https://buy.stripe.com/bJeeV6a9X0nm0saa3d1gs03',
+};
+
+let currentService = { id: 'mow-blow', name: 'Cut & Clean', price: 45, frequency: 'one-time' };
+
+function openModal(serviceId, serviceName, price, frequency) {
+  currentService = { id: serviceId, name: serviceName, price, frequency };
+  document.getElementById('modalServiceName').textContent = serviceName;
+  document.getElementById('priceDisplay').textContent = '$' + (price - 0.01).toFixed(2);
+  document.getElementById('modalOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('formState').style.display = 'block';
+  document.getElementById('successState').style.display = 'none';
+
+  // Set frequency UI — map service ID to frequency
+  const freqMap = { 'mow-blow': 'one-time', 'biweekly': 'biweekly', 'weekly': 'weekly' };
+  const initialFreq = freqMap[serviceId] || 'one-time';
+  document.getElementById('frequencySection').style.display = 'block';
+  setFrequency(initialFreq);
+
+  // Reset yard size toggle
+  document.getElementById('largeYard').checked = false;
+  document.getElementById('bookingSection').style.display = 'block';
+  document.getElementById('quoteSection').style.display = 'none';
+  document.getElementById('customerZip').value = '';
+  document.getElementById('zip-error').style.display = 'none';
+
+  updatePriceSummary();
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('modalOverlay')) closeModal();
+}
+
+const FREQ_DATA = {
+  'one-time': { id: 'mow-blow',  name: 'Cut & Clean',    price: 45,  label: 'One-time visit' },
+  'biweekly': { id: 'biweekly',  name: 'Bi-Weekly Plan', price: 80,  label: 'Billed monthly, cancel anytime' },
+  'weekly':   { id: 'weekly',    name: 'Weekly Plan',     price: 140, label: 'Billed monthly, cancel anytime' },
+};
+
+function setFrequency(freq) {
+  const data = FREQ_DATA[freq];
+  currentService = { ...currentService, ...data, frequency: freq };
+  document.getElementById('btn-onetime').classList.toggle('active', freq === 'one-time');
+  document.getElementById('btn-biweekly').classList.toggle('active', freq === 'biweekly');
+  document.getElementById('btn-weekly').classList.toggle('active', freq === 'weekly');
+  updatePriceSummary();
+}
+
+function updatePriceSummary() {
+  const { price, frequency } = currentService;
+  document.getElementById('freqLabel').textContent = FREQ_DATA[frequency]?.label || 'One-time visit';
+  document.getElementById('priceDisplay').textContent = '$' + (price - 0.01).toFixed(2);
+}
+
+// ─────────────────────────────────────────────
+// CITRUS COUNTY ZIP CODES
+// ─────────────────────────────────────────────
+const VALID_ZIPS = new Set([
+  '34428','34429',  // Crystal River
+  '34450','34452','34453',  // Inverness
+  '34446','34448',  // Homosassa
+  '34460','34461',  // Lecanto
+  '34433','34434',  // Citrus Springs
+  '34436',  // Floral City
+  '34464'  // Beverly Hills
+]);
+
+function validateZip() {
+  const zip = document.getElementById('customerZip').value.trim();
+  const err = document.getElementById('zip-error');
+  if (zip.length === 5 && !VALID_ZIPS.has(zip)) {
+    err.style.display = 'block';
+    return false;
+  }
+  err.style.display = 'none';
+  return true;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('customerZip').addEventListener('input', validateZip);
+});
+
+// ─────────────────────────────────────────────
+// YARD SIZE TOGGLE
+// ─────────────────────────────────────────────
+function handleYardSize() {
+  const isLarge = document.getElementById('largeYard').checked;
+  document.getElementById('bookingSection').style.display = isLarge ? 'none' : 'block';
+  document.getElementById('quoteSection').style.display = isLarge ? 'block' : 'none';
+}
+
+async function handleQuoteRequest() {
+  const name = document.getElementById('customerName').value.trim();
+  const email = document.getElementById('customerEmail').value.trim();
+  const phone = document.getElementById('customerPhone').value.trim();
+  const address = document.getElementById('customerAddress').value.trim();
+
+  if (!name || !email || !address) {
+    alert('Please fill in your name, email, and address.');
+    return;
+  }
+  if (!validateZip()) {
+    alert('Please enter a valid Citrus County zip code.');
+    return;
+  }
+
+  const btn = document.getElementById('quoteBtn');
+  btn.classList.add('loading');
+  btn.disabled = true;
+
+  const FORMSPREE_URL = 'https://formspree.io/f/meevqpde';
+
+  try {
+    const res = await fetch(FORMSPREE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({
+        name,
+        email,
+        phone,
+        address,
+        zip: document.getElementById('customerZip').value.trim(),
+        yardSize: document.getElementById('yardSize').value,
+        notes: document.getElementById('quoteNotes').value.trim(),
+      })
+    });
+
+    btn.classList.remove('loading');
+    btn.disabled = false;
+
+    if (res.ok) {
+      document.getElementById('formState').style.display = 'none';
+      const success = document.getElementById('successState');
+      success.querySelector('h3').textContent = "Quote Request Received!";
+      success.querySelector('p').textContent = "Thanks! We'll review your property details and reach out within 24 hours with a custom quote.";
+      success.style.display = 'block';
+    } else {
+      alert('Something went wrong. Please call us at (352) 000-0000.');
+    }
+  } catch(e) {
+    btn.classList.remove('loading');
+    btn.disabled = false;
+    alert('Something went wrong. Please call us at (352) 000-0000.');
+  }
+}
+
+async function handlePayment() {
+  const name    = document.getElementById('customerName').value.trim();
+  const email   = document.getElementById('customerEmail').value.trim();
+  const phone   = document.getElementById('customerPhone').value.trim();
+  const address = document.getElementById('customerAddress').value.trim();
+  const zip     = document.getElementById('customerZip').value.trim();
+
+  if (!name || !email || !address) {
+    alert('Please fill in your name, email, and address.');
+    return;
+  }
+  if (!validateZip()) {
+    alert('Please enter a valid Citrus County zip code.');
+    return;
+  }
+
+  const btn = document.getElementById('payBtn');
+  btn.classList.add('loading');
+  btn.disabled = true;
+
+  // Send booking info to Formspree
+  try {
+    await fetch('https://formspree.io/f/meevqpde', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({
+        name, email, phone, address, zip,
+        service: currentService.name,
+        price: '$' + currentService.price,
+        day: document.getElementById('preferredDay').value,
+        notes: document.getElementById('notes').value.trim(),
+      })
+    });
+  } catch(e) { /* non-fatal */ }
+
+  // Redirect to Stripe Payment Link with email pre-filled
+  const baseLink = PAYMENT_LINKS[currentService.id] || PAYMENT_LINKS['mow-blow'];
+  window.location.href = baseLink + '?prefilled_email=' + encodeURIComponent(email);
+}
+
+// Navbar scroll effect
+window.addEventListener('scroll', () => {
+  document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 20);
+});
+
+// ─────────────────────────────────────────────
+// CAROUSEL & TESTIMONIALS (Data-driven)
+// ─────────────────────────────────────────────
+
+let currentSlide = 0;
+let carouselInterval;
+
+// Carousel data embedded directly (no fetch needed)
+const carouselData = {
+  "images": [
+    "Photos/imageexample.webp",
+    "Photos/imageexample.webp"
+  ],
+  "reviews": [
+    {
+      "name": "Kaylee Fredrick",
+      "location": "Citrus Springs",
+      "text": "Evergreen showed up exactly on time and did an amazing job. Our lawn has never looked better!",
+      "stars": 5
+    },
+    {
+      "name": "Sarah Martinez",
+      "location": "Inverness",
+      "text": "We've been using their bi-weekly service for 6 months now. Reliable, professional, and affordable.",
+      "stars": 5
+    },
+    {
+      "name": "Mike Johnson",
+      "location": "Homosassa",
+      "text": "They're dependable and always deliver quality work. Highly recommend!",
+      "stars": 5
+    }
+  ]
+};
+
+// Initialize carousel and testimonials
+function loadData() {
+  initCarousel();
+  renderTestimonials();
+}
+
+// Initialize carousel
+function initCarousel() {
+  if (!carouselData.images || carouselData.images.length === 0) {
+    document.getElementById('carouselTrack').innerHTML = '<div class="carousel-slide"><div style="color:#999; text-align:center;">No images yet. Add image URLs to data.json</div></div>';
+    return;
+  }
+
+  const track = document.getElementById('carouselTrack');
+  const dotsContainer = document.getElementById('carouselDots');
+
+  // Populate slides
+  track.innerHTML = carouselData.images.map(img => `
+    <div class="carousel-slide">
+      <img src="${img}" alt="Gallery" />
+    </div>
+  `).join('');
+
+  // Populate dots
+  dotsContainer.innerHTML = carouselData.images.map((_, idx) => `
+    <div class="carousel-dot ${idx === 0 ? 'active' : ''}" onclick="goToSlide(${idx})"></div>
+  `).join('');
+
+  // Start auto-play
+  startAutoPlay();
+}
+
+function nextSlide() {
+  currentSlide = (currentSlide + 1) % carouselData.images.length;
+  updateCarousel();
+  resetAutoPlay();
+}
+
+function prevSlide() {
+  currentSlide = (currentSlide - 1 + carouselData.images.length) % carouselData.images.length;
+  updateCarousel();
+  resetAutoPlay();
+}
+
+function goToSlide(idx) {
+  currentSlide = idx;
+  updateCarousel();
+  resetAutoPlay();
+}
+
+function updateCarousel() {
+  const track = document.getElementById('carouselTrack');
+  track.style.transform = `translateX(-${currentSlide * 100}%)`;
+
+  // Update dots
+  document.querySelectorAll('.carousel-dot').forEach((dot, idx) => {
+    dot.classList.toggle('active', idx === currentSlide);
+  });
+}
+
+function startAutoPlay() {
+  carouselInterval = setInterval(() => {
+    currentSlide = (currentSlide + 1) % carouselData.images.length;
+    updateCarousel();
+  }, 5000); // Change slide every 5 seconds
+}
+
+function resetAutoPlay() {
+  clearInterval(carouselInterval);
+  startAutoPlay();
+}
+
+// Render testimonials from data.json
+function renderTestimonials() {
+  const container = document.getElementById('testimonialsContainer');
+
+  if (!carouselData.reviews || carouselData.reviews.length === 0) {
+    container.innerHTML = '<div style="text-align:center; padding:40px; color:#999;">No reviews yet. Add reviews to data.json</div>';
+    return;
+  }
+
+  container.innerHTML = carouselData.reviews.map(r => `
+    <div class="testimonial-card">
+      <div class="testimonial-stars">${'★'.repeat(r.stars)}${'☆'.repeat(5-r.stars)}</div>
+      <div class="testimonial-text">"${r.text}"</div>
+      <div class="testimonial-author">${r.name}</div>
+      <div class="testimonial-location">${r.location}</div>
+    </div>
+  `).join('');
+}
+
+// Load on page load
+document.addEventListener('DOMContentLoaded', () => {
+  loadData();
+});
+</script>
+</body>
+</html>
