@@ -6,7 +6,6 @@
 <title>Evergreen Lawn Care</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <script src="https://js.stripe.com/v3/"></script>
-<script src="Photos/photos.js"></script>
 <style>
   :root {
     --green-deep: #1a3a1a;
@@ -1341,33 +1340,16 @@ window.addEventListener('scroll', () => {
 let currentSlide = 0;
 let carouselInterval;
 
-// Carousel data — images loaded from Photos/photos.js
-const carouselData = {
-  "images": typeof PHOTOS !== 'undefined' ? PHOTOS : [],
-  "reviews": [
-    {
-      "name": "Kaylee Fredrick",
-      "location": "Citrus Springs",
-      "text": "Evergreen showed up exactly on time and did an amazing job. Our lawn has never looked better!",
-      "stars": 5
-    },
-    {
-      "name": "Sarah Martinez",
-      "location": "Inverness",
-      "text": "We've been using their bi-weekly service for 6 months now. Reliable, professional, and affordable.",
-      "stars": 5
-    },
-    {
-      "name": "Mike Johnson",
-      "location": "Homosassa",
-      "text": "They're dependable and always deliver quality work. Highly recommend!",
-      "stars": 5
-    }
-  ]
-};
+let carouselData = { images: [], reviews: [] };
 
-// Initialize carousel and testimonials
-function loadData() {
+// Fetch from data.json — edit that file to update photos and reviews
+async function loadData() {
+  try {
+    const res = await fetch('data.json');
+    carouselData = await res.json();
+  } catch(e) {
+    console.error('Could not load data.json:', e);
+  }
   initCarousel();
   renderTestimonials();
 }
