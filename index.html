@@ -1053,15 +1053,10 @@
       <!-- BOOKING SECTION (standard yards) -->
       <div id="bookingSection">
         <div class="form-row">
-          <label>Preferred Day(s)</label>
-          <select id="preferredDay">
-            <option value="">-- Select a day --</option>
-            <option>Monday</option>
-            <option>Tuesday</option>
-            <option>Wednesday</option>
-            <option>Thursday</option>
-            <option>Friday</option>
-          </select>
+          <label id="dateLabel">Preferred Service Date</label>
+          <input type="date" id="preferredDay" style="width:100%;padding:12px 14px;border:1.5px solid #d1d5db;border-radius:10px;font-size:15px;font-family:inherit;background:#fff;color:var(--text);transition:border-color .2s;cursor:pointer;" />
+          <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">Available Monday – Friday. We'll confirm your date within 24 hours.</div>
+          <div id="date-error" style="display:none;color:#e53e3e;font-size:13px;margin-top:6px;">Please select a weekday (Monday–Friday).</div>
         </div>
         <div class="form-row">
           <label>Notes (gate code, special instructions, etc.)</label>
@@ -1163,6 +1158,19 @@ function openModal(serviceId, serviceName, price, frequency) {
   document.getElementById('customerZip').value = '';
   document.getElementById('zip-error').style.display = 'none';
 
+  // Set min date for date picker to tomorrow
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const minDate = tomorrow.toISOString().split('T')[0];
+  const datePicker = document.getElementById('preferredDay');
+  if (datePicker) {
+    datePicker.min = minDate;
+    datePicker.value = '';
+  }
+  if (document.getElementById('date-error')) {
+    document.getElementById('date-error').style.display = 'none';
+  }
+
   updatePriceSummary();
 }
 
@@ -1187,6 +1195,11 @@ function setFrequency(freq) {
   document.getElementById('btn-onetime').classList.toggle('active', freq === 'one-time');
   document.getElementById('btn-biweekly').classList.toggle('active', freq === 'biweekly');
   document.getElementById('btn-weekly').classList.toggle('active', freq === 'weekly');
+  // Update date label based on frequency
+  const dateLabel = document.getElementById('dateLabel');
+  if (dateLabel) {
+    dateLabel.textContent = (freq === 'one-time') ? 'Preferred Service Date' : 'Select Your Start Date';
+  }
   updatePriceSummary();
 }
 
@@ -1259,13 +1272,15 @@ async function handleQuoteRequest() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify({
+        _subject: `Quote Request – Large Property – ${name}`,
+        type: 'QUOTE REQUEST (Large Property)',
         name,
         email,
         phone,
         address,
         zip: document.getElementById('customerZip').value.trim(),
         yardSize: document.getElementById('yardSize').value,
-        notes: document.getElementById('quoteNotes').value.trim(),
+        notes: document.getElementById('quoteNotes').value.trim() || '(none)',
       })
     });
 
@@ -1304,21 +1319,44 @@ async function handlePayment() {
     return;
   }
 
+  // Validate date: required + must be a weekday
+  const selectedDate = document.getElementById('preferredDay').value;
+  const dateErr = document.getElementById('date-error');
+  if (!selectedDate) {
+    if (dateErr) dateErr.style.display = 'block';
+    alert('Please select a preferred service date.');
+    return;
+  }
+  const dayOfWeek = new Date(selectedDate + 'T12:00:00').getDay(); // 0=Sun, 6=Sat
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
+    if (dateErr) dateErr.style.display = 'block';
+    return;
+  }
+  if (dateErr) dateErr.style.display = 'none';
+
+  // Format date nicely for calendar readability
+  const dateFormatted = new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+
   const btn = document.getElementById('payBtn');
   btn.classList.add('loading');
   btn.disabled = true;
 
   // Send booking info to Formspree
   try {
-    await fetch('https://formspree.io/f/meevqpde', {
+    await fetch('https://formspree.io/f/xnjlnooq', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify({
+        _subject: `New Booking – ${currentService.name} – ${dateFormatted}`,
         name, email, phone, address, zip,
         service: currentService.name,
+        frequency: currentService.frequency === 'one-time' ? 'One-time visit' : currentService.frequency === 'biweekly' ? 'Bi-Weekly Plan' : 'Weekly Plan',
         price: '$' + currentService.price,
-        day: document.getElementById('preferredDay').value,
-        notes: document.getElementById('notes').value.trim(),
+        serviceDate: selectedDate,
+        serviceDateFormatted: dateFormatted,
+        notes: document.getElementById('notes').value.trim() || '(none)',
       })
     });
   } catch(e) { /* non-fatal */ }
