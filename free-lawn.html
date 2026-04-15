@@ -38,12 +38,40 @@
 
   /* ── NAV ── */
   nav {
-    display: flex; align-items: center; justify-content: center;
-    padding: 16px 40px;
-    background: rgba(250,249,246,0.98);
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 60px;
+    background: rgba(250,249,246,0.95);
+    backdrop-filter: blur(10px);
     border-bottom: 1px solid rgba(26,58,26,0.08);
+    transition: box-shadow .3s;
   }
-  .nav-logo img { height: 90px; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.2)); }
+  nav.scrolled { box-shadow: 0 2px 20px rgba(0,0,0,0.08); }
+  .nav-logo span { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; color: var(--green-deep); }
+  .nav-logo span em { color: var(--green-bright); font-style: normal; }
+  .nav-links { display: flex; gap: 36px; list-style: none; }
+  .nav-links a {
+    text-decoration: none;
+    font-size: 14px; font-weight: 500; letter-spacing: .03em;
+    color: var(--green-deep);
+    transition: color .2s;
+  }
+  .nav-links a:hover { color: var(--green-bright); }
+  .nav-cta {
+    background: var(--green-mid);
+    color: #fff !important;
+    padding: 10px 24px;
+    border-radius: 6px;
+    transition: background .2s !important;
+  }
+  .nav-cta:hover { background: var(--green-deep) !important; color: #fff !important; }
+  @media (max-width: 700px) {
+    nav { padding: 16px 24px; }
+    .nav-links { display: none; }
+  }
+
+  /* ── NAV SPACER ── */
+  .nav-spacer { height: 89px; }
 
   /* ── HERO BANNER ── */
   .hero-banner {
@@ -325,11 +353,21 @@
 <body>
 
 <!-- NAV -->
-<nav>
-  <a href="/" class="nav-logo">
-    <img src="Images/Evergreen Logo Transparent.png" alt="Evergreen Lawn Care"/>
-  </a>
+<nav id="navbar">
+  <div class="nav-logo">
+    <a href="/" style="text-decoration:none;">
+      <span>🌿 Evergreen <em>Lawn Care</em></span>
+    </a>
+  </div>
+  <ul class="nav-links">
+    <li><a href="/#services">Services</a></li>
+    <li><a href="/#how">How It Works</a></li>
+    <li><a href="/#trust">Why Us</a></li>
+    <li><a href="tel:+13524620627" class="nav-cta">Call Us</a></li>
+  </ul>
 </nav>
+
+<div class="nav-spacer"></div>
 
 <!-- HERO -->
 <div class="hero-banner">
@@ -464,6 +502,11 @@
 </footer>
 
 <script>
+// Navbar scroll shadow
+window.addEventListener('scroll', () => {
+  document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 20);
+});
+
 // ─────────────────────────────────────────────
 // CITRUS COUNTY ZIP CODES
 // ─────────────────────────────────────────────
