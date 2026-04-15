@@ -1638,36 +1638,43 @@ async function handlePayment() {
   btn.classList.add('loading');
   btn.disabled = true;
 
-  // Send booking info to Formspree
+  const notes = document.getElementById('notes').value.trim() || '(none)';
+  const frequency = currentService.frequency === 'one-time' ? 'One-time visit' : currentService.frequency === 'biweekly' ? 'Bi-Weekly Plan' : 'Weekly Plan';
+
+  // ── Send to Formspree (4 second timeout so it never hangs forever) ──
   try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 4000);
     await fetch('https://formspree.io/f/xnjlnooq', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({
         _subject: `New Booking – ${currentService.name} – ${dateFormatted}`,
         name, email, phone, address, zip,
         service: currentService.name,
-        frequency: currentService.frequency === 'one-time' ? 'One-time visit' : currentService.frequency === 'biweekly' ? 'Bi-Weekly Plan' : 'Weekly Plan',
-        price: '$' + currentService.price,
+        frequency, price: '$' + currentService.price,
         serviceDate: selectedDate,
         serviceDateFormatted: dateFormatted,
-        notes: document.getElementById('notes').value.trim() || '(none)',
+        notes,
       })
     });
-  } catch(e) { /* non-fatal */ }
+    clearTimeout(t);
+  } catch(e) { /* timeout or error — non-fatal, proceed to Stripe */ }
 
-  // ── Log to paid bookings Sheet + Calendar (fire and forget) ──
+  // ── Log to paid bookings Sheet + Calendar ──
+  // Uses Image pixel which reliably fires before navigation (no CORS issues)
   try {
     const bParams = new URLSearchParams({
       name, email, phone, address, zip,
       service:        currentService.name,
       price:          '$' + currentService.price,
-      frequency:      currentService.frequency === 'one-time' ? 'One-time visit' : currentService.frequency === 'biweekly' ? 'Bi-Weekly Plan' : 'Weekly Plan',
+      frequency,
       serviceDateRaw: selectedDate,
       serviceDate:    dateFormatted,
-      notes:          document.getElementById('notes').value.trim() || '(none)',
+      notes,
     });
-    fetch(`${BOOKINGS_SCRIPT_URL}?${bParams}`, { keepalive: true, mode: 'no-cors' }).catch(() => {});
+    new Image().src = `${BOOKINGS_SCRIPT_URL}?${bParams}`;
   } catch(e) { /* non-fatal */ }
 
   // Redirect to Stripe Payment Link with email pre-filled
