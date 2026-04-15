@@ -811,6 +811,57 @@
     border-top: 1px solid rgba(255,255,255,0.08);
   }
 
+  /* ── PROMO BANNER ── */
+  #promoBanner {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 300;
+    background: linear-gradient(90deg, var(--green-deep) 0%, var(--green-mid) 100%);
+    color: #fff;
+    text-align: center;
+    padding: 11px 48px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: .01em;
+    display: none;
+  }
+  #promoBanner a {
+    color: #fff;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: opacity .2s;
+  }
+  #promoBanner a:hover { opacity: .85; }
+  #promoBanner .banner-claim {
+    background: var(--gold);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  #promoBanner .banner-close {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.6);
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px 8px;
+    transition: color .2s;
+  }
+  #promoBanner .banner-close:hover { color: #fff; }
+
   /* ── ANIMATIONS ── */
   @keyframes fadeUp {
     from { opacity:0; transform: translateY(20px); }
@@ -849,6 +900,15 @@
 </style>
 </head>
 <body>
+
+<!-- PROMO BANNER — controlled by PROMO_BANNER config in <script> below -->
+<div id="promoBanner">
+  <a id="promoBannerLink" href="#">
+    <span id="promoBannerText"></span>
+    <span class="banner-claim">Claim Free Mow</span>
+  </a>
+  <button class="banner-close" onclick="closeBanner()" aria-label="Close">✕</button>
+</div>
 
 <!-- NAV -->
 <nav id="navbar">
@@ -1158,6 +1218,15 @@
 
 <script>
 // ─────────────────────────────────────────────
+// PROMO BANNER CONFIG — edit here to control the banner
+// ─────────────────────────────────────────────
+const PROMO_BANNER = {
+  enabled: true,                                          // ← true = show banner, false = hide it
+  text: '🎉 New customers: Get your first lawn service FREE!',
+  url: '/free-lawn.html',                                 // ← change this to send to any page/link
+};
+
+// ─────────────────────────────────────────────
 // STRIPE CONFIG
 // Replace with your real key from dashboard.stripe.com
 // ─────────────────────────────────────────────
@@ -1270,7 +1339,23 @@ function validateZip() {
   return true;
 }
 
+function closeBanner() {
+  const banner = document.getElementById('promoBanner');
+  banner.style.display = 'none';
+  document.getElementById('navbar').style.top = '0';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  // Promo banner
+  if (PROMO_BANNER.enabled) {
+    const banner = document.getElementById('promoBanner');
+    document.getElementById('promoBannerLink').href = PROMO_BANNER.url;
+    document.getElementById('promoBannerText').textContent = PROMO_BANNER.text;
+    banner.style.display = 'block';
+    const bannerH = banner.offsetHeight;
+    document.getElementById('navbar').style.top = bannerH + 'px';
+  }
+
   document.getElementById('customerZip').addEventListener('input', validateZip);
 
   // Auto-open modal if ?service= param is in the URL
