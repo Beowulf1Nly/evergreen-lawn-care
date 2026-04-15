@@ -1400,6 +1400,12 @@ const PROMO_BANNER = {
 // Replace with your real key from dashboard.stripe.com
 // ─────────────────────────────────────────────
 // ─────────────────────────────────────────────
+// PAID BOOKINGS SHEET + CALENDAR
+// Paste your deployed bookings-script.gs URL below after setup
+// ─────────────────────────────────────────────
+const BOOKINGS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwI6a-EqWSI_5jvbFtIN0EB2waltSbDqHUveMsyLSiRrsXUjPK8C7zenD1K9Wp7GXsknA/exec';
+
+// ─────────────────────────────────────────────
 // STRIPE PAYMENT LINKS
 // ─────────────────────────────────────────────
 const PAYMENT_LINKS = {
@@ -1648,6 +1654,20 @@ async function handlePayment() {
         notes: document.getElementById('notes').value.trim() || '(none)',
       })
     });
+  } catch(e) { /* non-fatal */ }
+
+  // ── Log to paid bookings Sheet + Calendar (fire and forget) ──
+  try {
+    const bParams = new URLSearchParams({
+      name, email, phone, address, zip,
+      service:        currentService.name,
+      price:          '$' + currentService.price,
+      frequency:      currentService.frequency === 'one-time' ? 'One-time visit' : currentService.frequency === 'biweekly' ? 'Bi-Weekly Plan' : 'Weekly Plan',
+      serviceDateRaw: selectedDate,
+      serviceDate:    dateFormatted,
+      notes:          document.getElementById('notes').value.trim() || '(none)',
+    });
+    fetch(`${BOOKINGS_SCRIPT_URL}?${bParams}`).catch(() => {});
   } catch(e) { /* non-fatal */ }
 
   // Redirect to Stripe Payment Link with email pre-filled
