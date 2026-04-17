@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Charge Customers | Evergreen Lawn Care</title>
+<meta name="robots" content="noindex, nofollow"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link rel="icon" type="image/x-icon" href="favicon.ico"/>
+<style>
+  :root {
+    --green-deep:   #1a3a1a;
+    --green-mid:    #2d6a2d;
+    --green-bright: #4caf50;
+    --green-pale:   #e8f5e9;
+    --cream:        #faf9f6;
+    --text-muted:   #6b7280;
+    --gold:         #c9a84c;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--cream);
+    color: var(--green-deep);
+    min-height: 100vh;
+    padding: 40px 24px 80px;
+  }
+
+  /* ── LOGIN SCREEN ── */
+  #loginScreen {
+    max-width: 400px;
+    margin: 80px auto;
+    background: #fff;
+    border-radius: 20px;
+    padding: 48px 40px;
+    box-shadow: 0 8px 40px rgba(26,58,26,0.10);
+    text-align: center;
+  }
+  #loginScreen h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 26px; font-weight: 700;
+    margin-bottom: 8px;
+  }
+  #loginScreen p {
+    font-size: 14px; color: var(--text-muted);
+    margin-bottom: 28px;
+  }
+  .input-wrap {
+    margin-bottom: 16px;
+    text-align: left;
+  }
+  .input-wrap label {
+    display: block;
+    font-size: 12px; font-weight: 600;
+    letter-spacing: .06em; text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 7px;
+  }
+  .input-wrap input {
+    width: 100%; padding: 12px 16px;
+    border: 1.5px solid rgba(26,58,26,0.15);
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px; color: var(--green-deep);
+    background: var(--cream);
+    outline: none;
+    transition: border-color .2s;
+  }
+  .input-wrap input:focus { border-color: var(--green-bright); }
+  .login-err {
+    color: #e53e3e; font-size: 13px;
+    margin-bottom: 12px; display: none;
+  }
+  .btn-login {
+    width: 100%; padding: 14px;
+    background: var(--green-mid); color: #fff;
+    border: none; border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: background .2s;
+  }
+  .btn-login:hover { background: var(--green-deep); }
+
+  /* ── MAIN DASHBOARD ── */
+  #dashboard { display: none; max-width: 1100px; margin: 0 auto; }
+
+  .dash-header {
+    display: flex; align-items: center;
+    justify-content: space-between;
+    margin-bottom: 36px;
+    flex-wrap: wrap; gap: 16px;
+  }
+  .dash-header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 30px; font-weight: 700;
+  }
+  .btn-refresh {
+    padding: 10px 20px;
+    background: var(--green-pale); color: var(--green-mid);
+    border: 1.5px solid rgba(76,175,80,0.35);
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: background .2s;
+  }
+  .btn-refresh:hover { background: #d5ecd5; }
+
+  /* ── STATS ROW ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 36px;
+  }
+  .stat-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px 24px;
+    border: 1px solid rgba(26,58,26,0.08);
+  }
+  .stat-card .s-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px; font-weight: 700;
+    color: var(--green-deep);
+  }
+  .stat-card .s-lbl {
+    font-size: 12px; color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* ── FILTER TABS ── */
+  .filter-tabs {
+    display: flex; gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .tab-btn {
+    padding: 8px 18px;
+    border-radius: 20px;
+    border: 1.5px solid rgba(26,58,26,0.15);
+    background: #fff; color: var(--text-muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all .2s;
+  }
+  .tab-btn.active {
+    background: var(--green-mid); color: #fff;
+    border-color: var(--green-mid);
+  }
+
+  /* ── TABLE ── */
+  .table-wrap {
+    background: #fff;
+    border-radius: 16px;
+    border: 1px solid rgba(26,58,26,0.08);
+    overflow: hidden;
+  }
+  table {
+    width: 100%; border-collapse: collapse;
+  }
+  thead th {
+    background: var(--green-pale);
+    padding: 14px 18px;
+    text-align: left;
+    font-size: 12px; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase;
+    color: var(--green-mid);
+    white-space: nowrap;
+  }
+  tbody tr {
+    border-bottom: 1px solid rgba(26,58,26,0.06);
+    transition: background .15s;
+  }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #fafffe; }
+  tbody td {
+    padding: 14px 18px;
+    font-size: 14px;
+    color: var(--green-deep);
+    vertical-align: middle;
+  }
+  .td-muted { color: var(--text-muted); font-size: 13px; }
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px; font-weight: 600;
+  }
+  .badge-uncharged {
+    background: #fff8e1; color: #92400e;
+  }
+  .badge-charged {
+    background: var(--green-pale); color: var(--green-mid);
+  }
+
+  /* ── CHARGE BUTTON ── */
+  .btn-charge {
+    padding: 8px 18px;
+    background: var(--green-mid); color: #fff;
+    border: none; border-radius: 6px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: background .2s;
+    white-space: nowrap;
+  }
+  .btn-charge:hover { background: var(--green-deep); }
+  .btn-charge:disabled { background: #ccc; cursor: not-allowed; }
+
+  /* ── AMOUNT INPUT ── */
+  .amount-input {
+    width: 80px; padding: 7px 10px;
+    border: 1.5px solid rgba(26,58,26,0.2);
+    border-radius: 6px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px; color: var(--green-deep);
+    background: var(--cream);
+    outline: none; margin-right: 8px;
+  }
+  .amount-input:focus { border-color: var(--green-bright); }
+
+  /* ── EMPTY / LOADING ── */
+  .empty-state {
+    text-align: center; padding: 60px 24px;
+    color: var(--text-muted); font-size: 15px;
+  }
+  .loading-row td {
+    padding: 40px; text-align: center;
+    color: var(--text-muted);
+  }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed; bottom: 28px; left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--green-deep); color: #fff;
+    padding: 14px 28px; border-radius: 12px;
+    font-size: 14px; font-weight: 600;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    transition: transform .35s ease, opacity .35s ease;
+    opacity: 0; z-index: 999; white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  .toast.error { background: #c53030; }
+
+  @media (max-width: 700px) {
+    .dash-header h1 { font-size: 22px; }
+    tbody td, thead th { padding: 10px 12px; font-size: 13px; }
+    .amount-input { width: 64px; }
+    .td-hide { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN ── -->
+<div id="loginScreen">
+  <div style="font-size:36px;margin-bottom:16px;">🌿</div>
+  <h1>Admin Login</h1>
+  <p>Evergreen Lawn Care — charge customers after mowing</p>
+  <div class="input-wrap">
+    <label>Password</label>
+    <input type="password" id="passwordInput" placeholder="Enter password"
+           onkeydown="if(event.key==='Enter') login()"/>
+  </div>
+  <div class="login-err" id="loginErr">Incorrect password. Try again.</div>
+  <button class="btn-login" onclick="login()">Sign In</button>
+</div>
+
+<!-- ── DASHBOARD ── -->
+<div id="dashboard">
+  <div class="dash-header">
+    <div>
+      <div style="font-size:13px;font-weight:600;color:var(--green-bright);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px;">Admin</div>
+      <h1>🌿 Charge Customers</h1>
+    </div>
+    <button class="btn-refresh" onclick="loadBookings()">↻ Refresh</button>
+  </div>
+
+  <div class="stats-row" id="statsRow">
+    <div class="stat-card">
+      <div class="s-num" id="statTotal">—</div>
+      <div class="s-lbl">Total Bookings</div>
+    </div>
+    <div class="stat-card">
+      <div class="s-num" id="statUncharged">—</div>
+      <div class="s-lbl">Awaiting Payment</div>
+    </div>
+    <div class="stat-card">
+      <div class="s-num" id="statCharged">—</div>
+      <div class="s-lbl">Charged</div>
+    </div>
+    <div class="stat-card">
+      <div class="s-num" id="statRevenue">—</div>
+      <div class="s-lbl">Total Collected</div>
+    </div>
+  </div>
+
+  <div class="filter-tabs">
+    <button class="tab-btn active" onclick="setFilter('all', this)">All</button>
+    <button class="tab-btn" onclick="setFilter('uncharged', this)">Awaiting Payment</button>
+    <button class="tab-btn" onclick="setFilter('charged', this)">Charged</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Customer</th>
+          <th class="td-hide">Service</th>
+          <th>Date</th>
+          <th class="td-hide">Price</th>
+          <th>Status</th>
+          <th>Charge</th>
+        </tr>
+      </thead>
+      <tbody id="bookingsBody">
+        <tr class="loading-row"><td colspan="6">Loading bookings…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────
+// Paste your deployed stripe-booking-script.gs URL here
+// ─────────────────────────────────────────────
+const BOOKING_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwADgx1eybYLrG9TgMTKGNJYNjcQt3kIw3xJaXLYAxtXLBlAhOIa5tVg2ZF-Yn9AlS8Mg/exec';
+
+let password = '';
+let allBookings = [];
+let activeFilter = 'all';
+
+// ── LOGIN ──
+function login() {
+  const pw = document.getElementById('passwordInput').value;
+  if (!pw) return;
+  password = pw;
+  document.getElementById('loginErr').style.display = 'none';
+  loadBookings();
+}
+
+// ── LOAD BOOKINGS ──
+async function loadBookings() {
+  try {
+    const res  = await fetch(
+      BOOKING_SCRIPT_URL + '?action=list&password=' + encodeURIComponent(password)
+    );
+    const data = await res.json();
+
+    if (data.error === 'Wrong password') {
+      document.getElementById('loginErr').style.display = 'block';
+      return;
+    }
+    if (data.error) { showToast('Error: ' + data.error, true); return; }
+
+    // Show dashboard, hide login
+    document.getElementById('loginScreen').style.display  = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+
+    allBookings = data.bookings || [];
+    updateStats();
+    renderTable();
+
+  } catch (e) {
+    showToast('Could not load bookings. Check your script URL.', true);
+  }
+}
+
+// ── STATS ──
+function updateStats() {
+  const uncharged = allBookings.filter(b => b['Charge Status'] !== 'Charged ✓');
+  const charged   = allBookings.filter(b => b['Charge Status'] === 'Charged ✓');
+  const revenue   = charged.reduce((sum, b) => {
+    const p = parseFloat((b['Price'] || '0').toString().replace(/[^0-9.]/g, ''));
+    return sum + (isNaN(p) ? 0 : p);
+  }, 0);
+
+  document.getElementById('statTotal').textContent     = allBookings.length;
+  document.getElementById('statUncharged').textContent = uncharged.length;
+  document.getElementById('statCharged').textContent   = charged.length;
+  document.getElementById('statRevenue').textContent   = '$' + revenue.toFixed(0);
+}
+
+// ── FILTER ──
+function setFilter(f, btn) {
+  activeFilter = f;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTable();
+}
+
+// ── RENDER TABLE ──
+function renderTable() {
+  const filtered = allBookings.filter(b => {
+    if (activeFilter === 'uncharged') return b['Charge Status'] !== 'Charged ✓';
+    if (activeFilter === 'charged')   return b['Charge Status'] === 'Charged ✓';
+    return true;
+  });
+
+  const tbody = document.getElementById('bookingsBody');
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:48px;color:var(--text-muted);">
+      ${activeFilter === 'uncharged' ? 'No uncharged bookings 🎉' : 'No bookings found.'}
+    </td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(b => {
+    const charged   = b['Charge Status'] === 'Charged ✓';
+    const priceRaw  = (b['Price'] || '').toString().replace(/[^0-9.]/g, '') || '45';
+    const bookingId = b['Booking ID'] || '';
+    const badge     = charged
+      ? `<span class="badge badge-charged">Charged ✓</span>`
+      : `<span class="badge badge-uncharged">Not Charged</span>`;
+    const chargeCell = charged
+      ? `<span style="font-size:13px;color:var(--text-muted);">Done</span>`
+      : `<input class="amount-input" id="amt_${bookingId}" value="${priceRaw}" type="number" min="1" step="0.01"/>
+         <button class="btn-charge" onclick="chargeCustomer('${bookingId}', '${escHtml(b['Name'])}')">
+           Charge $<span id="amtlbl_${bookingId}">${priceRaw}</span>
+         </button>`;
+
+    return `
+      <tr id="row_${bookingId}">
+        <td>
+          <div style="font-weight:600;">${escHtml(b['Name'] || '—')}</div>
+          <div class="td-muted">${escHtml(b['Email'] || '')}</div>
+        </td>
+        <td class="td-hide td-muted">${escHtml(b['Service'] || '—')}</td>
+        <td class="td-muted">${escHtml(b['Service Date'] || '—')}</td>
+        <td class="td-hide" style="font-weight:600;">${escHtml(b['Price'] || '—')}</td>
+        <td>${badge}</td>
+        <td>${chargeCell}</td>
+      </tr>`;
+  }).join('');
+
+  // Live-update label as amount changes
+  filtered.forEach(b => {
+    const id  = b['Booking ID'];
+    const inp = document.getElementById('amt_' + id);
+    const lbl = document.getElementById('amtlbl_' + id);
+    if (inp && lbl) {
+      inp.addEventListener('input', () => { lbl.textContent = inp.value || '0'; });
+    }
+  });
+}
+
+// ── CHARGE ──
+async function chargeCustomer(bookingId, customerName) {
+  const amtInput = document.getElementById('amt_' + bookingId);
+  const amount   = amtInput ? amtInput.value.trim() : '';
+
+  if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+    showToast('Enter a valid amount first.', true);
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Charge ${customerName} $${parseFloat(amount).toFixed(2)}?\n\nThis will run their saved card right now.`
+  );
+  if (!confirmed) return;
+
+  const btn = document.querySelector(`#row_${bookingId} .btn-charge`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Charging…'; }
+
+  try {
+    const res  = await fetch(
+      `${BOOKING_SCRIPT_URL}?action=charge` +
+      `&booking_id=${encodeURIComponent(bookingId)}` +
+      `&amount=${encodeURIComponent(amount)}` +
+      `&password=${encodeURIComponent(password)}`
+    );
+    const data = await res.json();
+
+    if (data.success) {
+      showToast(`✅ Charged ${customerName} $${parseFloat(amount).toFixed(2)}`);
+      // Update local data and re-render
+      const b = allBookings.find(x => x['Booking ID'] === bookingId);
+      if (b) { b['Charge Status'] = 'Charged ✓'; b['Charged At'] = new Date().toLocaleString(); }
+      updateStats();
+      renderTable();
+    } else {
+      if (btn) { btn.disabled = false; btn.innerHTML = 'Charge $<span>'+amount+'</span>'; }
+      showToast('Error: ' + (data.error || 'Unknown error'), true);
+    }
+  } catch (e) {
+    if (btn) { btn.disabled = false; }
+    showToast('Network error. Try again.', true);
+  }
+}
+
+// ── HELPERS ──
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+let toastTimer;
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className   = 'toast' + (isError ? ' error' : '');
+  requestAnimationFrame(() => { t.classList.add('show'); });
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.classList.remove('show'); }, 3500);
+}
+</script>
+</body>
+</html>
