@@ -1225,12 +1225,12 @@
 
         <button class="btn-pay" id="payBtn" onclick="handleBooking()">
           <div class="spinner"></div>
-          <span class="pay-text">Confirm Booking →</span>
+          <span class="pay-text">Save Card &amp; Book →</span>
         </button>
 
         <div class="stripe-note">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          We'll reach out to confirm your appointment · Pay after service
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          Card saved securely by Stripe · Charged only after we mow
         </div>
       </div>
 
@@ -1415,10 +1415,16 @@ const PROMO_BANNER = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// BOOKING SCRIPT URLS — Google Sheets logger + Google Calendar
+// BOOKING SCRIPT URL — deployed stripe-booking-script.gs
+// Handles: Stripe card-on-file, Google Sheets, Google Calendar
+// Deploy it, then paste the URL here AND in booking-success.html
 // ═══════════════════════════════════════════════════════════════
-const SHEETS_SCRIPT_URL   = 'https://script.google.com/macros/s/AKfycbyZBQUkNW6Ug4QP_Oh1mqEZdK5XpjnZkkaIDiW4ctTiAIg-9C6PHCOp6kXjSLXEP1X6ng/exec';
-const CALENDAR_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxsD59YQqae_RPZOoA7F2_yEXchB8s0qu7Y2HOEY1WuVYEJcgx8zrazySYlXvpq19t2JQ/exec';
+const BOOKING_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwADgx1eybYLrG9TgMTKGNJYNjcQt3kIw3xJaXLYAxtXLBlAhOIa5tVg2ZF-Yn9AlS8Mg/exec';
+
+// Old individual script URLs — kept for reference, no longer called directly
+// (stripe-booking-script.gs now handles Sheets + Calendar after card is saved)
+// const SHEETS_SCRIPT_URL   = 'https://script.google.com/macros/s/AKfycbyZBQUkNW6Ug4QP_Oh1mqEZdK5XpjnZkkaIDiW4ctTiAIg-9C6PHCOp6kXjSLXEP1X6ng/exec';
+// const CALENDAR_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxsD59YQqae_RPZOoA7F2_yEXchB8s0qu7Y2HOEY1WuVYEJcgx8zrazySYlXvpq19t2JQ/exec';
 
 // ─────────────────────────────────────────────
 // PAY-AFTER-SERVICE MODE: Stripe + Make.com kept below for easy revert
@@ -1620,9 +1626,11 @@ async function handleQuoteRequest() {
 }
 
 // ─────────────────────────────────────────────
-// PAY-AFTER-SERVICE BOOKING (no Stripe redirect)
-// Sends booking data directly to Google Sheets + Calendar via Apps Script,
-// plus an email notification via Formspree. Shows success state on completion.
+// CARD-ON-FILE BOOKING
+// Posts booking data to stripe-booking-script.gs, which creates a
+// Stripe Customer + Setup Checkout Session. Customer is then redirected
+// to Stripe to save their card (no charge). After saving, Stripe sends
+// them to booking-success.html which logs to Sheets + Calendar.
 // ─────────────────────────────────────────────
 async function handleBooking() {
   const name    = document.getElementById('customerName').value.trim();
@@ -1640,9 +1648,8 @@ async function handleBooking() {
     return;
   }
 
-  // Validate date
   const selectedDate = document.getElementById('preferredDay').value;
-  const dateErr = document.getElementById('date-error');
+  const dateErr      = document.getElementById('date-error');
   if (!selectedDate) {
     if (dateErr) dateErr.style.display = 'block';
     alert('Please select a preferred service date.');
@@ -1650,7 +1657,6 @@ async function handleBooking() {
   }
   if (dateErr) dateErr.style.display = 'none';
 
-  // Format date nicely for calendar readability
   const dateFormatted = new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   });
@@ -1659,11 +1665,12 @@ async function handleBooking() {
   btn.classList.add('loading');
   btn.disabled = true;
 
-  const notes = document.getElementById('notes').value.trim() || '(none)';
-  const frequency = currentService.frequency === 'one-time' ? 'One-time visit' : currentService.frequency === 'biweekly' ? 'Bi-Weekly Plan' : 'Weekly Plan';
+  const notes     = document.getElementById('notes').value.trim() || '(none)';
+  const frequency = currentService.frequency === 'one-time' ? 'One-time visit'
+                  : currentService.frequency === 'biweekly' ? 'Bi-Weekly Plan'
+                  : 'Weekly Plan';
 
-  // ── Build shared params for both scripts ──
-  const bookingParams = new URLSearchParams({
+  const bookingData = {
     name, email, phone, address, zip,
     service:        currentService.name,
     price:          '$' + currentService.price,
@@ -1671,51 +1678,32 @@ async function handleBooking() {
     serviceDateRaw: selectedDate,
     serviceDate:    dateFormatted,
     notes,
-  });
+    bookingId:      'bk_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+  };
 
-  // ── Send to Google Sheets logger ──
   try {
-    await fetch(SHEETS_SCRIPT_URL + '?' + bookingParams.toString(), {
-      method: 'GET',
-      mode: 'no-cors',
+    // Use text/plain to avoid CORS preflight — Apps Script receives JSON fine
+    const res  = await fetch(BOOKING_SCRIPT_URL, {
+      method:  'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body:    JSON.stringify(bookingData),
     });
-  } catch(e) { /* non-fatal */ }
+    const data = await res.json();
 
-  // ── Send to Google Calendar ──
-  try {
-    await fetch(CALENDAR_SCRIPT_URL + '?' + bookingParams.toString(), {
-      method: 'GET',
-      mode: 'no-cors',
-    });
-  } catch(e) { /* non-fatal */ }
-
-  // ── Send email notification via Formspree (4s timeout) ──
-  try {
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), 4000);
-    await fetch('https://formspree.io/f/xnjlnooq', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({
-        _subject: `New Booking – ${currentService.name} – ${dateFormatted}`,
-        name, email, phone, address, zip,
-        service: currentService.name,
-        frequency, price: '$' + currentService.price,
-        serviceDate: selectedDate,
-        serviceDateFormatted: dateFormatted,
-        notes,
-        paymentNote: 'PAY-AFTER-SERVICE — customer will pay after the mow, not upfront.',
-      })
-    });
-    clearTimeout(t);
-  } catch(e) { /* non-fatal */ }
-
-  // ── Show success (no payment redirect) ──
-  btn.classList.remove('loading');
-  btn.disabled = false;
-  document.getElementById('formState').style.display = 'none';
-  document.getElementById('successState').style.display = 'block';
+    if (data.checkoutUrl) {
+      // Redirect to Stripe to save card — booking-success.html handles confirmation
+      window.location.href = data.checkoutUrl;
+    } else {
+      btn.classList.remove('loading');
+      btn.disabled = false;
+      alert('Something went wrong: ' + (data.error || 'Unknown error') +
+            '\n\nPlease call us at (352) 462-0627.');
+    }
+  } catch (e) {
+    btn.classList.remove('loading');
+    btn.disabled = false;
+    alert('Could not connect to booking server. Please call us at (352) 462-0627.');
+  }
 }
 
 // ─────────────────────────────────────────────
