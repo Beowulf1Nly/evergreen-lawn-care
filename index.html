@@ -958,6 +958,9 @@
     <div class="hero-btns">
       <a href="#services" class="btn-primary">View Services & Book</a>
     </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;font-weight:600;color:var(--green-mid);">
+      <span style="font-size:16px;">✅</span> Book your spot today — you only pay after we mow, not before.
+    </div>
     <div class="hero-stats">
       <div>
         <div class="stat-num">5.0★</div>
@@ -985,6 +988,12 @@
   <h2 class="section-title">Simple, Honest Pricing</h2>
   <p class="section-sub">No hidden fees. Book once or set it and forget it with a recurring plan — we'll show up every time.</p>
 
+  <!-- PAY-AFTER BANNER -->
+  <div style="max-width:620px;margin:-16px auto 48px;background:#e8f5e9;border:1.5px solid rgba(76,175,80,0.4);border-radius:14px;padding:16px 28px;text-align:center;display:flex;align-items:center;justify-content:center;gap:12px;">
+    <span style="font-size:24px;flex-shrink:0;">✅</span>
+    <span style="font-size:15px;font-weight:700;color:var(--green-deep);line-height:1.4;">No upfront payment — book your service now and pay <em>only after</em> your lawn is mowed.</span>
+  </div>
+
   <div class="services-grid">
 
     <!-- Cut & Clean -->
@@ -1001,6 +1010,7 @@
       <div class="service-price">$45 <span>/ visit</span></div>
       <div style="display:inline-block;background:#e8f5e9;color:#2e7d32;font-size:12px;font-weight:700;letter-spacing:0.05em;padding:4px 10px;border-radius:20px;margin-bottom:14px;">One-time · No commitment</div>
       <button class="btn-book" onclick="openModal('mow-blow', 'Cut & Clean', 45, 'one-time')">Book Now →</button>
+      <div style="text-align:center;font-size:12px;color:rgba(255,255,255,0.65);margin-top:9px;font-weight:500;">✅ Pay after service · No upfront payment</div>
     </div>
 
     <!-- Bi-Weekly Plan -->
@@ -1017,6 +1027,7 @@
       <div class="service-price">$80 <span>/ month</span></div>
       <div class="service-savings">💰 Save $10/mo vs one-time</div>
       <button class="btn-book" onclick="openModal('biweekly', 'Bi-Weekly Plan', 80, 'recurring')">Subscribe →</button>
+      <div style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:9px;font-weight:500;">✅ Pay after service · No upfront payment</div>
     </div>
 
     <!-- Weekly Plan -->
@@ -1033,6 +1044,7 @@
       <div class="service-price">$140 <span>/ month</span></div>
       <div class="service-savings">💰 Save $40/mo vs one-time</div>
       <button class="btn-book" onclick="openModal('weekly', 'Weekly Plan', 140, 'recurring')">Subscribe →</button>
+      <div style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:9px;font-weight:500;">✅ Pay after service · No upfront payment</div>
     </div>
 
 
@@ -1198,9 +1210,9 @@
         </div>
 
         <!-- PAY-AFTER NOTICE -->
-        <div style="background:#e8f5e9;border:1px solid rgba(76,175,80,0.35);border-radius:10px;padding:13px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:var(--green-deep);">
-          <span style="font-size:18px;flex-shrink:0;">✅</span>
-          No payment required to book — you pay <em>after</em> we mow your lawn.
+        <div style="background:#e8f5e9;border:1.5px solid rgba(76,175,80,0.4);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px;font-size:14px;font-weight:600;color:var(--green-deep);line-height:1.4;">
+          <span style="font-size:22px;flex-shrink:0;">✅</span>
+          <span>No upfront payment required — we collect payment <strong>after</strong> your lawn is mowed.</span>
         </div>
 
         <div class="price-summary">
@@ -1403,12 +1415,10 @@ const PROMO_BANNER = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// BOOKINGS SCRIPT URL — paste your deployed Apps Script URL here
-// How to deploy: open bookings-script.gs in Google Apps Script →
-//   Deploy > New deployment > Web app
-//   Execute as: Me | Who has access: Anyone → Deploy → copy URL
+// BOOKING SCRIPT URLS — Google Sheets logger + Google Calendar
 // ═══════════════════════════════════════════════════════════════
-const BOOKINGS_SCRIPT_URL = 'PASTE_YOUR_DEPLOYED_APPS_SCRIPT_URL_HERE';
+const SHEETS_SCRIPT_URL   = 'https://script.google.com/macros/s/AKfycbyZBQUkNW6Ug4QP_Oh1mqEZdK5XpjnZkkaIDiW4ctTiAIg-9C6PHCOp6kXjSLXEP1X6ng/exec';
+const CALENDAR_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxsD59YQqae_RPZOoA7F2_yEXchB8s0qu7Y2HOEY1WuVYEJcgx8zrazySYlXvpq19t2JQ/exec';
 
 // ─────────────────────────────────────────────
 // PAY-AFTER-SERVICE MODE: Stripe + Make.com kept below for easy revert
@@ -1652,24 +1662,32 @@ async function handleBooking() {
   const notes = document.getElementById('notes').value.trim() || '(none)';
   const frequency = currentService.frequency === 'one-time' ? 'One-time visit' : currentService.frequency === 'biweekly' ? 'Bi-Weekly Plan' : 'Weekly Plan';
 
-  // ── Send to Google Sheets + Calendar via deployed Apps Script ──
-  if (BOOKINGS_SCRIPT_URL && BOOKINGS_SCRIPT_URL !== 'PASTE_YOUR_DEPLOYED_APPS_SCRIPT_URL_HERE') {
-    try {
-      const params = new URLSearchParams({
-        name, email, phone, address, zip,
-        service:        currentService.name,
-        price:          '$' + currentService.price,
-        frequency,
-        serviceDateRaw: selectedDate,
-        serviceDate:    dateFormatted,
-        notes,
-      });
-      await fetch(BOOKINGS_SCRIPT_URL + '?' + params.toString(), {
-        method: 'GET',
-        mode: 'no-cors', // Apps Script redirects through Google auth; no-cors fires it and moves on
-      });
-    } catch(e) { /* non-fatal */ }
-  }
+  // ── Build shared params for both scripts ──
+  const bookingParams = new URLSearchParams({
+    name, email, phone, address, zip,
+    service:        currentService.name,
+    price:          '$' + currentService.price,
+    frequency,
+    serviceDateRaw: selectedDate,
+    serviceDate:    dateFormatted,
+    notes,
+  });
+
+  // ── Send to Google Sheets logger ──
+  try {
+    await fetch(SHEETS_SCRIPT_URL + '?' + bookingParams.toString(), {
+      method: 'GET',
+      mode: 'no-cors',
+    });
+  } catch(e) { /* non-fatal */ }
+
+  // ── Send to Google Calendar ──
+  try {
+    await fetch(CALENDAR_SCRIPT_URL + '?' + bookingParams.toString(), {
+      method: 'GET',
+      mode: 'no-cors',
+    });
+  } catch(e) { /* non-fatal */ }
 
   // ── Send email notification via Formspree (4s timeout) ──
   try {
