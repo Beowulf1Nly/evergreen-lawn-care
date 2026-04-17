@@ -29,7 +29,8 @@
 <link rel="icon" type="image/x-icon" href="favicon.ico"/>
 <link rel="icon" type="image/png" href="favicon.png"/>
 <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
-<script src="https://js.stripe.com/v3/"></script>
+<!-- STRIPE JS — kept for easy revert; not used in pay-after-service mode -->
+<!-- <script src="https://js.stripe.com/v3/"></script> -->
 <style>
   :root {
     --green-deep: #1a3a1a;
@@ -1058,13 +1059,13 @@
     </div>
     <div class="step">
       <div class="step-num">3</div>
-      <h3>Secure Checkout</h3>
-      <p>Pay safely with Stripe. One-time or auto-billed monthly — your choice.</p>
+      <h3>Get Confirmed</h3>
+      <p>We confirm your appointment by email and add it to our schedule — no payment needed to book.</p>
     </div>
     <div class="step">
       <div class="step-num">4</div>
-      <h3>We Show Up</h3>
-      <p>You get a confirmation, we arrive on time and leave your lawn spotless.</p>
+      <h3>We Mow, Then You Pay</h3>
+      <p>We show up on time and leave your lawn spotless. Payment is only collected <em>after</em> the job is done.</p>
     </div>
   </div>
 </section>
@@ -1196,22 +1197,28 @@
           <textarea id="notes" placeholder="e.g. Gate code is 1234, avoid the back corner..."></textarea>
         </div>
 
+        <!-- PAY-AFTER NOTICE -->
+        <div style="background:#e8f5e9;border:1px solid rgba(76,175,80,0.35);border-radius:10px;padding:13px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:var(--green-deep);">
+          <span style="font-size:18px;flex-shrink:0;">✅</span>
+          No payment required to book — you pay <em>after</em> we mow your lawn.
+        </div>
+
         <div class="price-summary">
           <div>
-            <div class="label">Total Due Today</div>
+            <div class="label">Service Price</div>
             <div class="freq-label" id="freqLabel">One-time visit</div>
           </div>
           <div class="amount" id="priceDisplay">$44.99</div>
         </div>
 
-        <button class="btn-pay" id="payBtn" onclick="handlePayment()">
+        <button class="btn-pay" id="payBtn" onclick="handleBooking()">
           <div class="spinner"></div>
-          <span class="pay-text">Proceed to Payment →</span>
+          <span class="pay-text">Confirm Booking →</span>
         </button>
 
         <div class="stripe-note">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-          Secured by Stripe · SSL encrypted
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          We'll reach out to confirm your appointment · Pay after service
         </div>
       </div>
 
@@ -1245,7 +1252,7 @@
     <div class="success-state" id="successState">
       <div class="success-icon">✅</div>
       <h3>You're on the books!</h3>
-      <p>Thanks for booking with Evergreen Lawn Care. You'll receive a confirmation email shortly. We'll see you soon!</p>
+      <p>Thanks for scheduling with Evergreen Lawn Care! You'll receive a confirmation shortly. <strong>No payment needed now</strong> — we'll collect payment after your lawn is mowed. We'll see you soon!</p>
       <br/>
       <button class="btn-primary" onclick="closeModal()" style="width:100%;margin-top:8px;">Close</button>
     </div>
@@ -1395,25 +1402,24 @@ const PROMO_BANNER = {
   url: '/free-lawn.html',                                 // ← change this to send to any page/link
 };
 
-// ─────────────────────────────────────────────
-// STRIPE CONFIG
-// Replace with your real key from dashboard.stripe.com
-// ─────────────────────────────────────────────
-// ─────────────────────────────────────────────
-// PAID BOOKINGS SHEET + CALENDAR
-// Paste your deployed bookings-script.gs URL below after setup
-// ─────────────────────────────────────────────
-const MAKE_BOOKING_WEBHOOK = 'https://hook.us2.make.com/69olj8df7aperc2b86w5py3v15k23vvv';
+// ═══════════════════════════════════════════════════════════════
+// BOOKINGS SCRIPT URL — paste your deployed Apps Script URL here
+// How to deploy: open bookings-script.gs in Google Apps Script →
+//   Deploy > New deployment > Web app
+//   Execute as: Me | Who has access: Anyone → Deploy → copy URL
+// ═══════════════════════════════════════════════════════════════
+const BOOKINGS_SCRIPT_URL = 'PASTE_YOUR_DEPLOYED_APPS_SCRIPT_URL_HERE';
 
 // ─────────────────────────────────────────────
-// STRIPE PAYMENT LINKS
+// PAY-AFTER-SERVICE MODE: Stripe + Make.com kept below for easy revert
 // ─────────────────────────────────────────────
-const PAYMENT_LINKS = {
-  'mow-blow': 'https://buy.stripe.com/bJeeV6a9X0nm0saa3d1gs03',
-  'biweekly': 'https://buy.stripe.com/5kQdR281P6LK7UC5MX1gs04',
-  'weekly':   'https://buy.stripe.com/8x2dR2ci59XW1wefnx1gs05',
-  'test':     'https://buy.stripe.com/bJeeV6a9X0nm0saa3d1gs03',
-};
+// const MAKE_BOOKING_WEBHOOK = 'https://hook.us2.make.com/69olj8df7aperc2b86w5py3v15k23vvv';
+// const PAYMENT_LINKS = {
+//   'mow-blow': 'https://buy.stripe.com/bJeeV6a9X0nm0saa3d1gs03',
+//   'biweekly': 'https://buy.stripe.com/5kQdR281P6LK7UC5MX1gs04',
+//   'weekly':   'https://buy.stripe.com/8x2dR2ci59XW1wefnx1gs05',
+//   'test':     'https://buy.stripe.com/bJeeV6a9X0nm0saa3d1gs03',
+// };
 
 let currentService = { id: 'mow-blow', name: 'Cut & Clean', price: 45, frequency: 'one-time' };
 
@@ -1603,7 +1609,12 @@ async function handleQuoteRequest() {
   }
 }
 
-async function handlePayment() {
+// ─────────────────────────────────────────────
+// PAY-AFTER-SERVICE BOOKING (no Stripe redirect)
+// Sends booking data directly to Google Sheets + Calendar via Apps Script,
+// plus an email notification via Formspree. Shows success state on completion.
+// ─────────────────────────────────────────────
+async function handleBooking() {
   const name    = document.getElementById('customerName').value.trim();
   const email   = document.getElementById('customerEmail').value.trim();
   const phone   = document.getElementById('customerPhone').value.trim();
@@ -1641,7 +1652,26 @@ async function handlePayment() {
   const notes = document.getElementById('notes').value.trim() || '(none)';
   const frequency = currentService.frequency === 'one-time' ? 'One-time visit' : currentService.frequency === 'biweekly' ? 'Bi-Weekly Plan' : 'Weekly Plan';
 
-  // ── Send to Formspree (4 second timeout so it never hangs forever) ──
+  // ── Send to Google Sheets + Calendar via deployed Apps Script ──
+  if (BOOKINGS_SCRIPT_URL && BOOKINGS_SCRIPT_URL !== 'PASTE_YOUR_DEPLOYED_APPS_SCRIPT_URL_HERE') {
+    try {
+      const params = new URLSearchParams({
+        name, email, phone, address, zip,
+        service:        currentService.name,
+        price:          '$' + currentService.price,
+        frequency,
+        serviceDateRaw: selectedDate,
+        serviceDate:    dateFormatted,
+        notes,
+      });
+      await fetch(BOOKINGS_SCRIPT_URL + '?' + params.toString(), {
+        method: 'GET',
+        mode: 'no-cors', // Apps Script redirects through Google auth; no-cors fires it and moves on
+      });
+    } catch(e) { /* non-fatal */ }
+  }
+
+  // ── Send email notification via Formspree (4s timeout) ──
   try {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), 4000);
@@ -1657,34 +1687,47 @@ async function handlePayment() {
         serviceDate: selectedDate,
         serviceDateFormatted: dateFormatted,
         notes,
+        paymentNote: 'PAY-AFTER-SERVICE — customer will pay after the mow, not upfront.',
       })
     });
     clearTimeout(t);
-  } catch(e) { /* timeout or error — non-fatal, proceed to Stripe */ }
+  } catch(e) { /* non-fatal */ }
 
-  // ── Send booking data to Make.com (holds it until Stripe confirms payment) ──
-  const bookingId = 'bk_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-  try {
-    await fetch(MAKE_BOOKING_WEBHOOK, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        bookingId,
-        name, email, phone, address, zip,
-        service:        currentService.name,
-        price:          '$' + currentService.price,
-        frequency,
-        serviceDateRaw: selectedDate,
-        serviceDate:    dateFormatted,
-        notes,
-      })
-    });
-  } catch(e) { /* non-fatal — Stripe redirect still happens */ }
-
-  // Redirect to Stripe with bookingId attached so Make can match it on payment success
-  const baseLink = PAYMENT_LINKS[currentService.id] || PAYMENT_LINKS['mow-blow'];
-  window.location.href = baseLink + '?client_reference_id=' + bookingId + '&prefilled_email=' + encodeURIComponent(email);
+  // ── Show success (no payment redirect) ──
+  btn.classList.remove('loading');
+  btn.disabled = false;
+  document.getElementById('formState').style.display = 'none';
+  document.getElementById('successState').style.display = 'block';
 }
+
+// ─────────────────────────────────────────────
+// ORIGINAL handlePayment() — kept for easy revert to pay-upfront mode.
+// To revert: rename handleBooking → handleBooking_payAfter,
+//            uncomment below, restore Stripe JS + PAYMENT_LINKS + MAKE_BOOKING_WEBHOOK above.
+// ─────────────────────────────────────────────
+// async function handlePayment() {
+//   const name    = document.getElementById('customerName').value.trim();
+//   const email   = document.getElementById('customerEmail').value.trim();
+//   const phone   = document.getElementById('customerPhone').value.trim();
+//   const address = document.getElementById('customerAddress').value.trim();
+//   const zip     = document.getElementById('customerZip').value.trim();
+//   if (!name || !email || !address) { alert('Please fill in your name, email, and address.'); return; }
+//   if (!validateZip()) { alert('Please enter a valid Citrus County zip code.'); return; }
+//   const selectedDate = document.getElementById('preferredDay').value;
+//   const dateErr = document.getElementById('date-error');
+//   if (!selectedDate) { if (dateErr) dateErr.style.display = 'block'; alert('Please select a preferred service date.'); return; }
+//   if (dateErr) dateErr.style.display = 'none';
+//   const dateFormatted = new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+//   const btn = document.getElementById('payBtn');
+//   btn.classList.add('loading'); btn.disabled = true;
+//   const notes = document.getElementById('notes').value.trim() || '(none)';
+//   const frequency = currentService.frequency === 'one-time' ? 'One-time visit' : currentService.frequency === 'biweekly' ? 'Bi-Weekly Plan' : 'Weekly Plan';
+//   try { const controller = new AbortController(); const t = setTimeout(() => controller.abort(), 4000); await fetch('https://formspree.io/f/xnjlnooq', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, signal: controller.signal, body: JSON.stringify({ _subject:`New Booking – ${currentService.name} – ${dateFormatted}`, name,email,phone,address,zip, service:currentService.name, frequency, price:'$'+currentService.price, serviceDate:selectedDate, serviceDateFormatted:dateFormatted, notes }) }); clearTimeout(t); } catch(e) {}
+//   const bookingId = 'bk_' + Date.now() + '_' + Math.random().toString(36).substr(2,6);
+//   try { await fetch(MAKE_BOOKING_WEBHOOK, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bookingId, name,email,phone,address,zip, service:currentService.name, price:'$'+currentService.price, frequency, serviceDateRaw:selectedDate, serviceDate:dateFormatted, notes }) }); } catch(e) {}
+//   const baseLink = PAYMENT_LINKS[currentService.id] || PAYMENT_LINKS['mow-blow'];
+//   window.location.href = baseLink + '?client_reference_id=' + bookingId + '&prefilled_email=' + encodeURIComponent(email);
+// }
 
 // Navbar scroll effect
 window.addEventListener('scroll', () => {
