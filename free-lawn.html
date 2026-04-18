@@ -3,1809 +3,557 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Free First Lawn Service | Evergreen Lawn Care</title>
-<meta name="robots" content="noindex, nofollow"/>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-<link rel="icon" type="image/x-icon" href="favicon.ico"/>
-<link rel="icon" type="image/png" href="favicon.png"/>
-<link rel="apple-touch-icon" href="apple-touch-icon.png"/>
+<title>Evergreen — Invoice Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
   :root {
     --green-deep: #1a3a1a;
-    --green-mid: #2d6a2d;
-    --green-bright: #4caf50;
-    --green-light: #7ec87e;
+    --green-mid:  #2d6a2d;
+    --green-bright:#4caf50;
     --green-pale: #e8f5e9;
-    --cream: #faf9f6;
-    --earth: #5c4a2a;
-    --gold: #c9a84c;
-    --white: #ffffff;
-    --text: #1a1a1a;
+    --cream:      #faf9f6;
+    --white:      #ffffff;
+    --text:       #1a1a1a;
     --text-muted: #6b7280;
+    --border:     #e2e8f0;
+    --red:        #e53e3e;
+    --gold:       #c9a84c;
   }
-
   * { margin:0; padding:0; box-sizing:border-box; }
-  html { scroll-behavior: smooth; }
+  body { font-family:'DM Sans',sans-serif; background:var(--cream); color:var(--text); min-height:100vh; }
 
-  body {
-    font-family: 'DM Sans', sans-serif;
-    background: var(--cream);
-    color: var(--text);
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
+  /* ── Login Screen ── */
+  #loginScreen {
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh; background:var(--green-deep);
   }
+  .login-card {
+    background:#fff; border-radius:20px; padding:48px 40px;
+    max-width:400px; width:100%; text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,.25);
+  }
+  .login-card h1 { font-family:'Playfair Display',serif; color:var(--green-deep); font-size:28px; margin-bottom:8px; }
+  .login-card p  { color:var(--text-muted); font-size:14px; margin-bottom:28px; }
+  .login-input {
+    width:100%; padding:14px 18px; border:2px solid var(--border);
+    border-radius:10px; font-family:inherit; font-size:15px;
+    margin-bottom:14px; outline:none; transition:border .2s;
+  }
+  .login-input:focus { border-color:var(--green-mid); }
+  .login-btn {
+    width:100%; padding:14px; background:var(--green-mid);
+    color:#fff; border:none; border-radius:10px; font-family:inherit;
+    font-size:15px; font-weight:600; cursor:pointer; transition:background .2s;
+  }
+  .login-btn:hover { background:var(--green-deep); }
+  #loginError { color:var(--red); font-size:13px; margin-top:10px; display:none; }
 
-  /* ── NAV ── */
-  nav {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 18px 60px;
-    background: rgba(250,249,246,0.95);
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid rgba(26,58,26,0.08);
-    transition: box-shadow .3s;
-  }
-  nav.scrolled { box-shadow: 0 2px 20px rgba(0,0,0,0.08); }
-  .nav-logo span { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; color: var(--green-deep); }
-  .nav-logo span em { color: var(--green-bright); font-style: normal; }
-  .nav-links { display: flex; gap: 36px; list-style: none; }
-  .nav-links a {
-    text-decoration: none;
-    font-size: 14px; font-weight: 500; letter-spacing: .03em;
-    color: var(--green-deep);
-    transition: color .2s;
-  }
-  .nav-links a:hover { color: var(--green-bright); }
-  .nav-cta {
-    background: var(--green-mid);
-    color: #fff !important;
-    padding: 10px 24px;
-    border-radius: 6px;
-    transition: background .2s !important;
-  }
-  .nav-cta:hover { background: var(--green-deep) !important; color: #fff !important; }
-  @media (max-width: 700px) {
-    nav { padding: 16px 24px; }
-    .nav-links { display: none; }
-  }
+  /* ── Main App ── */
+  #appScreen { display:none; }
 
-  /* ── NAV SPACER ── */
-  .nav-spacer { height: 89px; }
-
-  /* ── HERO BANNER ── */
-  .hero-banner {
-    background: linear-gradient(135deg, #1a3a1a 0%, #2d6a2d 100%);
-    padding: 40px 24px 36px;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
+  header {
+    background:var(--green-deep); color:#fff; padding:16px 24px;
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    position:sticky; top:0; z-index:100;
   }
-  .hero-banner::before {
-    content: '';
-    position: absolute; inset: 0;
-    background: radial-gradient(ellipse at 70% 50%, rgba(76,175,80,0.18) 0%, transparent 65%);
-    pointer-events: none;
+  .header-brand { font-family:'Playfair Display',serif; font-size:20px; }
+  .header-brand span { color:#7ec87e; }
+  .header-right { display:flex; align-items:center; gap:12px; }
+  #lastRefresh { font-size:12px; color:rgba(255,255,255,.55); }
+  .btn-refresh {
+    padding:8px 16px; background:rgba(255,255,255,.12); color:#fff;
+    border:1px solid rgba(255,255,255,.25); border-radius:8px;
+    font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; transition:background .2s;
   }
-  .badge {
-    display: inline-block;
-    background: var(--gold);
-    color: #fff;
-    font-size: 11px; font-weight: 700;
-    letter-spacing: .1em;
-    padding: 5px 14px;
-    border-radius: 20px;
-    text-transform: uppercase;
-    margin-bottom: 16px;
-  }
-  .hero-banner h1 {
-    font-family: 'Playfair Display', serif;
-    font-size: clamp(28px, 5vw, 44px);
-    font-weight: 900;
-    color: #fff;
-    line-height: 1.15;
-    margin-bottom: 12px;
-  }
-  .hero-banner h1 span { color: var(--green-light); }
-  .hero-banner p {
-    font-size: 15px;
-    color: rgba(255,255,255,0.75);
-    max-width: 420px;
-    margin: 0 auto;
-    line-height: 1.6;
-  }
-  .free-value {
-    display: inline-flex; align-items: baseline; gap: 6px;
-    margin-top: 20px;
-  }
-  .free-value .was {
-    font-size: 18px; color: rgba(255,255,255,0.4);
-    text-decoration: line-through;
-    font-weight: 500;
-  }
-  .free-value .now {
-    font-family: 'Playfair Display', serif;
-    font-size: 42px; font-weight: 900;
-    color: var(--green-light);
+  .btn-refresh:hover { background:rgba(255,255,255,.22); }
+  .btn-logout {
+    padding:8px 14px; background:transparent; color:rgba(255,255,255,.6);
+    border:1px solid rgba(255,255,255,.2); border-radius:8px;
+    font-family:inherit; font-size:13px; cursor:pointer;
   }
 
-  /* ── MAIN CONTENT ── */
-  .page-wrap {
-    flex: 1;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 40px 24px 60px;
+  .container { max-width:1000px; margin:0 auto; padding:28px 20px; }
+
+  /* ── Search bar ── */
+  .search-bar {
+    display:flex; gap:10px; margin-bottom:28px; flex-wrap:wrap;
+  }
+  .search-bar input {
+    flex:1; min-width:200px; padding:12px 18px; border:2px solid var(--border);
+    border-radius:10px; font-family:inherit; font-size:14px;
+    background:#fff; outline:none; transition:border .2s;
+  }
+  .search-bar input:focus { border-color:var(--green-mid); }
+  .filter-select {
+    padding:12px 14px; border:2px solid var(--border); border-radius:10px;
+    font-family:inherit; font-size:14px; background:#fff; cursor:pointer; outline:none;
   }
 
-  .card {
-    background: #fff;
-    border-radius: 20px;
-    padding: 40px;
-    max-width: 520px;
-    width: 100%;
-    box-shadow: 0 8px 40px rgba(26,58,26,0.10);
+  /* ── Section headers ── */
+  .section-label {
+    font-size:12px; font-weight:700; letter-spacing:.08em;
+    color:var(--text-muted); text-transform:uppercase; margin-bottom:12px;
+    padding-bottom:8px; border-bottom:2px solid var(--border);
+    display:flex; align-items:center; gap:8px;
+  }
+  .section-label .badge {
+    background:var(--green-bright); color:#fff; border-radius:20px;
+    padding:2px 8px; font-size:11px; font-weight:700;
   }
 
-  /* ── ELIGIBILITY NOTICE ── */
-  .eligibility-notice {
-    background: #fffbeb;
-    border: 1px solid #f59e0b;
-    border-radius: 10px;
-    padding: 14px 16px;
-    margin-bottom: 28px;
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
+  /* ── Booking cards ── */
+  .booking-card {
+    background:#fff; border:1.5px solid var(--border); border-radius:14px;
+    padding:18px 20px; margin-bottom:12px; display:grid;
+    grid-template-columns:1fr auto; gap:12px; align-items:start;
+    transition:box-shadow .2s, border-color .2s;
   }
-  .eligibility-notice .icon { font-size: 18px; flex-shrink: 0; line-height: 1.4; }
-  .eligibility-notice p {
-    font-size: 13px;
-    color: #92400e;
-    line-height: 1.6;
-  }
-  .eligibility-notice strong { font-weight: 700; }
+  .booking-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.07); border-color:#c8ddc8; }
+  .booking-card.today { border-left:4px solid var(--green-bright); }
+  .booking-card.invoiced { opacity:.6; background:#f8faf8; }
 
-  .section-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 20px; font-weight: 700;
-    color: var(--green-deep);
-    margin-bottom: 20px;
-  }
+  .card-name { font-size:16px; font-weight:600; color:var(--green-deep); margin-bottom:4px; }
+  .card-meta { font-size:13px; color:var(--text-muted); line-height:1.7; }
+  .card-meta a { color:var(--green-mid); text-decoration:none; font-weight:500; }
+  .card-badges { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .badge-service { background:var(--green-pale); color:var(--green-deep); border-radius:6px; padding:3px 10px; font-size:12px; font-weight:600; }
+  .badge-autopay { background:#1a3a1a; color:#fff; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:700; letter-spacing:.03em; }
+  .badge-invoiced { background:#f0fdf4; color:#16a34a; border:1px solid #86efac; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:600; }
+  .badge-paylater { background:#fffbeb; color:#92400e; border:1px solid #fcd34d; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:600; }
 
-  /* ── FORM ── */
-  .form-row { margin-bottom: 16px; }
-  .form-row label {
-    display: block;
-    font-size: 13px; font-weight: 600;
-    color: var(--green-deep);
-    margin-bottom: 7px;
-    letter-spacing: .02em;
+  .card-actions { display:flex; flex-direction:column; gap:8px; align-items:flex-end; }
+  .btn-invoice {
+    padding:10px 18px; background:var(--green-mid); color:#fff;
+    border:none; border-radius:10px; font-family:inherit; font-size:13px;
+    font-weight:600; cursor:pointer; white-space:nowrap; transition:background .2s;
   }
-  .form-row input,
-  .form-row select,
-  .form-row textarea {
-    width: 100%;
-    padding: 12px 16px;
-    border: 1.5px solid rgba(26,58,26,0.15);
-    border-radius: 8px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 14px;
-    color: var(--text);
-    background: var(--cream);
-    outline: none;
-    transition: border-color .2s;
-    -webkit-appearance: none;
-  }
-  .form-row input:focus,
-  .form-row select:focus,
-  .form-row textarea:focus { border-color: var(--green-bright); }
-  .form-row textarea { height: 80px; resize: vertical; }
+  .btn-invoice:hover { background:var(--green-deep); }
+  .btn-invoice:disabled { background:#a0aec0; cursor:not-allowed; }
+  .btn-invoice.sent { background:#16a34a; }
+  .price-tag { font-size:18px; font-weight:700; color:var(--green-deep); }
 
-  /* ── PRICE SUMMARY ── */
-  .price-summary {
-    background: var(--green-pale);
-    border-radius: 10px;
-    padding: 16px 20px;
-    margin: 20px 0;
-    display: flex; justify-content: space-between; align-items: center;
+  /* ── Empty / loading states ── */
+  .empty-state {
+    text-align:center; padding:48px 20px; color:var(--text-muted); font-size:14px;
   }
-  .price-summary .label { font-size: 14px; color: var(--text-muted); }
-  .price-summary .sublabel { font-size: 12px; color: var(--green-mid); font-weight: 500; }
-  .price-summary .amount {
-    font-family: 'Playfair Display', serif;
-    font-size: 26px; font-weight: 900;
-    color: var(--green-mid);
+  .loading-spinner {
+    display:inline-block; width:20px; height:20px;
+    border:3px solid rgba(0,0,0,.1); border-top-color:var(--green-mid);
+    border-radius:50%; animation:spin .7s linear infinite;
   }
+  @keyframes spin { to { transform:rotate(360deg); } }
 
-  /* ── LARGE YARD BOX ── */
-  .yard-check-box {
-    background: var(--green-pale);
-    border-radius: 10px;
-    padding: 16px 18px;
-    margin-bottom: 18px;
+  /* ── Invoice modal ── */
+  .modal-overlay {
+    position:fixed; inset:0; background:rgba(0,0,0,.5);
+    display:none; align-items:center; justify-content:center;
+    z-index:1000; padding:20px;
   }
-  .yard-check-box label {
-    display: flex; align-items: flex-start; gap: 12px;
-    cursor: pointer; font-size: 14px; font-weight: 600;
-    color: var(--green-deep);
+  .modal-overlay.open { display:flex; }
+  .modal {
+    background:#fff; border-radius:20px; padding:36px 32px;
+    max-width:480px; width:100%; box-shadow:0 24px 80px rgba(0,0,0,.25);
   }
-  .yard-check-box input[type=checkbox] {
-    width: 18px; height: 18px;
-    margin-top: 1px;
-    accent-color: var(--green-mid);
-    flex-shrink: 0;
+  .modal h3 { font-family:'Playfair Display',serif; font-size:22px; color:var(--green-deep); margin-bottom:6px; }
+  .modal p  { font-size:14px; color:var(--text-muted); margin-bottom:20px; line-height:1.6; }
+  .modal-detail { background:var(--green-pale); border-radius:10px; padding:16px 18px; margin-bottom:20px; font-size:14px; line-height:1.8; }
+  .modal-detail strong { color:var(--green-deep); }
+  .modal-row { display:flex; gap:10px; margin-bottom:14px; }
+  .modal-input {
+    flex:1; padding:12px 16px; border:2px solid var(--border); border-radius:10px;
+    font-family:inherit; font-size:14px; outline:none; transition:border .2s;
   }
-  .yard-check-box .hint {
-    font-size: 12px; color: var(--text-muted);
-    margin-top: 6px; margin-left: 30px;
+  .modal-input:focus { border-color:var(--green-mid); }
+  .modal-textarea {
+    width:100%; padding:12px 16px; border:2px solid var(--border); border-radius:10px;
+    font-family:inherit; font-size:14px; outline:none; resize:vertical; margin-bottom:14px;
+    transition:border .2s;
   }
+  .modal-textarea:focus { border-color:var(--green-mid); }
+  .modal-actions { display:flex; gap:10px; }
+  .btn-send {
+    flex:1; padding:14px; background:var(--green-mid); color:#fff;
+    border:none; border-radius:10px; font-family:inherit; font-size:15px;
+    font-weight:600; cursor:pointer; transition:background .2s;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .btn-send:hover { background:var(--green-deep); }
+  .btn-send:disabled { background:#a0aec0; cursor:not-allowed; }
+  .btn-cancel {
+    padding:14px 20px; background:#fff; color:var(--text-muted);
+    border:2px solid var(--border); border-radius:10px; font-family:inherit;
+    font-size:15px; font-weight:600; cursor:pointer;
+  }
+  .modal-error { color:var(--red); font-size:13px; margin-top:10px; display:none; }
+  .modal-success { background:#f0fdf4; border:1px solid #86efac; border-radius:10px; padding:16px; text-align:center; color:#15803d; font-weight:600; display:none; margin-top:16px; }
 
-  /* ── BUTTON ── */
-  .btn-submit {
-    width: 100%; padding: 16px;
-    background: var(--green-mid);
-    color: #fff; border: none;
-    border-radius: 10px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 16px; font-weight: 600;
-    cursor: pointer;
-    transition: background .2s, transform .15s;
-    display: flex; align-items: center; justify-content: center; gap: 10px;
-    margin-top: 4px;
-  }
-  .btn-submit:hover { background: var(--green-deep); transform: translateY(-1px); }
-  .btn-submit:disabled { background: #ccc; cursor: not-allowed; transform: none; }
-  .btn-submit .spinner {
-    width: 18px; height: 18px;
-    border: 2px solid rgba(255,255,255,0.4);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: spin .7s linear infinite;
-    display: none;
-  }
-  .btn-submit.loading .spinner { display: block; }
-  .btn-submit.loading .btn-text { display: none; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ── TRUST NOTE ── */
-  .trust-note {
-    text-align: center; font-size: 12px; color: var(--text-muted);
-    margin-top: 14px;
-    line-height: 1.5;
-  }
-
-  /* ── SUCCESS STATE ── */
-  .success-state {
-    display: none;
-    text-align: center;
-    padding: 20px 0;
-  }
-  .success-icon {
-    width: 80px; height: 80px;
-    background: var(--green-pale);
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 36px;
-    margin: 0 auto 24px;
-  }
-  .success-state h2 {
-    font-family: 'Playfair Display', serif;
-    font-size: 26px; font-weight: 700;
-    color: var(--green-deep);
-    margin-bottom: 12px;
-  }
-  .success-state p {
-    font-size: 15px; color: var(--text-muted);
-    line-height: 1.7;
-    max-width: 360px; margin: 0 auto;
-  }
-  .success-state .btn-home {
-    display: inline-block;
-    margin-top: 28px;
-    background: var(--green-mid);
-    color: #fff;
-    text-decoration: none;
-    padding: 14px 32px;
-    border-radius: 10px;
-    font-size: 15px; font-weight: 600;
-    transition: background .2s;
-  }
-  .success-state .btn-home:hover { background: var(--green-deep); }
-
-  /* ── BOOKING CALENDAR ── */
-  .cal-widget { border:1.5px solid rgba(26,58,26,0.15); border-radius:10px; overflow:hidden; background:#fff; margin-bottom:4px; }
-  .cal-header { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:var(--green-pale); }
-  .cal-month-label { font-weight:700; font-size:14px; color:var(--green-deep); letter-spacing:.01em; }
-  .cal-nav { background:none; border:none; font-size:22px; line-height:1; cursor:pointer; color:var(--green-mid); padding:2px 8px; border-radius:6px; transition:background .15s; }
-  .cal-nav:hover:not(:disabled) { background:rgba(45,106,45,0.12); }
-  .cal-nav:disabled { color:#ccc; cursor:not-allowed; }
-  .cal-day-names { display:grid; grid-template-columns:repeat(7,1fr); padding:8px 8px 0; border-bottom:1px solid rgba(26,58,26,0.07); }
-  .cal-day-name { text-align:center; font-size:11px; font-weight:700; color:var(--text-muted); letter-spacing:.06em; padding-bottom:8px; }
-  .cal-day-name.wknd { color:#d1d5db; }
-  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; padding:8px; }
-  .cal-cell { aspect-ratio:1; display:flex; align-items:center; justify-content:center; border-radius:8px; font-size:13px; font-weight:500; transition:background .15s, color .15s; }
-  .cal-cell.available { color:var(--green-deep); cursor:pointer; }
-  .cal-cell.available:hover { background:var(--green-pale); }
-  .cal-cell.selected { background:var(--green-mid) !important; color:#fff !important; font-weight:700; cursor:pointer; }
-  .cal-cell.disabled, .cal-cell.wknd-cell, .cal-cell.blocked { color:#d1d5db; cursor:not-allowed; }
-  .cal-cell.blocked { text-decoration:line-through; }
-  .cal-cell.empty { cursor:default; }
-  .cal-picked { padding:10px 14px; border-top:1px solid rgba(26,58,26,0.08); font-size:13px; font-weight:600; color:var(--green-mid); text-align:center; min-height:40px; display:flex; align-items:center; justify-content:center; }
-  .cal-picked.none { color:var(--text-muted); font-weight:400; }
-
-  /* ── ERRORS ── */
-  .field-error {
-    color: #e53e3e;
-    font-size: 13px;
-    margin-top: 6px;
-    display: none;
-  }
-
-  /* ── DATE HINT ── */
-  .date-hint {
-    font-size: 12px; color: var(--text-muted);
-    margin-top: 6px;
-  }
-
-  /* ── FOOTER ── */
-  footer {
-    background: var(--green-deep);
-    color: rgba(255,255,255,0.55);
-    padding: 24px 40px;
-    text-align: center;
-    font-size: 13px;
-  }
-  footer a {
-    color: rgba(255,255,255,0.55);
-    text-decoration: none;
-  }
-  footer a:hover { color: var(--green-light); }
-
-  /* ── RESPONSIVE ── */
-  @media (max-width: 560px) {
-    .card { padding: 28px 20px; border-radius: 16px; }
-    .page-wrap { padding: 24px 16px 48px; }
-    nav { padding: 14px 20px; }
-    footer { padding: 20px 24px; }
+  @media(max-width:600px) {
+    .booking-card { grid-template-columns:1fr; }
+    .card-actions { align-items:stretch; flex-direction:row; flex-wrap:wrap; }
+    header { flex-wrap:wrap; }
+    .modal { padding:24px 20px; }
   }
 </style>
 </head>
 <body>
 
-<!-- NAV -->
-<nav id="navbar">
-  <div class="nav-logo">
-    <a href="/" style="text-decoration:none;">
-      <span>🌿 Evergreen <em>Lawn Care</em></span>
-    </a>
-  </div>
-  <ul class="nav-links">
-    <li><a href="/#services">Services</a></li>
-    <li><a href="/#how">How It Works</a></li>
-    <li><a href="/#trust">Why Us</a></li>
-    <li><a href="tel:+13524620627" class="nav-cta">Call Us</a></li>
-  </ul>
-</nav>
-
-<div class="nav-spacer"></div>
-
-<!-- HERO -->
-<div class="hero-banner" id="heroBanner">
-  <div class="badge">Limited Offer</div>
-  <h1>Your First Lawn Service,<br/><span>On Us.</span></h1>
-  <p>New to Evergreen? Let us show you what we can do — completely free. No credit card, no commitment.</p>
-  <div class="free-value">
-    <span class="was">$45</span>
-    <span class="now">FREE</span>
+<!-- ══════════════════════════════════════════
+     LOGIN SCREEN
+══════════════════════════════════════════ -->
+<div id="loginScreen">
+  <div class="login-card">
+    <h1>🌿 Evergreen</h1>
+    <p>Admin access only — enter your password to continue.</p>
+    <input type="password" id="pwInput" class="login-input" placeholder="Password"
+           onkeydown="if(event.key==='Enter') login()"/>
+    <button class="login-btn" onclick="login()">Sign In</button>
+    <div id="loginError">Incorrect password. Try again.</div>
   </div>
 </div>
 
-<!-- MAIN -->
-<div class="page-wrap">
-  <div class="card">
+<!-- ══════════════════════════════════════════
+     MAIN APP
+══════════════════════════════════════════ -->
+<div id="appScreen">
 
-    <!-- FORM STATE -->
-    <div id="formState">
+  <header>
+    <div class="header-brand">🌿 Evergreen <span>Invoices</span></div>
+    <div class="header-right">
+      <span id="lastRefresh"></span>
+      <button class="btn-refresh" onclick="loadBookings()">↻ Refresh</button>
+      <button class="btn-logout" onclick="logout()">Sign Out</button>
+    </div>
+  </header>
 
-      <div class="eligibility-notice">
-        <div class="icon">⚠️</div>
-        <p><strong>First-time customers only · One per address.</strong> By submitting, you confirm this is your first time using Evergreen Lawn Care and that you haven't previously redeemed this offer at your address.</p>
-      </div>
+  <div class="container">
 
-      <div class="section-title">Claim Your Free Visit</div>
-
-      <div class="form-row">
-        <label>Full Name</label>
-        <input type="text" id="customerName" placeholder="Jane Smith"/>
-      </div>
-      <div class="form-row">
-        <label>Email Address</label>
-        <input type="email" id="customerEmail" placeholder="jane@email.com"/>
-      </div>
-      <div class="form-row">
-        <label>Phone Number</label>
-        <input type="tel" id="customerPhone" placeholder="(352) 462-0627"/>
-      </div>
-      <div class="form-row">
-        <label>Property Address</label>
-        <input type="text" id="customerAddress" placeholder="123 Oak St, Citrus Springs, FL"/>
-      </div>
-      <div class="form-row">
-        <label>Zip Code</label>
-        <input type="text" id="customerZip" placeholder="34433" maxlength="5"/>
-        <div id="zip-error" class="field-error">Sorry, we currently only serve Citrus County, FL. Please call us at <a href="tel:+13524620627">(352) 462-0627</a> to discuss service availability.</div>
-      </div>
-
-      <!-- YARD SIZE -->
-      <div class="yard-check-box">
-        <label>
-          <input type="checkbox" id="largeYard" onchange="handleYardSize()"/>
-          My yard is larger than ½ acre
-        </label>
-        <div class="hint">Large properties need a custom quote — check this if you're unsure.</div>
-      </div>
-
-      <!-- STANDARD BOOKING -->
-      <div id="bookingSection">
-        <div class="form-row">
-          <label>Preferred Service Date</label>
-          <div class="cal-widget">
-            <div class="cal-header">
-              <button class="cal-nav" id="calPrev" onclick="calPrevMonth()" type="button">‹</button>
-              <span class="cal-month-label" id="calMonthLabel"></span>
-              <button class="cal-nav" id="calNext" onclick="calNextMonth()" type="button">›</button>
-            </div>
-            <div class="cal-day-names">
-              <div class="cal-day-name">Su</div>
-              <div class="cal-day-name">Mo</div>
-              <div class="cal-day-name">Tu</div>
-              <div class="cal-day-name">We</div>
-              <div class="cal-day-name">Th</div>
-              <div class="cal-day-name">Fr</div>
-              <div class="cal-day-name">Sa</div>
-            </div>
-            <div class="cal-grid" id="calGrid"></div>
-            <div class="cal-picked none" id="calPicked">Select a date above</div>
-          </div>
-          <input type="hidden" id="preferredDay"/>
-          <div id="date-error" class="field-error">Please select an available date.</div>
-        </div>
-        <div class="form-row">
-          <label>Notes (gate code, special instructions, etc.)</label>
-          <textarea id="notes" placeholder="e.g. Gate code is 1234, avoid the back corner..."></textarea>
-        </div>
-
-        <div class="price-summary">
-          <div>
-            <div class="label">Total Due Today</div>
-            <div class="sublabel">One-time free visit</div>
-          </div>
-          <div class="amount">FREE</div>
-        </div>
-
-        <button class="btn-submit" id="submitBtn" onclick="handleSubmit()">
-          <div class="spinner"></div>
-          <span class="btn-text">Claim My Free Lawn Service →</span>
-        </button>
-        <div class="trust-note">No payment required · No commitment · Citrus County, FL only</div>
-      </div>
-
-      <!-- LARGE YARD QUOTE -->
-      <div id="quoteSection" style="display:none;">
-        <div style="background:#fff8e1;border:1px solid #f59e0b;border-radius:10px;padding:14px 16px;margin-bottom:18px;font-size:13px;color:#92400e;line-height:1.6;">
-          🌿 No problem! Large properties get a custom quote. Fill in your details and we'll reach out within 24 hours.
-        </div>
-        <div class="form-row">
-          <label>Yard Size (approximate)</label>
-          <select id="yardSize">
-            <option value="">-- Select a size --</option>
-            <option>½ – 1 acre</option>
-            <option>1 – 2 acres</option>
-            <option>2 – 5 acres</option>
-            <option>5+ acres</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <label>Notes (anything we should know)</label>
-          <textarea id="quoteNotes" placeholder="e.g. Lots of trees, steep slope, needs trimming too..."></textarea>
-        </div>
-        <button class="btn-submit" id="quoteBtn" onclick="handleQuote()">
-          <div class="spinner"></div>
-          <span class="btn-text">Request a Free Quote →</span>
-        </button>
-        <div class="trust-note">First-time customers only · One per address</div>
-      </div>
-
+    <!-- Search + Filter -->
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="Search by name, address, or service…" oninput="renderBookings()"/>
+      <select class="filter-select" id="filterStatus" onchange="renderBookings()">
+        <option value="all">All bookings</option>
+        <option value="pending">Needs invoice</option>
+        <option value="autopay">Auto-Pay only</option>
+        <option value="invoiced">Invoiced</option>
+      </select>
     </div>
 
-    <!-- SUCCESS STATE -->
-    <div class="success-state" id="successState">
-      <div class="success-icon">🌿</div>
-      <h2 id="successTitle">You're on the books!</h2>
-      <p id="successMsg">Thanks for claiming your free lawn service! We'll review your info and reach out within 24 hours to confirm your date. See you soon!</p>
-      <a href="/" class="btn-home">Back to Evergreen Lawn Care →</a>
+    <!-- Today's Jobs -->
+    <div id="todaySection">
+      <div class="section-label">
+        📅 Today's Jobs <span class="badge" id="todayCount">0</span>
+      </div>
+      <div id="todayList"></div>
     </div>
 
-    <!-- ALREADY CLAIMED STATE -->
-    <div class="success-state" id="alreadyClaimedState">
-      <div class="success-icon">🚫</div>
-      <h2>Offer Already Redeemed</h2>
-      <p>It looks like this free visit has already been claimed from this device or address. This offer is limited to one per household for first-time customers.</p>
-      <p style="margin-top:14px;">Questions? Give us a call.</p>
-      <a href="tel:+13524620627" class="btn-home" style="background:var(--green-deep);">Call (352) 462-0627</a>
-      <br/>
-      <a href="/" class="btn-home" style="margin-top:12px; background:var(--green-mid);">View Our Services →</a>
+    <!-- All Bookings -->
+    <div style="margin-top:32px;">
+      <div class="section-label">
+        📋 All Bookings <span class="badge" id="allCount">0</span>
+      </div>
+      <div id="allList"></div>
     </div>
 
   </div>
 </div>
 
-<!-- FOOTER -->
-<footer>
-  <p>© 2025 Evergreen Lawn Care · Citrus County, FL · <a href="tel:+13524620627">(352) 462-0627</a></p>
-  <p style="margin-top:6px;">
-    <a href="/privacy-policy.html">Privacy Policy</a> &nbsp;·&nbsp;
-    <a href="/terms-of-service.html">Terms of Service</a>
-  </p>
-</footer>
+<!-- ══════════════════════════════════════════
+     INVOICE MODAL
+══════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
+  <div class="modal">
+    <h3>Send Invoice</h3>
+    <p>Review the details below and click Send. The customer will receive a professional Stripe invoice by email with a Pay Now button.</p>
+
+    <div class="modal-detail" id="modalDetail"></div>
+
+    <div class="modal-row">
+      <input type="number" id="invoiceAmount" class="modal-input" placeholder="Amount ($)" step="0.01" min="1"/>
+      <input type="number" id="invoiceDays" class="modal-input" placeholder="Days to pay" value="7" min="1" max="30"/>
+    </div>
+    <textarea id="invoiceNote" class="modal-textarea" rows="3"
+              placeholder="Optional note to customer (e.g. 'Thanks for your business! Gate code was 1234 — let us know if you have any questions.')"></textarea>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-send" id="sendBtn" onclick="sendInvoice()">
+        <span id="sendBtnText">📧 Send Invoice</span>
+      </button>
+    </div>
+    <div class="modal-error" id="modalError"></div>
+    <div class="modal-success" id="modalSuccess">✅ Invoice sent! Check your Stripe dashboard.</div>
+  </div>
+</div>
 
 <script>
-// ─────────────────────────────────────────────
-// CONFIG
-// ─────────────────────────────────────────────
-// After deploying your Apps Script, paste the Web App URL below:
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxzlXvyQYNDCLW0cSz7Ln4scpqMQTozexg8pkyfOxCCiesWmYixBZU9hD8d0Qp_IpdaTg/exec';
+// ═══════════════════════════════════════════════════════
+// CONFIG — update these URLs after deploying your scripts
+// ═══════════════════════════════════════════════════════
+const INVOICE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby23IEsXg9TbIfKINDYJoJXQFATFwHZm9tNTGxL6dMf6aQ1yGlSRGUd2xDetxdCNbxERQ/exec';
+const ADMIN_PASSWORD     = 'evergreen2025';
 
-const FORMSPREE_URL = 'https://formspree.io/f/xnjlnooq';
-
-const COOKIE_NAME = 'eg_free_claimed'; // cookie set after a successful claim
-
-// ─────────────────────────────────────────────
-// COOKIE HELPERS
-// ─────────────────────────────────────────────
-function setCookie(name, value, days) {
-  const expires = new Date(Date.now() + days * 864e5).toUTCString();
-  document.cookie = `${name}=${value}; expires=${expires}; path=/; SameSite=Lax`;
-}
-
-function getCookie(name) {
-  return document.cookie.split('; ').reduce((acc, c) => {
-    const [k, v] = c.split('=');
-    return k === name ? v : acc;
-  }, null);
-}
-
-// ─────────────────────────────────────────────
-// BOOKING CALENDAR CONFIG
-// ─────────────────────────────────────────────
-const MAX_BOOKING_DAYS = 30;
-
-// Dates to block (format: 'YYYY-MM-DD'). Add/remove as needed.
-const BLOCKED_DATES = new Set([
-  // ── 2026 Federal Holidays ──
-  '2026-01-01', // New Year's Day
-  '2026-01-19', // MLK Day
-  '2026-02-16', // Presidents' Day
-  '2026-05-25', // Memorial Day
-  '2026-06-19', // Juneteenth
-  '2026-07-03', // Independence Day (observed, July 4 falls on Sat)
-  '2026-07-04', // Independence Day
-  '2026-09-07', // Labor Day
-  '2026-10-12', // Columbus Day
-  '2026-11-11', // Veterans Day
-  '2026-11-26', // Thanksgiving
-  '2026-11-27', // Day after Thanksgiving
-  '2026-12-24', // Christmas Eve
-  '2026-12-25', // Christmas Day
-  '2026-12-31', // New Year's Eve
-  // ── 2027 Federal Holidays ──
-  '2027-01-01', // New Year's Day
-  '2027-01-18', // MLK Day
-  '2027-02-15', // Presidents' Day
-  '2027-05-31', // Memorial Day
-  '2027-06-18', // Juneteenth (observed, June 19 falls on Sat)
-  '2027-06-19', // Juneteenth
-  '2027-07-04', // Independence Day (Sun)
-  '2027-07-05', // Independence Day (observed)
-  '2027-09-06', // Labor Day
-  '2027-10-11', // Columbus Day
-  '2027-11-11', // Veterans Day
-  '2027-11-25', // Thanksgiving
-  '2027-11-26', // Day after Thanksgiving
-  '2027-12-24', // Christmas Eve
-  '2027-12-25', // Christmas Day
-  '2027-12-31', // New Year's Eve
-]);
-
-// ─────────────────────────────────────────────
-// CALENDAR STATE + FUNCTIONS
-// ─────────────────────────────────────────────
-let calYear, calMonth, calSelected = '';
-
-function initCalendar() {
-  calSelected = '';
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  calYear  = tomorrow.getFullYear();
-  calMonth = tomorrow.getMonth();
-  document.getElementById('preferredDay').value = '';
-  if (document.getElementById('date-error')) document.getElementById('date-error').style.display = 'none';
-  renderCalendar();
-}
-
-function renderCalendar() {
-  const today    = new Date(); today.setHours(0,0,0,0);
-  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-  const maxDate  = new Date(today); maxDate.setDate(today.getDate() + MAX_BOOKING_DAYS);
-  const MONTHS   = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-
-  document.getElementById('calMonthLabel').textContent = `${MONTHS[calMonth]} ${calYear}`;
-
-  const firstOfMonth = new Date(calYear, calMonth, 1);
-  const lastOfMonth  = new Date(calYear, calMonth + 1, 0);
-  document.getElementById('calPrev').disabled = firstOfMonth <= tomorrow;
-  document.getElementById('calNext').disabled = lastOfMonth  >= maxDate;
-
-  const grid = document.getElementById('calGrid');
-  grid.innerHTML = '';
-
-  const startDay = firstOfMonth.getDay();
-  for (let i = 0; i < startDay; i++) {
-    const el = document.createElement('div');
-    el.className = 'cal-cell empty';
-    grid.appendChild(el);
-  }
-
-  const daysInMonth = lastOfMonth.getDate();
-  for (let d = 1; d <= daysInMonth; d++) {
-    const date    = new Date(calYear, calMonth, d);
-    const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const isWknd  = date.getDay() === 0 || date.getDay() === 6;
-    const isPast  = date < tomorrow;
-    const isFar   = date > maxDate;
-    const isBlock = BLOCKED_DATES.has(dateStr);
-    const isSel   = dateStr === calSelected;
-
-    const el = document.createElement('div');
-    el.textContent = d;
-
-    if (isSel)                      el.className = 'cal-cell selected', el.onclick = () => pickDate(dateStr);
-    else if (isPast || isFar)       el.className = 'cal-cell disabled';
-    else if (isBlock)               el.className = 'cal-cell blocked';
-    else if (isWknd)                el.className = 'cal-cell wknd-cell disabled';
-    else { el.className = 'cal-cell available'; el.onclick = () => pickDate(dateStr); }
-
-    grid.appendChild(el);
-  }
-
-  const picked = document.getElementById('calPicked');
-  if (calSelected) {
-    picked.textContent = new Date(calSelected + 'T12:00:00').toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
-    picked.classList.remove('none');
+// ═══════════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════════
+function login() {
+  const pw = document.getElementById('pwInput').value;
+  if (pw === ADMIN_PASSWORD) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appScreen').style.display   = 'block';
+    loadBookings();
   } else {
-    picked.textContent = 'Select a date above';
-    picked.classList.add('none');
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('pwInput').value = '';
+    document.getElementById('pwInput').focus();
   }
 }
 
-function pickDate(dateStr) {
-  calSelected = dateStr;
-  document.getElementById('preferredDay').value = dateStr;
-  if (document.getElementById('date-error')) document.getElementById('date-error').style.display = 'none';
-  renderCalendar();
+function logout() {
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('appScreen').style.display   = 'none';
+  document.getElementById('pwInput').value = '';
 }
 
-function calPrevMonth() {
-  calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; }
-  renderCalendar();
-}
-function calNextMonth() {
-  calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; }
-  renderCalendar();
-}
-
-// ─────────────────────────────────────────────
-// CITRUS COUNTY ZIP CODES
-// ─────────────────────────────────────────────
-const VALID_ZIPS = new Set([
-  '34428','34429',
-  '34450','34452','34453',
-  '34446','34448',
-  '34460','34461',
-  '34433','34434',
-  '34436',
-  '34464'
-]);
-
-document.addEventListener('DOMContentLoaded', () => {
-  // ── Cookie check — instant, no network needed ──
-  if (getCookie(COOKIE_NAME)) {
-    showAlreadyClaimed();
-    return;
-  }
-
-  document.getElementById('customerZip').addEventListener('input', validateZip);
-  initCalendar();
+document.getElementById('pwInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') login();
 });
 
-function validateZip() {
-  const zip = document.getElementById('customerZip').value.trim();
-  const err = document.getElementById('zip-error');
-  if (zip.length === 5 && !VALID_ZIPS.has(zip)) {
-    err.style.display = 'block';
-    return false;
+// ═══════════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════════
+let allBookings = [];
+let activeRow   = null; // row index being invoiced
+
+async function loadBookings() {
+  document.getElementById('lastRefresh').textContent = 'Loading…';
+
+  const url = INVOICE_SCRIPT_URL + '?action=bookings&password=' + encodeURIComponent(ADMIN_PASSWORD);
+
+  try {
+    const res  = await fetch(url);
+    const data = await res.json();
+
+    if (!data.success) throw new Error(data.error || 'Unknown error');
+
+    allBookings = data.bookings || [];
+    renderBookings();
+
+    const now = new Date();
+    document.getElementById('lastRefresh').textContent =
+      'Updated ' + now.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+
+  } catch(err) {
+    document.getElementById('lastRefresh').textContent = 'Load failed';
+    document.getElementById('allList').innerHTML =
+      `<div class="empty-state">⚠️ Could not load bookings.<br><small>${err.message}</small><br><br><button class="btn-refresh" onclick="loadBookings()">Try Again</button></div>`;
   }
-  err.style.display = 'none';
-  return true;
 }
 
-function handleYardSize() {
-  const isLarge = document.getElementById('largeYard').checked;
-  document.getElementById('bookingSection').style.display = isLarge ? 'none' : 'block';
-  document.getElementById('quoteSection').style.display  = isLarge ? 'block' : 'none';
+// ═══════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════
+function renderBookings() {
+  const query    = document.getElementById('searchInput').value.toLowerCase();
+  const filter   = document.getElementById('filterStatus').value;
+  const todayStr = todayDateString();
+
+  let bookings = allBookings;
+
+  // Search filter
+  if (query) {
+    bookings = bookings.filter(b =>
+      (b.name    || '').toLowerCase().includes(query) ||
+      (b.address || '').toLowerCase().includes(query) ||
+      (b.service || '').toLowerCase().includes(query) ||
+      (b.email   || '').toLowerCase().includes(query)
+    );
+  }
+
+  // Status filter
+  if (filter === 'pending') {
+    bookings = bookings.filter(b => !b.invoiced && !isAutoPay(b));
+  } else if (filter === 'autopay') {
+    bookings = bookings.filter(b => isAutoPay(b));
+  } else if (filter === 'invoiced') {
+    bookings = bookings.filter(b => b.invoiced);
+  }
+
+  // Split today vs rest
+  const todayJobs = bookings.filter(b => b.serviceDateRaw === todayStr || normalizeDate(b.serviceDate) === todayStr);
+  const otherJobs = bookings.filter(b => b.serviceDateRaw !== todayStr && normalizeDate(b.serviceDate) !== todayStr);
+
+  // Render today
+  document.getElementById('todayCount').textContent = todayJobs.length;
+  document.getElementById('todayList').innerHTML = todayJobs.length
+    ? todayJobs.map(b => cardHTML(b, true)).join('')
+    : '<div class="empty-state" style="padding:20px;">No jobs scheduled for today.</div>';
+
+  // Render all
+  document.getElementById('allCount').textContent = bookings.length;
+  document.getElementById('allList').innerHTML = bookings.length
+    ? bookings.map(b => cardHTML(b, false)).join('')
+    : '<div class="empty-state">No bookings found.</div>';
 }
 
-async function handleSubmit() {
-  // ── 1. Cookie check (instant) ──
-  if (getCookie(COOKIE_NAME)) {
-    showAlreadyClaimed();
-    return;
-  }
+function cardHTML(b, isToday) {
+  const auto    = isAutoPay(b);
+  const invoiced = b.invoiced;
 
-  const name    = document.getElementById('customerName').value.trim();
-  const email   = document.getElementById('customerEmail').value.trim();
-  const phone   = document.getElementById('customerPhone').value.trim();
-  const address = document.getElementById('customerAddress').value.trim();
-  const zip     = document.getElementById('customerZip').value.trim();
-  const notes   = document.getElementById('notes').value.trim() || '(none)';
+  const autoBadge     = auto    ? '<span class="badge-autopay">🔄 AUTO-PAY</span>' : '<span class="badge-paylater">📧 Pay After</span>';
+  const invoicedBadge = invoiced ? '<span class="badge-invoiced">✅ Invoiced</span>' : '';
 
-  if (!name || !email || !address) {
-    alert('Please fill in your name, email, and address.');
-    return;
-  }
-  if (zip.length !== 5 || !VALID_ZIPS.has(zip)) {
-    alert('Please enter a valid Citrus County zip code.');
-    document.getElementById('zip-error').style.display = 'block';
-    return;
-  }
+  const btnLabel   = invoiced ? 'Sent ✓' : (auto ? 'No Invoice Needed' : 'Send Invoice');
+  const btnClass   = invoiced ? 'btn-invoice sent' : 'btn-invoice';
+  const btnDisabled = (invoiced || auto) ? 'disabled' : '';
 
-  const selectedDate = document.getElementById('preferredDay').value;
-  const dateErr = document.getElementById('date-error');
-  if (!selectedDate) {
-    dateErr.style.display = 'block';
-    alert('Please select a preferred service date.');
-    return;
-  }
-  dateErr.style.display = 'none';
+  const rowIdx = allBookings.indexOf(b);
 
-  const dateFormatted = new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  return `
+    <div class="booking-card ${isToday ? 'today' : ''} ${invoiced ? 'invoiced' : ''}">
+      <div>
+        <div class="card-name">${esc(b.name || '—')}</div>
+        <div class="card-meta">
+          📍 ${esc(b.address || '—')} ${b.zip ? '· ' + esc(b.zip) : ''}<br>
+          📅 ${esc(b.serviceDate || b.serviceDateRaw || '—')}<br>
+          ${b.email ? `✉️ <a href="mailto:${esc(b.email)}">${esc(b.email)}</a><br>` : ''}
+          ${b.phone ? `📞 ${esc(b.phone)}<br>` : ''}
+          ${b.notes && b.notes !== '(none)' ? `💬 ${esc(b.notes)}<br>` : ''}
+        </div>
+        <div class="card-badges">
+          <span class="badge-service">${esc(b.service || 'Service')}</span>
+          ${autoBadge}
+          ${invoicedBadge}
+        </div>
+      </div>
+      <div class="card-actions">
+        <div class="price-tag">${esc(b.price || '$—')}</div>
+        <button class="${btnClass}" ${btnDisabled}
+          onclick="openInvoiceModal(${rowIdx})">${btnLabel}</button>
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// INVOICE MODAL
+// ═══════════════════════════════════════════════════════
+function openInvoiceModal(rowIdx) {
+  const b = allBookings[rowIdx];
+  if (!b || isAutoPay(b) || b.invoiced) return;
+  activeRow = rowIdx;
+
+  // Pre-fill amount
+  const numericPrice = parseFloat((b.price || '').replace(/[^0-9.]/g, '')) || '';
+  document.getElementById('invoiceAmount').value = numericPrice;
+  document.getElementById('invoiceDays').value   = 7;
+  document.getElementById('invoiceNote').value   = '';
+  document.getElementById('modalError').style.display   = 'none';
+  document.getElementById('modalSuccess').style.display = 'none';
+  document.getElementById('sendBtn').disabled    = false;
+  document.getElementById('sendBtnText').textContent = '📧 Send Invoice';
+
+  document.getElementById('modalDetail').innerHTML = `
+    <strong>${esc(b.name)}</strong><br>
+    ✉️ ${esc(b.email || '(no email)')}  ·  📍 ${esc(b.address || '—')}<br>
+    Service: ${esc(b.service)} · Date: ${esc(b.serviceDate || b.serviceDateRaw || '—')}
+  `;
+
+  document.getElementById('modalOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => document.getElementById('invoiceAmount').focus(), 100);
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+  activeRow = null;
+}
+
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('modalOverlay')) closeModal();
+}
+
+async function sendInvoice() {
+  const b = allBookings[activeRow];
+  if (!b) return;
+
+  const amount  = parseFloat(document.getElementById('invoiceAmount').value);
+  const days    = parseInt(document.getElementById('invoiceDays').value) || 7;
+  const note    = document.getElementById('invoiceNote').value.trim();
+  const errEl   = document.getElementById('modalError');
+  const successEl = document.getElementById('modalSuccess');
+
+  errEl.style.display     = 'none';
+  successEl.style.display = 'none';
+
+  if (!b.email) { errEl.textContent = 'This customer has no email on file. Cannot send invoice.'; errEl.style.display='block'; return; }
+  if (!amount || amount <= 0) { errEl.textContent = 'Please enter a valid amount.'; errEl.style.display='block'; return; }
+
+  const btn = document.getElementById('sendBtn');
+  btn.disabled = true;
+  document.getElementById('sendBtnText').textContent = 'Sending…';
+
+  const params = new URLSearchParams({
+    action:       'send_invoice',
+    password:     ADMIN_PASSWORD,
+    email:        b.email,
+    name:         b.name,
+    amount:       amount,
+    description:  `${b.service} – ${b.serviceDate || b.serviceDateRaw || 'Lawn Service'} – ${b.address || ''}`,
+    daysUntilDue: days,
+    note:         note || '',
+    rowIndex:     activeRow + 2, // 1-based + header row
   });
 
-  const btn = document.getElementById('submitBtn');
-  btn.classList.add('loading');
-  btn.disabled = true;
-
-  // ── 2. Google Sheet check + log (blocks duplicate addresses) ──
   try {
-    const params = new URLSearchParams({
-      action: 'claim',
-      address, name, email, phone, zip,
-      serviceDateRaw: selectedDate,   // YYYY-MM-DD (for Calendar)
-      serviceDate: dateFormatted,     // human-readable (for Sheet display)
-      notes,
-    });
-    const sheetRes = await fetch(`${APPS_SCRIPT_URL}?${params}`);
-    const sheetData = await sheetRes.json();
+    const res  = await fetch(INVOICE_SCRIPT_URL + '?' + params.toString());
+    const data = await res.json();
 
-    if (!sheetData.success && sheetData.reason === 'address_used') {
-      btn.classList.remove('loading');
-      btn.disabled = false;
-      showAlreadyClaimed();
-      return;
-    }
-  } catch (err) {
-    // If the Sheet check fails (network issue, script not set up yet),
-    // allow the submission to go through so customers aren't blocked
-    console.warn('Sheet check failed, proceeding anyway:', err);
-  }
-
-  // ── 3. Send to Formspree ──
-  try {
-    const res = await fetch(FORMSPREE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({
-        _subject: `🎉 FREE SERVICE Claim – ${name} – ${dateFormatted}`,
-        type: 'FREE SERVICE CLAIM (First-Time Customer)',
-        name, email, phone, address, zip,
-        service: 'Free First Lawn Service (Cut & Clean)',
-        serviceDate: selectedDate,
-        serviceDateFormatted: dateFormatted,
-        notes,
-      })
-    });
-
-    btn.classList.remove('loading');
-    btn.disabled = false;
-
-    if (res.ok) {
-      // ── 4. Set cookie so this device is blocked for 2 years ──
-      setCookie(COOKIE_NAME, '1', 730);
-      showSuccess(
-        "You're on the books!",
-        "Thanks for claiming your free lawn service! We'll review your info and reach out within 24 hours to confirm your date. See you soon!"
-      );
+    if (data.success) {
+      successEl.style.display = 'block';
+      document.getElementById('sendBtnText').textContent = '✅ Sent!';
+      // Mark locally
+      allBookings[activeRow].invoiced = true;
+      // Refresh list after short delay so user sees the success state
+      setTimeout(() => {
+        closeModal();
+        renderBookings();
+      }, 2200);
     } else {
-      alert('Something went wrong. Please call us at (352) 462-0627.');
-    }
-  } catch(e) {
-    btn.classList.remove('loading');
-    btn.disabled = false;
-    alert('Something went wrong. Please call us at (352) 462-0627.');
-  }
-}
-
-async function handleQuote() {
-  // Cookie check
-  if (getCookie(COOKIE_NAME)) {
-    showAlreadyClaimed();
-    return;
-  }
-
-  const name    = document.getElementById('customerName').value.trim();
-  const email   = document.getElementById('customerEmail').value.trim();
-  const phone   = document.getElementById('customerPhone').value.trim();
-  const address = document.getElementById('customerAddress').value.trim();
-  const zip     = document.getElementById('customerZip').value.trim();
-  const notes   = document.getElementById('quoteNotes').value.trim() || '(none)';
-
-  if (!name || !email || !address) {
-    alert('Please fill in your name, email, and address.');
-    return;
-  }
-  if (zip.length !== 5 || !VALID_ZIPS.has(zip)) {
-    alert('Please enter a valid Citrus County zip code.');
-    document.getElementById('zip-error').style.display = 'block';
-    return;
-  }
-
-  const btn = document.getElementById('quoteBtn');
-  btn.classList.add('loading');
-  btn.disabled = true;
-
-  // Sheet check
-  try {
-    const params = new URLSearchParams({ action: 'claim', address, name, email, phone, zip, notes });
-    const sheetRes  = await fetch(`${APPS_SCRIPT_URL}?${params}`);
-    const sheetData = await sheetRes.json();
-    if (!sheetData.success && sheetData.reason === 'address_used') {
-      btn.classList.remove('loading');
-      btn.disabled = false;
-      showAlreadyClaimed();
-      return;
+      throw new Error(data.error || 'Invoice failed');
     }
   } catch(err) {
-    console.warn('Sheet check failed, proceeding anyway:', err);
+    btn.disabled = false;
+    document.getElementById('sendBtnText').textContent = '📧 Send Invoice';
+    errEl.textContent = '❌ ' + err.message;
+    errEl.style.display = 'block';
   }
+}
 
-  // Formspree
+// ═══════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════
+function isAutoPay(b) {
+  const pm = (b.payMethod || '').toLowerCase();
+  return pm.includes('auto') || pm.includes('stripe') || pm.includes('now');
+}
+
+function todayDateString() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+// Try to parse a human-readable service date back to YYYY-MM-DD for comparison
+function normalizeDate(str) {
+  if (!str) return '';
   try {
-    const res = await fetch(FORMSPREE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({
-        _subject: `🎉 FREE SERVICE Quote – Large Property – ${name}`,
-        type: 'FREE SERVICE QUOTE REQUEST (Large Property – First-Time Customer)',
-        name, email, phone, address, zip,
-        service: 'Free First Lawn Service – Large Yard Quote',
-        yardSize: document.getElementById('yardSize').value || '(not specified)',
-        notes,
-      })
-    });
-
-    btn.classList.remove('loading');
-    btn.disabled = false;
-
-    if (res.ok) {
-      setCookie(COOKIE_NAME, '1', 730);
-      showSuccess(
-        "Quote Request Received!",
-        "Thanks! We'll review your property details and reach out within 24 hours to discuss your free service."
-      );
-    } else {
-      alert('Something went wrong. Please call us at (352) 462-0627.');
-    }
-  } catch(e) {
-    btn.classList.remove('loading');
-    btn.disabled = false;
-    alert('Something went wrong. Please call us at (352) 462-0627.');
-  }
+    const d = new Date(str);
+    if (isNaN(d)) return '';
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  } catch { return ''; }
 }
 
-function hideHeroAndForm() {
-  document.getElementById('heroBanner').style.display = 'none';
-  document.getElementById('formState').style.display = 'none';
-  document.getElementById('successState').style.display = 'none';
-  document.getElementById('alreadyClaimedState').style.display = 'none';
-}
-
-function showSuccess(title, msg) {
-  hideHeroAndForm();
-  document.getElementById('successTitle').textContent = title;
-  document.getElementById('successMsg').textContent = msg;
-  document.getElementById('successState').style.display = 'block';
-}
-
-function showAlreadyClaimed() {
-  hideHeroAndForm();
-  document.getElementById('alreadyClaimedState').style.display = 'block';
-}
-</script>
-</body>
-</html>
-    overflow: hidden;
-  }
-  .hero-banner::before {
-    content: '';
-    position: absolute; inset: 0;
-    background: radial-gradient(ellipse at 70% 50%, rgba(76,175,80,0.18) 0%, transparent 65%);
-    pointer-events: none;
-  }
-  .badge {
-    display: inline-block;
-    background: var(--gold);
-    color: #fff;
-    font-size: 11px; font-weight: 700;
-    letter-spacing: .1em;
-    padding: 5px 14px;
-    border-radius: 20px;
-    text-transform: uppercase;
-    margin-bottom: 16px;
-  }
-  .hero-banner h1 {
-    font-family: 'Playfair Display', serif;
-    font-size: clamp(28px, 5vw, 44px);
-    font-weight: 900;
-    color: #fff;
-    line-height: 1.15;
-    margin-bottom: 12px;
-  }
-  .hero-banner h1 span { color: var(--green-light); }
-  .hero-banner p {
-    font-size: 15px;
-    color: rgba(255,255,255,0.75);
-    max-width: 420px;
-    margin: 0 auto;
-    line-height: 1.6;
-  }
-  .free-value {
-    display: inline-flex; align-items: baseline; gap: 6px;
-    margin-top: 20px;
-  }
-  .free-value .was {
-    font-size: 18px; color: rgba(255,255,255,0.4);
-    text-decoration: line-through;
-    font-weight: 500;
-  }
-  .free-value .now {
-    font-family: 'Playfair Display', serif;
-    font-size: 42px; font-weight: 900;
-    color: var(--green-light);
-  }
-
-  /* ── MAIN CONTENT ── */
-  .page-wrap {
-    flex: 1;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 40px 24px 60px;
-  }
-
-  .card {
-    background: #fff;
-    border-radius: 20px;
-    padding: 40px;
-    max-width: 520px;
-    width: 100%;
-    box-shadow: 0 8px 40px rgba(26,58,26,0.10);
-  }
-
-  /* ── ELIGIBILITY NOTICE ── */
-  .eligibility-notice {
-    background: #fffbeb;
-    border: 1px solid #f59e0b;
-    border-radius: 10px;
-    padding: 14px 16px;
-    margin-bottom: 28px;
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-  }
-  .eligibility-notice .icon { font-size: 18px; flex-shrink: 0; line-height: 1.4; }
-  .eligibility-notice p {
-    font-size: 13px;
-    color: #92400e;
-    line-height: 1.6;
-  }
-  .eligibility-notice strong { font-weight: 700; }
-
-  .section-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 20px; font-weight: 700;
-    color: var(--green-deep);
-    margin-bottom: 20px;
-  }
-
-  /* ── FORM ── */
-  .form-row { margin-bottom: 16px; }
-  .form-row label {
-    display: block;
-    font-size: 13px; font-weight: 600;
-    color: var(--green-deep);
-    margin-bottom: 7px;
-    letter-spacing: .02em;
-  }
-  .form-row input,
-  .form-row select,
-  .form-row textarea {
-    width: 100%;
-    padding: 12px 16px;
-    border: 1.5px solid rgba(26,58,26,0.15);
-    border-radius: 8px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 14px;
-    color: var(--text);
-    background: var(--cream);
-    outline: none;
-    transition: border-color .2s;
-    -webkit-appearance: none;
-  }
-  .form-row input:focus,
-  .form-row select:focus,
-  .form-row textarea:focus { border-color: var(--green-bright); }
-  .form-row textarea { height: 80px; resize: vertical; }
-
-  /* ── PRICE SUMMARY ── */
-  .price-summary {
-    background: var(--green-pale);
-    border-radius: 10px;
-    padding: 16px 20px;
-    margin: 20px 0;
-    display: flex; justify-content: space-between; align-items: center;
-  }
-  .price-summary .label { font-size: 14px; color: var(--text-muted); }
-  .price-summary .sublabel { font-size: 12px; color: var(--green-mid); font-weight: 500; }
-  .price-summary .amount {
-    font-family: 'Playfair Display', serif;
-    font-size: 26px; font-weight: 900;
-    color: var(--green-mid);
-  }
-
-  /* ── LARGE YARD BOX ── */
-  .yard-check-box {
-    background: var(--green-pale);
-    border-radius: 10px;
-    padding: 16px 18px;
-    margin-bottom: 18px;
-  }
-  .yard-check-box label {
-    display: flex; align-items: flex-start; gap: 12px;
-    cursor: pointer; font-size: 14px; font-weight: 600;
-    color: var(--green-deep);
-  }
-  .yard-check-box input[type=checkbox] {
-    width: 18px; height: 18px;
-    margin-top: 1px;
-    accent-color: var(--green-mid);
-    flex-shrink: 0;
-  }
-  .yard-check-box .hint {
-    font-size: 12px; color: var(--text-muted);
-    margin-top: 6px; margin-left: 30px;
-  }
-
-  /* ── BUTTON ── */
-  .btn-submit {
-    width: 100%; padding: 16px;
-    background: var(--green-mid);
-    color: #fff; border: none;
-    border-radius: 10px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 16px; font-weight: 600;
-    cursor: pointer;
-    transition: background .2s, transform .15s;
-    display: flex; align-items: center; justify-content: center; gap: 10px;
-    margin-top: 4px;
-  }
-  .btn-submit:hover { background: var(--green-deep); transform: translateY(-1px); }
-  .btn-submit:disabled { background: #ccc; cursor: not-allowed; transform: none; }
-  .btn-submit .spinner {
-    width: 18px; height: 18px;
-    border: 2px solid rgba(255,255,255,0.4);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: spin .7s linear infinite;
-    display: none;
-  }
-  .btn-submit.loading .spinner { display: block; }
-  .btn-submit.loading .btn-text { display: none; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ── TRUST NOTE ── */
-  .trust-note {
-    text-align: center; font-size: 12px; color: var(--text-muted);
-    margin-top: 14px;
-    line-height: 1.5;
-  }
-
-  /* ── SUCCESS STATE ── */
-  .success-state {
-    display: none;
-    text-align: center;
-    padding: 20px 0;
-  }
-  .success-icon {
-    width: 80px; height: 80px;
-    background: var(--green-pale);
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 36px;
-    margin: 0 auto 24px;
-  }
-  .success-state h2 {
-    font-family: 'Playfair Display', serif;
-    font-size: 26px; font-weight: 700;
-    color: var(--green-deep);
-    margin-bottom: 12px;
-  }
-  .success-state p {
-    font-size: 15px; color: var(--text-muted);
-    line-height: 1.7;
-    max-width: 360px; margin: 0 auto;
-  }
-  .success-state .btn-home {
-    display: inline-block;
-    margin-top: 28px;
-    background: var(--green-mid);
-    color: #fff;
-    text-decoration: none;
-    padding: 14px 32px;
-    border-radius: 10px;
-    font-size: 15px; font-weight: 600;
-    transition: background .2s;
-  }
-  .success-state .btn-home:hover { background: var(--green-deep); }
-
-  /* ── BOOKING CALENDAR ── */
-  .cal-widget { border:1.5px solid rgba(26,58,26,0.15); border-radius:10px; overflow:hidden; background:#fff; margin-bottom:4px; }
-  .cal-header { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:var(--green-pale); }
-  .cal-month-label { font-weight:700; font-size:14px; color:var(--green-deep); letter-spacing:.01em; }
-  .cal-nav { background:none; border:none; font-size:22px; line-height:1; cursor:pointer; color:var(--green-mid); padding:2px 8px; border-radius:6px; transition:background .15s; }
-  .cal-nav:hover:not(:disabled) { background:rgba(45,106,45,0.12); }
-  .cal-nav:disabled { color:#ccc; cursor:not-allowed; }
-  .cal-day-names { display:grid; grid-template-columns:repeat(7,1fr); padding:8px 8px 0; border-bottom:1px solid rgba(26,58,26,0.07); }
-  .cal-day-name { text-align:center; font-size:11px; font-weight:700; color:var(--text-muted); letter-spacing:.06em; padding-bottom:8px; }
-  .cal-day-name.wknd { color:#d1d5db; }
-  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; padding:8px; }
-  .cal-cell { aspect-ratio:1; display:flex; align-items:center; justify-content:center; border-radius:8px; font-size:13px; font-weight:500; transition:background .15s, color .15s; }
-  .cal-cell.available { color:var(--green-deep); cursor:pointer; }
-  .cal-cell.available:hover { background:var(--green-pale); }
-  .cal-cell.selected { background:var(--green-mid) !important; color:#fff !important; font-weight:700; cursor:pointer; }
-  .cal-cell.disabled, .cal-cell.wknd-cell, .cal-cell.blocked { color:#d1d5db; cursor:not-allowed; }
-  .cal-cell.blocked { text-decoration:line-through; }
-  .cal-cell.empty { cursor:default; }
-  .cal-picked { padding:10px 14px; border-top:1px solid rgba(26,58,26,0.08); font-size:13px; font-weight:600; color:var(--green-mid); text-align:center; min-height:40px; display:flex; align-items:center; justify-content:center; }
-  .cal-picked.none { color:var(--text-muted); font-weight:400; }
-
-  /* ── ERRORS ── */
-  .field-error {
-    color: #e53e3e;
-    font-size: 13px;
-    margin-top: 6px;
-    display: none;
-  }
-
-  /* ── DATE HINT ── */
-  .date-hint {
-    font-size: 12px; color: var(--text-muted);
-    margin-top: 6px;
-  }
-
-  /* ── FOOTER ── */
-  footer {
-    background: var(--green-deep);
-    color: rgba(255,255,255,0.55);
-    padding: 24px 40px;
-    text-align: center;
-    font-size: 13px;
-  }
-  footer a {
-    color: rgba(255,255,255,0.55);
-    text-decoration: none;
-  }
-  footer a:hover { color: var(--green-light); }
-
-  /* ── RESPONSIVE ── */
-  @media (max-width: 560px) {
-    .card { padding: 28px 20px; border-radius: 16px; }
-    .page-wrap { padding: 24px 16px 48px; }
-    nav { padding: 14px 20px; }
-    footer { padding: 20px 24px; }
-  }
-</style>
-</head>
-<body>
-
-<!-- NAV -->
-<nav id="navbar">
-  <div class="nav-logo">
-    <a href="/" style="text-decoration:none;">
-      <span>🌿 Evergreen <em>Lawn Care</em></span>
-    </a>
-  </div>
-  <ul class="nav-links">
-    <li><a href="/#services">Services</a></li>
-    <li><a href="/#how">How It Works</a></li>
-    <li><a href="/#trust">Why Us</a></li>
-    <li><a href="tel:+13524620627" class="nav-cta">Call Us</a></li>
-  </ul>
-</nav>
-
-<div class="nav-spacer"></div>
-
-<!-- HERO -->
-<div class="hero-banner" id="heroBanner">
-  <div class="badge">Limited Offer</div>
-  <h1>Your First Lawn Service,<br/><span>On Us.</span></h1>
-  <p>New to Evergreen? Let us show you what we can do — completely free. No credit card, no commitment.</p>
-  <div class="free-value">
-    <span class="was">$45</span>
-    <span class="now">FREE</span>
-  </div>
-</div>
-
-<!-- MAIN -->
-<div class="page-wrap">
-  <div class="card">
-
-    <!-- FORM STATE -->
-    <div id="formState">
-
-      <div class="eligibility-notice">
-        <div class="icon">⚠️</div>
-        <p><strong>First-time customers only · One per address.</strong> By submitting, you confirm this is your first time using Evergreen Lawn Care and that you haven't previously redeemed this offer at your address.</p>
-      </div>
-
-      <div class="section-title">Claim Your Free Visit</div>
-
-      <div class="form-row">
-        <label>Full Name</label>
-        <input type="text" id="customerName" placeholder="Jane Smith"/>
-      </div>
-      <div class="form-row">
-        <label>Email Address</label>
-        <input type="email" id="customerEmail" placeholder="jane@email.com"/>
-      </div>
-      <div class="form-row">
-        <label>Phone Number</label>
-        <input type="tel" id="customerPhone" placeholder="(352) 462-0627"/>
-      </div>
-      <div class="form-row">
-        <label>Property Address</label>
-        <input type="text" id="customerAddress" placeholder="123 Oak St, Citrus Springs, FL"/>
-      </div>
-      <div class="form-row">
-        <label>Zip Code</label>
-        <input type="text" id="customerZip" placeholder="34433" maxlength="5"/>
-        <div id="zip-error" class="field-error">Sorry, we currently only serve Citrus County, FL. Please call us at <a href="tel:+13524620627">(352) 462-0627</a> to discuss service availability.</div>
-      </div>
-
-      <!-- YARD SIZE -->
-      <div class="yard-check-box">
-        <label>
-          <input type="checkbox" id="largeYard" onchange="handleYardSize()"/>
-          My yard is larger than ½ acre
-        </label>
-        <div class="hint">Large properties need a custom quote — check this if you're unsure.</div>
-      </div>
-
-      <!-- STANDARD BOOKING -->
-      <div id="bookingSection">
-        <div class="form-row">
-          <label>Preferred Service Date</label>
-          <div class="cal-widget">
-            <div class="cal-header">
-              <button class="cal-nav" id="calPrev" onclick="calPrevMonth()" type="button">‹</button>
-              <span class="cal-month-label" id="calMonthLabel"></span>
-              <button class="cal-nav" id="calNext" onclick="calNextMonth()" type="button">›</button>
-            </div>
-            <div class="cal-day-names">
-              <div class="cal-day-name">Su</div>
-              <div class="cal-day-name">Mo</div>
-              <div class="cal-day-name">Tu</div>
-              <div class="cal-day-name">We</div>
-              <div class="cal-day-name">Th</div>
-              <div class="cal-day-name">Fr</div>
-              <div class="cal-day-name">Sa</div>
-            </div>
-            <div class="cal-grid" id="calGrid"></div>
-            <div class="cal-picked none" id="calPicked">Select a date above</div>
-          </div>
-          <input type="hidden" id="preferredDay"/>
-          <div id="date-error" class="field-error">Please select an available date.</div>
-        </div>
-        <div class="form-row">
-          <label>Notes (gate code, special instructions, etc.)</label>
-          <textarea id="notes" placeholder="e.g. Gate code is 1234, avoid the back corner..."></textarea>
-        </div>
-
-        <div class="price-summary">
-          <div>
-            <div class="label">Total Due Today</div>
-            <div class="sublabel">One-time free visit</div>
-          </div>
-          <div class="amount">FREE</div>
-        </div>
-
-        <button class="btn-submit" id="submitBtn" onclick="handleSubmit()">
-          <div class="spinner"></div>
-          <span class="btn-text">Claim My Free Lawn Service →</span>
-        </button>
-        <div class="trust-note">No payment required · No commitment · Citrus County, FL only</div>
-      </div>
-
-      <!-- LARGE YARD QUOTE -->
-      <div id="quoteSection" style="display:none;">
-        <div style="background:#fff8e1;border:1px solid #f59e0b;border-radius:10px;padding:14px 16px;margin-bottom:18px;font-size:13px;color:#92400e;line-height:1.6;">
-          🌿 No problem! Large properties get a custom quote. Fill in your details and we'll reach out within 24 hours.
-        </div>
-        <div class="form-row">
-          <label>Yard Size (approximate)</label>
-          <select id="yardSize">
-            <option value="">-- Select a size --</option>
-            <option>½ – 1 acre</option>
-            <option>1 – 2 acres</option>
-            <option>2 – 5 acres</option>
-            <option>5+ acres</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <label>Notes (anything we should know)</label>
-          <textarea id="quoteNotes" placeholder="e.g. Lots of trees, steep slope, needs trimming too..."></textarea>
-        </div>
-        <button class="btn-submit" id="quoteBtn" onclick="handleQuote()">
-          <div class="spinner"></div>
-          <span class="btn-text">Request a Free Quote →</span>
-        </button>
-        <div class="trust-note">First-time customers only · One per address</div>
-      </div>
-
-    </div>
-
-    <!-- SUCCESS STATE -->
-    <div class="success-state" id="successState">
-      <div class="success-icon">🌿</div>
-      <h2 id="successTitle">You're on the books!</h2>
-      <p id="successMsg">Thanks for claiming your free lawn service! We'll review your info and reach out within 24 hours to confirm your date. See you soon!</p>
-      <a href="/" class="btn-home">Back to Evergreen Lawn Care →</a>
-    </div>
-
-    <!-- ALREADY CLAIMED STATE -->
-    <div class="success-state" id="alreadyClaimedState">
-      <div class="success-icon">🚫</div>
-      <h2>Offer Already Redeemed</h2>
-      <p>It looks like this free visit has already been claimed from this device or address. This offer is limited to one per household for first-time customers.</p>
-      <p style="margin-top:14px;">Questions? Give us a call.</p>
-      <a href="tel:+13524620627" class="btn-home" style="background:var(--green-deep);">Call (352) 462-0627</a>
-      <br/>
-      <a href="/" class="btn-home" style="margin-top:12px; background:var(--green-mid);">View Our Services →</a>
-    </div>
-
-  </div>
-</div>
-
-<!-- FOOTER -->
-<footer>
-  <p>© 2025 Evergreen Lawn Care · Citrus County, FL · <a href="tel:+13524620627">(352) 462-0627</a></p>
-  <p style="margin-top:6px;">
-    <a href="/privacy-policy.html">Privacy Policy</a> &nbsp;·&nbsp;
-    <a href="/terms-of-service.html">Terms of Service</a>
-  </p>
-</footer>
-
-<script>
-// ─────────────────────────────────────────────
-// CONFIG
-// ─────────────────────────────────────────────
-// After deploying your Apps Script, paste the Web App URL below:
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxzlXvyQYNDCLW0cSz7Ln4scpqMQTozexg8pkyfOxCCiesWmYixBZU9hD8d0Qp_IpdaTg/exec';
-
-const FORMSPREE_URL = 'https://formspree.io/f/xnjlnooq';
-
-const COOKIE_NAME = 'eg_free_claimed'; // cookie set after a successful claim
-
-// ─────────────────────────────────────────────
-// COOKIE HELPERS
-// ─────────────────────────────────────────────
-function setCookie(name, value, days) {
-  const expires = new Date(Date.now() + days * 864e5).toUTCString();
-  document.cookie = `${name}=${value}; expires=${expires}; path=/; SameSite=Lax`;
-}
-
-function getCookie(name) {
-  return document.cookie.split('; ').reduce((acc, c) => {
-    const [k, v] = c.split('=');
-    return k === name ? v : acc;
-  }, null);
-}
-
-// ─────────────────────────────────────────────
-// BOOKING CALENDAR CONFIG
-// ─────────────────────────────────────────────
-const MAX_BOOKING_DAYS = 30;
-
-// Dates to block (format: 'YYYY-MM-DD'). Add/remove as needed.
-const BLOCKED_DATES = new Set([
-  // ── 2026 Federal Holidays ──
-  '2026-01-01', // New Year's Day
-  '2026-01-19', // MLK Day
-  '2026-02-16', // Presidents' Day
-  '2026-05-25', // Memorial Day
-  '2026-06-19', // Juneteenth
-  '2026-07-03', // Independence Day (observed, July 4 falls on Sat)
-  '2026-07-04', // Independence Day
-  '2026-09-07', // Labor Day
-  '2026-10-12', // Columbus Day
-  '2026-11-11', // Veterans Day
-  '2026-11-26', // Thanksgiving
-  '2026-11-27', // Day after Thanksgiving
-  '2026-12-24', // Christmas Eve
-  '2026-12-25', // Christmas Day
-  '2026-12-31', // New Year's Eve
-  // ── 2027 Federal Holidays ──
-  '2027-01-01', // New Year's Day
-  '2027-01-18', // MLK Day
-  '2027-02-15', // Presidents' Day
-  '2027-05-31', // Memorial Day
-  '2027-06-18', // Juneteenth (observed, June 19 falls on Sat)
-  '2027-06-19', // Juneteenth
-  '2027-07-04', // Independence Day (Sun)
-  '2027-07-05', // Independence Day (observed)
-  '2027-09-06', // Labor Day
-  '2027-10-11', // Columbus Day
-  '2027-11-11', // Veterans Day
-  '2027-11-25', // Thanksgiving
-  '2027-11-26', // Day after Thanksgiving
-  '2027-12-24', // Christmas Eve
-  '2027-12-25', // Christmas Day
-  '2027-12-31', // New Year's Eve
-]);
-
-// ─────────────────────────────────────────────
-// CALENDAR STATE + FUNCTIONS
-// ─────────────────────────────────────────────
-let calYear, calMonth, calSelected = '';
-
-function initCalendar() {
-  calSelected = '';
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  calYear  = tomorrow.getFullYear();
-  calMonth = tomorrow.getMonth();
-  document.getElementById('preferredDay').value = '';
-  if (document.getElementById('date-error')) document.getElementById('date-error').style.display = 'none';
-  renderCalendar();
-}
-
-function renderCalendar() {
-  const today    = new Date(); today.setHours(0,0,0,0);
-  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-  const maxDate  = new Date(today); maxDate.setDate(today.getDate() + MAX_BOOKING_DAYS);
-  const MONTHS   = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-
-  document.getElementById('calMonthLabel').textContent = `${MONTHS[calMonth]} ${calYear}`;
-
-  const firstOfMonth = new Date(calYear, calMonth, 1);
-  const lastOfMonth  = new Date(calYear, calMonth + 1, 0);
-  document.getElementById('calPrev').disabled = firstOfMonth <= tomorrow;
-  document.getElementById('calNext').disabled = lastOfMonth  >= maxDate;
-
-  const grid = document.getElementById('calGrid');
-  grid.innerHTML = '';
-
-  const startDay = firstOfMonth.getDay();
-  for (let i = 0; i < startDay; i++) {
-    const el = document.createElement('div');
-    el.className = 'cal-cell empty';
-    grid.appendChild(el);
-  }
-
-  const daysInMonth = lastOfMonth.getDate();
-  for (let d = 1; d <= daysInMonth; d++) {
-    const date    = new Date(calYear, calMonth, d);
-    const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const isWknd  = date.getDay() === 0 || date.getDay() === 6;
-    const isPast  = date < tomorrow;
-    const isFar   = date > maxDate;
-    const isBlock = BLOCKED_DATES.has(dateStr);
-    const isSel   = dateStr === calSelected;
-
-    const el = document.createElement('div');
-    el.textContent = d;
-
-    if (isSel)                el.className = 'cal-cell selected', el.onclick = () => pickDate(dateStr);
-    else if (isPast || isFar) el.className = 'cal-cell disabled';
-    else if (isBlock)         el.className = 'cal-cell blocked';
-    else { el.className = 'cal-cell available'; el.onclick = () => pickDate(dateStr); }
-
-    grid.appendChild(el);
-  }
-
-  const picked = document.getElementById('calPicked');
-  if (calSelected) {
-    picked.textContent = new Date(calSelected + 'T12:00:00').toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
-    picked.classList.remove('none');
-  } else {
-    picked.textContent = 'Select a date above';
-    picked.classList.add('none');
-  }
-}
-
-function pickDate(dateStr) {
-  calSelected = dateStr;
-  document.getElementById('preferredDay').value = dateStr;
-  if (document.getElementById('date-error')) document.getElementById('date-error').style.display = 'none';
-  renderCalendar();
-}
-
-function calPrevMonth() {
-  calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; }
-  renderCalendar();
-}
-function calNextMonth() {
-  calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; }
-  renderCalendar();
-}
-
-// ─────────────────────────────────────────────
-// CITRUS COUNTY ZIP CODES
-// ─────────────────────────────────────────────
-const VALID_ZIPS = new Set([
-  '34428','34429',
-  '34450','34452','34453',
-  '34446','34448',
-  '34460','34461',
-  '34433','34434',
-  '34436',
-  '34464'
-]);
-
-document.addEventListener('DOMContentLoaded', () => {
-  // ── Cookie check — instant, no network needed ──
-  if (getCookie(COOKIE_NAME)) {
-    showAlreadyClaimed();
-    return;
-  }
-
-  document.getElementById('customerZip').addEventListener('input', validateZip);
-  initCalendar();
-});
-
-function validateZip() {
-  const zip = document.getElementById('customerZip').value.trim();
-  const err = document.getElementById('zip-error');
-  if (zip.length === 5 && !VALID_ZIPS.has(zip)) {
-    err.style.display = 'block';
-    return false;
-  }
-  err.style.display = 'none';
-  return true;
-}
-
-function handleYardSize() {
-  const isLarge = document.getElementById('largeYard').checked;
-  document.getElementById('bookingSection').style.display = isLarge ? 'none' : 'block';
-  document.getElementById('quoteSection').style.display  = isLarge ? 'block' : 'none';
-}
-
-async function handleSubmit() {
-  // ── 1. Cookie check (instant) ──
-  if (getCookie(COOKIE_NAME)) {
-    showAlreadyClaimed();
-    return;
-  }
-
-  const name    = document.getElementById('customerName').value.trim();
-  const email   = document.getElementById('customerEmail').value.trim();
-  const phone   = document.getElementById('customerPhone').value.trim();
-  const address = document.getElementById('customerAddress').value.trim();
-  const zip     = document.getElementById('customerZip').value.trim();
-  const notes   = document.getElementById('notes').value.trim() || '(none)';
-
-  if (!name || !email || !address) {
-    alert('Please fill in your name, email, and address.');
-    return;
-  }
-  if (zip.length !== 5 || !VALID_ZIPS.has(zip)) {
-    alert('Please enter a valid Citrus County zip code.');
-    document.getElementById('zip-error').style.display = 'block';
-    return;
-  }
-
-  const selectedDate = document.getElementById('preferredDay').value;
-  const dateErr = document.getElementById('date-error');
-  if (!selectedDate) {
-    dateErr.style.display = 'block';
-    alert('Please select a preferred service date.');
-    return;
-  }
-  dateErr.style.display = 'none';
-
-  const dateFormatted = new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-  });
-
-  const btn = document.getElementById('submitBtn');
-  btn.classList.add('loading');
-  btn.disabled = true;
-
-  // ── 2. Google Sheet check + log (blocks duplicate addresses) ──
-  try {
-    const params = new URLSearchParams({
-      action: 'claim',
-      address, name, email, phone, zip,
-      serviceDateRaw: selectedDate,   // YYYY-MM-DD (for Calendar)
-      serviceDate: dateFormatted,     // human-readable (for Sheet display)
-      notes,
-    });
-    const sheetRes = await fetch(`${APPS_SCRIPT_URL}?${params}`);
-    const sheetData = await sheetRes.json();
-
-    if (!sheetData.success && sheetData.reason === 'address_used') {
-      btn.classList.remove('loading');
-      btn.disabled = false;
-      showAlreadyClaimed();
-      return;
-    }
-  } catch (err) {
-    // If the Sheet check fails (network issue, script not set up yet),
-    // allow the submission to go through so customers aren't blocked
-    console.warn('Sheet check failed, proceeding anyway:', err);
-  }
-
-  // ── 3. Send to Formspree ──
-  try {
-    const res = await fetch(FORMSPREE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({
-        _subject: `🎉 FREE SERVICE Claim – ${name} – ${dateFormatted}`,
-        type: 'FREE SERVICE CLAIM (First-Time Customer)',
-        name, email, phone, address, zip,
-        service: 'Free First Lawn Service (Cut & Clean)',
-        serviceDate: selectedDate,
-        serviceDateFormatted: dateFormatted,
-        notes,
-      })
-    });
-
-    btn.classList.remove('loading');
-    btn.disabled = false;
-
-    if (res.ok) {
-      // ── 4. Set cookie so this device is blocked for 2 years ──
-      setCookie(COOKIE_NAME, '1', 730);
-      showSuccess(
-        "You're on the books!",
-        "Thanks for claiming your free lawn service! We'll review your info and reach out within 24 hours to confirm your date. See you soon!"
-      );
-    } else {
-      alert('Something went wrong. Please call us at (352) 462-0627.');
-    }
-  } catch(e) {
-    btn.classList.remove('loading');
-    btn.disabled = false;
-    alert('Something went wrong. Please call us at (352) 462-0627.');
-  }
-}
-
-async function handleQuote() {
-  // Cookie check
-  if (getCookie(COOKIE_NAME)) {
-    showAlreadyClaimed();
-    return;
-  }
-
-  const name    = document.getElementById('customerName').value.trim();
-  const email   = document.getElementById('customerEmail').value.trim();
-  const phone   = document.getElementById('customerPhone').value.trim();
-  const address = document.getElementById('customerAddress').value.trim();
-  const zip     = document.getElementById('customerZip').value.trim();
-  const notes   = document.getElementById('quoteNotes').value.trim() || '(none)';
-
-  if (!name || !email || !address) {
-    alert('Please fill in your name, email, and address.');
-    return;
-  }
-  if (zip.length !== 5 || !VALID_ZIPS.has(zip)) {
-    alert('Please enter a valid Citrus County zip code.');
-    document.getElementById('zip-error').style.display = 'block';
-    return;
-  }
-
-  const btn = document.getElementById('quoteBtn');
-  btn.classList.add('loading');
-  btn.disabled = true;
-
-  // Sheet check
-  try {
-    const params = new URLSearchParams({ action: 'claim', address, name, email, phone, zip, notes });
-    const sheetRes  = await fetch(`${APPS_SCRIPT_URL}?${params}`);
-    const sheetData = await sheetRes.json();
-    if (!sheetData.success && sheetData.reason === 'address_used') {
-      btn.classList.remove('loading');
-      btn.disabled = false;
-      showAlreadyClaimed();
-      return;
-    }
-  } catch(err) {
-    console.warn('Sheet check failed, proceeding anyway:', err);
-  }
-
-  // Formspree
-  try {
-    const res = await fetch(FORMSPREE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({
-        _subject: `🎉 FREE SERVICE Quote – Large Property – ${name}`,
-        type: 'FREE SERVICE QUOTE REQUEST (Large Property – First-Time Customer)',
-        name, email, phone, address, zip,
-        service: 'Free First Lawn Service – Large Yard Quote',
-        yardSize: document.getElementById('yardSize').value || '(not specified)',
-        notes,
-      })
-    });
-
-    btn.classList.remove('loading');
-    btn.disabled = false;
-
-    if (res.ok) {
-      setCookie(COOKIE_NAME, '1', 730);
-      showSuccess(
-        "Quote Request Received!",
-        "Thanks! We'll review your property details and reach out within 24 hours to discuss your free service."
-      );
-    } else {
-      alert('Something went wrong. Please call us at (352) 462-0627.');
-    }
-  } catch(e) {
-    btn.classList.remove('loading');
-    btn.disabled = false;
-    alert('Something went wrong. Please call us at (352) 462-0627.');
-  }
-}
-
-function hideHeroAndForm() {
-  document.getElementById('heroBanner').style.display = 'none';
-  document.getElementById('formState').style.display = 'none';
-  document.getElementById('successState').style.display = 'none';
-  document.getElementById('alreadyClaimedState').style.display = 'none';
-}
-
-function showSuccess(title, msg) {
-  hideHeroAndForm();
-  document.getElementById('successTitle').textContent = title;
-  document.getElementById('successMsg').textContent = msg;
-  document.getElementById('successState').style.display = 'block';
-}
-
-function showAlreadyClaimed() {
-  hideHeroAndForm();
-  document.getElementById('alreadyClaimedState').style.display = 'block';
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 </script>
 </body>
