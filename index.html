@@ -1686,37 +1686,23 @@ async function handleQuoteRequest() {
   btn.classList.add('loading');
   btn.disabled = true;
 
-  const FORMSPREE_URL = 'https://formspree.io/f/meevqpde';
-
   try {
-    const res = await fetch(FORMSPREE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({
-        _subject: `Quote Request – Large Property – ${name}`,
-        type: 'QUOTE REQUEST (Large Property)',
-        name,
-        email,
-        phone,
-        address,
-        zip: document.getElementById('customerZip').value.trim(),
-        yardSize: document.getElementById('yardSize').value,
-        notes: document.getElementById('quoteNotes').value.trim() || '(none)',
-      })
+    const quoteParams = new URLSearchParams({
+      action: 'quote', name, email, phone, address,
+      zip:      document.getElementById('customerZip').value.trim(),
+      yardSize: document.getElementById('yardSize').value,
+      notes:    document.getElementById('quoteNotes').value.trim() || '(none)',
     });
+    await fetch(SHEETS_SCRIPT_URL + '?' + quoteParams.toString(), { method: 'GET', mode: 'no-cors' });
 
     btn.classList.remove('loading');
     btn.disabled = false;
 
-    if (res.ok) {
-      document.getElementById('formState').style.display = 'none';
-      const success = document.getElementById('successState');
-      success.querySelector('h3').textContent = "Quote Request Received!";
-      success.querySelector('p').textContent = "Thanks! We'll review your property details and reach out within 24 hours with a custom quote.";
-      success.style.display = 'block';
-    } else {
-      alert('Something went wrong. Please call us at (352) 462-0627.');
-    }
+    document.getElementById('formState').style.display = 'none';
+    const success = document.getElementById('successState');
+    success.querySelector('h3').textContent = "Quote Request Received!";
+    success.querySelector('p').textContent = "Thanks! We'll review your property details and reach out within 24 hours with a custom quote.";
+    success.style.display = 'block';
   } catch(e) {
     btn.classList.remove('loading');
     btn.disabled = false;
@@ -1845,25 +1831,8 @@ async function handleBooking() {
   // } catch(e) {}
 
   // ── Email notification via Formspree (4s timeout) ──
-  try {
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), 4000);
-    await fetch('https://formspree.io/f/xnjlnooq', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({
-        _subject: `New Booking – ${currentService.name} – ${dateFormatted}`,
-        name, email, phone, address, zip,
-        service: currentService.name,
-        frequency, price: '$' + currentService.price,
-        serviceDate: dateFormatted,
-        notes,
-        paymentMethod: payMethod === 'now' ? 'AUTO-PAY (Stripe — no invoice needed)' : 'PAY AFTER SERVICE — send invoice after mowing',
-      })
-    });
-    clearTimeout(t);
-  } catch(e) { /* non-fatal */ }
+  // Owner notification is now handled server-side via MailApp in the Apps Script
+  // (Formspree removed)
 
   btn.classList.remove('loading');
   btn.disabled = false;
