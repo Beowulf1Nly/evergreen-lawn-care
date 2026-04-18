@@ -557,7 +557,6 @@
 // After deploying your Apps Script, paste the Web App URL below:
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
 
-const FORMSPREE_URL = 'https://formspree.io/f/xnjlnooq';
 
 const COOKIE_NAME = 'eg_free_claimed'; // cookie set after a successful claim
 
@@ -811,40 +810,16 @@ async function handleSubmit() {
     console.warn('Sheet check failed, proceeding anyway:', err);
   }
 
-  // ── 3. Send to Formspree ──
-  try {
-    const res = await fetch(FORMSPREE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({
-        _subject: `🎉 FREE SERVICE Claim – ${name} – ${dateFormatted}`,
-        type: 'FREE SERVICE CLAIM (First-Time Customer)',
-        name, email, phone, address, zip,
-        service: 'Free First Lawn Service (Cut & Clean)',
-        serviceDate: selectedDate,
-        serviceDateFormatted: dateFormatted,
-        notes,
-      })
-    });
+  // ── 3. Owner notification handled server-side by Apps Script ──
+  btn.classList.remove('loading');
+  btn.disabled = false;
 
-    btn.classList.remove('loading');
-    btn.disabled = false;
-
-    if (res.ok) {
-      // ── 4. Set cookie so this device is blocked for 2 years ──
-      setCookie(COOKIE_NAME, '1', 730);
-      showSuccess(
-        "You're on the books!",
-        "Thanks for claiming your free lawn service! We'll review your info and reach out within 24 hours to confirm your date. See you soon!"
-      );
-    } else {
-      alert('Something went wrong. Please call us at (352) 462-0627.');
-    }
-  } catch(e) {
-    btn.classList.remove('loading');
-    btn.disabled = false;
-    alert('Something went wrong. Please call us at (352) 462-0627.');
-  }
+  // ── 4. Set cookie so this device is blocked for 2 years ──
+  setCookie(COOKIE_NAME, '1', 730);
+  showSuccess(
+    "You're on the books!",
+    "Thanks for claiming your free lawn service! We'll review your info and reach out within 24 hours to confirm your date. See you soon!"
+  );
 }
 
 async function handleQuote() {
@@ -890,38 +865,14 @@ async function handleQuote() {
     console.warn('Sheet check failed, proceeding anyway:', err);
   }
 
-  // Formspree
-  try {
-    const res = await fetch(FORMSPREE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({
-        _subject: `🎉 FREE SERVICE Quote – Large Property – ${name}`,
-        type: 'FREE SERVICE QUOTE REQUEST (Large Property – First-Time Customer)',
-        name, email, phone, address, zip,
-        service: 'Free First Lawn Service – Large Yard Quote',
-        yardSize: document.getElementById('yardSize').value || '(not specified)',
-        notes,
-      })
-    });
-
-    btn.classList.remove('loading');
-    btn.disabled = false;
-
-    if (res.ok) {
-      setCookie(COOKIE_NAME, '1', 730);
-      showSuccess(
-        "Quote Request Received!",
-        "Thanks! We'll review your property details and reach out within 24 hours to discuss your free service."
-      );
-    } else {
-      alert('Something went wrong. Please call us at (352) 462-0627.');
-    }
-  } catch(e) {
-    btn.classList.remove('loading');
-    btn.disabled = false;
-    alert('Something went wrong. Please call us at (352) 462-0627.');
-  }
+  // Owner notification handled server-side by Apps Script
+  btn.classList.remove('loading');
+  btn.disabled = false;
+  setCookie(COOKIE_NAME, '1', 730);
+  showSuccess(
+    "Quote Request Received!",
+    "Thanks! We'll review your property details and reach out within 24 hours to discuss your free service."
+  );
 }
 
 function hideHeroAndForm() {
