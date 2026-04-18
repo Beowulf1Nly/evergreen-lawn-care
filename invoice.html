@@ -399,14 +399,18 @@ function cardHTML(b, isToday) {
   const auto    = isAutoPay(b);
   const invoiced = b.invoiced;
 
+  const isDone     = b.done && String(b.done).includes('Done');
   const autoBadge     = auto    ? '<span class="badge-autopay">🔄 AUTO-PAY</span>' : '<span class="badge-paylater">📧 Pay After</span>';
   const invoicedBadge = invoiced ? '<span class="badge-invoiced">✅ Invoiced</span>' : '';
+  const doneBadge     = isDone  ? '<span class="badge-invoiced" style="background:#fff8e1;color:#92400e;border-color:#fcd34d;">✓ Done</span>' : '';
 
-  const btnLabel   = invoiced ? 'Sent ✓' : (auto ? 'No Invoice Needed' : 'Send Invoice');
-  const btnClass   = invoiced ? 'btn-invoice sent' : 'btn-invoice';
+  const btnLabel    = invoiced ? 'Sent ✓' : (auto ? 'No Invoice Needed' : 'Send Invoice');
+  const btnClass    = invoiced ? 'btn-invoice sent' : 'btn-invoice';
   const btnDisabled = (invoiced || auto) ? 'disabled' : '';
-
-  const rowIdx = allBookings.indexOf(b);
+  const rowIdx      = allBookings.indexOf(b);
+  const doneBtn     = !isDone
+    ? `<button class="btn-invoice" style="background:#f59e0b;" onclick="markDone(${rowIdx})">✓ Mark Done</button>`
+    : '';
 
   return `
     <div class="booking-card ${isToday ? 'today' : ''} ${invoiced ? 'invoiced' : ''}">
@@ -423,10 +427,12 @@ function cardHTML(b, isToday) {
           <span class="badge-service">${esc(b.service || 'Service')}</span>
           ${autoBadge}
           ${invoicedBadge}
+          ${doneBadge}
         </div>
       </div>
       <div class="card-actions">
         <div class="price-tag">${esc(b.price || '$—')}</div>
+        ${doneBtn}
         <button class="${btnClass}" ${btnDisabled}
           onclick="openInvoiceModal(${rowIdx})">${btnLabel}</button>
       </div>
@@ -550,6 +556,31 @@ function normalizeDate(str) {
     if (isNaN(d)) return '';
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
   } catch { return ''; }
+}
+
+async function markDone(rowIdx) {
+  const b = allBookings[rowIdx];
+  if (!b) return;
+  if (!confirm(`Mark "${b.name}" as done?`)) return;
+
+  const params = new URLSearchParams({
+    action:    'mark_done',
+    password:  ADMIN_PASSWORD,
+    rowIndex:  rowIdx + 2,
+  });
+
+  try {
+    const res  = await fetch(INVOICE_SCRIPT_URL + '?' + params.toString());
+    const data = await res.json();
+    if (data.success) {
+      allBookings[rowIdx].done = '✓ Done';
+      renderBookings();
+    } else {
+      alert('Failed: ' + (data.error || 'Unknown error'));
+    }
+  } catch(err) {
+    alert('Error: ' + err.message);
+  }
 }
 
 function esc(str) {
