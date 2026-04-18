@@ -268,8 +268,11 @@
     <div class="modal-detail" id="modalDetail"></div>
 
     <div class="modal-row">
-      <input type="number" id="invoiceAmount" class="modal-input" placeholder="Amount ($)" step="0.01" min="1"/>
+      <input type="number" id="invoiceAmount" class="modal-input" placeholder="Amount in dollars (e.g. 45)" step="0.01" min="1" oninput="updateAmountPreview()"/>
       <input type="number" id="invoiceDays" class="modal-input" placeholder="Days to pay" value="7" min="1" max="30"/>
+    </div>
+    <div id="amountPreview" style="font-size:13px;color:#15803d;font-weight:600;margin-bottom:10px;display:none;">
+      Customer will be invoiced: <span id="amountPreviewVal"></span>
     </div>
     <textarea id="invoiceNote" class="modal-textarea" rows="3"
               placeholder="Optional note to customer (e.g. 'Thanks for your business! Gate code was 1234 — let us know if you have any questions.')"></textarea>
@@ -471,6 +474,7 @@ function openInvoiceModal(rowIdx) {
 
   document.getElementById('modalOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
+  updateAmountPreview();
   setTimeout(() => document.getElementById('invoiceAmount').focus(), 100);
 }
 
@@ -586,6 +590,18 @@ async function markDone(rowIdx) {
     }
   } catch(err) {
     alert('Error: ' + err.message);
+  }
+}
+
+function updateAmountPreview() {
+  const val = parseFloat(document.getElementById('invoiceAmount').value);
+  const preview = document.getElementById('amountPreview');
+  const previewVal = document.getElementById('amountPreviewVal');
+  if (val > 0) {
+    previewVal.textContent = '$' + val.toFixed(2);
+    preview.style.display = 'block';
+  } else {
+    preview.style.display = 'none';
   }
 }
 
