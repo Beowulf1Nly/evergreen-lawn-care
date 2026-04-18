@@ -184,7 +184,7 @@
     border:2px solid var(--border); border-radius:10px; font-family:inherit;
     font-size:15px; font-weight:600; cursor:pointer;
   }
-  .modal-error { color:var(--red); font-size:13px; margin-top:10px; display:none; }
+  .modal-error { color:var(--red); font-size:13px; margin-top:10px; display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:8px; padding:12px 14px; }
   .modal-success { background:#f0fdf4; border:1px solid #86efac; border-radius:10px; padding:16px; text-align:center; color:#15803d; font-weight:600; display:none; margin-top:16px; }
 
   @media(max-width:600px) {
@@ -444,7 +444,13 @@ function cardHTML(b, isToday) {
 // ═══════════════════════════════════════════════════════
 function openInvoiceModal(rowIdx) {
   const b = allBookings[rowIdx];
-  if (!b || isAutoPay(b) || b.invoiced) return;
+  if (!b) { console.error('No booking at index', rowIdx); return; }
+  if (isAutoPay(b)) return; // auto-pay, no invoice needed
+  // Only block if invoice was actually sent (not just any truthy value)
+  if (b.invoiced && String(b.invoiced).toLowerCase().includes('invoiced')) {
+    alert('An invoice has already been sent for this booking.');
+    return;
+  }
   activeRow = rowIdx;
 
   // Pre-fill amount
