@@ -421,7 +421,7 @@ function cardHTML(b, isToday) {
         <div class="card-name">${esc(b.name || '—')}</div>
         <div class="card-meta">
           📍 ${esc(b.address || '—')} ${b.zip ? '· ' + esc(b.zip) : ''}<br>
-          📅 ${esc(b.serviceDate || b.serviceDateRaw || '—')}<br>
+          📅 ${esc(displayDate(b.serviceDate || b.serviceDateRaw) || '—')}<br>
           ${b.email ? `✉️ <a href="mailto:${esc(b.email)}">${esc(b.email)}</a><br>` : ''}
           ${b.phone ? `📞 ${esc(b.phone)}<br>` : ''}
           ${b.notes && b.notes !== '(none)' ? `💬 ${esc(b.notes)}<br>` : ''}
@@ -549,8 +549,20 @@ async function sendInvoice() {
 // HELPERS
 // ═══════════════════════════════════════════════════════
 function isAutoPay(b) {
-  const pm = (b.payMethod || '').toLowerCase();
-  return pm.includes('auto') || pm.includes('stripe') || pm.includes('now');
+  const pm  = (b.payMethod     || '').toLowerCase();
+  const cal = (b.calendarEvent || '');          // paidStatus column (col M in sheet)
+  return pm.includes('auto') || pm.includes('stripe') || pm.includes('now') ||
+         cal.includes('✅')  || cal.toLowerCase().includes('auto-pay');
+}
+
+function displayDate(raw) {
+  if (!raw) return '—';
+  // If already a readable string (server already converted), return as-is
+  if (!/^\d{4}-/.test(String(raw))) return raw;
+  try {
+    const d = new Date(raw);
+    return d.toLocaleDateString('en-US', { weekday:'short', year:'numeric', month:'short', day:'numeric' });
+  } catch(e) { return raw; }
 }
 
 function todayDateString() {
