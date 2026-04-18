@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Evergreen — Invoice Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --green-deep: #1a3a1a;
+    --green-mid:  #2d6a2d;
+    --green-bright:#4caf50;
+    --green-pale: #e8f5e9;
+    --cream:      #faf9f6;
+    --white:      #ffffff;
+    --text:       #1a1a1a;
+    --text-muted: #6b7280;
+    --border:     #e2e8f0;
+    --red:        #e53e3e;
+    --gold:       #c9a84c;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'DM Sans',sans-serif; background:var(--cream); color:var(--text); min-height:100vh; }
+
+  /* ── Login Screen ── */
+  #loginScreen {
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh; background:var(--green-deep);
+  }
+  .login-card {
+    background:#fff; border-radius:20px; padding:48px 40px;
+    max-width:400px; width:100%; text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,.25);
+  }
+  .login-card h1 { font-family:'Playfair Display',serif; color:var(--green-deep); font-size:28px; margin-bottom:8px; }
+  .login-card p  { color:var(--text-muted); font-size:14px; margin-bottom:28px; }
+  .login-input {
+    width:100%; padding:14px 18px; border:2px solid var(--border);
+    border-radius:10px; font-family:inherit; font-size:15px;
+    margin-bottom:14px; outline:none; transition:border .2s;
+  }
+  .login-input:focus { border-color:var(--green-mid); }
+  .login-btn {
+    width:100%; padding:14px; background:var(--green-mid);
+    color:#fff; border:none; border-radius:10px; font-family:inherit;
+    font-size:15px; font-weight:600; cursor:pointer; transition:background .2s;
+  }
+  .login-btn:hover { background:var(--green-deep); }
+  #loginError { color:var(--red); font-size:13px; margin-top:10px; display:none; }
+
+  /* ── Main App ── */
+  #appScreen { display:none; }
+
+  header {
+    background:var(--green-deep); color:#fff; padding:16px 24px;
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    position:sticky; top:0; z-index:100;
+  }
+  .header-brand { font-family:'Playfair Display',serif; font-size:20px; }
+  .header-brand span { color:#7ec87e; }
+  .header-right { display:flex; align-items:center; gap:12px; }
+  #lastRefresh { font-size:12px; color:rgba(255,255,255,.55); }
+  .btn-refresh {
+    padding:8px 16px; background:rgba(255,255,255,.12); color:#fff;
+    border:1px solid rgba(255,255,255,.25); border-radius:8px;
+    font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; transition:background .2s;
+  }
+  .btn-refresh:hover { background:rgba(255,255,255,.22); }
+  .btn-logout {
+    padding:8px 14px; background:transparent; color:rgba(255,255,255,.6);
+    border:1px solid rgba(255,255,255,.2); border-radius:8px;
+    font-family:inherit; font-size:13px; cursor:pointer;
+  }
+
+  .container { max-width:1000px; margin:0 auto; padding:28px 20px; }
+
+  /* ── Search bar ── */
+  .search-bar {
+    display:flex; gap:10px; margin-bottom:28px; flex-wrap:wrap;
+  }
+  .search-bar input {
+    flex:1; min-width:200px; padding:12px 18px; border:2px solid var(--border);
+    border-radius:10px; font-family:inherit; font-size:14px;
+    background:#fff; outline:none; transition:border .2s;
+  }
+  .search-bar input:focus { border-color:var(--green-mid); }
+  .filter-select {
+    padding:12px 14px; border:2px solid var(--border); border-radius:10px;
+    font-family:inherit; font-size:14px; background:#fff; cursor:pointer; outline:none;
+  }
+
+  /* ── Section headers ── */
+  .section-label {
+    font-size:12px; font-weight:700; letter-spacing:.08em;
+    color:var(--text-muted); text-transform:uppercase; margin-bottom:12px;
+    padding-bottom:8px; border-bottom:2px solid var(--border);
+    display:flex; align-items:center; gap:8px;
+  }
+  .section-label .badge {
+    background:var(--green-bright); color:#fff; border-radius:20px;
+    padding:2px 8px; font-size:11px; font-weight:700;
+  }
+
+  /* ── Booking cards ── */
+  .booking-card {
+    background:#fff; border:1.5px solid var(--border); border-radius:14px;
+    padding:18px 20px; margin-bottom:12px; display:grid;
+    grid-template-columns:1fr auto; gap:12px; align-items:start;
+    transition:box-shadow .2s, border-color .2s;
+  }
+  .booking-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.07); border-color:#c8ddc8; }
+  .booking-card.today { border-left:4px solid var(--green-bright); }
+  .booking-card.invoiced { opacity:.6; background:#f8faf8; }
+
+  .card-name { font-size:16px; font-weight:600; color:var(--green-deep); margin-bottom:4px; }
+  .card-meta { font-size:13px; color:var(--text-muted); line-height:1.7; }
+  .card-meta a { color:var(--green-mid); text-decoration:none; font-weight:500; }
+  .card-badges { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .badge-service { background:var(--green-pale); color:var(--green-deep); border-radius:6px; padding:3px 10px; font-size:12px; font-weight:600; }
+  .badge-autopay { background:#1a3a1a; color:#fff; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:700; letter-spacing:.03em; }
+  .badge-invoiced { background:#f0fdf4; color:#16a34a; border:1px solid #86efac; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:600; }
+  .badge-paylater { background:#fffbeb; color:#92400e; border:1px solid #fcd34d; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:600; }
+
+  .card-actions { display:flex; flex-direction:column; gap:8px; align-items:flex-end; }
+  .btn-invoice {
+    padding:10px 18px; background:var(--green-mid); color:#fff;
+    border:none; border-radius:10px; font-family:inherit; font-size:13px;
+    font-weight:600; cursor:pointer; white-space:nowrap; transition:background .2s;
+  }
+  .btn-invoice:hover { background:var(--green-deep); }
+  .btn-invoice:disabled { background:#a0aec0; cursor:not-allowed; }
+  .btn-invoice.sent { background:#16a34a; }
+  .price-tag { font-size:18px; font-weight:700; color:var(--green-deep); }
+
+  /* ── Empty / loading states ── */
+  .empty-state {
+    text-align:center; padding:48px 20px; color:var(--text-muted); font-size:14px;
+  }
+  .loading-spinner {
+    display:inline-block; width:20px; height:20px;
+    border:3px solid rgba(0,0,0,.1); border-top-color:var(--green-mid);
+    border-radius:50%; animation:spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* ── Invoice modal ── */
+  .modal-overlay {
+    position:fixed; inset:0; background:rgba(0,0,0,.5);
+    display:none; align-items:center; justify-content:center;
+    z-index:1000; padding:20px;
+  }
+  .modal-overlay.open { display:flex; }
+  .modal {
+    background:#fff; border-radius:20px; padding:36px 32px;
+    max-width:480px; width:100%; box-shadow:0 24px 80px rgba(0,0,0,.25);
+  }
+  .modal h3 { font-family:'Playfair Display',serif; font-size:22px; color:var(--green-deep); margin-bottom:6px; }
+  .modal p  { font-size:14px; color:var(--text-muted); margin-bottom:20px; line-height:1.6; }
+  .modal-detail { background:var(--green-pale); border-radius:10px; padding:16px 18px; margin-bottom:20px; font-size:14px; line-height:1.8; }
+  .modal-detail strong { color:var(--green-deep); }
+  .modal-row { display:flex; gap:10px; margin-bottom:14px; }
+  .modal-input {
+    flex:1; padding:12px 16px; border:2px solid var(--border); border-radius:10px;
+    font-family:inherit; font-size:14px; outline:none; transition:border .2s;
+  }
+  .modal-input:focus { border-color:var(--green-mid); }
+  .modal-textarea {
+    width:100%; padding:12px 16px; border:2px solid var(--border); border-radius:10px;
+    font-family:inherit; font-size:14px; outline:none; resize:vertical; margin-bottom:14px;
+    transition:border .2s;
+  }
+  .modal-textarea:focus { border-color:var(--green-mid); }
+  .modal-actions { display:flex; gap:10px; }
+  .btn-send {
+    flex:1; padding:14px; background:var(--green-mid); color:#fff;
+    border:none; border-radius:10px; font-family:inherit; font-size:15px;
+    font-weight:600; cursor:pointer; transition:background .2s;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .btn-send:hover { background:var(--green-deep); }
+  .btn-send:disabled { background:#a0aec0; cursor:not-allowed; }
+  .btn-cancel {
+    padding:14px 20px; background:#fff; color:var(--text-muted);
+    border:2px solid var(--border); border-radius:10px; font-family:inherit;
+    font-size:15px; font-weight:600; cursor:pointer;
+  }
+  .modal-error { color:var(--red); font-size:13px; margin-top:10px; display:none; }
+  .modal-success { background:#f0fdf4; border:1px solid #86efac; border-radius:10px; padding:16px; text-align:center; color:#15803d; font-weight:600; display:none; margin-top:16px; }
+
+  @media(max-width:600px) {
+    .booking-card { grid-template-columns:1fr; }
+    .card-actions { align-items:stretch; flex-direction:row; flex-wrap:wrap; }
+    header { flex-wrap:wrap; }
+    .modal { padding:24px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     LOGIN SCREEN
+══════════════════════════════════════════ -->
+<div id="loginScreen">
+  <div class="login-card">
+    <h1>🌿 Evergreen</h1>
+    <p>Admin access only — enter your password to continue.</p>
+    <input type="password" id="pwInput" class="login-input" placeholder="Password"
+           onkeydown="if(event.key==='Enter') login()"/>
+    <button class="login-btn" onclick="login()">Sign In</button>
+    <div id="loginError">Incorrect password. Try again.</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     MAIN APP
+══════════════════════════════════════════ -->
+<div id="appScreen">
+
+  <header>
+    <div class="header-brand">🌿 Evergreen <span>Invoices</span></div>
+    <div class="header-right">
+      <span id="lastRefresh"></span>
+      <button class="btn-refresh" onclick="loadBookings()">↻ Refresh</button>
+      <button class="btn-logout" onclick="logout()">Sign Out</button>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Search + Filter -->
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="Search by name, address, or service…" oninput="renderBookings()"/>
+      <select class="filter-select" id="filterStatus" onchange="renderBookings()">
+        <option value="all">All bookings</option>
+        <option value="pending">Needs invoice</option>
+        <option value="autopay">Auto-Pay only</option>
+        <option value="invoiced">Invoiced</option>
+      </select>
+    </div>
+
+    <!-- Today's Jobs -->
+    <div id="todaySection">
+      <div class="section-label">
+        📅 Today's Jobs <span class="badge" id="todayCount">0</span>
+      </div>
+      <div id="todayList"></div>
+    </div>
+
+    <!-- All Bookings -->
+    <div style="margin-top:32px;">
+      <div class="section-label">
+        📋 All Bookings <span class="badge" id="allCount">0</span>
+      </div>
+      <div id="allList"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     INVOICE MODAL
+══════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
+  <div class="modal">
+    <h3>Send Invoice</h3>
+    <p>Review the details below and click Send. The customer will receive a professional Stripe invoice by email with a Pay Now button.</p>
+
+    <div class="modal-detail" id="modalDetail"></div>
+
+    <div class="modal-row">
+      <input type="number" id="invoiceAmount" class="modal-input" placeholder="Amount ($)" step="0.01" min="1"/>
+      <input type="number" id="invoiceDays" class="modal-input" placeholder="Days to pay" value="7" min="1" max="30"/>
+    </div>
+    <textarea id="invoiceNote" class="modal-textarea" rows="3"
+              placeholder="Optional note to customer (e.g. 'Thanks for your business! Gate code was 1234 — let us know if you have any questions.')"></textarea>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-send" id="sendBtn" onclick="sendInvoice()">
+        <span id="sendBtnText">📧 Send Invoice</span>
+      </button>
+    </div>
+    <div class="modal-error" id="modalError"></div>
+    <div class="modal-success" id="modalSuccess">✅ Invoice sent! Check your Stripe dashboard.</div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// CONFIG — update these URLs after deploying your scripts
+// ═══════════════════════════════════════════════════════
+const INVOICE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwADgx1eybYLrG9TgMTKGNJYNjcQt3kIw3xJaXLYAxtXLBlAhOIa5tVg2ZF-Yn9AlS8Mg/exec';
+const ADMIN_PASSWORD     = 'evergreen2025';
+
+// ═══════════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════════
+function login() {
+  const pw = document.getElementById('pwInput').value;
+  if (pw === ADMIN_PASSWORD) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appScreen').style.display   = 'block';
+    loadBookings();
+  } else {
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('pwInput').value = '';
+    document.getElementById('pwInput').focus();
+  }
+}
+
+function logout() {
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('appScreen').style.display   = 'none';
+  document.getElementById('pwInput').value = '';
+}
+
+document.getElementById('pwInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') login();
+});
+
+// ═══════════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════════
+let allBookings = [];
+let activeRow   = null; // row index being invoiced
+
+async function loadBookings() {
+  document.getElementById('lastRefresh').textContent = 'Loading…';
+
+  const url = INVOICE_SCRIPT_URL + '?action=bookings&password=' + encodeURIComponent(ADMIN_PASSWORD);
+
+  try {
+    const res  = await fetch(url);
+    const data = await res.json();
+
+    if (!data.success) throw new Error(data.error || 'Unknown error');
+
+    allBookings = data.bookings || [];
+    renderBookings();
+
+    const now = new Date();
+    document.getElementById('lastRefresh').textContent =
+      'Updated ' + now.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+
+  } catch(err) {
+    document.getElementById('lastRefresh').textContent = 'Load failed';
+    document.getElementById('allList').innerHTML =
+      `<div class="empty-state">⚠️ Could not load bookings.<br><small>${err.message}</small><br><br><button class="btn-refresh" onclick="loadBookings()">Try Again</button></div>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════
+function renderBookings() {
+  const query    = document.getElementById('searchInput').value.toLowerCase();
+  const filter   = document.getElementById('filterStatus').value;
+  const todayStr = todayDateString();
+
+  let bookings = allBookings;
+
+  // Search filter
+  if (query) {
+    bookings = bookings.filter(b =>
+      (b.name    || '').toLowerCase().includes(query) ||
+      (b.address || '').toLowerCase().includes(query) ||
+      (b.service || '').toLowerCase().includes(query) ||
+      (b.email   || '').toLowerCase().includes(query)
+    );
+  }
+
+  // Status filter
+  if (filter === 'pending') {
+    bookings = bookings.filter(b => !b.invoiced && !isAutoPay(b));
+  } else if (filter === 'autopay') {
+    bookings = bookings.filter(b => isAutoPay(b));
+  } else if (filter === 'invoiced') {
+    bookings = bookings.filter(b => b.invoiced);
+  }
+
+  // Split today vs rest
+  const todayJobs = bookings.filter(b => b.serviceDateRaw === todayStr || normalizeDate(b.serviceDate) === todayStr);
+  const otherJobs = bookings.filter(b => b.serviceDateRaw !== todayStr && normalizeDate(b.serviceDate) !== todayStr);
+
+  // Render today
+  document.getElementById('todayCount').textContent = todayJobs.length;
+  document.getElementById('todayList').innerHTML = todayJobs.length
+    ? todayJobs.map(b => cardHTML(b, true)).join('')
+    : '<div class="empty-state" style="padding:20px;">No jobs scheduled for today.</div>';
+
+  // Render all
+  document.getElementById('allCount').textContent = bookings.length;
+  document.getElementById('allList').innerHTML = bookings.length
+    ? bookings.map(b => cardHTML(b, false)).join('')
+    : '<div class="empty-state">No bookings found.</div>';
+}
+
+function cardHTML(b, isToday) {
+  const auto    = isAutoPay(b);
+  const invoiced = b.invoiced;
+
+  const autoBadge     = auto    ? '<span class="badge-autopay">🔄 AUTO-PAY</span>' : '<span class="badge-paylater">📧 Pay After</span>';
+  const invoicedBadge = invoiced ? '<span class="badge-invoiced">✅ Invoiced</span>' : '';
+
+  const btnLabel   = invoiced ? 'Sent ✓' : (auto ? 'No Invoice Needed' : 'Send Invoice');
+  const btnClass   = invoiced ? 'btn-invoice sent' : 'btn-invoice';
+  const btnDisabled = (invoiced || auto) ? 'disabled' : '';
+
+  const rowIdx = allBookings.indexOf(b);
+
+  return `
+    <div class="booking-card ${isToday ? 'today' : ''} ${invoiced ? 'invoiced' : ''}">
+      <div>
+        <div class="card-name">${esc(b.name || '—')}</div>
+        <div class="card-meta">
+          📍 ${esc(b.address || '—')} ${b.zip ? '· ' + esc(b.zip) : ''}<br>
+          📅 ${esc(b.serviceDate || b.serviceDateRaw || '—')}<br>
+          ${b.email ? `✉️ <a href="mailto:${esc(b.email)}">${esc(b.email)}</a><br>` : ''}
+          ${b.phone ? `📞 ${esc(b.phone)}<br>` : ''}
+          ${b.notes && b.notes !== '(none)' ? `💬 ${esc(b.notes)}<br>` : ''}
+        </div>
+        <div class="card-badges">
+          <span class="badge-service">${esc(b.service || 'Service')}</span>
+          ${autoBadge}
+          ${invoicedBadge}
+        </div>
+      </div>
+      <div class="card-actions">
+        <div class="price-tag">${esc(b.price || '$—')}</div>
+        <button class="${btnClass}" ${btnDisabled}
+          onclick="openInvoiceModal(${rowIdx})">${btnLabel}</button>
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// INVOICE MODAL
+// ═══════════════════════════════════════════════════════
+function openInvoiceModal(rowIdx) {
+  const b = allBookings[rowIdx];
+  if (!b || isAutoPay(b) || b.invoiced) return;
+  activeRow = rowIdx;
+
+  // Pre-fill amount
+  const numericPrice = parseFloat((b.price || '').replace(/[^0-9.]/g, '')) || '';
+  document.getElementById('invoiceAmount').value = numericPrice;
+  document.getElementById('invoiceDays').value   = 7;
+  document.getElementById('invoiceNote').value   = '';
+  document.getElementById('modalError').style.display   = 'none';
+  document.getElementById('modalSuccess').style.display = 'none';
+  document.getElementById('sendBtn').disabled    = false;
+  document.getElementById('sendBtnText').textContent = '📧 Send Invoice';
+
+  document.getElementById('modalDetail').innerHTML = `
+    <strong>${esc(b.name)}</strong><br>
+    ✉️ ${esc(b.email || '(no email)')}  ·  📍 ${esc(b.address || '—')}<br>
+    Service: ${esc(b.service)} · Date: ${esc(b.serviceDate || b.serviceDateRaw || '—')}
+  `;
+
+  document.getElementById('modalOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => document.getElementById('invoiceAmount').focus(), 100);
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+  activeRow = null;
+}
+
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('modalOverlay')) closeModal();
+}
+
+async function sendInvoice() {
+  const b = allBookings[activeRow];
+  if (!b) return;
+
+  const amount  = parseFloat(document.getElementById('invoiceAmount').value);
+  const days    = parseInt(document.getElementById('invoiceDays').value) || 7;
+  const note    = document.getElementById('invoiceNote').value.trim();
+  const errEl   = document.getElementById('modalError');
+  const successEl = document.getElementById('modalSuccess');
+
+  errEl.style.display     = 'none';
+  successEl.style.display = 'none';
+
+  if (!b.email) { errEl.textContent = 'This customer has no email on file. Cannot send invoice.'; errEl.style.display='block'; return; }
+  if (!amount || amount <= 0) { errEl.textContent = 'Please enter a valid amount.'; errEl.style.display='block'; return; }
+
+  const btn = document.getElementById('sendBtn');
+  btn.disabled = true;
+  document.getElementById('sendBtnText').textContent = 'Sending…';
+
+  const params = new URLSearchParams({
+    action:       'send_invoice',
+    password:     ADMIN_PASSWORD,
+    email:        b.email,
+    name:         b.name,
+    amount:       amount,
+    description:  `${b.service} – ${b.serviceDate || b.serviceDateRaw || 'Lawn Service'} – ${b.address || ''}`,
+    daysUntilDue: days,
+    note:         note || '',
+    rowIndex:     activeRow + 2, // 1-based + header row
+  });
+
+  try {
+    const res  = await fetch(INVOICE_SCRIPT_URL + '?' + params.toString());
+    const data = await res.json();
+
+    if (data.success) {
+      successEl.style.display = 'block';
+      document.getElementById('sendBtnText').textContent = '✅ Sent!';
+      // Mark locally
+      allBookings[activeRow].invoiced = true;
+      // Refresh list after short delay so user sees the success state
+      setTimeout(() => {
+        closeModal();
+        renderBookings();
+      }, 2200);
+    } else {
+      throw new Error(data.error || 'Invoice failed');
+    }
+  } catch(err) {
+    btn.disabled = false;
+    document.getElementById('sendBtnText').textContent = '📧 Send Invoice';
+    errEl.textContent = '❌ ' + err.message;
+    errEl.style.display = 'block';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════
+function isAutoPay(b) {
+  const pm = (b.payMethod || '').toLowerCase();
+  return pm.includes('auto') || pm.includes('stripe') || pm.includes('now');
+}
+
+function todayDateString() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+// Try to parse a human-readable service date back to YYYY-MM-DD for comparison
+function normalizeDate(str) {
+  if (!str) return '';
+  try {
+    const d = new Date(str);
+    if (isNaN(d)) return '';
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  } catch { return ''; }
+}
+
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
