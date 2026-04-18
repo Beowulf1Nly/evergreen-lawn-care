@@ -436,13 +436,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Check for an existing session in localStorage
+  // loadProfile verifies the session server-side internally — no separate verifySession needed
   const session = getStoredSession();
   if (session) {
-    const valid = await verifySession(session.token);
-    if (valid) {
-      await loadProfile(session.token);
-      return;
-    }
+    await loadProfile(session.token);
+    return;
   }
 
   // No session, no token — show login
@@ -505,17 +503,15 @@ async function requestMagicLink(isResend) {
 
 // ═══════════════════════════════════════════════════════════════════════
 // MAGIC LINK — verify token from URL param
-// Profile data is returned in the same response (no second request needed)
+// On success: store session → full page reload (cleanest possible state)
 // ═══════════════════════════════════════════════════════════════════════
 async function verifyToken(token) {
   try {
     const data = await apiGet({ action: 'portal_verify_token', token });
     if (data.success && data.sessionToken) {
       storeSession({ token: data.sessionToken, email: data.email, expiry: data.expiry });
-      window.history.replaceState({}, '', window.location.pathname);
-      // Profile data is embedded in the verify response — render directly, no second call
-      renderProfile({ email: data.email, name: (data.profile || {}).name || '', bookings: (data.profile || {}).bookings || [] });
-      showProfile();
+      // Full reload without token param — DOMContentLoaded picks up the stored session
+      window.location.href = window.location.pathname;
     } else {
       hideLoading();
       showLogin();
@@ -555,9 +551,10 @@ async function loadProfile(sessionToken) {
     renderProfile(data);
     showProfile();
   } catch(err) {
-    clearSession();
+    // Don't clear session on render errors — just show a message
+    hideLoading();
     showLogin();
-    showLoginError('Could not load your profile. Please sign in again.');
+    showLoginError('Error loading profile: ' + (err.message || err));
   }
 }
 
