@@ -399,21 +399,43 @@ function renderBookings() {
 }
 
 function cardHTML(b, isToday) {
-  const auto    = isAutoPay(b);
-  const invoiced = b.invoiced;
+  const auto          = isAutoPay(b);       // booked as auto-pay originally
+  const portalAutopay = !!b.portalAutopay;  // customer enabled autopay in their portal
+  const anyAutopay    = auto || portalAutopay;
+  const invoiced      = b.invoiced;
+  const isDone        = b.done && String(b.done).includes('Done');
+  const rowIdx        = allBookings.indexOf(b);
 
-  const isDone     = b.done && String(b.done).includes('Done');
-  const autoBadge     = auto    ? '<span class="badge-autopay">🔄 AUTO-PAY</span>' : '<span class="badge-paylater">📧 Pay After</span>';
+  // Payment badge
+  let payBadge;
+  if (auto) {
+    payBadge = '<span class="badge-autopay">🔄 Auto-Pay</span>';
+  } else if (portalAutopay) {
+    const cardInfo = b.cardLast4 ? ` &nbsp;·&nbsp; ${cap(b.cardBrand || 'Card')} ••${b.cardLast4}` : '';
+    payBadge = `<span class="badge-autopay" style="background:#166534;">⚡ Autopay${cardInfo}</span>`;
+  } else {
+    payBadge = '<span class="badge-paylater">📧 Pay After</span>';
+  }
+
   const invoicedBadge = invoiced ? '<span class="badge-invoiced">✅ Invoiced</span>' : '';
-  const doneBadge     = isDone  ? '<span class="badge-invoiced" style="background:#fff8e1;color:#92400e;border-color:#fcd34d;">✓ Done</span>' : '';
+  const doneBadge     = isDone   ? '<span class="badge-invoiced" style="background:#fff8e1;color:#92400e;border-color:#fcd34d;">✓ Done</span>' : '';
 
-  const btnLabel    = invoiced ? 'Sent ✓' : (auto ? 'No Invoice Needed' : 'Send Invoice');
-  const btnClass    = invoiced ? 'btn-invoice sent' : 'btn-invoice';
-  const btnDisabled = (invoiced || auto) ? 'disabled' : '';
-  const rowIdx      = allBookings.indexOf(b);
-  const doneBtn     = !isDone
+  // Mark Done button
+  const doneBtn = !isDone
     ? `<button class="btn-invoice" style="background:#f59e0b;" onclick="markDone(${rowIdx})">✓ Mark Done</button>`
     : '';
+
+  // Invoice button — hidden for portal-autopay customers to prevent double-billing
+  let invoiceBtn;
+  if (invoiced) {
+    invoiceBtn = `<button class="btn-invoice sent" disabled>Sent ✓</button>`;
+  } else if (auto) {
+    invoiceBtn = `<button class="btn-invoice" disabled style="background:#6b7280;font-size:12px;">No Invoice Needed</button>`;
+  } else if (portalAutopay) {
+    invoiceBtn = `<button class="btn-invoice" disabled style="background:#166534;font-size:12px;" title="Card will be charged automatically when you click Mark Done">⚡ Charged on Done</button>`;
+  } else {
+    invoiceBtn = `<button class="btn-invoice" onclick="openInvoiceModal(${rowIdx})">Send Invoice</button>`;
+  }
 
   return `
     <div class="booking-card ${isToday ? 'today' : ''} ${invoiced ? 'invoiced' : ''}">
@@ -428,7 +450,7 @@ function cardHTML(b, isToday) {
         </div>
         <div class="card-badges">
           <span class="badge-service">${esc(b.service || 'Service')}</span>
-          ${autoBadge}
+          ${payBadge}
           ${invoicedBadge}
           ${doneBadge}
         </div>
@@ -436,8 +458,7 @@ function cardHTML(b, isToday) {
       <div class="card-actions">
         <div class="price-tag">${esc(b.price || '$—')}</div>
         ${doneBtn}
-        <button class="${btnClass}" ${btnDisabled}
-          onclick="openInvoiceModal(${rowIdx})">${btnLabel}</button>
+        ${invoiceBtn}
       </div>
     </div>`;
 }
@@ -583,7 +604,18 @@ function normalizeDate(str) {
 async function markDone(rowIdx) {
   const b = allBookings[rowIdx];
   if (!b) return;
-  if (!confirm(`Mark "${b.name}" as done?`)) return;
+
+  // Warn clearly when autopay will fire so there's no surprise charge
+  let confirmMsg;
+  if (b.portalAutopay) {
+    const brand = cap(b.cardBrand || 'card');
+    const card  = b.cardLast4 ? `${brand} ••••${b.cardLast4}` : 'saved card';
+    const price = b.price || '(job price)';
+    confirmMsg = `Mark "${b.name}" as done?\n\n⚡ AUTOPAY WILL FIRE — their ${card} will be charged ${price} automatically.\n\nDo NOT send an invoice separately.`;
+  } else {
+    confirmMsg = `Mark "${b.name}" as done?`;
+  }
+  if (!confirm(confirmMsg)) return;
 
   const params = new URLSearchParams({
     action:    'mark_done',
@@ -619,6 +651,11 @@ function updateAmountPreview() {
 
 function esc(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function cap(str) {
+  if (!str) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
 </script>
 </body>
