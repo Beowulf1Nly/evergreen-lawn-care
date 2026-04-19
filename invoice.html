@@ -254,6 +254,15 @@
       <div id="allList"></div>
     </div>
 
+    <!-- Free Mow Schedule -->
+    <div style="margin-top:40px; padding-top:32px; border-top:2px solid var(--border);">
+      <div class="section-label">
+        🌿 Free Mow Schedule <span class="badge" id="freeMowCount" style="background:#16a34a;">0</span>
+        <button class="btn-refresh" onclick="loadFreeMows()" style="margin-left:auto;font-size:12px;">↻ Refresh</button>
+      </div>
+      <div id="freeMowList"><div class="empty-state" style="padding:20px;">Loading free mow schedule…</div></div>
+    </div>
+
   </div>
 </div>
 
@@ -304,6 +313,7 @@ function login() {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('appScreen').style.display   = 'block';
     loadBookings();
+    loadFreeMows();
   } else {
     document.getElementById('loginError').style.display = 'block';
     document.getElementById('pwInput').value = '';
@@ -647,6 +657,70 @@ function updateAmountPreview() {
   } else {
     preview.style.display = 'none';
   }
+}
+
+// ═══════════════════════════════════════════════════════
+// FREE MOW SCHEDULE
+// ═══════════════════════════════════════════════════════
+let allFreeMows = [];
+
+async function loadFreeMows() {
+  const url = INVOICE_SCRIPT_URL + '?action=free_mows&password=' + encodeURIComponent(ADMIN_PASSWORD);
+  try {
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Unknown error');
+    allFreeMows = data.freeMows || [];
+    renderFreeMows();
+  } catch(err) {
+    document.getElementById('freeMowList').innerHTML =
+      `<div class="empty-state">⚠️ Could not load free mows.<br><small>${err.message}</small></div>`;
+  }
+}
+
+function renderFreeMows() {
+  const list = document.getElementById('freeMowList');
+  document.getElementById('freeMowCount').textContent = allFreeMows.length;
+  if (!allFreeMows.length) {
+    list.innerHTML = '<div class="empty-state" style="padding:20px;">No free mows scheduled yet.</div>';
+    return;
+  }
+  const todayStr = todayDateString();
+  // Sort: today first, then by date
+  const sorted = [...allFreeMows].sort((a, b) => {
+    const aDate = String(a.service_date || '');
+    const bDate = String(b.service_date || '');
+    if (aDate === todayStr && bDate !== todayStr) return -1;
+    if (bDate === todayStr && aDate !== todayStr) return 1;
+    return aDate.localeCompare(bDate);
+  });
+  list.innerHTML = sorted.map(m => freeMowCardHTML(m, todayStr)).join('');
+}
+
+function freeMowCardHTML(m, todayStr) {
+  const isToday = String(m.service_date || '') === todayStr;
+  const dateLabel = m.service_date || m.timestamp || '—';
+  return `
+    <div class="booking-card ${isToday ? 'today' : ''}" style="border-left:4px solid #16a34a;">
+      <div>
+        <div class="card-name">${esc(m.name || '—')} <span style="font-size:12px;font-weight:400;color:#16a34a;">🌿 FREE MOW</span></div>
+        <div class="card-meta">
+          📍 ${esc(m.address || '—')} ${m.zip ? '· ' + esc(m.zip) : ''}<br>
+          📅 ${esc(dateLabel)}<br>
+          ${m.email ? `✉️ <a href="mailto:${esc(m.email)}">${esc(m.email)}</a><br>` : ''}
+          ${m.phone ? `📞 ${esc(m.phone)}<br>` : ''}
+          ${m.notes && m.notes !== '(none)' ? `💬 ${esc(m.notes)}<br>` : ''}
+          ${m.calendar_event ? `📆 Cal: ${esc(m.calendar_event)}<br>` : ''}
+        </div>
+        <div class="card-badges">
+          <span class="badge-service">Free First Mow</span>
+          <span class="badge-autopay" style="background:#16a34a;">No Charge</span>
+        </div>
+      </div>
+      <div class="card-actions">
+        <div class="price-tag" style="color:#16a34a;">$0.00</div>
+      </div>
+    </div>`;
 }
 
 function esc(str) {
