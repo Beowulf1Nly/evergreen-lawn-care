@@ -403,8 +403,10 @@ function renderBookings() {
     const em   = (bk.email || '').toLowerCase().trim();
     const freq = (bk.frequency || '');
     if (!em) return;
-    if (freq === 'Weekly Plan')    weeklyMowMap[em]   = (weeklyMowMap[em]   || 0) + 1;
-    if (freq === 'Bi-Weekly Plan') biweeklyMowMap[em] = (biweeklyMowMap[em] || 0) + 1;
+    const isW  = /weekly/i.test(freq) && !/bi/i.test(freq);
+    const isBW = /bi.?weekly/i.test(freq);
+    if (isW)  weeklyMowMap[em]   = (weeklyMowMap[em]   || 0) + 1;
+    if (isBW) biweeklyMowMap[em] = (biweeklyMowMap[em] || 0) + 1;
   });
 
   // Split today vs rest
@@ -429,7 +431,7 @@ function cycleBadge(b) {
   const email = (b.email || '').toLowerCase().trim();
   if (!email || (!freq.includes('Weekly') && !freq.includes('Bi-Weekly'))) return '';
 
-  const isWeekly  = freq === 'Weekly Plan';
+  const isWeekly  = /weekly/i.test(freq) && !/bi/i.test(freq);
   const cycleSize = isWeekly ? 4 : 2;
   const amount    = isWeekly ? '$140' : '$80';
   const done      = isWeekly ? (weeklyMowMap[email] || 0) : (biweeklyMowMap[email] || 0);
@@ -449,22 +451,20 @@ function cycleBadge(b) {
 }
 
 function isCoveredMow(b) {
-  // A "covered" mow is any subscription mow that is NOT mow 1 of its billing cycle.
-  // Mow 1 = payment mow (invoice/charge). All others = free, covered by the plan.
   const freq  = (b.frequency || '');
   const email = (b.email || '').toLowerCase().trim();
   if (!email) return false;
 
-  // Check if already marked covered by the Apps Script (done mows)
+  // Primary check: Apps Script pre-tags covered rows with 'Covered' in paidStatus
   const cal = String(b.calendarEvent || b.payMethod || '');
   if (cal.includes('Covered')) return true;
 
-  // For upcoming (not-done) subscription bookings, predict position in cycle
-  if (freq === 'Weekly Plan' || freq === 'Bi-Weekly Plan') {
-    const cycleSize = freq === 'Weekly Plan' ? 4 : 2;
-    const done      = freq === 'Weekly Plan' ? (weeklyMowMap[email] || 0) : (biweeklyMowMap[email] || 0);
-    // Next mow position = done % cycleSize
-    // If done % cycleSize === 0, next is mow 1 (payment). Otherwise it's covered.
+  // Fallback for older rows: compute from done-mow counts
+  const isW  = /weekly/i.test(freq) && !/bi/i.test(freq);
+  const isBW = /bi.?weekly/i.test(freq);
+  if (isW || isBW) {
+    const cycleSize = isW ? 4 : 2;
+    const done      = isW ? (weeklyMowMap[email] || 0) : (biweeklyMowMap[email] || 0);
     return done % cycleSize !== 0;
   }
   return false;
