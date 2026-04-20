@@ -1591,6 +1591,7 @@
 // BOOKING CALENDAR CONFIG
 // ─────────────────────────────────────────────
 const MAX_BOOKING_DAYS = 30; // how many days out customers can book
+const MIN_BOOKING_DAYS = 3;  // earliest bookable day (1 = tomorrow). Set to 5 to block next 4 days while getting a mower.
 
 // Dates to block (format: 'YYYY-MM-DD'). Add/remove as needed.
 const BLOCKED_DATES = new Set([
@@ -1637,7 +1638,7 @@ let calYear, calMonth, calSelected = '';
 function initCalendar() {
   calSelected = '';
   const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setDate(tomorrow.getDate() + MIN_BOOKING_DAYS);
   calYear  = tomorrow.getFullYear();
   calMonth = tomorrow.getMonth();
   document.getElementById('preferredDay').value = '';
@@ -1647,7 +1648,7 @@ function initCalendar() {
 
 function renderCalendar() {
   const today    = new Date(); today.setHours(0,0,0,0);
-  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + MIN_BOOKING_DAYS);
   const maxDate  = new Date(today); maxDate.setDate(today.getDate() + MAX_BOOKING_DAYS);
   const MONTHS   = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
