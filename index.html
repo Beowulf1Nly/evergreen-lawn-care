@@ -171,13 +171,48 @@
     animation: fadeIn .9s .3s ease both;
   }
   .hero-image img {
-    width: 460px; max-width: 82%;
+    width: 520px; max-width: 88%;
     filter:
       drop-shadow(0 0 1.5px rgba(15,45,15,0.85))
       drop-shadow(0 0 4px rgba(15,45,15,0.5))
       drop-shadow(0 6px 18px rgba(15,45,15,0.18))
       drop-shadow(0 20px 50px rgba(15,45,15,0.12));
   }
+
+  /* Floating trust cards */
+  .hero-float-card {
+    position: absolute;
+    background: #fff;
+    border: 1px solid rgba(45,106,45,0.1);
+    border-radius: 14px;
+    padding: 14px 18px;
+    display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 4px 20px rgba(26,58,26,0.1), 0 1px 4px rgba(26,58,26,0.06);
+    z-index: 3;
+    animation: fadeIn .8s ease both;
+    white-space: nowrap;
+  }
+  .hero-float-card .fc-icon {
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    background: var(--green-pale);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .hero-float-card .fc-label {
+    font-size: 11px; color: var(--text-muted);
+    font-weight: 500; letter-spacing: .03em;
+    text-transform: uppercase; line-height: 1;
+    margin-bottom: 3px;
+  }
+  .hero-float-card .fc-value {
+    font-size: 15px; font-weight: 700;
+    color: var(--green-deep); line-height: 1;
+  }
+  .fc-top    { top: 18%; left: 6%; animation-delay: .5s; }
+  .fc-mid    { bottom: 28%; right: 5%; animation-delay: .65s; }
+  .fc-bottom { bottom: 13%; left: 8%; animation-delay: .8s; }
   .hero-grass { display: none; }
   .hero-circle-1, .hero-circle-2, .hero-glow { display: none; }
 
@@ -1883,11 +1918,7 @@ async function handleQuoteRequest() {
     btn.classList.remove('loading');
     btn.disabled = false;
 
-    document.getElementById('formState').style.display = 'none';
-    const success = document.getElementById('successState');
-    success.querySelector('h3').textContent = "Quote Request Received!";
-    success.querySelector('p').textContent = "Thanks! We'll review your property details and reach out within 24 hours with a custom quote.";
-    success.style.display = 'block';
+    window.location.href = '/success';
   } catch(e) {
     btn.classList.remove('loading');
     btn.disabled = false;
@@ -2028,9 +2059,8 @@ async function handleBooking() {
     return;
   }
 
-  // ── Pay Later → show success ──
-  document.getElementById('formState').style.display = 'none';
-  document.getElementById('successState').style.display = 'block';
+  // ── Pay Later → redirect to success page ──
+  window.location.href = '/success';
 }
 
 // Original Stripe handlePayment kept for reference
