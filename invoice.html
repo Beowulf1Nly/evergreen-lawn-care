@@ -427,33 +427,55 @@ function renderBookings() {
 function cycleBadge(b) {
   const freq  = (b.frequency || '');
   const email = (b.email || '').toLowerCase().trim();
-  if (!email) return '';
+  if (!email || (!freq.includes('Weekly') && !freq.includes('Bi-Weekly'))) return '';
 
-  if (freq === 'Weekly Plan') {
-    const done      = weeklyMowMap[email] || 0;
-    const cyclePos  = done % 4;
-    const mowsLeft  = cyclePos === 0 ? 4 : 4 - cyclePos;
-    const chargeNow = mowsLeft === 1;
-    const label = cyclePos === 0
-      ? `Mow 0/4 · ${mowsLeft} until $140`
-      : chargeNow
-        ? `Mow ${cyclePos}/4 · ⚡ CHARGE NEXT MOW — $140`
-        : `Mow ${cyclePos}/4 · ${mowsLeft} mows until $140`;
-    return `<span class="badge-cycle ${chargeNow ? 'charge-next' : ''}">${label}</span>`;
+  const isWeekly  = freq === 'Weekly Plan';
+  const cycleSize = isWeekly ? 4 : 2;
+  const amount    = isWeekly ? '$140' : '$80';
+  const done      = isWeekly ? (weeklyMowMap[email] || 0) : (biweeklyMowMap[email] || 0);
+  const cyclePos  = done % cycleSize;  // 0 = starting new cycle (next mow = payment)
+
+  // cyclePos 0 → next mow is mow 1 (payment mow)
+  // cyclePos 1 → mow 1 done (just paid), remaining are covered
+  if (cyclePos === 0) {
+    return `<span class="badge-cycle charge-next">⚡ NEXT MOW = ${amount} PAYMENT</span>`;
+  } else if (cyclePos === 1) {
+    const covered = cycleSize - 1;
+    return `<span class="badge-cycle">Paid ✓ · ${covered} mow${covered > 1 ? 's' : ''} covered</span>`;
+  } else {
+    const remaining = cycleSize - cyclePos;
+    return `<span class="badge-cycle">Covered · ${remaining} mow${remaining > 1 ? 's' : ''} left free</span>`;
   }
+}
 
-  if (freq === 'Bi-Weekly Plan') {
-    const done      = biweeklyMowMap[email] || 0;
-    const cyclePos  = done % 2;
-    const mowsLeft  = cyclePos === 0 ? 2 : 1;
-    const chargeNow = mowsLeft === 1;
-    const label = cyclePos === 0
-      ? `Mow 0/2 · 2 until $80`
-      : `Mow 1/2 · ⚡ CHARGE NEXT MOW — $80`;
-    return `<span class="badge-cycle ${chargeNow ? 'charge-next' : ''}">${label}</span>`;
+function isCoveredMow(b) {
+  // A "covered" mow is any subscription mow that is NOT mow 1 of its billing cycle.
+  // Mow 1 = payment mow (invoice/charge). All others = free, covered by the plan.
+  const freq  = (b.frequency || '');
+  const email = (b.email || '').toLowerCase().trim();
+  if (!email) return false;
+
+  // Check if already marked covered by the Apps Script (done mows)
+  const cal = String(b.calendarEvent || b.payMethod || '');
+  if (cal.includes('Covered')) return true;
+
+  // For upcoming (not-done) subscription bookings, predict position in cycle
+  if (freq === 'Weekly Plan' || freq === 'Bi-Weekly Plan') {
+    const cycleSize = freq === 'Weekly Plan' ? 4 : 2;
+    const done      = freq === 'Weekly Plan' ? (weeklyMowMap[email] || 0) : (biweeklyMowMap[email] || 0);
+    // Next mow position = done % cycleSize
+    // If done % cycleSize === 0, next is mow 1 (payment). Otherwise it's covered.
+    return done % cycleSize !== 0;
   }
+  return false;
+}
 
-  return '';
+function cycleChargeAmount(b) {
+  const freq = (b.frequency || '');
+  const priceNum = parseFloat(String(b.price || '').replace(/[^0-9.]/g, '')) || 0;
+  if (freq === 'Weekly Plan')    return (priceNum * 4).toFixed(2);
+  if (freq === 'Bi-Weekly Plan') return (priceNum * 2).toFixed(2);
+  return priceNum.toFixed(2);
 }
 
 function cardHTML(b, isToday) {
@@ -462,6 +484,7 @@ function cardHTML(b, isToday) {
   const anyAutopay    = auto || portalAutopay;
   const invoiced      = b.invoiced;
   const isDone        = b.done && String(b.done).includes('Done');
+  const covered       = isCoveredMow(b);    // free mow in the middle of a billing cycle
   const rowIdx        = allBookings.indexOf(b);
 
   // Payment badge
@@ -483,17 +506,30 @@ function cardHTML(b, isToday) {
     ? `<button class="btn-invoice" style="background:#f59e0b;" onclick="markDone(${rowIdx})">✓ Mark Done</button>`
     : '';
 
-  // Invoice button — hidden for portal-autopay customers to prevent double-billing
+  // Invoice / payment button logic
   let invoiceBtn;
-  if (invoiced) {
+  if (covered) {
+    // Covered mow — no charge, no invoice ever
+    invoiceBtn = `<button class="btn-invoice" disabled style="background:#166534;font-size:12px;">✅ Paid for</button>`;
+  } else if (invoiced) {
     invoiceBtn = `<button class="btn-invoice sent" disabled>Sent ✓</button>`;
   } else if (auto) {
     invoiceBtn = `<button class="btn-invoice" disabled style="background:#6b7280;font-size:12px;">No Invoice Needed</button>`;
   } else if (portalAutopay) {
-    invoiceBtn = `<button class="btn-invoice" disabled style="background:#166534;font-size:12px;" title="Card will be charged automatically when you click Mark Done">⚡ Charged on Done</button>`;
+    const amt = cycleChargeAmount(b);
+    invoiceBtn = `<button class="btn-invoice" disabled style="background:#166534;font-size:12px;" title="Card will be charged $${amt} automatically when you click Mark Done">⚡ Autopay $${amt} on Done</button>`;
   } else {
-    invoiceBtn = `<button class="btn-invoice" onclick="openInvoiceModal(${rowIdx})">Send Invoice</button>`;
+    // Pay After — payment mow, send invoice
+    const amt = cycleChargeAmount(b);
+    invoiceBtn = `<button class="btn-invoice" onclick="openInvoiceModal(${rowIdx})" title="Send invoice for $${amt}">Send Invoice ($${amt})</button>`;
   }
+
+  // Covered badge (for done rows that were auto-covered)
+  const coveredBadge = covered && isDone
+    ? `<span class="badge-invoiced" style="background:#f0fdf4;color:#166534;">✅ Paid for</span>`
+    : '';
+
+  const displayPrice = covered ? '—' : (b.price || '$—');
 
   return `
     <div class="booking-card ${isToday ? 'today' : ''} ${invoiced ? 'invoiced' : ''}">
@@ -512,10 +548,11 @@ function cardHTML(b, isToday) {
           ${cycleBadge(b)}
           ${invoicedBadge}
           ${doneBadge}
+          ${coveredBadge}
         </div>
       </div>
       <div class="card-actions">
-        <div class="price-tag">${esc(b.price || '$—')}</div>
+        <div class="price-tag">${esc(displayPrice)}</div>
         ${doneBtn}
         ${invoiceBtn}
       </div>
@@ -536,8 +573,8 @@ function openInvoiceModal(rowIdx) {
   }
   activeRow = rowIdx;
 
-  // Pre-fill amount
-  const numericPrice = parseFloat(String(b.price || '').replace(/[^0-9.]/g, '')) || '';
+  // Pre-fill amount — use cycle amount for subscriptions ($80 biweekly, $140 weekly)
+  const numericPrice = parseFloat(cycleChargeAmount(b)) || parseFloat(String(b.price || '').replace(/[^0-9.]/g, '')) || '';
   document.getElementById('invoiceAmount').value = numericPrice;
   document.getElementById('invoiceDays').value   = 7;
   document.getElementById('invoiceNote').value   = '';

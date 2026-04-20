@@ -760,32 +760,42 @@ function renderBillingCard(bookings) {
 
   if (isWeekly) {
     // Count done weekly mows to determine position in 4-mow billing cycle
-    const doneMows  = subBookings.filter(b =>
+    const doneMows   = subBookings.filter(b =>
       b.frequency === 'Weekly Plan' && String(b.done || '').includes('Done')
     ).length;
-    const cyclePos  = doneMows % 4;           // 0 = start of new cycle, 1-3 = in progress
-    const dotsFilled = cyclePos;              // how many green dots
-    const dotsLeft   = 4 - cyclePos;          // how many remaining (including next-to-charge)
-    const mowsLeft   = cyclePos === 0 ? 4 : 4 - cyclePos;
-    const chargeSoon = mowsLeft === 1;        // last mow before $140 charge
+    // Position in current cycle (1 = payment mow just done, 2-4 = covered, 0 = starting fresh)
+    const cyclePos   = doneMows % 4;
+    // Mow 1 of cycle = payment mow. Next cycle starts when cyclePos hits 0 again.
+    const isPaymentMow  = cyclePos === 1;
+    const coveredSoFar  = cyclePos === 0 ? 0 : cyclePos - 1; // done covered mows this cycle
+    const coveredTotal  = 3;                                  // 3 covered mows per cycle
 
-    // Dots: green = done in cycle, gold = next-to-charge last dot, grey = remaining
-    let dotsHtml = '';
-    for (let i = 0; i < 4; i++) {
-      if (i < dotsFilled)          dotsHtml += '<div class="mow-dot filled"></div>';
-      else if (i === dotsFilled)   dotsHtml += '<div class="mow-dot pending"></div>';  // next mow
-      else                         dotsHtml += '<div class="mow-dot"></div>';
+    // Dots: first dot = payment (gold/green), remaining = covered (green=done, grey=upcoming)
+    let dotsHtml = '<div class="mow-dot ' + (cyclePos >= 1 ? 'filled' : 'pending') + '" title="Payment mow"></div>';
+    for (let i = 1; i < 4; i++) {
+      if (i < cyclePos)      dotsHtml += '<div class="mow-dot filled" title="Covered"></div>';
+      else if (i === cyclePos && cyclePos > 0) dotsHtml += '<div class="mow-dot" style="background:#d1fae5;" title="Next covered mow"></div>';
+      else                   dotsHtml += '<div class="mow-dot"></div>';
     }
 
-    const cycleLabel = cyclePos === 0
-      ? 'New billing cycle — 4 mows until next charge'
-      : `Mow ${cyclePos} of 4 complete — ${mowsLeft} mow${mowsLeft !== 1 ? 's' : ''} until next charge`;
+    let chargeInfo, cycleLabel;
+    if (cyclePos === 0) {
+      chargeInfo  = '<span class="billing-info-value gold">⚡ Next mow — $140.00</span>';
+      cycleLabel  = 'New cycle — next mow is the payment mow ($140)';
+    } else if (isPaymentMow) {
+      chargeInfo  = '<span class="billing-info-value green">Paid ✓ — next 3 mows are covered</span>';
+      cycleLabel  = 'Payment collected — mows 2, 3, 4 of this cycle are free';
+    } else {
+      const remaining = 4 - cyclePos;
+      chargeInfo  = `<span class="billing-info-value green">Covered — ${remaining} mow${remaining !== 1 ? 's' : ''} left this cycle</span>`;
+      cycleLabel  = `Mow ${cyclePos} of 4 complete — ${remaining} covered mow${remaining !== 1 ? 's' : ''} remaining`;
+    }
 
     html = `
       <div class="billing-plan-row">
         <div>
           <div class="billing-plan-name">📅 Weekly Plan</div>
-          <div class="billing-plan-sub">$35/mow · charged every 4 mows ($140)</div>
+          <div class="billing-plan-sub">$140/month · 1st mow billed, next 3 free</div>
         </div>
       </div>
       <hr class="billing-divider">
@@ -794,39 +804,38 @@ function renderBillingCard(bookings) {
         <span class="billing-info-value">${nextDateLabel}</span>
       </div>
       <div class="billing-info-row">
-        <span class="billing-info-label">Next charge</span>
-        <span class="billing-info-value ${chargeSoon ? 'gold' : ''}">
-          ${chargeSoon ? '⚡ Next mow — $140.00' : 'In ' + mowsLeft + ' mow' + (mowsLeft !== 1 ? 's' : '') + ' — $140.00'}
-        </span>
+        <span class="billing-info-label">Billing status</span>
+        ${chargeInfo}
       </div>
       <div class="mow-dots">${dotsHtml}</div>
       <div class="mow-dot-label">${cycleLabel}</div>`;
 
   } else {
-    // Bi-weekly: charge $80 every 2 mows (once a month)
-    const doneMows  = subBookings.filter(b =>
+    // Bi-weekly: mow 1 = $80 payment, mow 2 = covered free
+    const doneMows = subBookings.filter(b =>
       b.frequency === 'Bi-Weekly Plan' && String(b.done || '').includes('Done')
     ).length;
-    const cyclePos  = doneMows % 2;       // 0 = start of cycle, 1 = 1 done
-    const mowsLeft  = cyclePos === 0 ? 2 : 1;
-    const chargeSoon = mowsLeft === 1;    // next mow triggers $80
+    const cyclePos = doneMows % 2;  // 1 = just paid, 0 = starting new cycle
 
-    let dotsHtml = '';
-    for (let i = 0; i < 2; i++) {
-      if (i < cyclePos)        dotsHtml += '<div class="mow-dot filled"></div>';
-      else if (i === cyclePos) dotsHtml += '<div class="mow-dot pending"></div>';
-      else                     dotsHtml += '<div class="mow-dot"></div>';
+    let dotsHtml = '<div class="mow-dot ' + (cyclePos >= 1 ? 'filled' : 'pending') + '" title="Payment mow"></div>';
+    dotsHtml += cyclePos >= 1
+      ? '<div class="mow-dot" style="background:#d1fae5;" title="Next mow covered"></div>'
+      : '<div class="mow-dot"></div>';
+
+    let chargeInfo, cycleLabel;
+    if (cyclePos === 0) {
+      chargeInfo = '<span class="billing-info-value gold">⚡ Next mow — $80.00</span>';
+      cycleLabel = 'New cycle — next mow is the payment mow ($80)';
+    } else {
+      chargeInfo = '<span class="billing-info-value green">Paid ✓ — next mow is free</span>';
+      cycleLabel = 'Payment collected — next mow is covered';
     }
-
-    const cycleLabel = cyclePos === 0
-      ? 'New billing cycle — 2 mows until next charge'
-      : 'Mow 1 of 2 complete — next mow will be charged';
 
     html = `
       <div class="billing-plan-row">
         <div>
           <div class="billing-plan-name">📅 Bi-Weekly Plan</div>
-          <div class="billing-plan-sub">$40/mow · charged every 2 mows ($80/month)</div>
+          <div class="billing-plan-sub">$80/month · 1st mow billed, 2nd free</div>
         </div>
       </div>
       <hr class="billing-divider">
@@ -835,10 +844,8 @@ function renderBillingCard(bookings) {
         <span class="billing-info-value">${nextDateLabel}</span>
       </div>
       <div class="billing-info-row">
-        <span class="billing-info-label">Next charge</span>
-        <span class="billing-info-value ${chargeSoon ? 'gold' : ''}">
-          ${chargeSoon ? '⚡ Next mow — $80.00' : 'In 2 mows — $80.00'}
-        </span>
+        <span class="billing-info-label">Billing status</span>
+        ${chargeInfo}
       </div>
       <div class="mow-dots">${dotsHtml}</div>
       <div class="mow-dot-label">${cycleLabel}</div>`;
