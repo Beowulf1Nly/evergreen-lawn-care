@@ -337,7 +337,8 @@ document.getElementById('pwInput').addEventListener('keydown', e => {
 // DATA
 // ═══════════════════════════════════════════════════════
 let allBookings  = [];
-let weeklyMowMap = {};   // { email → total done weekly mows } — used for billing cycle badges
+let weeklyMowMap   = {};  // { email → total done weekly mows }
+let biweeklyMowMap = {};  // { email → total done bi-weekly mows }
 let activeRow   = null; // row index being invoiced
 
 async function loadBookings() {
@@ -394,14 +395,16 @@ function renderBookings() {
     bookings = bookings.filter(b => b.invoiced);
   }
 
-  // Build weekly mow count map: { email → totalDoneWeeklyMows } from ALL bookings (not filtered)
-  // Used to show billing cycle progress on weekly subscription cards.
-  weeklyMowMap = {};
+  // Build mow count maps from ALL bookings — used for billing cycle badges
+  weeklyMowMap   = {};
+  biweeklyMowMap = {};
   allBookings.forEach(bk => {
-    if ((bk.frequency || '').toLowerCase().includes('weekly') && String(bk.done || '').includes('Done')) {
-      const em = (bk.email || '').toLowerCase().trim();
-      if (em) weeklyMowMap[em] = (weeklyMowMap[em] || 0) + 1;
-    }
+    if (!String(bk.done || '').includes('Done')) return;
+    const em   = (bk.email || '').toLowerCase().trim();
+    const freq = (bk.frequency || '');
+    if (!em) return;
+    if (freq === 'Weekly Plan')    weeklyMowMap[em]   = (weeklyMowMap[em]   || 0) + 1;
+    if (freq === 'Bi-Weekly Plan') biweeklyMowMap[em] = (biweeklyMowMap[em] || 0) + 1;
   });
 
   // Split today vs rest
@@ -424,23 +427,32 @@ function renderBookings() {
 function cycleBadge(b) {
   const freq  = (b.frequency || '');
   const email = (b.email || '').toLowerCase().trim();
+  if (!email) return '';
 
-  if (freq.toLowerCase().includes('weekly') && email) {
+  if (freq === 'Weekly Plan') {
     const done      = weeklyMowMap[email] || 0;
-    const cyclePos  = done % 4;           // 0 = start of new cycle
+    const cyclePos  = done % 4;
     const mowsLeft  = cyclePos === 0 ? 4 : 4 - cyclePos;
-    const chargeNow = mowsLeft === 1;     // next mow triggers $140 charge
-
+    const chargeNow = mowsLeft === 1;
     const label = cyclePos === 0
-      ? `Mow 0/4 · ${mowsLeft} until $140 charge`
+      ? `Mow 0/4 · ${mowsLeft} until $140`
       : chargeNow
-        ? `Mow ${cyclePos}/4 · ⚡ CHARGE NEXT MOW`
+        ? `Mow ${cyclePos}/4 · ⚡ CHARGE NEXT MOW — $140`
         : `Mow ${cyclePos}/4 · ${mowsLeft} mows until $140`;
     return `<span class="badge-cycle ${chargeNow ? 'charge-next' : ''}">${label}</span>`;
   }
-  if (freq.includes('Bi-Weekly')) {
-    return `<span class="badge-cycle">Charged each mow · $40</span>`;
+
+  if (freq === 'Bi-Weekly Plan') {
+    const done      = biweeklyMowMap[email] || 0;
+    const cyclePos  = done % 2;
+    const mowsLeft  = cyclePos === 0 ? 2 : 1;
+    const chargeNow = mowsLeft === 1;
+    const label = cyclePos === 0
+      ? `Mow 0/2 · 2 until $80`
+      : `Mow 1/2 · ⚡ CHARGE NEXT MOW — $80`;
+    return `<span class="badge-cycle ${chargeNow ? 'charge-next' : ''}">${label}</span>`;
   }
+
   return '';
 }
 

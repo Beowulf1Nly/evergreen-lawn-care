@@ -803,12 +803,30 @@ function renderBillingCard(bookings) {
       <div class="mow-dot-label">${cycleLabel}</div>`;
 
   } else {
-    // Bi-weekly: charged every mow
+    // Bi-weekly: charge $80 every 2 mows (once a month)
+    const doneMows  = subBookings.filter(b =>
+      b.frequency === 'Bi-Weekly Plan' && String(b.done || '').includes('Done')
+    ).length;
+    const cyclePos  = doneMows % 2;       // 0 = start of cycle, 1 = 1 done
+    const mowsLeft  = cyclePos === 0 ? 2 : 1;
+    const chargeSoon = mowsLeft === 1;    // next mow triggers $80
+
+    let dotsHtml = '';
+    for (let i = 0; i < 2; i++) {
+      if (i < cyclePos)        dotsHtml += '<div class="mow-dot filled"></div>';
+      else if (i === cyclePos) dotsHtml += '<div class="mow-dot pending"></div>';
+      else                     dotsHtml += '<div class="mow-dot"></div>';
+    }
+
+    const cycleLabel = cyclePos === 0
+      ? 'New billing cycle — 2 mows until next charge'
+      : 'Mow 1 of 2 complete — next mow will be charged';
+
     html = `
       <div class="billing-plan-row">
         <div>
           <div class="billing-plan-name">📅 Bi-Weekly Plan</div>
-          <div class="billing-plan-sub">$40/mow · charged after each service</div>
+          <div class="billing-plan-sub">$40/mow · charged every 2 mows ($80/month)</div>
         </div>
       </div>
       <hr class="billing-divider">
@@ -818,12 +836,12 @@ function renderBillingCard(bookings) {
       </div>
       <div class="billing-info-row">
         <span class="billing-info-label">Next charge</span>
-        <span class="billing-info-value green">After next mow — $40.00</span>
+        <span class="billing-info-value ${chargeSoon ? 'gold' : ''}">
+          ${chargeSoon ? '⚡ Next mow — $80.00' : 'In 2 mows — $80.00'}
+        </span>
       </div>
-      <div class="billing-info-row">
-        <span class="billing-info-label">Billing cycle</span>
-        <span class="billing-info-value">Per service</span>
-      </div>`;
+      <div class="mow-dots">${dotsHtml}</div>
+      <div class="mow-dot-label">${cycleLabel}</div>`;
   }
 
   card.innerHTML = html;
