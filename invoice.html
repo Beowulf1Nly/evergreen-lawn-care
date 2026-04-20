@@ -120,6 +120,8 @@
   .badge-autopay { background:#1a3a1a; color:#fff; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:700; letter-spacing:.03em; }
   .badge-invoiced { background:#f0fdf4; color:#16a34a; border:1px solid #86efac; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:600; }
   .badge-paylater { background:#fffbeb; color:#92400e; border:1px solid #fcd34d; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:600; }
+  .badge-cycle { background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:700; }
+  .badge-cycle.charge-next { background:#fef3c7; color:#92400e; border-color:#fcd34d; }
 
   .card-actions { display:flex; flex-direction:column; gap:8px; align-items:flex-end; }
   .btn-invoice {
@@ -334,7 +336,8 @@ document.getElementById('pwInput').addEventListener('keydown', e => {
 // ═══════════════════════════════════════════════════════
 // DATA
 // ═══════════════════════════════════════════════════════
-let allBookings = [];
+let allBookings  = [];
+let weeklyMowMap = {};   // { email → total done weekly mows } — used for billing cycle badges
 let activeRow   = null; // row index being invoiced
 
 async function loadBookings() {
@@ -391,6 +394,16 @@ function renderBookings() {
     bookings = bookings.filter(b => b.invoiced);
   }
 
+  // Build weekly mow count map: { email → totalDoneWeeklyMows } from ALL bookings (not filtered)
+  // Used to show billing cycle progress on weekly subscription cards.
+  weeklyMowMap = {};
+  allBookings.forEach(bk => {
+    if ((bk.frequency || '').toLowerCase().includes('weekly') && String(bk.done || '').includes('Done')) {
+      const em = (bk.email || '').toLowerCase().trim();
+      if (em) weeklyMowMap[em] = (weeklyMowMap[em] || 0) + 1;
+    }
+  });
+
   // Split today vs rest
   const todayJobs = bookings.filter(b => b.serviceDateRaw === todayStr || normalizeDate(b.serviceDate) === todayStr);
   const otherJobs = bookings.filter(b => b.serviceDateRaw !== todayStr && normalizeDate(b.serviceDate) !== todayStr);
@@ -406,6 +419,29 @@ function renderBookings() {
   document.getElementById('allList').innerHTML = bookings.length
     ? bookings.map(b => cardHTML(b, false)).join('')
     : '<div class="empty-state">No bookings found.</div>';
+}
+
+function cycleBadge(b) {
+  const freq  = (b.frequency || '');
+  const email = (b.email || '').toLowerCase().trim();
+
+  if (freq.toLowerCase().includes('weekly') && email) {
+    const done      = weeklyMowMap[email] || 0;
+    const cyclePos  = done % 4;           // 0 = start of new cycle
+    const mowsLeft  = cyclePos === 0 ? 4 : 4 - cyclePos;
+    const chargeNow = mowsLeft === 1;     // next mow triggers $140 charge
+
+    const label = cyclePos === 0
+      ? `Mow 0/4 · ${mowsLeft} until $140 charge`
+      : chargeNow
+        ? `Mow ${cyclePos}/4 · ⚡ CHARGE NEXT MOW`
+        : `Mow ${cyclePos}/4 · ${mowsLeft} mows until $140`;
+    return `<span class="badge-cycle ${chargeNow ? 'charge-next' : ''}">${label}</span>`;
+  }
+  if (freq.includes('Bi-Weekly')) {
+    return `<span class="badge-cycle">Charged each mow · $40</span>`;
+  }
+  return '';
 }
 
 function cardHTML(b, isToday) {
@@ -461,6 +497,7 @@ function cardHTML(b, isToday) {
         <div class="card-badges">
           <span class="badge-service">${esc(b.service || 'Service')}</span>
           ${payBadge}
+          ${cycleBadge(b)}
           ${invoicedBadge}
           ${doneBadge}
         </div>

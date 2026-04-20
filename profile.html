@@ -311,6 +311,37 @@
   }
   .btn-add-card:hover { background:var(--green-deep); }
 
+  /* ── Billing card ── */
+  .billing-card {
+    background:#fff; border-radius:16px; border:1.5px solid var(--border);
+    padding:20px; overflow:hidden;
+  }
+  .billing-plan-row {
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:14px;
+  }
+  .billing-plan-name { font-size:15px; font-weight:700; color:var(--green-deep); }
+  .billing-plan-sub  { font-size:12px; color:var(--text-muted); margin-top:2px; }
+  .billing-divider   { border:none; border-top:1px solid var(--border); margin:0 0 14px; }
+  .billing-info-row  {
+    display:flex; justify-content:space-between; align-items:baseline;
+    margin-bottom:10px;
+  }
+  .billing-info-row:last-child { margin-bottom:0; }
+  .billing-info-label { font-size:13px; color:var(--text-muted); }
+  .billing-info-value { font-size:13px; font-weight:600; color:var(--text); text-align:right; }
+  .billing-info-value.green { color:#166534; }
+  .billing-info-value.gold  { color:#92400e; }
+  /* Mow progress dots */
+  .mow-dots { display:flex; gap:6px; margin:14px 0 6px; }
+  .mow-dot  {
+    width:28px; height:8px; border-radius:4px;
+    background:var(--border); transition:background .2s;
+  }
+  .mow-dot.filled  { background:var(--green-bright); }
+  .mow-dot.pending { background:#fbbf24; }   /* last dot — next charge */
+  .mow-dot-label   { font-size:11px; color:var(--text-muted); }
+
   /* Mobile tweaks */
   @media (max-width:480px) {
     .login-card, .sent-card { padding:36px 24px; }
@@ -396,6 +427,12 @@
           <div class="stat-label">All Time</div>
         </div>
       </div>
+    </div>
+
+    <!-- Plan & Billing (rendered by JS) -->
+    <div id="billingSection" class="section-wrap" style="display:none;">
+      <div class="section-title">Plan &amp; Billing</div>
+      <div class="billing-card" id="billingCard"></div>
     </div>
 
     <!-- Upcoming Appointments -->
@@ -672,6 +709,9 @@ function renderProfile(data) {
   document.getElementById('upcomingBadge').textContent = upcoming.length;
   document.getElementById('historyBadge').textContent  = past.length;
 
+  // Billing card
+  renderBillingCard(bookings);
+
   // Render upcoming
   const upEl = document.getElementById('upcomingList');
   upEl.innerHTML = upcoming.length
@@ -683,6 +723,111 @@ function renderProfile(data) {
   histEl.innerHTML = past.length
     ? past.map(b => bookingCardHTML(b, false)).join('')
     : `<div class="empty-state"><div class="empty-icon">📋</div>No past bookings yet.</div>`;
+}
+
+function renderBillingCard(bookings) {
+  const section = document.getElementById('billingSection');
+  const card    = document.getElementById('billingCard');
+  if (!section || !card) return;
+
+  // Find the customer's active subscription plan (most recent booking with a plan)
+  const subBookings = bookings.filter(b => b.frequency && b.frequency !== 'One-time visit');
+  if (!subBookings.length) { section.style.display = 'none'; return; }
+
+  const freq = subBookings.slice().sort((a, b) =>
+    (parseBookingDate(b.serviceDate) || 0) - (parseBookingDate(a.serviceDate) || 0)
+  )[0].frequency;
+
+  const isWeekly    = freq === 'Weekly Plan';
+  const isBiWeekly  = freq === 'Bi-Weekly Plan';
+  if (!isWeekly && !isBiWeekly) { section.style.display = 'none'; return; }
+
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  // Next upcoming (undone) appointment for this plan
+  const nextAppt = subBookings
+    .filter(b => b.frequency === freq && !String(b.done || '').includes('Done'))
+    .sort((a, b) => (parseBookingDate(a.serviceDate) || 0) - (parseBookingDate(b.serviceDate) || 0))[0];
+
+  const nextDateStr = nextAppt
+    ? (parseBookingDate(nextAppt.serviceDate) || null)
+    : null;
+  const nextDateLabel = nextDateStr
+    ? nextDateStr.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' })
+    : 'TBD';
+
+  let html = '';
+
+  if (isWeekly) {
+    // Count done weekly mows to determine position in 4-mow billing cycle
+    const doneMows  = subBookings.filter(b =>
+      b.frequency === 'Weekly Plan' && String(b.done || '').includes('Done')
+    ).length;
+    const cyclePos  = doneMows % 4;           // 0 = start of new cycle, 1-3 = in progress
+    const dotsFilled = cyclePos;              // how many green dots
+    const dotsLeft   = 4 - cyclePos;          // how many remaining (including next-to-charge)
+    const mowsLeft   = cyclePos === 0 ? 4 : 4 - cyclePos;
+    const chargeSoon = mowsLeft === 1;        // last mow before $140 charge
+
+    // Dots: green = done in cycle, gold = next-to-charge last dot, grey = remaining
+    let dotsHtml = '';
+    for (let i = 0; i < 4; i++) {
+      if (i < dotsFilled)          dotsHtml += '<div class="mow-dot filled"></div>';
+      else if (i === dotsFilled)   dotsHtml += '<div class="mow-dot pending"></div>';  // next mow
+      else                         dotsHtml += '<div class="mow-dot"></div>';
+    }
+
+    const cycleLabel = cyclePos === 0
+      ? 'New billing cycle — 4 mows until next charge'
+      : `Mow ${cyclePos} of 4 complete — ${mowsLeft} mow${mowsLeft !== 1 ? 's' : ''} until next charge`;
+
+    html = `
+      <div class="billing-plan-row">
+        <div>
+          <div class="billing-plan-name">📅 Weekly Plan</div>
+          <div class="billing-plan-sub">$35/mow · charged every 4 mows ($140)</div>
+        </div>
+      </div>
+      <hr class="billing-divider">
+      <div class="billing-info-row">
+        <span class="billing-info-label">Next appointment</span>
+        <span class="billing-info-value">${nextDateLabel}</span>
+      </div>
+      <div class="billing-info-row">
+        <span class="billing-info-label">Next charge</span>
+        <span class="billing-info-value ${chargeSoon ? 'gold' : ''}">
+          ${chargeSoon ? '⚡ Next mow — $140.00' : 'In ' + mowsLeft + ' mow' + (mowsLeft !== 1 ? 's' : '') + ' — $140.00'}
+        </span>
+      </div>
+      <div class="mow-dots">${dotsHtml}</div>
+      <div class="mow-dot-label">${cycleLabel}</div>`;
+
+  } else {
+    // Bi-weekly: charged every mow
+    html = `
+      <div class="billing-plan-row">
+        <div>
+          <div class="billing-plan-name">📅 Bi-Weekly Plan</div>
+          <div class="billing-plan-sub">$40/mow · charged after each service</div>
+        </div>
+      </div>
+      <hr class="billing-divider">
+      <div class="billing-info-row">
+        <span class="billing-info-label">Next appointment</span>
+        <span class="billing-info-value">${nextDateLabel}</span>
+      </div>
+      <div class="billing-info-row">
+        <span class="billing-info-label">Next charge</span>
+        <span class="billing-info-value green">After next mow — $40.00</span>
+      </div>
+      <div class="billing-info-row">
+        <span class="billing-info-label">Billing cycle</span>
+        <span class="billing-info-value">Per service</span>
+      </div>`;
+  }
+
+  card.innerHTML = html;
+  section.style.display = 'block';
 }
 
 function bookingCardHTML(b, isUpcoming) {
