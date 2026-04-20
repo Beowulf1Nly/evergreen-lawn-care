@@ -459,7 +459,12 @@ function isCoveredMow(b) {
   const cal = String(b.calendarEvent || b.payMethod || '');
   if (cal.includes('Covered')) return true;
 
-  // Fallback for older rows: compute from done-mow counts
+  // For DONE mows: only trust the explicit tag above — no count-based guessing.
+  // (Avoids falsely marking a payment mow as covered just because doneMows % 4 !== 0.)
+  const isDone = String(b.done || '').includes('Done');
+  if (isDone) return false;
+
+  // For UPCOMING (not yet done) bookings: predict from mow count
   const isW  = /weekly/i.test(freq) && !/bi/i.test(freq);
   const isBW = /bi.?weekly/i.test(freq);
   if (isW || isBW) {

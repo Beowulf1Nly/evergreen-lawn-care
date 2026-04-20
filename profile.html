@@ -778,17 +778,38 @@ function renderBillingCard(bookings) {
       else                   dotsHtml += '<div class="mow-dot"></div>';
     }
 
-    let chargeInfo, cycleLabel;
+    // Check if the payment mow was actually paid vs just invoiced
+    const payMow = subBookings.find(b =>
+      b.frequency === freq && String(b.done || '').includes('Done') &&
+      !String(b.calendarEvent || b.payMethod || '').includes('Covered')
+    );
+    const paidVal       = payMow ? String(payMow.calendarEvent || payMow.payMethod || '') : '';
+    const invoicedVal   = payMow ? String(payMow.invoiced || '').toLowerCase() : '';
+    const actuallyPaid  = paidVal.includes('✅') || invoicedVal.includes('paid') || invoicedVal.includes('auto');
+    const invoiceSent   = payMow && payMow.invoiced && !actuallyPaid;
+
+    let chargeInfo, cycleLabel, alertBox = '';
     if (cyclePos === 0) {
-      chargeInfo  = '<span class="billing-info-value gold">⚡ Payment due on your next visit</span>';
-      cycleLabel  = '● = payment mow  ○ = free mows included in your plan';
+      chargeInfo = '<span class="billing-info-value gold">⚡ Payment due on your next visit</span>';
+      cycleLabel = '● = payment mow  ○ = included mows';
     } else if (isPaymentMow) {
-      chargeInfo  = '<span class="billing-info-value green">✅ Paid for this month — next 3 visits are free</span>';
-      cycleLabel  = '● = paid  ○ = upcoming free mows';
+      if (invoiceSent) {
+        chargeInfo = '<span class="billing-info-value gold">⚠️ Invoice sent — payment still pending</span>';
+        alertBox   = `<div style="margin-top:12px;padding:12px 16px;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:10px;font-size:13px;color:#92400e;line-height:1.6;">
+          ⚠️ <strong>You have an unpaid invoice.</strong> Please check your email for the payment link. Your next 3 mows are scheduled but your spot isn't secured until payment is received.
+        </div>`;
+        cycleLabel = '● = payment mow (pending)  ○ = scheduled mows';
+      } else if (actuallyPaid) {
+        chargeInfo = '<span class="billing-info-value green">✅ Paid — your next 3 visits are already covered</span>';
+        cycleLabel = '● = paid  ○ = already covered mows';
+      } else {
+        chargeInfo = '<span class="billing-info-value gold">⏳ Invoice will be sent after your first mow</span>';
+        cycleLabel = '● = payment mow  ○ = included mows';
+      }
     } else {
       const remaining = 4 - cyclePos;
-      chargeInfo  = `<span class="billing-info-value green">✅ ${remaining} free visit${remaining !== 1 ? 's' : ''} remaining this month</span>`;
-      cycleLabel  = `Mow ${cyclePos} of 4 — ${remaining} more free visit${remaining !== 1 ? 's' : ''} before next payment`;
+      chargeInfo  = `<span class="billing-info-value green">✅ ${remaining} visit${remaining !== 1 ? 's' : ''} already paid for and included this month</span>`;
+      cycleLabel  = `Mow ${cyclePos} of 4 — ${remaining} paid-for visit${remaining !== 1 ? 's' : ''} remaining`;
     }
 
     html = `
@@ -813,8 +834,9 @@ function renderBillingCard(bookings) {
       </div>
       <div class="mow-dots">${dotsHtml}</div>
       <div class="mow-dot-label">${cycleLabel}</div>
+      ${alertBox}
       <div style="margin-top:12px;padding:10px 14px;background:#f0fdf4;border-radius:10px;font-size:12px;color:#166534;line-height:1.6;">
-        💡 How it works: your first mow each month is billed at $140. The next 3 mows that month are on us — no extra charge.
+        💡 How it works: your first mow each month is billed at $140 — that single payment covers all 4 weekly visits. The other 3 are already included.
       </div>`;
 
   } else {
@@ -829,13 +851,31 @@ function renderBillingCard(bookings) {
       ? '<div class="mow-dot" style="background:#d1fae5;" title="Next mow covered"></div>'
       : '<div class="mow-dot"></div>';
 
-    let chargeInfo, cycleLabel;
+    const bwPayMow      = subBookings.find(b =>
+      b.frequency === freq && String(b.done || '').includes('Done') &&
+      !String(b.calendarEvent || b.payMethod || '').includes('Covered')
+    );
+    const bwPaidVal     = bwPayMow ? String(bwPayMow.calendarEvent || bwPayMow.payMethod || '') : '';
+    const bwInvoicedVal = bwPayMow ? String(bwPayMow.invoiced || '').toLowerCase() : '';
+    const bwActuallyPaid = bwPaidVal.includes('✅') || bwInvoicedVal.includes('paid') || bwInvoicedVal.includes('auto');
+    const bwInvoiceSent  = bwPayMow && bwPayMow.invoiced && !bwActuallyPaid;
+
+    let chargeInfo, cycleLabel, alertBox = '';
     if (cyclePos === 0) {
       chargeInfo = '<span class="billing-info-value gold">⚡ Payment due on your next visit</span>';
-      cycleLabel = '● = payment mow  ○ = free mow included in your plan';
+      cycleLabel = '● = payment mow  ○ = included mow';
+    } else if (bwInvoiceSent) {
+      chargeInfo = '<span class="billing-info-value gold">⚠️ Invoice sent — payment still pending</span>';
+      alertBox   = `<div style="margin-top:12px;padding:12px 16px;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:10px;font-size:13px;color:#92400e;line-height:1.6;">
+        ⚠️ <strong>You have an unpaid invoice.</strong> Please check your email for the payment link. Your next visit is scheduled but your spot isn't secured until payment is received.
+      </div>`;
+      cycleLabel = '● = payment mow (pending)  ○ = scheduled mow';
+    } else if (bwActuallyPaid) {
+      chargeInfo = '<span class="billing-info-value green">✅ Paid — your next visit is already covered</span>';
+      cycleLabel = '● = paid  ○ = already covered';
     } else {
-      chargeInfo = '<span class="billing-info-value green">✅ Paid for this month — next visit is free</span>';
-      cycleLabel = '● = paid  ○ = upcoming free visit';
+      chargeInfo = '<span class="billing-info-value gold">⏳ Invoice will be sent after your first mow</span>';
+      cycleLabel = '● = payment mow  ○ = included mow';
     }
 
     html = `
@@ -860,8 +900,9 @@ function renderBillingCard(bookings) {
       </div>
       <div class="mow-dots">${dotsHtml}</div>
       <div class="mow-dot-label">${cycleLabel}</div>
+      ${alertBox}
       <div style="margin-top:12px;padding:10px 14px;background:#f0fdf4;border-radius:10px;font-size:12px;color:#166534;line-height:1.6;">
-        💡 How it works: your first mow each month is billed at $80. Your second mow that month is on us — no extra charge.
+        💡 How it works: your first mow each month is billed at $80 — that single payment covers both visits. The second one is already included.
       </div>`;
   }
 
