@@ -780,22 +780,22 @@ function renderBillingCard(bookings) {
 
     let chargeInfo, cycleLabel;
     if (cyclePos === 0) {
-      chargeInfo  = '<span class="billing-info-value gold">⚡ Next mow — $140.00</span>';
-      cycleLabel  = 'New cycle — next mow is the payment mow ($140)';
+      chargeInfo  = '<span class="billing-info-value gold">⚡ Payment due on your next visit</span>';
+      cycleLabel  = '● = payment mow  ○ = free mows included in your plan';
     } else if (isPaymentMow) {
-      chargeInfo  = '<span class="billing-info-value green">Paid ✓ — next 3 mows are covered</span>';
-      cycleLabel  = 'Payment collected — mows 2, 3, 4 of this cycle are free';
+      chargeInfo  = '<span class="billing-info-value green">✅ Paid for this month — next 3 visits are free</span>';
+      cycleLabel  = '● = paid  ○ = upcoming free mows';
     } else {
       const remaining = 4 - cyclePos;
-      chargeInfo  = `<span class="billing-info-value green">Covered — ${remaining} mow${remaining !== 1 ? 's' : ''} left this cycle</span>`;
-      cycleLabel  = `Mow ${cyclePos} of 4 complete — ${remaining} covered mow${remaining !== 1 ? 's' : ''} remaining`;
+      chargeInfo  = `<span class="billing-info-value green">✅ ${remaining} free visit${remaining !== 1 ? 's' : ''} remaining this month</span>`;
+      cycleLabel  = `Mow ${cyclePos} of 4 — ${remaining} more free visit${remaining !== 1 ? 's' : ''} before next payment`;
     }
 
     html = `
       <div class="billing-plan-row">
         <div>
           <div class="billing-plan-name">📅 Weekly Plan</div>
-          <div class="billing-plan-sub">$140/month · 1st mow billed, next 3 free</div>
+          <div class="billing-plan-sub">$140/month — one payment, four mows</div>
         </div>
       </div>
       <hr class="billing-divider">
@@ -804,11 +804,18 @@ function renderBillingCard(bookings) {
         <span class="billing-info-value">${nextDateLabel}</span>
       </div>
       <div class="billing-info-row">
-        <span class="billing-info-label">Billing status</span>
+        <span class="billing-info-label">Monthly rate</span>
+        <span class="billing-info-value">$140 covers all 4 mows</span>
+      </div>
+      <div class="billing-info-row">
+        <span class="billing-info-label">This month</span>
         ${chargeInfo}
       </div>
       <div class="mow-dots">${dotsHtml}</div>
-      <div class="mow-dot-label">${cycleLabel}</div>`;
+      <div class="mow-dot-label">${cycleLabel}</div>
+      <div style="margin-top:12px;padding:10px 14px;background:#f0fdf4;border-radius:10px;font-size:12px;color:#166534;line-height:1.6;">
+        💡 How it works: your first mow each month is billed at $140. The next 3 mows that month are on us — no extra charge.
+      </div>`;
 
   } else {
     // Bi-weekly: mow 1 = $80 payment, mow 2 = covered free
@@ -824,18 +831,18 @@ function renderBillingCard(bookings) {
 
     let chargeInfo, cycleLabel;
     if (cyclePos === 0) {
-      chargeInfo = '<span class="billing-info-value gold">⚡ Next mow — $80.00</span>';
-      cycleLabel = 'New cycle — next mow is the payment mow ($80)';
+      chargeInfo = '<span class="billing-info-value gold">⚡ Payment due on your next visit</span>';
+      cycleLabel = '● = payment mow  ○ = free mow included in your plan';
     } else {
-      chargeInfo = '<span class="billing-info-value green">Paid ✓ — next mow is free</span>';
-      cycleLabel = 'Payment collected — next mow is covered';
+      chargeInfo = '<span class="billing-info-value green">✅ Paid for this month — next visit is free</span>';
+      cycleLabel = '● = paid  ○ = upcoming free visit';
     }
 
     html = `
       <div class="billing-plan-row">
         <div>
           <div class="billing-plan-name">📅 Bi-Weekly Plan</div>
-          <div class="billing-plan-sub">$80/month · 1st mow billed, 2nd free</div>
+          <div class="billing-plan-sub">$80/month — one payment, two mows</div>
         </div>
       </div>
       <hr class="billing-divider">
@@ -844,11 +851,18 @@ function renderBillingCard(bookings) {
         <span class="billing-info-value">${nextDateLabel}</span>
       </div>
       <div class="billing-info-row">
-        <span class="billing-info-label">Billing status</span>
+        <span class="billing-info-label">Monthly rate</span>
+        <span class="billing-info-value">$80 covers both mows</span>
+      </div>
+      <div class="billing-info-row">
+        <span class="billing-info-label">This month</span>
         ${chargeInfo}
       </div>
       <div class="mow-dots">${dotsHtml}</div>
-      <div class="mow-dot-label">${cycleLabel}</div>`;
+      <div class="mow-dot-label">${cycleLabel}</div>
+      <div style="margin-top:12px;padding:10px 14px;background:#f0fdf4;border-radius:10px;font-size:12px;color:#166534;line-height:1.6;">
+        💡 How it works: your first mow each month is billed at $80. Your second mow that month is on us — no extra charge.
+      </div>`;
   }
 
   card.innerHTML = html;
@@ -870,7 +884,10 @@ function bookingCardHTML(b, isUpcoming) {
   const chipClass = isPaid ? 'chip-paid' : (isDone ? 'chip-done' : 'chip-unpaid');
   const chipText  = isPaid ? '✅ Paid' : (isDone ? '✓ Done' : 'Pending');
 
-  const priceTag = price ? `<span>💵 $${price}</span>` : '';
+  const isSubscription = b.frequency && b.frequency !== 'One-time visit';
+  const priceTag = isSubscription
+    ? `<span style="color:var(--green-mid);font-weight:600;">✓ Included in plan</span>`
+    : (price ? `<span>💵 $${price}</span>` : '');
   const addrTag  = address ? `<span>📍 ${address}</span>` : '';
 
   return `
