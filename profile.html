@@ -342,6 +342,34 @@
   .mow-dot.pending { background:#fbbf24; }   /* last dot — next charge */
   .mow-dot-label   { font-size:12px; color:var(--text); font-weight:500; }
 
+  /* ── Cancel plan button (Account Settings row) ── */
+  .btn-cancel-sub {
+    padding:7px 14px; background:#fff; color:var(--red);
+    border:1.5px solid #fca5a5; border-radius:8px;
+    font-family:inherit; font-size:13px; font-weight:600;
+    cursor:pointer; transition:all .2s; white-space:nowrap;
+  }
+  .btn-cancel-sub:hover { background:var(--red-pale); border-color:var(--red); }
+
+  /* ── Cancel modal option cards ── */
+  .cancel-option {
+    width:100%; border:2px solid var(--border); border-radius:12px;
+    padding:14px 16px; margin-bottom:10px; cursor:pointer;
+    background:#fff; text-align:left; font-family:inherit;
+    transition:border-color .2s, background .2s; display:block;
+  }
+  .cancel-option:hover { border-color:#fca5a5; background:var(--red-pale); }
+  .cancel-option.selected { border-color:var(--red); background:var(--red-pale); }
+  .cancel-option-title { font-size:14px; font-weight:700; color:var(--text); margin-bottom:3px; }
+  .cancel-option-desc  { font-size:12px; color:var(--text-muted); line-height:1.5; }
+  .btn-confirm-cancel {
+    flex:1; padding:13px; background:var(--red); color:#fff; border:none;
+    border-radius:12px; font-family:inherit; font-size:15px; font-weight:600;
+    cursor:pointer; transition:background .2s;
+  }
+  .btn-confirm-cancel:hover:not(:disabled) { background:#c53030; }
+  .btn-confirm-cancel:disabled { opacity:.5; cursor:not-allowed; }
+
   /* Mobile tweaks */
   @media (max-width:480px) {
     .login-card, .sent-card { padding:36px 24px; }
@@ -492,6 +520,13 @@
           </div>
           <button class="btn-add-card" id="addCardBtn" onclick="openCardModal()">Add Card</button>
         </div>
+        <div class="settings-row" id="cancelSubscriptionRow" style="display:none;">
+          <div>
+            <div class="settings-label" style="color:var(--red);">Cancel Subscription</div>
+            <div class="settings-sub">End your lawn care plan</div>
+          </div>
+          <button class="btn-cancel-sub" onclick="openCancelModal()">Cancel Plan</button>
+        </div>
       </div>
     </div>
 
@@ -510,6 +545,28 @@
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeCardModal()">Cancel</button>
       <button class="btn-save-card" id="saveCardBtn" onclick="saveCard()">Save Card</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     CANCEL SUBSCRIPTION MODAL
+═══════════════════════════════════════════ -->
+<div id="cancelModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title">🚫 Cancel Subscription</div>
+    <div class="modal-sub" id="cancelModalSub">Are you sure you want to cancel your lawn care plan?</div>
+    <button class="cancel-option" id="cancelOptImmediate" onclick="selectCancelType('immediate')">
+      <div class="cancel-option-title">Cancel Immediately</div>
+      <div class="cancel-option-desc">All upcoming scheduled appointments will be removed right away.</div>
+    </button>
+    <button class="cancel-option" id="cancelOptCycle" onclick="selectCancelType('end_of_cycle')">
+      <div class="cancel-option-title">Cancel at End of Cycle</div>
+      <div class="cancel-option-desc">Complete your remaining paid visits this cycle, then stop — no new appointments will be scheduled after that.</div>
+    </button>
+    <div class="modal-btns" style="margin-top:8px;">
+      <button class="btn-cancel" onclick="closeCancelModal()">Keep My Plan</button>
+      <button class="btn-confirm-cancel" id="confirmCancelBtn" disabled onclick="confirmCancellation()">Confirm Cancel</button>
     </div>
   </div>
 </div>
@@ -784,9 +841,15 @@ function renderBillingCard(bookings) {
       !String(b.calendarEvent || b.payMethod || '').includes('Covered')
     );
     const paidVal       = payMow ? String(payMow.calendarEvent || payMow.payMethod || '') : '';
-    const invoicedVal   = payMow ? String(payMow.invoiced || '').toLowerCase() : '';
-    const actuallyPaid  = paidVal.includes('✅') || invoicedVal.includes('paid') || invoicedVal.includes('auto');
+    const invoicedVal   = payMow ? String(payMow.invoiced || '') : '';
+    const actuallyPaid  = paidVal.includes('✅') || invoicedVal.toLowerCase().includes('paid') || invoicedVal.toLowerCase().includes('auto');
     const invoiceSent   = payMow && payMow.invoiced && !actuallyPaid;
+    // Extract Stripe-hosted pay URL stored in the invoiced field (format: '... — https://...')
+    const invoiceUrlMatch = invoicedVal.match(/https:\/\/[^\s'"<>]+/);
+    const invoicePayUrl   = invoiceUrlMatch ? invoiceUrlMatch[0] : '';
+    // Extract invoice ID as fallback if URL wasn't stored (format: '... — in_xxxx ...')
+    const invoiceIdMatch  = invoicedVal.match(/(in_[A-Za-z0-9]+)/);
+    const invoiceId       = invoiceIdMatch ? invoiceIdMatch[1] : '';
 
     let chargeInfo, cycleLabel, alertBox = '';
     if (cyclePos === 0) {
@@ -795,8 +858,14 @@ function renderBillingCard(bookings) {
     } else if (isPaymentMow) {
       if (invoiceSent) {
         chargeInfo = '<span class="billing-info-value gold">⚠️ Invoice sent — payment still pending</span>';
+        const payBtn = invoicePayUrl
+          ? `<a href="${invoicePayUrl}" target="_blank" style="display:inline-block;margin-top:10px;padding:10px 22px;background:#92400e;color:#fff;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Pay Invoice →</a>`
+          : invoiceId
+            ? `<button onclick="openInvoiceByFetch('${invoiceId}', this)" style="display:inline-block;margin-top:10px;padding:10px 22px;background:#92400e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Pay Invoice →</button>`
+            : '<span style="font-size:12px;display:block;margin-top:8px;">Check your email for the payment link.</span>';
         alertBox   = `<div style="margin-top:12px;padding:12px 16px;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:10px;font-size:13px;color:#92400e;line-height:1.6;">
-          ⚠️ <strong>You have an unpaid invoice.</strong> Please check your email for the payment link. Your next 3 mows are scheduled but your spot isn't secured until payment is received.
+          ⚠️ <strong>You have an unpaid invoice.</strong> Your next 3 mows are scheduled but your spot isn't secured until payment is received.
+          <br>${payBtn}
         </div>`;
         cycleLabel = '● = payment mow (pending)  ○ = scheduled mows';
       } else if (actuallyPaid) {
@@ -855,10 +924,14 @@ function renderBillingCard(bookings) {
       b.frequency === freq && String(b.done || '').includes('Done') &&
       !String(b.calendarEvent || b.payMethod || '').includes('Covered')
     );
-    const bwPaidVal     = bwPayMow ? String(bwPayMow.calendarEvent || bwPayMow.payMethod || '') : '';
-    const bwInvoicedVal = bwPayMow ? String(bwPayMow.invoiced || '').toLowerCase() : '';
-    const bwActuallyPaid = bwPaidVal.includes('✅') || bwInvoicedVal.includes('paid') || bwInvoicedVal.includes('auto');
+    const bwPaidVal      = bwPayMow ? String(bwPayMow.calendarEvent || bwPayMow.payMethod || '') : '';
+    const bwInvoicedVal  = bwPayMow ? String(bwPayMow.invoiced || '') : '';
+    const bwActuallyPaid = bwPaidVal.includes('✅') || bwInvoicedVal.toLowerCase().includes('paid') || bwInvoicedVal.toLowerCase().includes('auto');
     const bwInvoiceSent  = bwPayMow && bwPayMow.invoiced && !bwActuallyPaid;
+    const bwInvoiceUrlMatch = bwInvoicedVal.match(/https:\/\/[^\s'"<>]+/);
+    const bwInvoicePayUrl   = bwInvoiceUrlMatch ? bwInvoiceUrlMatch[0] : '';
+    const bwInvoiceIdMatch  = bwInvoicedVal.match(/(in_[A-Za-z0-9]+)/);
+    const bwInvoiceId       = bwInvoiceIdMatch ? bwInvoiceIdMatch[1] : '';
 
     let chargeInfo, cycleLabel, alertBox = '';
     if (cyclePos === 0) {
@@ -866,8 +939,14 @@ function renderBillingCard(bookings) {
       cycleLabel = '● = payment mow  ○ = included mow';
     } else if (bwInvoiceSent) {
       chargeInfo = '<span class="billing-info-value gold">⚠️ Invoice sent — payment still pending</span>';
+      const bwPayBtn = bwInvoicePayUrl
+        ? `<a href="${bwInvoicePayUrl}" target="_blank" style="display:inline-block;margin-top:10px;padding:10px 22px;background:#92400e;color:#fff;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">Pay Invoice →</a>`
+        : bwInvoiceId
+          ? `<button onclick="openInvoiceByFetch('${bwInvoiceId}', this)" style="display:inline-block;margin-top:10px;padding:10px 22px;background:#92400e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Pay Invoice →</button>`
+          : '<span style="font-size:12px;display:block;margin-top:8px;">Check your email for the payment link.</span>';
       alertBox   = `<div style="margin-top:12px;padding:12px 16px;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:10px;font-size:13px;color:#92400e;line-height:1.6;">
-        ⚠️ <strong>You have an unpaid invoice.</strong> Please check your email for the payment link. Your next visit is scheduled but your spot isn't secured until payment is received.
+        ⚠️ <strong>You have an unpaid invoice.</strong> Your next visit is scheduled but your spot isn't secured until payment is received.
+        <br>${bwPayBtn}
       </div>`;
       cycleLabel = '● = payment mow (pending)  ○ = scheduled mow';
     } else if (bwActuallyPaid) {
@@ -905,6 +984,11 @@ function renderBillingCard(bookings) {
         💡 How it works: your first mow each month is billed at $80 — that single payment covers both visits. The second one is already included.
       </div>`;
   }
+
+  // Store plan name for cancel modal, and reveal the Cancel Plan settings row
+  activePlanFreq = freq;
+  const cancelRow = document.getElementById('cancelSubscriptionRow');
+  if (cancelRow) cancelRow.style.display = '';
 
   card.innerHTML = html;
   section.style.display = 'block';
@@ -1171,6 +1255,98 @@ function showLoginError(msg) {
 function hideLoginError() {
   const el = document.getElementById('loginError');
   if (el) el.style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// INVOICE URL FETCH — fallback when URL wasn't stored in sheet
+// ═══════════════════════════════════════════════════════════════════════
+async function openInvoiceByFetch(invoiceId, btn) {
+  if (!btn) btn = event && event.currentTarget;
+  const origText = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+
+  try {
+    const session = getStoredSession();
+    if (!session) throw new Error('Not logged in');
+
+    const data = await apiGet({
+      action:       'portal_get_invoice_url',
+      sessionToken: session.token,
+      invoiceId,
+    });
+
+    if (data.success && data.url) {
+      window.open(data.url, '_blank');
+    } else {
+      alert('Could not load invoice. Please check your email for the payment link.');
+    }
+  } catch(err) {
+    alert('Could not load invoice. Please check your email or call (352) 462-0627.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = origText; }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CANCEL SUBSCRIPTION
+// ═══════════════════════════════════════════════════════════════════════
+let activePlanFreq    = '';
+let selectedCancelType = '';
+
+function openCancelModal() {
+  selectedCancelType = '';
+  document.getElementById('confirmCancelBtn').disabled = true;
+  document.getElementById('cancelOptImmediate').classList.remove('selected');
+  document.getElementById('cancelOptCycle').classList.remove('selected');
+  document.getElementById('cancelModalSub').innerHTML = activePlanFreq
+    ? `Cancel your <strong>${activePlanFreq}</strong>? Choose how you'd like to end it.`
+    : 'Are you sure you want to cancel your lawn care plan?';
+  document.getElementById('cancelModal').classList.add('open');
+}
+
+function closeCancelModal() {
+  document.getElementById('cancelModal').classList.remove('open');
+}
+
+function selectCancelType(type) {
+  selectedCancelType = type;
+  document.getElementById('cancelOptImmediate').classList.toggle('selected', type === 'immediate');
+  document.getElementById('cancelOptCycle').classList.toggle('selected', type === 'end_of_cycle');
+  document.getElementById('confirmCancelBtn').disabled = false;
+}
+
+async function confirmCancellation() {
+  const session = getStoredSession();
+  if (!session || !selectedCancelType) return;
+
+  const btn = document.getElementById('confirmCancelBtn');
+  btn.disabled    = true;
+  btn.textContent = 'Cancelling…';
+
+  try {
+    const data = await apiGet({
+      action:       'portal_cancel_subscription',
+      sessionToken: session.token,
+      cancelType:   selectedCancelType,
+    });
+
+    if (data.success) {
+      closeCancelModal();
+      // Reload profile to reflect removed appointments
+      await loadProfile(session.token);
+      const keptMsg = (selectedCancelType === 'end_of_cycle' && data.kept > 0)
+        ? `Your remaining ${data.kept} paid visit${data.kept !== 1 ? 's' : ''} will still be honoured — we'll see you then.`
+        : 'All upcoming appointments have been removed. Hope to see you again!';
+      alert('✅ Subscription cancelled. ' + keptMsg);
+    } else {
+      alert(data.error || 'Could not cancel. Please call us at (352) 462-0627.');
+    }
+  } catch(err) {
+    alert('Could not cancel. Please call us at (352) 462-0627.');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Confirm Cancel';
+  }
 }
 </script>
 </body>
