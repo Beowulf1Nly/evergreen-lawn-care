@@ -426,6 +426,34 @@ function renderBookings() {
     : '<div class="empty-state">No bookings found.</div>';
 }
 
+// Returns true if the payment mow's invoice has actually been paid (not just sent)
+function isInvoicePaid(bk) {
+  if (!bk) return false;
+  const cal = String(bk.calendarEvent || bk.payMethod || '');
+  const inv = String(bk.invoiced || '').toLowerCase();
+  return cal.includes('✅') || inv.includes('auto') || inv.includes('paid in full');
+}
+
+// Returns true if an invoice was sent but NOT yet paid
+function isInvoicePending(bk) {
+  return bk && bk.invoiced && !isInvoicePaid(bk);
+}
+
+// Find the most recent DONE, non-covered payment mow for a customer+frequency
+function findPaymentMow(email, freq) {
+  const em  = (email || '').toLowerCase().trim();
+  const isW = /weekly/i.test(freq) && !/bi/i.test(freq);
+  return allBookings
+    .filter(bk =>
+      (bk.email || '').toLowerCase().trim() === em &&
+      (isW ? (/weekly/i.test(bk.frequency) && !/bi/i.test(bk.frequency)) : /bi.?weekly/i.test(bk.frequency)) &&
+      String(bk.done || '').includes('Done') &&
+      !String(bk.calendarEvent || bk.payMethod || '').includes('Covered')
+    )
+    .sort((a, bk) => new Date(bk.serviceDate || '') - new Date(a.serviceDate || ''))
+    [0];
+}
+
 function cycleBadge(b) {
   const freq  = (b.frequency || '');
   const email = (b.email || '').toLowerCase().trim();
@@ -442,7 +470,12 @@ function cycleBadge(b) {
   if (cyclePos === 0) {
     return `<span class="badge-cycle charge-next">⚡ NEXT MOW = ${amount} PAYMENT</span>`;
   } else if (cyclePos === 1) {
-    const covered = cycleSize - 1;
+    const covered     = cycleSize - 1;
+    const payMow      = findPaymentMow(email, freq);
+    const invPending  = isInvoicePending(payMow);
+    if (invPending) {
+      return `<span class="badge-cycle charge-next">⚠️ Invoice pending · ${covered} mow${covered > 1 ? 's' : ''} scheduled</span>`;
+    }
     return `<span class="badge-cycle">Paid ✓ · ${covered} mow${covered > 1 ? 's' : ''} covered</span>`;
   } else {
     const remaining = cycleSize - cyclePos;
@@ -514,8 +547,14 @@ function cardHTML(b, isToday) {
   // Invoice / payment button logic
   let invoiceBtn;
   if (covered) {
-    // Covered mow — no charge, no invoice ever
-    invoiceBtn = `<button class="btn-invoice" disabled style="background:#166534;font-size:12px;">✅ Paid for</button>`;
+    // Covered mow — check if the covering payment mow invoice has actually been paid
+    const payMow     = findPaymentMow(b.email, b.frequency);
+    const invPending = isInvoicePending(payMow);
+    if (invPending) {
+      invoiceBtn = `<button class="btn-invoice" disabled style="background:#d97706;font-size:12px;">⏳ Invoice pending</button>`;
+    } else {
+      invoiceBtn = `<button class="btn-invoice" disabled style="background:#166534;font-size:12px;">✅ Paid for</button>`;
+    }
   } else if (invoiced) {
     invoiceBtn = `<button class="btn-invoice sent" disabled>Sent ✓</button>`;
   } else if (auto) {
@@ -530,9 +569,14 @@ function cardHTML(b, isToday) {
   }
 
   // Covered badge (for done rows that were auto-covered)
-  const coveredBadge = covered && isDone
-    ? `<span class="badge-invoiced" style="background:#f0fdf4;color:#166534;">✅ Paid for</span>`
-    : '';
+  let coveredBadge = '';
+  if (covered && isDone) {
+    const _payMow    = findPaymentMow(b.email, b.frequency);
+    const _invPend   = isInvoicePending(_payMow);
+    coveredBadge = _invPend
+      ? `<span class="badge-invoiced" style="background:#fff7ed;color:#92400e;border-color:#fcd34d;">⏳ Invoice pending</span>`
+      : `<span class="badge-invoiced" style="background:#f0fdf4;color:#166534;">✅ Paid for</span>`;
+  }
 
   const displayPrice = covered ? '—' : (b.price || '$—');
 
