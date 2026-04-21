@@ -304,26 +304,45 @@
 // CONFIG — update these URLs after deploying your scripts
 // ═══════════════════════════════════════════════════════
 const INVOICE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
-const ADMIN_PASSWORD     = 'Evergreen@2025!';
+
+// Runtime-only — never stored as a constant in source
+let sessionPw = '';
 
 // ═══════════════════════════════════════════════════════
-// AUTH
+// AUTH — password validated by backend, never stored here
 // ═══════════════════════════════════════════════════════
-function login() {
-  const pw = document.getElementById('pwInput').value;
-  if (pw === ADMIN_PASSWORD) {
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('appScreen').style.display   = 'block';
-    loadBookings();
-    loadFreeMows();
-  } else {
+async function login() {
+  const pw = document.getElementById('pwInput').value.trim();
+  if (!pw) return;
+
+  const loginBtn = document.querySelector('.login-btn');
+  if (loginBtn) { loginBtn.disabled = true; loginBtn.textContent = 'Checking…'; }
+
+  try {
+    const url = INVOICE_SCRIPT_URL + '?action=bookings&password=' + encodeURIComponent(pw);
+    const res  = await fetch(url);
+    const data = await res.json();
+
+    if (data.success) {
+      sessionPw = pw;
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('appScreen').style.display   = 'block';
+      loadBookings();
+      loadFreeMows();
+    } else {
+      throw new Error('wrong password');
+    }
+  } catch(e) {
     document.getElementById('loginError').style.display = 'block';
     document.getElementById('pwInput').value = '';
     document.getElementById('pwInput').focus();
+  } finally {
+    if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = 'Sign In'; }
   }
 }
 
 function logout() {
+  sessionPw = '';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('appScreen').style.display   = 'none';
   document.getElementById('pwInput').value = '';
@@ -344,7 +363,7 @@ let activeRow   = null; // row index being invoiced
 async function loadBookings() {
   document.getElementById('lastRefresh').textContent = 'Loading…';
 
-  const url = INVOICE_SCRIPT_URL + '?action=bookings&password=' + encodeURIComponent(ADMIN_PASSWORD);
+  const url = INVOICE_SCRIPT_URL + '?action=bookings&password=' + encodeURIComponent(sessionPw);
 
   try {
     const res  = await fetch(url);
@@ -681,7 +700,7 @@ async function sendInvoice() {
 
   const params = new URLSearchParams({
     action:       'send_invoice',
-    password:     ADMIN_PASSWORD,
+    password:     sessionPw,
     email:        b.email,
     name:         b.name,
     amount:       amount,
@@ -769,7 +788,7 @@ async function markDone(rowIdx) {
 
   const params = new URLSearchParams({
     action:    'mark_done',
-    password:  ADMIN_PASSWORD,
+    password:  sessionPw,
     rowIndex:  rowIdx + 2,
   });
 
@@ -805,7 +824,7 @@ function updateAmountPreview() {
 let allFreeMows = [];
 
 async function loadFreeMows() {
-  const url = INVOICE_SCRIPT_URL + '?action=free_mows&password=' + encodeURIComponent(ADMIN_PASSWORD);
+  const url = INVOICE_SCRIPT_URL + '?action=free_mows&password=' + encodeURIComponent(sessionPw);
   try {
     const res  = await fetch(url);
     const data = await res.json();
