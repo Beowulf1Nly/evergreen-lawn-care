@@ -905,7 +905,7 @@ function renderBillingCard(bookings) {
       <div class="mow-dot-label">${cycleLabel}</div>
       ${alertBox}
       <div style="margin-top:12px;padding:10px 14px;background:#f0fdf4;border-radius:10px;font-size:12px;color:#166534;line-height:1.6;">
-        💡 How it works: your first mow each month is billed at $140 — that single payment covers all 4 weekly visits. The other 3 are already included.
+        💡 How it works: one payment of $140/month covers all 4 weekly visits ($35/visit). We invoice after your first mow — visits 2, 3, and 4 are already included in what you paid.
       </div>`;
 
   } else {
@@ -981,7 +981,7 @@ function renderBillingCard(bookings) {
       <div class="mow-dot-label">${cycleLabel}</div>
       ${alertBox}
       <div style="margin-top:12px;padding:10px 14px;background:#f0fdf4;border-radius:10px;font-size:12px;color:#166534;line-height:1.6;">
-        💡 How it works: your first mow each month is billed at $80 — that single payment covers both visits. The second one is already included.
+        💡 How it works: one payment of $80/month covers both bi-weekly visits ($40/visit). We invoice after your first mow — the second visit is already included in what you paid.
       </div>`;
   }
 
@@ -1244,7 +1244,10 @@ function esc(str) {
 
 function parseBookingDate(str) {
   if (!str) return null;
-  const d = new Date(str);
+  // Strip leading weekday name if present — "Monday, May 4 2026" → "May 4 2026"
+  // new Date() chokes on full weekday prefixes in some V8 versions
+  const cleaned = String(str).replace(/^[A-Za-z]+,\s*/, '');
+  const d = new Date(cleaned);
   return isNaN(d.getTime()) ? null : d;
 }
 

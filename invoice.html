@@ -470,13 +470,14 @@ function cycleBadge(b) {
   if (cyclePos === 0) {
     return `<span class="badge-cycle charge-next">⚡ NEXT MOW = ${amount} PAYMENT</span>`;
   } else if (cyclePos === 1) {
-    const covered     = cycleSize - 1;
-    const payMow      = findPaymentMow(email, freq);
-    const invPending  = isInvoicePending(payMow);
-    if (invPending) {
-      return `<span class="badge-cycle charge-next">⚠️ Invoice pending · ${covered} mow${covered > 1 ? 's' : ''} scheduled</span>`;
+    const covered  = cycleSize - 1;
+    const payMow   = findPaymentMow(email, freq);
+    // Only show "Paid ✓" when payment is confirmed; everything else = warning
+    if (isInvoicePaid(payMow)) {
+      return `<span class="badge-cycle">Paid ✓ · ${covered} mow${covered > 1 ? 's' : ''} covered</span>`;
     }
-    return `<span class="badge-cycle">Paid ✓ · ${covered} mow${covered > 1 ? 's' : ''} covered</span>`;
+    const label = isInvoicePending(payMow) ? 'Invoice pending' : 'Invoice needed';
+    return `<span class="badge-cycle charge-next">⚠️ ${label} · ${covered} mow${covered > 1 ? 's' : ''} scheduled</span>`;
   } else {
     const remaining = cycleSize - cyclePos;
     return `<span class="badge-cycle">Covered · ${remaining} mow${remaining > 1 ? 's' : ''} left free</span>`;
