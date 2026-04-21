@@ -547,8 +547,11 @@ function cardHTML(b, isToday) {
     : '';
 
   // Invoice / payment button logic
+  const isFreeMow = (b.frequency || '') === 'Free Mow';
   let invoiceBtn;
-  if (covered) {
+  if (isFreeMow) {
+    invoiceBtn = `<button class="btn-invoice" disabled style="background:#2d6a2d;font-size:12px;">🌿 Free Visit</button>`;
+  } else if (covered) {
     // Covered mow — check if the covering payment mow invoice has actually been paid
     const payMow     = findPaymentMow(b.email, b.frequency);
     const invPending = isInvoicePending(payMow);

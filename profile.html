@@ -787,8 +787,8 @@ function renderBillingCard(bookings) {
   const card    = document.getElementById('billingCard');
   if (!section || !card) return;
 
-  // Find the customer's active subscription plan (most recent booking with a plan)
-  const subBookings = bookings.filter(b => b.frequency && b.frequency !== 'One-time visit');
+  // Find the customer's active subscription plan (most recent booking with a plan, excluding free mows)
+  const subBookings = bookings.filter(b => b.frequency && b.frequency !== 'One-time visit' && b.frequency !== 'Free Mow');
   if (!subBookings.length) { section.style.display = 'none'; return; }
 
   const freq = subBookings.slice().sort((a, b) =>
@@ -1009,10 +1009,13 @@ function bookingCardHTML(b, isUpcoming) {
   const chipClass = isPaid ? 'chip-paid' : (isDone ? 'chip-done' : 'chip-unpaid');
   const chipText  = isPaid ? '✅ Paid' : (isDone ? '✓ Done' : 'Pending');
 
-  const isSubscription = b.frequency && b.frequency !== 'One-time visit';
-  const priceTag = isSubscription
-    ? `<span style="color:var(--green-mid);font-weight:600;">✓ Included in plan</span>`
-    : (price ? `<span>💵 $${price}</span>` : '');
+  const isFreeMow      = b.frequency === 'Free Mow';
+  const isSubscription = b.frequency && b.frequency !== 'One-time visit' && !isFreeMow;
+  const priceTag = isFreeMow
+    ? `<span style="color:var(--green-mid);font-weight:600;">🌿 Free Visit</span>`
+    : isSubscription
+      ? `<span style="color:var(--green-mid);font-weight:600;">✓ Included in plan</span>`
+      : (price ? `<span>💵 $${price}</span>` : '');
   const addrTag  = address ? `<span>📍 ${address}</span>` : '';
 
   return `

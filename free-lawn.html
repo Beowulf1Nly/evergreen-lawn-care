@@ -410,7 +410,7 @@
 
       <div class="eligibility-notice">
         <div class="icon">⚠️</div>
-        <p><strong>First-time customers only · One per address.</strong> By submitting, you confirm this is your first time using Evergreen Lawn Care and that you haven't previously redeemed this offer at your address.</p>
+        <p><strong>First-time customers only · One per email.</strong> By submitting, you confirm this is your first time using Evergreen Lawn Care and that you haven't previously redeemed this offer with your email address.</p>
       </div>
 
       <div class="section-title">Claim Your Free Visit</div>
@@ -514,7 +514,7 @@
           <div class="spinner"></div>
           <span class="btn-text">Request a Free Quote →</span>
         </button>
-        <div class="trust-note">First-time customers only · One per address</div>
+        <div class="trust-note">First-time customers only · One per email</div>
       </div>
 
     </div>
@@ -531,7 +531,7 @@
     <div class="success-state" id="alreadyClaimedState">
       <div class="success-icon">🚫</div>
       <h2>Offer Already Redeemed</h2>
-      <p>It looks like this free visit has already been claimed from this device or address. This offer is limited to one per household for first-time customers.</p>
+      <p>It looks like this free visit has already been claimed with this email address. This offer is limited to one per customer for first-time clients only.</p>
       <p style="margin-top:14px;">Questions? Give us a call.</p>
       <a href="tel:+13524620627" class="btn-home" style="background:var(--green-deep);">Call (352) 462-0627</a>
       <br/>
@@ -625,7 +625,7 @@ let calYear, calMonth, calSelected = '';
 function initCalendar() {
   calSelected = '';
   const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setDate(tomorrow.getDate() + 5);  // 5-day minimum booking delay
   calYear  = tomorrow.getFullYear();
   calMonth = tomorrow.getMonth();
   document.getElementById('preferredDay').value = '';
@@ -635,7 +635,7 @@ function initCalendar() {
 
 function renderCalendar() {
   const today    = new Date(); today.setHours(0,0,0,0);
-  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 5);  // 5-day minimum
   const maxDate  = new Date(today); maxDate.setDate(today.getDate() + MAX_BOOKING_DAYS);
   const MONTHS   = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
@@ -786,7 +786,7 @@ async function handleSubmit() {
   btn.classList.add('loading');
   btn.disabled = true;
 
-  // ── 2. Google Sheet check + log (blocks duplicate addresses) ──
+  // ── 2. Submit to Apps Script (server validates email uniqueness + 5-day date) ──
   try {
     const params = new URLSearchParams({
       action: 'claim',
@@ -798,10 +798,18 @@ async function handleSubmit() {
     const sheetRes = await fetch(`${APPS_SCRIPT_URL}?${params}`);
     const sheetData = await sheetRes.json();
 
-    if (!sheetData.success && sheetData.reason === 'address_used') {
+    if (!sheetData.success) {
       btn.classList.remove('loading');
       btn.disabled = false;
-      showAlreadyClaimed();
+      if (sheetData.reason === 'email_used' || sheetData.reason === 'address_used') {
+        showAlreadyClaimed();
+      } else if (sheetData.reason === 'date_too_soon') {
+        alert('Please select a date at least 5 days from today — we need a little time to prepare!');
+        document.getElementById('date-error').style.display = 'block';
+        document.getElementById('date-error').textContent = 'Please select a date at least 5 days from today.';
+      } else {
+        alert('Something went wrong. Please try again or call us at (352) 462-0627.');
+      }
       return;
     }
   } catch (err) {
@@ -850,15 +858,19 @@ async function handleQuote() {
   btn.classList.add('loading');
   btn.disabled = true;
 
-  // Sheet check
+  // Submit to Apps Script (server validates email uniqueness)
   try {
     const params = new URLSearchParams({ action: 'claim', address, name, email, phone, zip, notes });
     const sheetRes  = await fetch(`${APPS_SCRIPT_URL}?${params}`);
     const sheetData = await sheetRes.json();
-    if (!sheetData.success && sheetData.reason === 'address_used') {
+    if (!sheetData.success) {
       btn.classList.remove('loading');
       btn.disabled = false;
-      showAlreadyClaimed();
+      if (sheetData.reason === 'email_used' || sheetData.reason === 'address_used') {
+        showAlreadyClaimed();
+      } else {
+        alert('Something went wrong. Please try again or call us at (352) 462-0627.');
+      }
       return;
     }
   } catch(err) {
