@@ -511,8 +511,9 @@ function isCoveredMow(b) {
 function cycleChargeAmount(b) {
   const freq = (b.frequency || '');
   const priceNum = parseFloat(String(b.price || '').replace(/[^0-9.]/g, '')) || 0;
-  if (freq === 'Weekly Plan')    return (priceNum * 4).toFixed(2);
-  if (freq === 'Bi-Weekly Plan') return (priceNum * 2).toFixed(2);
+  // priceNum IS already the monthly plan rate ($140 weekly / $80 bi-weekly) — no multiplication needed
+  if (freq === 'Weekly Plan')    return priceNum.toFixed(2);
+  if (freq === 'Bi-Weekly Plan') return priceNum.toFixed(2);
   return priceNum.toFixed(2);
 }
 
