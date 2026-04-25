@@ -1541,20 +1541,25 @@
       <h2 style="font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:var(--green-deep);margin-bottom:6px;">Get your free quote</h2>
       <p style="font-size:14px;color:var(--text-muted);margin-bottom:22px;line-height:1.6;">Enter your address and we'll calculate your price instantly. First service only $19.</p>
       <div class="form-row">
-        <label>Property Address <span style="color:var(--text-muted);font-weight:400;">(include zip code)</span></label>
-        <input type="text" id="q-address" placeholder="123 Oak St, Inverness, FL 34450" autocomplete="new-password" autocorrect="off" autocapitalize="off"/>
+        <label>Property Address</label>
+        <input type="text" id="q-address" placeholder="123 Oak St, Inverness, FL" autocomplete="street-address"/>
+      </div>
+      <div class="form-row">
+        <label>Zip Code</label>
+        <input type="text" id="q-zip" placeholder="34450" maxlength="5" inputmode="numeric" pattern="\d{5}" autocomplete="postal-code" style="max-width:140px;"/>
+        <div id="q-zip-error" style="color:#e53e3e;font-size:13px;margin-top:4px;display:none;">We only serve Citrus County, FL. Call <a href="tel:+13524620627">(352) 462-0627</a> if you're outside the area.</div>
       </div>
       <div class="form-row">
         <label>Full Name</label>
-        <input type="text" id="q-name" placeholder="Jane Smith" autocomplete="off"/>
+        <input type="text" id="q-name" placeholder="Jane Smith" autocomplete="name"/>
       </div>
       <div class="form-row">
         <label>Email Address</label>
-        <input type="email" id="q-email" placeholder="you@email.com" autocomplete="off"/>
+        <input type="email" id="q-email" placeholder="you@email.com" autocomplete="email"/>
       </div>
       <div class="form-row">
         <label>Phone Number <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-        <input type="tel" id="q-phone" placeholder="(352) 555-0123" autocomplete="off"/>
+        <input type="tel" id="q-phone" placeholder="(352) 555-0123" autocomplete="tel"/>
       </div>
       <div id="q-step1-error" style="color:#e53e3e;font-size:13px;margin-bottom:12px;display:none;"></div>
       <button class="btn-primary" onclick="quoteStep1Submit()" style="width:100%;font-size:16px;padding:16px;border:none;cursor:pointer;">
@@ -2664,7 +2669,7 @@ function openQuoteModal(preselectedPlan) {
   // Default to biweekly; ignore one-time if somehow passed
   const validPlan = (preselectedPlan === 'weekly') ? 'weekly' : 'biweekly';
   qState = { name:'',email:'',phone:'',address:'',zip:'',lotTierIdx:1,selectedPlan:validPlan,startDate:'',stripeCustomerId:'',isReturning:false };
-  ['q-name','q-email','q-phone','q-address'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  ['q-name','q-email','q-phone','q-address','q-zip'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('q-step1-error').style.display = 'none';
   document.getElementById('quoteStepsBar').style.display = 'flex';
   showQuoteStep(1);
@@ -2727,17 +2732,20 @@ async function quoteStep1Submit() {
   const errEl   = document.getElementById('q-step1-error');
   const btn     = document.querySelector('#quoteStep1 .btn-primary');
 
+  const zip = (document.getElementById('q-zip')?.value || '').trim();
   if (!name || !email || !address) {
-    errEl.textContent = 'Please fill in your name, email, and address.';
+    errEl.textContent = 'Please fill in your address, name, and email.';
+    errEl.style.display = 'block'; return;
+  }
+  if (!zip || zip.length !== 5 || !/^\d{5}$/.test(zip)) {
+    errEl.textContent = 'Please enter your 5-digit zip code.';
     errEl.style.display = 'block'; return;
   }
   if (!email.includes('@') || !email.includes('.')) {
     errEl.textContent = 'Please enter a valid email address.';
     errEl.style.display = 'block'; return;
   }
-  const zipMatch = address.match(/\b(\d{5})\b/);
-  const zip = zipMatch ? zipMatch[1] : '';
-  if (zip && !VALID_ZIPS.has(zip)) {
+  if (!VALID_ZIPS.has(zip)) {
     errEl.textContent = 'We currently only serve Citrus County, FL. Call (352) 462-0627 for more info.';
     errEl.style.display = 'block'; return;
   }
@@ -2757,7 +2765,7 @@ async function quoteStep1Submit() {
   qState.name=name; qState.email=email; qState.phone=phone; qState.address=address; qState.zip=zip;
   if (zip && ZIP_LOT_MAP[zip] !== undefined) qState.lotTierIdx = ZIP_LOT_MAP[zip];
   showQuoteStep(2);
-  document.getElementById('q-address-confirm').textContent = address;
+  document.getElementById('q-address-confirm').textContent = address + (zip ? ', ' + zip : '');
   runAnalyzingAnimation();
 }
 
