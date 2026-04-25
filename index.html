@@ -26,6 +26,7 @@
 <meta name="twitter:description" content="Professional mowing & blowing in Citrus County. Same-day availability. Starting at $45 — book online in minutes."/>
 <meta name="twitter:image" content="https://evergreenlawncareflorida.com/og-image.jpg"/>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://js.stripe.com/v3/"></script>
 <link rel="icon" type="image/x-icon" href="favicon.ico"/>
 <link rel="icon" type="image/png" href="favicon.png"/>
 <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
@@ -1098,6 +1099,106 @@
   }
 
   /* ── RESPONSIVE ── */
+  /* ── QUOTE FLOW MODAL ── */
+  .quote-modal { max-width: 500px; }
+
+  /* Step indicator */
+  .quote-steps-bar { display:flex; align-items:center; margin-bottom:24px; padding:0 4px; }
+  .quote-step-dot {
+    width:30px; height:30px; border-radius:50%;
+    background:rgba(26,58,26,0.08); color:var(--text-muted);
+    font-size:12px; font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+    transition:all .3s; flex-shrink:0;
+  }
+  .quote-step-dot.active { background:var(--green-mid); color:#fff; box-shadow:0 4px 12px rgba(45,106,45,0.3); }
+  .quote-step-dot.done   { background:var(--green-bright); color:#fff; }
+  .quote-step-line { flex:1; height:2px; background:rgba(26,58,26,0.1); margin:0 8px; transition:background .3s; }
+  .quote-step-line.done  { background:var(--green-bright); }
+
+  /* Analyzing screen */
+  .quote-analyzing-icon { font-size:48px; margin-bottom:16px; }
+  .quote-progress-bar { width:100%; height:6px; background:rgba(26,58,26,0.08); border-radius:3px; overflow:hidden; margin:20px 0; }
+  .quote-progress-fill { height:100%; width:0%; background:linear-gradient(90deg, var(--green-bright), var(--green-mid)); border-radius:3px; }
+
+  /* Lot size bar */
+  .quote-lot-bar {
+    background:var(--green-pale); border:1px solid rgba(45,106,45,0.15);
+    border-radius:12px; padding:14px 16px;
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:18px;
+  }
+  .quote-lot-info { display:flex; align-items:center; gap:10px; }
+  .quote-lot-icon { font-size:22px; }
+  .quote-lot-label { font-size:14px; font-weight:700; color:var(--green-deep); }
+  .quote-lot-sublabel { font-size:11px; color:var(--text-muted); margin-top:2px; }
+  .quote-lot-adjust { display:flex; gap:6px; }
+  .quote-adj-btn {
+    width:28px; height:28px; border-radius:6px;
+    border:1px solid rgba(45,106,45,0.2); background:#fff;
+    color:var(--green-mid); font-size:16px; font-weight:700;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+    transition:all .15s; line-height:1;
+  }
+  .quote-adj-btn:hover { background:var(--green-pale); border-color:var(--green-mid); }
+
+  /* Plan cards */
+  .quote-plan-cards { display:flex; flex-direction:column; gap:10px; }
+  .quote-plan-card {
+    border:2px solid rgba(26,58,26,0.1); border-radius:12px;
+    padding:14px 16px; cursor:pointer; transition:all .2s;
+    background:var(--cream); display:flex; align-items:center;
+    gap:12px; position:relative;
+  }
+  .quote-plan-card:hover { border-color:var(--green-bright); background:var(--green-pale); }
+  .quote-plan-card.selected {
+    border-color:var(--green-mid); background:var(--green-pale);
+    box-shadow:0 0 0 1px var(--green-mid);
+  }
+  .quote-plan-radio {
+    width:20px; height:20px; border-radius:50%;
+    border:2px solid rgba(26,58,26,0.2); flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    transition:all .2s;
+  }
+  .quote-plan-card.selected .quote-plan-radio { border-color:var(--green-mid); background:var(--green-mid); }
+  .quote-plan-card.selected .quote-plan-radio::after { content:''; width:7px; height:7px; border-radius:50%; background:#fff; }
+  .quote-plan-details { flex:1; }
+  .quote-plan-name { font-size:14px; font-weight:700; color:var(--green-deep); }
+  .quote-plan-first { font-size:13px; color:var(--green-mid); font-weight:600; margin-top:2px; }
+  .quote-plan-after { font-size:12px; color:var(--text-muted); margin-top:1px; }
+  .quote-plan-badge {
+    position:absolute; top:-8px; right:12px;
+    background:var(--gold); color:#fff;
+    font-size:10px; font-weight:700;
+    padding:2px 10px; border-radius:100px;
+    letter-spacing:.04em; white-space:nowrap;
+  }
+  .quote-plan-price { text-align:right; flex-shrink:0; }
+  .quote-plan-price-num {
+    font-family:'Playfair Display',serif;
+    font-size:24px; font-weight:700; color:var(--green-deep); line-height:1;
+  }
+  .quote-plan-price-period { font-size:11px; color:var(--text-muted); line-height:1.4; margin-top:2px; }
+
+  /* Order summary */
+  .quote-order-summary { background:var(--green-pale); border-radius:12px; padding:16px 18px; margin-bottom:20px; }
+  .quote-order-row {
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:13px; color:var(--text-muted); margin-bottom:8px;
+  }
+  .quote-order-row:last-child { margin-bottom:0; }
+  .quote-order-total {
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:15px; font-weight:700; color:var(--green-deep);
+    border-top:1px solid rgba(26,58,26,0.1);
+    padding-top:12px; margin-top:10px;
+  }
+  .quote-order-amount {
+    font-family:'Playfair Display',serif;
+    font-size:30px; font-weight:700; color:var(--green-mid);
+  }
+
   @media (max-width: 900px) {
     /* ── NAV mobile ── */
     nav { padding: 12px 16px; }
@@ -1160,6 +1261,7 @@
         <li><a href="#trust">Why Us</a></li>
         <li><a href="#faq">FAQ</a></li>
       </ul>
+      <a href="javascript:void(0)" onclick="openQuoteModal()" class="nav-cta" style="font-size:14px;font-weight:600;text-decoration:none;padding:10px 22px;border-radius:6px;">Get a Quote</a>
       <a href="/profile" class="nav-account"><span class="nav-account-icon">&#128100;</span> My Account</a>
     </div>
   </nav>
@@ -1177,11 +1279,11 @@
       <h1>Fast, Reliable<br/><em>Lawn Care</em></h1>
       <p>We show up on time. Every time. Professional mowing and blowing in Citrus County with same-day and next-day availability. Book online or call — we make it easy.</p>
       <div class="hero-btns">
-        <a href="#services" class="btn-primary">View Services & Book</a>
+        <button onclick="openQuoteModal()" class="btn-primary" style="border:none;cursor:pointer;">Get a Free Quote — Under 2 Minutes</button>
         <a href="tel:+13524620627" class="btn-secondary">📞 Call Us</a>
       </div>
       <div class="hero-spot-line" style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;font-weight:500;color:rgba(255,255,255,0.45);">
-        <span style="font-size:15px;">✅</span> Book your spot today!
+        <span style="font-size:15px;">⚡</span> Spots fill fast — lock yours in today
       </div>
       <div class="hero-stats">
         <div>
@@ -1214,8 +1316,8 @@
 <!-- SERVICES -->
 <section class="services" id="services">
   <div class="section-label reveal">What We Offer</div>
-  <h2 class="section-title reveal" style="transition-delay:.05s">Simple, Honest Pricing</h2>
-  <p class="section-sub reveal" style="transition-delay:.1s">No hidden fees. Book once or set it and forget it with a recurring plan — we'll show up every time.</p>
+  <h2 class="section-title reveal" style="transition-delay:.05s">First Service Just $19</h2>
+  <p class="section-sub reveal" style="transition-delay:.1s">New customers get their first mow for $19 — no commitment. Love it, and we'll set you up on a plan. No upcharges, no surprises.</p>
 
   <div class="services-grid">
 
@@ -1230,10 +1332,10 @@
         <li>Blowing clippings clear</li>
         <li>Driveway & walkway cleanup</li>
       </ul>
-      <div class="service-price">$45 <span>/ visit</span></div>
-      <div style="display:inline-block;background:#e8f5e9;color:#2e7d32;font-size:12px;font-weight:700;letter-spacing:0.05em;padding:4px 10px;border-radius:20px;margin-bottom:14px;">One-time · No commitment</div>
-      <button class="btn-book" onclick="openModal('mow-blow', 'Cut & Clean', 45, 'one-time')">Book Now →</button>
-      <div style="text-align:center;font-size:12px;color:rgba(255,255,255,0.65);margin-top:9px;font-weight:500;">✅ Pay after service · No upfront payment</div>
+      <div class="service-price" style="margin-bottom:4px;">$19 <span>first service</span></div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:16px;">Following visits from $35–$65 based on yard size</div>
+      <button class="btn-book" onclick="openQuoteModalPlan('one-time')">Book Now — $19 →</button>
+      <div style="text-align:center;font-size:12px;color:rgba(255,255,255,0.55);margin-top:9px;font-weight:500;">💳 Pay today · Card required at booking</div>
     </div>
 
     <!-- Bi-Weekly Plan -->
@@ -1247,10 +1349,11 @@
         <li>Driveway & walkway cleanup</li>
         <li>Cancel anytime</li>
       </ul>
-      <div class="service-price">$80 <span>/ month</span></div>
-      <div class="service-savings">💰 Save $10/mo vs one-time</div>
-      <button class="btn-book" onclick="openModal('biweekly', 'Bi-Weekly Plan', 40, 'recurring')">Subscribe →</button>
-      <div style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:9px;font-weight:500;">✅ Pay after service · No upfront payment</div>
+      <div class="service-price" style="margin-bottom:4px;">$19 <span>first service</span></div>
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">Then from $65–$110/mo · 2 visits/month</div>
+      <div class="service-savings">💰 Most popular recurring plan</div>
+      <button class="btn-book" onclick="openQuoteModalPlan('biweekly')">Book Now — $19 →</button>
+      <div style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:9px;font-weight:500;">💳 Pay today · Cancel anytime</div>
     </div>
 
     <!-- Weekly Plan -->
@@ -1264,10 +1367,11 @@
         <li>Driveway & walkway cleanup</li>
         <li>Cancel anytime</li>
       </ul>
-      <div class="service-price">$140 <span>/ month</span></div>
-      <div class="service-savings">💰 Save $40/mo vs one-time</div>
-      <button class="btn-book" onclick="openModal('weekly', 'Weekly Plan', 35, 'recurring')">Subscribe →</button>
-      <div style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:9px;font-weight:500;">✅ Pay after service · No upfront payment</div>
+      <div class="service-price" style="margin-bottom:4px;">$19 <span>first service</span></div>
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">Then from $115–$190/mo · 4 visits/month</div>
+      <div class="service-savings">💰 Best value per mow</div>
+      <button class="btn-book" onclick="openQuoteModalPlan('weekly')">Book Now — $19 →</button>
+      <div style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:9px;font-weight:500;">💳 Pay today · Cancel anytime</div>
     </div>
 
 
@@ -1442,7 +1546,7 @@
   <ul class="footer-links">
     <li><a href="#services">Services</a></li>
     <li><a href="#how">How It Works</a></li>
-    <li><a href="#services" onclick="openModal('mow-blow','Cut & Clean',45,'one-time')">Book Now</a></li>
+    <li><a href="#services" onclick="openQuoteModal()">Book Now</a></li>
     <li><a href="refund-policy.html">Refund Policy</a></li>
     <li><a href="privacy-policy.html">Privacy Policy</a></li>
     <li><a href="terms-of-service.html">Terms of Service</a></li>
@@ -1453,6 +1557,127 @@
   </div>
   <div class="footer-copy">© 2025 Evergreen Lawn Care LLC — Citrus County, FL</div>
 </footer>
+
+<!-- QUOTE & BOOKING FLOW MODAL (4-step) -->
+<div class="modal-overlay" id="quoteModalOverlay" onclick="handleQuoteOverlayClick(event)">
+  <div class="modal quote-modal">
+    <button class="modal-close" onclick="closeQuoteModal()">✕</button>
+
+    <!-- Step dots -->
+    <div class="quote-steps-bar" id="quoteStepsBar">
+      <div class="quote-step-dot active" id="sdot-1">1</div>
+      <div class="quote-step-line" id="sline-1"></div>
+      <div class="quote-step-dot" id="sdot-2">2</div>
+      <div class="quote-step-line" id="sline-2"></div>
+      <div class="quote-step-dot" id="sdot-3">3</div>
+    </div>
+
+    <!-- ── STEP 1: Address + Contact ── -->
+    <div id="quoteStep1">
+      <h2 style="font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:var(--green-deep);margin-bottom:6px;">Get your free quote</h2>
+      <p style="font-size:14px;color:var(--text-muted);margin-bottom:22px;line-height:1.6;">Enter your address and we'll calculate your price instantly. First service only $19.</p>
+      <div class="form-row">
+        <label>Property Address <span style="color:var(--text-muted);font-weight:400;">(include zip code)</span></label>
+        <input type="text" id="q-address" placeholder="123 Oak St, Inverness, FL 34450"/>
+      </div>
+      <div class="form-row">
+        <label>Full Name</label>
+        <input type="text" id="q-name" placeholder="Jane Smith"/>
+      </div>
+      <div class="form-row">
+        <label>Phone Number</label>
+        <input type="tel" id="q-phone" placeholder="(352) 555-0123"/>
+      </div>
+      <div class="form-row">
+        <label>Email Address</label>
+        <input type="email" id="q-email" placeholder="you@email.com"/>
+      </div>
+      <div id="q-step1-error" style="color:#e53e3e;font-size:13px;margin-bottom:12px;display:none;"></div>
+      <button class="btn-primary" onclick="quoteStep1Submit()" style="width:100%;font-size:16px;padding:16px;border:none;cursor:pointer;">
+        Get My Price →
+      </button>
+      <div style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:10px;">✅ No commitment · Under 2 minutes · First service $19</div>
+    </div>
+
+    <!-- ── STEP 2: Analyzing animation ── -->
+    <div id="quoteStep2" style="display:none;text-align:center;padding:24px 0;">
+      <div class="quote-analyzing-icon">📍</div>
+      <h3 id="q-analyzing-text" style="font-family:'Playfair Display',serif;font-size:20px;color:var(--green-deep);margin-bottom:8px;">Locating your property...</h3>
+      <div id="q-address-confirm" style="font-size:13px;color:var(--text-muted);margin-bottom:16px;"></div>
+      <div class="quote-progress-bar"><div class="quote-progress-fill" id="quoteProgressFill"></div></div>
+    </div>
+
+    <!-- ── STEP 3: Plan selection + date ── -->
+    <div id="quoteStep3" style="display:none;">
+      <div class="quote-lot-bar">
+        <div class="quote-lot-info">
+          <span class="quote-lot-icon" id="q-lot-icon">🏘️</span>
+          <div>
+            <div class="quote-lot-label" id="q-lot-label">Medium lot · ¼–½ acre</div>
+            <div class="quote-lot-sublabel">Estimated from your location — adjust if needed</div>
+          </div>
+        </div>
+        <div class="quote-lot-adjust">
+          <button class="quote-adj-btn" onclick="adjustLotSize(-1)" title="Smaller">−</button>
+          <button class="quote-adj-btn" onclick="adjustLotSize(1)" title="Larger">＋</button>
+        </div>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--green-deep);margin-bottom:12px;">Choose Your Plan</div>
+      <div class="quote-plan-cards" id="quotePlanCards"></div>
+
+      <div class="form-row" style="margin-top:20px;">
+        <label>Select Your Start Date</label>
+        <div class="cal-widget">
+          <div class="cal-header">
+            <button class="cal-nav" id="qCalPrev" onclick="qCalPrevMonth()" type="button">‹</button>
+            <span class="cal-month-label" id="qCalMonthLabel"></span>
+            <button class="cal-nav" id="qCalNext" onclick="qCalNextMonth()" type="button">›</button>
+          </div>
+          <div class="cal-day-names">
+            <div class="cal-day-name">Su</div><div class="cal-day-name">Mo</div><div class="cal-day-name">Tu</div>
+            <div class="cal-day-name">We</div><div class="cal-day-name">Th</div><div class="cal-day-name">Fr</div>
+            <div class="cal-day-name">Sa</div>
+          </div>
+          <div class="cal-grid" id="qCalGrid"></div>
+          <div class="cal-picked none" id="qCalPicked">Select a date above</div>
+        </div>
+        <div id="q-date-error" style="color:#e53e3e;font-size:13px;margin-top:6px;display:none;">Please select a start date.</div>
+      </div>
+
+      <div id="q-step3-error" style="color:#e53e3e;font-size:13px;margin-bottom:12px;display:none;"></div>
+      <button class="btn-primary" onclick="quoteStep3Submit()" style="width:100%;font-size:16px;padding:16px;border:none;cursor:pointer;">
+        Next: Enter Payment →
+      </button>
+    </div>
+
+    <!-- ── STEP 4: Card + Confirm ── -->
+    <div id="quoteStep4" style="display:none;">
+      <div class="quote-order-summary" id="quoteOrderSummary"></div>
+      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--green-deep);margin-bottom:10px;">Payment Details</div>
+      <div id="q-card-element" style="padding:14px 16px;border:1.5px solid rgba(26,58,26,0.15);border-radius:8px;background:var(--cream);margin-bottom:6px;min-height:46px;"></div>
+      <div id="q-card-errors" style="color:#e53e3e;font-size:13px;min-height:18px;margin-bottom:14px;"></div>
+      <button class="btn-pay" id="q-pay-btn" onclick="quotePaySubmit()">
+        <div class="spinner"></div>
+        <span class="pay-text">🔒 Book Now — Pay $19 Today</span>
+      </button>
+      <div class="stripe-note" style="margin-top:12px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        Secured by Stripe · Your card is saved for future charges
+      </div>
+      <div style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:8px;" id="q-following-line"></div>
+    </div>
+
+    <!-- ── SUCCESS ── -->
+    <div id="quoteSuccess" style="display:none;text-align:center;padding:16px 0;">
+      <div class="success-icon">✅</div>
+      <h3 style="font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:var(--green-deep);margin-bottom:10px;">You're all set!</h3>
+      <p style="font-size:15px;color:var(--text-muted);line-height:1.7;">First mow booked for <strong id="q-success-date"></strong>. We charged $19 today — your card is saved for future visits. See you soon! 🌿</p>
+      <button class="btn-primary" onclick="closeQuoteModal()" style="width:100%;margin-top:20px;border:none;cursor:pointer;">Close</button>
+    </div>
+
+  </div>
+</div>
 
 <!-- BOOKING MODAL -->
 <div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
@@ -1775,7 +2000,7 @@ const CALENDAR_SCRIPT_URL = SHEETS_SCRIPT_URL; // same unified script
 
 let currentService = { id: 'mow-blow', name: 'Cut & Clean', price: 45, frequency: 'one-time' };
 
-function openModal(serviceId, serviceName, price, frequency) {
+function openModal(serviceId, serviceName, price, frequency, customPrice) {
   currentService = { id: serviceId, name: serviceName, price, frequency };
   document.getElementById('modalServiceName').textContent = serviceName;
   document.getElementById('priceDisplay').textContent = '$' + price;
@@ -1805,6 +2030,14 @@ function openModal(serviceId, serviceName, price, frequency) {
   initCalendar();
 
   updatePriceSummary();
+
+  // Apply custom price from quote calculator if provided (overrides standard FREQ_DATA price)
+  if (customPrice !== undefined && customPrice !== null) {
+    currentService.price = customPrice;
+    document.getElementById('priceDisplay').textContent = '$' + customPrice;
+    const baseLabel = FREQ_DATA[initialFreq]?.label || 'One-time visit';
+    document.getElementById('freqLabel').textContent = baseLabel + ' · Pay after we mow';
+  }
 }
 
 function closeModal() {
@@ -2329,6 +2562,404 @@ function initCardTilt() {
 }
 
 function initParallax() { /* no-op — circles now decorative */ }
+
+// ═══════════════════════════════════════════════════════════════
+// QUOTE & BOOKING FLOW — 4-STEP MODAL
+// ═══════════════════════════════════════════════════════════════
+const STRIPE_PUB_KEY = 'pk_live_51TLrat4J18msjfgfYqm9zvDa2pkr5ZPv6s10bl5UwMIYnAqpJbXEU14YXFlS6sEA3H0VgsLPTxHuPWD6YutUy1J000mzhTGL1N';
+
+let stripeInstance = null;
+let stripeCardEl   = null;
+let stripeCardMounted = false;
+
+function initStripeElements() {
+  if (stripeInstance) return;
+  stripeInstance = Stripe(STRIPE_PUB_KEY);
+  const elements = stripeInstance.elements();
+  stripeCardEl = elements.create('card', {
+    style: {
+      base: {
+        fontFamily: "'DM Sans', sans-serif",
+        fontSize: '15px',
+        color: '#1a1a1a',
+        '::placeholder': { color: '#9ca3af' },
+      },
+      invalid: { color: '#e53e3e', iconColor: '#e53e3e' },
+    },
+  });
+}
+
+// ── Lot tiers ──
+const LOT_TIERS = [
+  { key: 'small',  label: 'Small lot · Up to ¼ acre',  icon: '🏡' },
+  { key: 'medium', label: 'Medium lot · ¼–½ acre',     icon: '🏘️' },
+  { key: 'large',  label: 'Large lot · ½–1 acre',      icon: '🌿' },
+  { key: 'xl',     label: 'Large estate · 1+ acres',   icon: '🌳' },
+];
+
+// Zip → default lot tier index
+const ZIP_LOT_MAP = {
+  '34428':1,'34429':1,           // Crystal River
+  '34450':1,'34452':1,'34453':1, // Inverness
+  '34446':2,'34448':2,           // Homosassa (larger)
+  '34460':1,'34461':2,           // Lecanto
+  '34433':2,'34434':1,           // Citrus Springs
+  '34436':2,                     // Floral City (rural)
+  '34464':1,                     // Beverly Hills
+};
+
+// Pricing after the $19 first service
+const PLAN_PRICING = {
+  small:  { 'one-time': 35,  biweekly: 65,  weekly: 115 },
+  medium: { 'one-time': 45,  biweekly: 80,  weekly: 140 },
+  large:  { 'one-time': 65,  biweekly: 110, weekly: 190 },
+  xl:     { 'one-time': null, biweekly: null, weekly: null },
+};
+
+// Flow state
+let qState = {
+  name:'', email:'', phone:'', address:'', zip:'',
+  lotTierIdx: 1,
+  selectedPlan: 'biweekly',
+  startDate: '',
+  stripeCustomerId: '',
+};
+
+// ── Calendar for Step 3 ──
+let qCalYear, qCalMonth, qCalSelected = '';
+
+function initQCal() {
+  qCalSelected = '';
+  qState.startDate = '';
+  const d = new Date();
+  d.setDate(d.getDate() + MIN_BOOKING_DAYS);
+  qCalYear  = d.getFullYear();
+  qCalMonth = d.getMonth();
+  const picked = document.getElementById('qCalPicked');
+  if (picked) { picked.textContent = 'Select a date above'; picked.className = 'cal-picked none'; }
+  renderQCal();
+}
+
+function renderQCal() {
+  const today    = new Date(); today.setHours(0,0,0,0);
+  const earliest = new Date(today); earliest.setDate(today.getDate() + MIN_BOOKING_DAYS);
+  const maxDate  = new Date(today); maxDate.setDate(today.getDate() + MAX_BOOKING_DAYS);
+  const MONTHS   = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('qCalMonthLabel').textContent = `${MONTHS[qCalMonth]} ${qCalYear}`;
+  const firstOfMonth = new Date(qCalYear, qCalMonth, 1);
+  const lastOfMonth  = new Date(qCalYear, qCalMonth + 1, 0);
+  document.getElementById('qCalPrev').disabled = firstOfMonth <= earliest;
+  document.getElementById('qCalNext').disabled = lastOfMonth  >= maxDate;
+  const grid = document.getElementById('qCalGrid');
+  grid.innerHTML = '';
+  const startDay = firstOfMonth.getDay();
+  for (let i = 0; i < startDay; i++) { const e = document.createElement('div'); e.className='cal-cell empty'; grid.appendChild(e); }
+  for (let d = 1; d <= lastOfMonth.getDate(); d++) {
+    const date    = new Date(qCalYear, qCalMonth, d);
+    const dateStr = `${qCalYear}-${String(qCalMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isWknd  = date.getDay()===0 || date.getDay()===6;
+    const isPast  = date < earliest;
+    const isFar   = date > maxDate;
+    const isBlock = BLOCKED_DATES.has(dateStr);
+    const isSel   = dateStr === qCalSelected;
+    const el = document.createElement('div');
+    el.textContent = d;
+    if (isSel)                { el.className='cal-cell selected'; el.onclick=()=>qPickDate(dateStr); }
+    else if (isPast||isFar)   el.className='cal-cell disabled';
+    else if (isBlock)         el.className='cal-cell blocked';
+    else if (isWknd)          el.className='cal-cell wknd-cell disabled';
+    else { el.className='cal-cell available'; el.onclick=()=>qPickDate(dateStr); }
+    grid.appendChild(el);
+  }
+  const picked = document.getElementById('qCalPicked');
+  if (qCalSelected) {
+    picked.textContent = new Date(qCalSelected+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+    picked.classList.remove('none');
+  } else {
+    picked.textContent = 'Select a date above';
+    picked.classList.add('none');
+  }
+}
+
+function qPickDate(dateStr) {
+  qCalSelected = dateStr;
+  qState.startDate = dateStr;
+  const errEl = document.getElementById('q-date-error');
+  if (errEl) errEl.style.display='none';
+  renderQCal();
+}
+function qCalPrevMonth() { qCalMonth--; if(qCalMonth<0){qCalMonth=11;qCalYear--;} renderQCal(); }
+function qCalNextMonth() { qCalMonth++; if(qCalMonth>11){qCalMonth=0;qCalYear++;} renderQCal(); }
+
+// ── Open / Close ──
+function openQuoteModal(preselectedPlan) {
+  qState = { name:'',email:'',phone:'',address:'',zip:'',lotTierIdx:1,selectedPlan:preselectedPlan||'biweekly',startDate:'',stripeCustomerId:'' };
+  ['q-name','q-email','q-phone','q-address'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('q-step1-error').style.display = 'none';
+  document.getElementById('quoteStepsBar').style.display = 'flex';
+  showQuoteStep(1);
+  document.getElementById('quoteModalOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  initStripeElements();
+}
+
+function openQuoteModalPlan(plan) { openQuoteModal(plan); }
+
+function closeQuoteModal() {
+  document.getElementById('quoteModalOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+  if (stripeCardEl && stripeCardMounted) { try { stripeCardEl.unmount(); } catch(e){} stripeCardMounted=false; }
+}
+
+function handleQuoteOverlayClick(e) {
+  if (e.target === document.getElementById('quoteModalOverlay')) closeQuoteModal();
+}
+
+function showQuoteStep(step) {
+  ['quoteStep1','quoteStep2','quoteStep3','quoteStep4','quoteSuccess'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.style.display='none';
+  });
+  // Update step dots + lines
+  for (let i=1;i<=3;i++) {
+    const dot = document.getElementById('sdot-'+i);
+    if(dot) dot.className='quote-step-dot'+(i<step?' done':(i===step?' active':''));
+  }
+  [1,2].forEach(i => {
+    const line=document.getElementById('sline-'+i);
+    if(line) line.className='quote-step-line'+(i<step?' done':'');
+  });
+  const target = document.getElementById('quoteStep'+step) || document.getElementById('quoteSuccess');
+  if (target) target.style.display = 'block';
+  // Mount Stripe card on step 4
+  if (step===4 && !stripeCardMounted && stripeCardEl) {
+    setTimeout(() => {
+      stripeCardEl.mount('#q-card-element');
+      stripeCardEl.on('change', ev => {
+        const errEl=document.getElementById('q-card-errors');
+        if(errEl) errEl.textContent = ev.error ? ev.error.message : '';
+      });
+      stripeCardMounted = true;
+    }, 120);
+  }
+}
+
+// ── STEP 1 ──
+function quoteStep1Submit() {
+  const name    = document.getElementById('q-name').value.trim();
+  const email   = document.getElementById('q-email').value.trim();
+  const phone   = document.getElementById('q-phone').value.trim();
+  const address = document.getElementById('q-address').value.trim();
+  const errEl   = document.getElementById('q-step1-error');
+
+  if (!name || !email || !address) {
+    errEl.textContent = 'Please fill in your name, email, and address.';
+    errEl.style.display = 'block'; return;
+  }
+  if (!email.includes('@') || !email.includes('.')) {
+    errEl.textContent = 'Please enter a valid email address.';
+    errEl.style.display = 'block'; return;
+  }
+  const zipMatch = address.match(/\b(\d{5})\b/);
+  const zip = zipMatch ? zipMatch[1] : '';
+  if (zip && !VALID_ZIPS.has(zip)) {
+    errEl.textContent = 'We currently only serve Citrus County, FL. Call (352) 462-0627 for more info.';
+    errEl.style.display = 'block'; return;
+  }
+  errEl.style.display = 'none';
+  qState.name=name; qState.email=email; qState.phone=phone; qState.address=address; qState.zip=zip;
+  if (zip && ZIP_LOT_MAP[zip] !== undefined) qState.lotTierIdx = ZIP_LOT_MAP[zip];
+  showQuoteStep(2);
+  document.getElementById('q-address-confirm').textContent = address;
+  runAnalyzingAnimation();
+}
+
+function runAnalyzingAnimation() {
+  const fill   = document.getElementById('quoteProgressFill');
+  const textEl = document.getElementById('q-analyzing-text');
+  const steps  = [
+    { pct:18, text:'Locating your property...' },
+    { pct:45, text:'Checking your zip code...' },
+    { pct:72, text:'Estimating yard size...' },
+    { pct:92, text:'Calculating your price...' },
+  ];
+  let i=0; fill.style.width='0%';
+  const iv = setInterval(() => {
+    if (i >= steps.length) {
+      clearInterval(iv);
+      fill.style.transition='width 0.4s ease';
+      fill.style.width='100%';
+      textEl.textContent='Price calculated! ✓';
+      setTimeout(() => { buildStep3(); showQuoteStep(3); initQCal(); }, 500);
+      return;
+    }
+    fill.style.transition='width 0.55s ease';
+    fill.style.width = steps[i].pct+'%';
+    textEl.textContent = steps[i].text;
+    i++;
+  }, 550);
+}
+
+// ── STEP 3 ──
+function buildStep3() { updateLotDisplay(); renderPlanCards(); }
+
+function updateLotDisplay() {
+  const tier = LOT_TIERS[qState.lotTierIdx];
+  const labelEl = document.getElementById('q-lot-label');
+  const iconEl  = document.getElementById('q-lot-icon');
+  if (labelEl) labelEl.textContent = tier.label;
+  if (iconEl)  iconEl.textContent  = tier.icon;
+}
+
+function adjustLotSize(dir) {
+  qState.lotTierIdx = Math.max(0, Math.min(LOT_TIERS.length-1, qState.lotTierIdx+dir));
+  updateLotDisplay();
+  renderPlanCards();
+}
+
+function renderPlanCards() {
+  const tierKey = LOT_TIERS[qState.lotTierIdx].key;
+  const prices  = PLAN_PRICING[tierKey];
+  const isXL    = tierKey === 'xl';
+  const plans = [
+    { id:'biweekly',  icon:'📅', name:'Bi-Weekly Plan',   badge:'Most Popular', note:'2 visits/month · cancel anytime', afterPrice: prices.biweekly },
+    { id:'weekly',    icon:'⚡', name:'Weekly Plan',       badge:'Best Value',   note:'4 visits/month · best looking lawn', afterPrice: prices.weekly   },
+    { id:'one-time',  icon:'🌿', name:'One-Time Visit',    badge:null,           note:'No commitment · pay once',           afterPrice: prices['one-time'] },
+  ];
+  document.getElementById('quotePlanCards').innerHTML = plans.map(p => {
+    const noPrice = isXL || p.afterPrice===null;
+    const afterLabel = noPrice ? 'Custom quote after' : (p.id==='one-time' ? `$${p.afterPrice}/visit after` : `$${p.afterPrice}/mo after`);
+    const isSelected = qState.selectedPlan === p.id;
+    return `
+      <div class="quote-plan-card${isSelected?' selected':''}" onclick="selectQuotePlan('${p.id}')">
+        ${p.badge ? `<div class="quote-plan-badge">${p.badge}</div>` : ''}
+        <div class="quote-plan-radio"></div>
+        <div class="quote-plan-details">
+          <div class="quote-plan-name">${p.icon} ${p.name}</div>
+          <div class="quote-plan-first">First service: $19</div>
+          <div class="quote-plan-after">${noPrice ? 'Custom quote — we'll follow up' : p.note}</div>
+        </div>
+        <div class="quote-plan-price">
+          <div class="quote-plan-price-num">$19</div>
+          <div class="quote-plan-price-period">today<br><span style="color:var(--green-mid)">${afterLabel}</span></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function selectQuotePlan(planId) { qState.selectedPlan=planId; renderPlanCards(); }
+
+function quoteStep3Submit() {
+  if (!qState.startDate) {
+    document.getElementById('q-date-error').style.display='block'; return;
+  }
+  document.getElementById('q-date-error').style.display='none';
+  buildOrderSummary();
+  showQuoteStep(4);
+}
+
+function buildOrderSummary() {
+  const tierKey  = LOT_TIERS[qState.lotTierIdx].key;
+  const prices   = PLAN_PRICING[tierKey];
+  const planId   = qState.selectedPlan;
+  const planNames = {'one-time':'One-Time Visit','biweekly':'Bi-Weekly Plan','weekly':'Weekly Plan'};
+  const dateFmt  = new Date(qState.startDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  const after    = prices[planId];
+  const afterTxt = !after ? 'Custom quote' : (planId==='one-time' ? `$${after}/visit (future visits)` : `$${after}/mo (after first visit)`);
+  document.getElementById('q-following-line').textContent = 'Following services: ' + afterTxt;
+  document.getElementById('quoteOrderSummary').innerHTML = `
+    <div class="quote-order-row"><span>Service</span><span style="font-weight:600;color:var(--green-deep)">${planNames[planId]}</span></div>
+    <div class="quote-order-row"><span>Start Date</span><span style="font-weight:600;color:var(--green-deep)">${dateFmt}</span></div>
+    <div class="quote-order-row"><span>Following services</span><span style="color:var(--green-mid);font-weight:600">${afterTxt}</span></div>
+    <div class="quote-order-total"><span>Charged today</span><span class="quote-order-amount">$19</span></div>`;
+}
+
+// ── STEP 4 — Payment ──
+async function quotePaySubmit() {
+  const btn   = document.getElementById('q-pay-btn');
+  const errEl = document.getElementById('q-card-errors');
+  btn.classList.add('loading'); btn.disabled=true; errEl.textContent='';
+
+  try {
+    // 1. Ask Apps Script to create a PaymentIntent for $19
+    const tierKey  = LOT_TIERS[qState.lotTierIdx].key;
+    const prices   = PLAN_PRICING[tierKey];
+    const planId   = qState.selectedPlan;
+    const planNames = {'one-time':'Cut & Clean','biweekly':'Bi-Weekly Plan','weekly':'Weekly Plan'};
+    const freqLabels = {'one-time':'One-time visit','biweekly':'Bi-Weekly Plan','weekly':'Weekly Plan'};
+    const afterPrice = prices[planId] || 'custom';
+    const dateFmt  = new Date(qState.startDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+
+    const intentParams = new URLSearchParams({
+      action: 'booking_create_intent',
+      email:  qState.email,
+      name:   qState.name,
+      amount: '1900',
+    });
+    let clientSecret='', customerId='';
+    try {
+      const res  = await fetch(SHEETS_SCRIPT_URL+'?'+intentParams.toString());
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Could not create payment');
+      clientSecret = data.clientSecret;
+      customerId   = data.customerId;
+    } catch(fetchErr) {
+      // If CORS blocks the read, fall through to Stripe confirmation below
+      // This should not normally happen since Apps Script supports CORS
+      throw new Error('Could not reach payment server. Please call (352) 462-0627.');
+    }
+
+    qState.stripeCustomerId = customerId;
+
+    // 2. Confirm the payment with the card element
+    const { paymentIntent, error } = await stripeInstance.confirmCardPayment(clientSecret, {
+      payment_method: {
+        card: stripeCardEl,
+        billing_details: { name: qState.name, email: qState.email, phone: qState.phone },
+      },
+    });
+
+    if (error) {
+      errEl.textContent = error.message;
+      btn.classList.remove('loading'); btn.disabled=false; return;
+    }
+
+    // 3. Log booking + save card in Apps Script
+    const completeParams = new URLSearchParams({
+      action:            'booking_complete',
+      pmId:              paymentIntent.payment_method,
+      stripeCustomerId:  customerId,
+      name:              qState.name,
+      email:             qState.email,
+      phone:             qState.phone,
+      address:           qState.address,
+      zip:               qState.zip,
+      service:           planNames[planId],
+      frequency:         freqLabels[planId],
+      followingPrice:    String(afterPrice),
+      serviceDateRaw:    qState.startDate,
+      serviceDate:       dateFmt,
+      yardSize:          tierKey,
+      notes:             'First service $19 promo. Following: ' + afterPrice,
+    });
+    // Fire-and-forget — payment already confirmed by Stripe
+    fetch(SHEETS_SCRIPT_URL+'?'+completeParams.toString(), { method:'GET', mode:'no-cors' }).catch(()=>{});
+
+    btn.classList.remove('loading'); btn.disabled=false;
+
+    // Show success
+    document.getElementById('q-success-date').textContent =
+      new Date(qState.startDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+    document.getElementById('quoteStepsBar').style.display='none';
+    ['quoteStep1','quoteStep2','quoteStep3','quoteStep4'].forEach(id=>{
+      const el=document.getElementById(id); if(el) el.style.display='none';
+    });
+    document.getElementById('quoteSuccess').style.display='block';
+
+  } catch(err) {
+    errEl.textContent = err.message || 'Something went wrong. Please call (352) 462-0627.';
+    btn.classList.remove('loading'); btn.disabled=false;
+  }
+}
 
 </script>
 </body>
