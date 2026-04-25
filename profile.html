@@ -853,8 +853,16 @@ function renderBillingCard(bookings) {
 
     let chargeInfo, cycleLabel, alertBox = '';
     if (cyclePos === 0) {
-      chargeInfo = '<span class="billing-info-value gold">⚡ Payment due on your next visit</span>';
-      cycleLabel = '● = payment mow  ○ = included mows';
+      // Check if the upcoming first mow is already paid (e.g. $19 promo booked via quote flow)
+      const nextCalEvent = String(nextAppt ? (nextAppt.calendarEvent || nextAppt.payMethod || '') : '');
+      const firstMowPrepaid = nextCalEvent.includes('✅');
+      if (firstMowPrepaid) {
+        chargeInfo = '<span class="billing-info-value green">✅ First mow paid ($19) — card saved for future billing</span>';
+        cycleLabel = '● = first mow (paid)  ○ = included mows';
+      } else {
+        chargeInfo = '<span class="billing-info-value gold">⚡ Payment due on your next visit</span>';
+        cycleLabel = '● = payment mow  ○ = included mows';
+      }
     } else if (isPaymentMow) {
       if (invoiceSent) {
         chargeInfo = '<span class="billing-info-value gold">⚠️ Invoice sent — payment still pending</span>';
@@ -935,8 +943,16 @@ function renderBillingCard(bookings) {
 
     let chargeInfo, cycleLabel, alertBox = '';
     if (cyclePos === 0) {
-      chargeInfo = '<span class="billing-info-value gold">⚡ Payment due on your next visit</span>';
-      cycleLabel = '● = payment mow  ○ = included mow';
+      // Check if the upcoming first mow is already paid (e.g. $19 promo booked via quote flow)
+      const bwNextCalEvent = String(nextAppt ? (nextAppt.calendarEvent || nextAppt.payMethod || '') : '');
+      const bwFirstMowPrepaid = bwNextCalEvent.includes('✅');
+      if (bwFirstMowPrepaid) {
+        chargeInfo = '<span class="billing-info-value green">✅ First mow paid ($19) — card saved for future billing</span>';
+        cycleLabel = '● = first mow (paid)  ○ = included mow';
+      } else {
+        chargeInfo = '<span class="billing-info-value gold">⚡ Payment due on your next visit</span>';
+        cycleLabel = '● = payment mow  ○ = included mow';
+      }
     } else if (bwInvoiceSent) {
       chargeInfo = '<span class="billing-info-value gold">⚠️ Invoice sent — payment still pending</span>';
       const bwPayBtn = bwInvoicePayUrl
