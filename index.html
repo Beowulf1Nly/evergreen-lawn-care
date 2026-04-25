@@ -1368,7 +1368,7 @@
     <div class="step reveal" style="transition-delay:.35s">
       <div class="step-num">4</div>
       <h3>We Show Up & Mow</h3>
-      <p>We arrive on your scheduled date, mow and blow, and leave your lawn spotless. Future visits are billed automatically.</p>
+      <p>We arrive on your scheduled date, mow and blow, and leave your lawn spotless. Your card is charged automatically after each mow.</p>
     </div>
   </div>
 </section>
@@ -1448,7 +1448,7 @@
           <span style="font-size:20px;transition:transform .2s;color:var(--green-mid);">＋</span>
         </summary>
         <div style="padding:0 24px 20px;font-size:14px;color:var(--text-muted);line-height:1.7;border-top:1px solid #f0f4f0;">
-          Your card is automatically charged your plan rate — <strong>bi-weekly</strong> customers are billed once a month (covering 2 visits), and <strong>weekly</strong> customers are billed once a month (covering 4 visits). No invoices, no reminders — it just works.
+          Your card is automatically charged after each mow — <strong>bi-weekly</strong> customers are charged per visit at their bi-weekly rate, and <strong>weekly</strong> customers are charged per visit at their weekly rate. No invoices, no reminders — it just works.
         </div>
       </details>
 
@@ -1523,7 +1523,7 @@
 </footer>
 
 <!-- QUOTE & BOOKING FLOW MODAL (4-step) -->
-<div class="modal-overlay" id="quoteModalOverlay" onclick="handleQuoteOverlayClick(event)">
+<div class="modal-overlay" id="quoteModalOverlay" onmousedown="trackQuoteOverlayMD(event)" onmouseup="handleQuoteOverlayClick(event)">
   <div class="modal quote-modal">
     <button class="modal-close" onclick="closeQuoteModal()">✕</button>
 
@@ -1587,6 +1587,9 @@
         </div>
       </div>
 
+      <div id="q-returning-banner" style="display:none;margin-bottom:14px;padding:12px 16px;background:#fff7ed;border:1.5px solid #fde68a;border-radius:10px;font-size:13px;color:#92400e;line-height:1.5;">
+        👋 <strong>Welcome back!</strong> The $19 intro rate is for first-time customers only. Your regular per-mow rate applies.
+      </div>
       <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--green-deep);margin-bottom:12px;">Choose Your Plan</div>
       <div class="quote-plan-cards" id="quotePlanCards"></div>
 
@@ -1636,7 +1639,7 @@
     <div id="quoteSuccess" style="display:none;text-align:center;padding:16px 0;">
       <div class="success-icon">✅</div>
       <h3 style="font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:var(--green-deep);margin-bottom:10px;">You're all set!</h3>
-      <p style="font-size:15px;color:var(--text-muted);line-height:1.7;">First mow booked for <strong id="q-success-date"></strong>. We charged $19 today — your card is saved for future visits. See you soon! 🌿</p>
+      <p style="font-size:15px;color:var(--text-muted);line-height:1.7;" id="q-success-msg">Mow booked for <strong id="q-success-date"></strong>. Your card is saved for automatic billing after each visit. See you soon! 🌿</p>
       <button class="btn-primary" onclick="closeQuoteModal()" style="width:100%;margin-top:20px;border:none;cursor:pointer;">Close</button>
     </div>
 
@@ -1803,7 +1806,7 @@
 // BOOKING CALENDAR CONFIG
 // ─────────────────────────────────────────────
 const MAX_BOOKING_DAYS = 30; // how many days out customers can book
-const MIN_BOOKING_DAYS = 5;  // earliest bookable day (1 = tomorrow). Set to 5 to block next 4 days while getting a mower.
+const MIN_BOOKING_DAYS = 1;  // earliest bookable day (1 = tomorrow).
 
 // Dates to block (format: 'YYYY-MM-DD'). Add/remove as needed.
 const BLOCKED_DATES = new Set([
@@ -1886,7 +1889,7 @@ function renderCalendar() {
   for (let d = 1; d <= daysInMonth; d++) {
     const date    = new Date(calYear, calMonth, d);
     const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const isWknd  = date.getDay() === 0 || date.getDay() === 6;
+    const isWknd  = date.getDay() === 0;  // Sundays only — Saturdays available
     const isPast  = date < tomorrow;
     const isFar   = date > maxDate;
     const isBlock = BLOCKED_DATES.has(dateStr);
@@ -1937,9 +1940,9 @@ function calNextMonth() {
 // PROMO BANNER CONFIG — edit here to control the banner
 // ─────────────────────────────────────────────
 const PROMO_BANNER = {
-  enabled: true,                                          // ← true = show banner, false = hide it
-  text: 'New customers — your first mow is on us.',
-  url: '/free-lawn.html',                                 // ← change this to send to any page/link
+  enabled: false,                                         // ← true = show banner, false = hide it
+  text: 'First mow just $19 — get your instant quote.',
+  url: '#services',                                       // ← change this to send to any page/link
 };
 
 // ─────────────────────────────────────────────
@@ -2572,17 +2575,18 @@ const ZIP_LOT_MAP = {
   '34464':1,'34465':1,                    // Beverly Hills
 };
 
-// Pricing after the $19 first service
+// Per-mow pricing after the $19 first service
 const PLAN_PRICING = {
-  small:  { 'one-time': 35,  biweekly: 65,  weekly: 115 },
-  medium: { 'one-time': 45,  biweekly: 80,  weekly: 140 },
-  large:  { 'one-time': 65,  biweekly: 110, weekly: 190 },
-  xl:     { 'one-time': null, biweekly: null, weekly: null },
+  small:  { biweekly: 33,  weekly: 29  },
+  medium: { biweekly: 40,  weekly: 35  },
+  large:  { biweekly: 55,  weekly: 48  },
+  xl:     { biweekly: null, weekly: null },
 };
 
 // Flow state
 let qState = {
   name:'', email:'', phone:'', address:'', zip:'',
+  isReturning: false,
   lotTierIdx: 1,
   selectedPlan: 'biweekly',
   startDate: '',
@@ -2621,7 +2625,7 @@ function renderQCal() {
   for (let d = 1; d <= lastOfMonth.getDate(); d++) {
     const date    = new Date(qCalYear, qCalMonth, d);
     const dateStr = `${qCalYear}-${String(qCalMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const isWknd  = date.getDay()===0 || date.getDay()===6;
+    const isWknd  = date.getDay()===0;  // Sundays only — Saturdays are available
     const isPast  = date < earliest;
     const isFar   = date > maxDate;
     const isBlock = BLOCKED_DATES.has(dateStr);
@@ -2659,7 +2663,7 @@ function qCalNextMonth() { qCalMonth++; if(qCalMonth>11){qCalMonth=0;qCalYear++;
 function openQuoteModal(preselectedPlan) {
   // Default to biweekly; ignore one-time if somehow passed
   const validPlan = (preselectedPlan === 'weekly') ? 'weekly' : 'biweekly';
-  qState = { name:'',email:'',phone:'',address:'',zip:'',lotTierIdx:1,selectedPlan:validPlan,startDate:'',stripeCustomerId:'' };
+  qState = { name:'',email:'',phone:'',address:'',zip:'',lotTierIdx:1,selectedPlan:validPlan,startDate:'',stripeCustomerId:'',isReturning:false };
   ['q-name','q-email','q-phone','q-address'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('q-step1-error').style.display = 'none';
   document.getElementById('quoteStepsBar').style.display = 'flex';
@@ -2677,8 +2681,13 @@ function closeQuoteModal() {
   if (stripeCardEl && stripeCardMounted) { try { stripeCardEl.unmount(); } catch(e){} stripeCardMounted=false; }
 }
 
+let _qOverlayMD = false;
+function trackQuoteOverlayMD(e) {
+  _qOverlayMD = e.target === document.getElementById('quoteModalOverlay');
+}
 function handleQuoteOverlayClick(e) {
-  if (e.target === document.getElementById('quoteModalOverlay')) closeQuoteModal();
+  if (_qOverlayMD && e.target === document.getElementById('quoteModalOverlay')) closeQuoteModal();
+  _qOverlayMD = false;
 }
 
 function showQuoteStep(step) {
@@ -2710,12 +2719,13 @@ function showQuoteStep(step) {
 }
 
 // ── STEP 1 ──
-function quoteStep1Submit() {
+async function quoteStep1Submit() {
   const name    = document.getElementById('q-name').value.trim();
   const email   = document.getElementById('q-email').value.trim();
   const phone   = document.getElementById('q-phone').value.trim();
   const address = document.getElementById('q-address').value.trim();
   const errEl   = document.getElementById('q-step1-error');
+  const btn     = document.querySelector('#quoteStep1 .btn-primary');
 
   if (!name || !email || !address) {
     errEl.textContent = 'Please fill in your name, email, and address.';
@@ -2732,6 +2742,18 @@ function quoteStep1Submit() {
     errEl.style.display = 'block'; return;
   }
   errEl.style.display = 'none';
+
+  // Check if returning customer (no $19 promo for repeat bookings)
+  if (btn) { btn.textContent = 'Checking…'; btn.disabled = true; }
+  try {
+    const res  = await fetch(SHEETS_SCRIPT_URL + '?action=check_customer&email=' + encodeURIComponent(email));
+    const data = await res.json();
+    qState.isReturning = data.success && data.isExisting;
+  } catch(e) {
+    qState.isReturning = false; // network error — assume new customer
+  }
+  if (btn) { btn.textContent = 'Get My Price →'; btn.disabled = false; }
+
   qState.name=name; qState.email=email; qState.phone=phone; qState.address=address; qState.zip=zip;
   if (zip && ZIP_LOT_MAP[zip] !== undefined) qState.lotTierIdx = ZIP_LOT_MAP[zip];
   showQuoteStep(2);
@@ -2766,7 +2788,12 @@ function runAnalyzingAnimation() {
 }
 
 // ── STEP 3 ──
-function buildStep3() { updateLotDisplay(); renderPlanCards(); }
+function buildStep3() {
+  updateLotDisplay();
+  renderPlanCards();
+  const banner = document.getElementById('q-returning-banner');
+  if (banner) banner.style.display = qState.isReturning ? 'block' : 'none';
+}
 
 function updateLotDisplay() {
   const tier = LOT_TIERS[qState.lotTierIdx];
@@ -2787,12 +2814,13 @@ function renderPlanCards() {
   const prices  = PLAN_PRICING[tierKey];
   const isXL    = tierKey === 'xl';
   const plans = [
-    { id:'biweekly', icon:'📅', name:'Bi-Weekly Plan', badge:'Most Popular', note:'2 visits/month · cancel anytime',      afterPrice: prices.biweekly },
-    { id:'weekly',   icon:'⚡', name:'Weekly Plan',     badge:'Best Value',   note:'4 visits/month · best looking lawn',  afterPrice: prices.weekly   },
+    { id:'biweekly', icon:'📅', name:'Bi-Weekly Plan', badge:'Most Popular', note:'2 visits/month · cancel anytime', afterPrice: prices.biweekly },
+    { id:'weekly',   icon:'⚡', name:'Weekly Plan',     badge:'Best Value',   note:'4 visits/month · cancel anytime', afterPrice: prices.weekly   },
   ];
   document.getElementById('quotePlanCards').innerHTML = plans.map(p => {
     const noPrice = isXL || p.afterPrice===null;
-    const afterLabel = noPrice ? 'Custom quote after' : (p.id==='one-time' ? `$${p.afterPrice}/visit after` : `$${p.afterPrice}/mo after`);
+    const firstPrice = qState.isReturning ? p.afterPrice : 19;
+    const afterLabel = noPrice ? 'Custom quote' : (qState.isReturning ? 'regular rate' : `$${p.afterPrice}/mow after`);
     const isSelected = qState.selectedPlan === p.id;
     return `
       <div class="quote-plan-card${isSelected?' selected':''}" onclick="selectQuotePlan('${p.id}')">
@@ -2800,12 +2828,12 @@ function renderPlanCards() {
         <div class="quote-plan-radio"></div>
         <div class="quote-plan-details">
           <div class="quote-plan-name">${p.icon} ${p.name}</div>
-          <div class="quote-plan-first">First service: $19</div>
+          <div class="quote-plan-first">${qState.isReturning ? (noPrice ? 'Custom quote' : `$${p.afterPrice}/mow`) : 'First service: $19'}</div>
           <div class="quote-plan-after">${noPrice ? "Custom quote — we’ll follow up" : p.note}</div>
         </div>
         <div class="quote-plan-price">
-          <div class="quote-plan-price-num">$19</div>
-          <div class="quote-plan-price-period">today<br><span style="color:var(--green-mid)">${afterLabel}</span></div>
+          <div class="quote-plan-price-num">${noPrice ? '—' : '$' + firstPrice}</div>
+          <div class="quote-plan-price-period">${qState.isReturning ? 'per mow' : 'today'}<br><span style="color:var(--green-mid)">${afterLabel}</span></div>
         </div>
       </div>`;
   }).join('');
@@ -2829,13 +2857,16 @@ function buildOrderSummary() {
   const planNames = {'biweekly':'Bi-Weekly Plan','weekly':'Weekly Plan'};
   const dateFmt  = new Date(qState.startDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
   const after    = prices[planId];
-  const afterTxt = !after ? 'Custom quote' : `$${after}/mo (after first visit)`;
-  document.getElementById('q-following-line').textContent = 'Following services: ' + afterTxt;
+  const isRet    = qState.isReturning || false;
+  const afterTxt = !after ? 'Custom quote' : `$${after}/mow`;
+  const todayAmt = isRet ? (after ? `$${after}` : 'Custom') : '$19';
+  const todayLbl = isRet ? 'Charged today' : 'Charged today (first visit)';
+  document.getElementById('q-following-line').textContent = isRet ? `Per mow: ${afterTxt}` : `Following services: ${afterTxt}`;
   document.getElementById('quoteOrderSummary').innerHTML = `
     <div class="quote-order-row"><span>Service</span><span style="font-weight:600;color:var(--green-deep)">${planNames[planId]}</span></div>
     <div class="quote-order-row"><span>Start Date</span><span style="font-weight:600;color:var(--green-deep)">${dateFmt}</span></div>
-    <div class="quote-order-row"><span>Following services</span><span style="color:var(--green-mid);font-weight:600">${afterTxt}</span></div>
-    <div class="quote-order-total"><span>Charged today</span><span class="quote-order-amount">$19</span></div>`;
+    ${!isRet ? `<div class="quote-order-row"><span>Following services</span><span style="color:var(--green-mid);font-weight:600">${afterTxt}/mow</span></div>` : ''}
+    <div class="quote-order-total"><span>${todayLbl}</span><span class="quote-order-amount">${todayAmt}</span></div>`;
 }
 
 // ── STEP 4 — Payment ──
@@ -2854,11 +2885,13 @@ async function quotePaySubmit() {
     const afterPrice = prices[planId] || 'custom';
     const dateFmt  = new Date(qState.startDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
 
+    const isReturning = qState.isReturning || false;
+    const chargeAmountCents = isReturning ? ((afterPrice === 'custom' ? 0 : Number(afterPrice)) * 100) : 1900;
     const intentParams = new URLSearchParams({
       action: 'booking_create_intent',
       email:  qState.email,
       name:   qState.name,
-      amount: '1900',
+      amount: String(chargeAmountCents || 1900),
     });
     let clientSecret='', customerId='';
     try {
@@ -2904,7 +2937,9 @@ async function quotePaySubmit() {
       serviceDateRaw:    qState.startDate,
       serviceDate:       dateFmt,
       yardSize:          tierKey,
-      notes:             'First service $19 promo. Following: ' + afterPrice,
+      notes:             isReturning
+        ? 'Returning customer. Per-mow rate: ' + afterPrice
+        : 'First service $19 promo. Following: ' + afterPrice,
     });
     // Fire-and-forget — payment already confirmed by Stripe
     fetch(SHEETS_SCRIPT_URL+'?'+completeParams.toString(), { method:'GET', mode:'no-cors' }).catch(()=>{});
