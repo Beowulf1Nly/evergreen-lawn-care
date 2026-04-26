@@ -2561,30 +2561,68 @@ function initStripeElements() {
   });
 }
 
-// ── Lot tiers ──
+// ── Lot tiers — 0.5-acre steps up to 10 acres ──
 const LOT_TIERS = [
-  { key: 'small',  label: 'Small lot · Up to ¼ acre',  icon: '🏡' },
-  { key: 'medium', label: 'Medium lot · ¼–½ acre',     icon: '🏘️' },
-  { key: 'large',  label: 'Large lot · ½–1 acre',      icon: '🌿' },
-  { key: 'xl',     label: 'Large estate · 1+ acres',   icon: '🌳' },
+  { key: 'small',   label: 'Small · Up to ¼ acre',       icon: '🏡' },
+  { key: 'medium',  label: 'Medium · ¼–½ acre',           icon: '🏘️' },
+  { key: 'half',    label: '½–1 acre',                    icon: '🌿' },
+  { key: 'one',     label: '1–1.5 acres',                 icon: '🏠' },
+  { key: 'one5',    label: '1.5–2 acres',                 icon: '🌳' },
+  { key: 'two',     label: '2–2.5 acres',                 icon: '🌲' },
+  { key: 'two5',    label: '2.5–3 acres',                 icon: '🌾' },
+  { key: 'three',   label: '3–3.5 acres',                 icon: '🌾' },
+  { key: 'three5',  label: '3.5–4 acres',                 icon: '🌾' },
+  { key: 'four',    label: '4–4.5 acres',                 icon: '🌾' },
+  { key: 'four5',   label: '4.5–5 acres',                 icon: '🌾' },
+  { key: 'five',    label: '5–5.5 acres',                 icon: '🌾' },
+  { key: 'five5',   label: '5.5–6 acres',                 icon: '🌾' },
+  { key: 'six',     label: '6–6.5 acres',                 icon: '🌾' },
+  { key: 'six5',    label: '6.5–7 acres',                 icon: '🌾' },
+  { key: 'seven',   label: '7–7.5 acres',                 icon: '🌾' },
+  { key: 'seven5',  label: '7.5–8 acres',                 icon: '🌾' },
+  { key: 'eight',   label: '8–8.5 acres',                 icon: '🌾' },
+  { key: 'eight5',  label: '8.5–9 acres',                 icon: '🌾' },
+  { key: 'nine',    label: '9–9.5 acres',                 icon: '🌾' },
+  { key: 'nine5',   label: '9.5–10 acres',                icon: '🌾' },
+  { key: 'xl',      label: '10+ acres · Custom Quote',    icon: '🗺️' },
 ];
 
-// Zip → default lot tier index
+// Zip → default lot tier index (0=small, 1=medium, 2=half-acre, 3=1-1.5ac...)
+// Most Citrus County residential lots are ¼-½ acre (tier 1=medium or 2=half)
 const ZIP_LOT_MAP = {
-  '34428':1,'34429':1,                    // Crystal River
-  '34450':1,'34451':1,'34452':1,'34453':1,// Inverness
-  '34446':2,'34447':2,'34448':2,          // Homosassa / Homosassa Springs
+  '34428':1,'34429':1,                    // Crystal River (mostly medium)
+  '34450':1,'34451':1,'34452':1,'34453':1,// Inverness (medium)
+  '34446':2,'34447':2,'34448':2,          // Homosassa / Homosassa Springs (half acre)
   '34460':1,'34461':2,                    // Lecanto
   '34433':2,'34434':1,                    // Citrus Springs
-  '34436':2,                              // Floral City (rural)
+  '34436':2,                              // Floral City (rural, half acre)
   '34464':1,'34465':1,                    // Beverly Hills
 };
 
 // Per-mow pricing after the $19 first service
+// Biweekly = less frequent (costs slightly more/mow). Weekly = more frequent (less/mow).
 const PLAN_PRICING = {
-  small:  { biweekly: 33,  weekly: 29  },
-  medium: { biweekly: 40,  weekly: 35  },
-  large:  { biweekly: 55,  weekly: 48  },
+  small:  { biweekly: 45,  weekly: 40  },
+  medium: { biweekly: 60,  weekly: 50  },
+  half:   { biweekly: 75,  weekly: 65  },
+  one:    { biweekly: 90,  weekly: 78  },
+  one5:   { biweekly: 110, weekly: 95  },
+  two:    { biweekly: 130, weekly: 112 },
+  two5:   { biweekly: 150, weekly: 130 },
+  three:  { biweekly: 170, weekly: 148 },
+  three5: { biweekly: 190, weekly: 165 },
+  four:   { biweekly: 210, weekly: 182 },
+  four5:  { biweekly: 230, weekly: 200 },
+  five:   { biweekly: 250, weekly: 218 },
+  five5:  { biweekly: 270, weekly: 235 },
+  six:    { biweekly: 290, weekly: 252 },
+  six5:   { biweekly: 310, weekly: 270 },
+  seven:  { biweekly: 330, weekly: 288 },
+  seven5: { biweekly: 350, weekly: 305 },
+  eight:  { biweekly: 370, weekly: 322 },
+  eight5: { biweekly: 390, weekly: 340 },
+  nine:   { biweekly: 410, weekly: 358 },
+  nine5:  { biweekly: 430, weekly: 375 },
   xl:     { biweekly: null, weekly: null },
 };
 
