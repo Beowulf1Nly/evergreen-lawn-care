@@ -814,7 +814,7 @@ async function executeAutoCharge(rowIdx) {
     const res  = await fetch(SCRIPT_URL + '?' + params.toString());
     const data = await res.json();
     if (data.success) {
-      alert('✅ Charged $' + (data.amount || '') + ' successfully!');
+      alert('✅ Charged $' + (data.charged || '') + ' successfully!');
       allBookings[rowIdx].invoiced = 'Autopay charged';
       renderBookings();
     } else {
@@ -1046,7 +1046,28 @@ async function loadStats() {
     const res  = await fetch(SCRIPT_URL + '?action=get_stats&' + authParam());
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'Failed');
-    const s = data.stats || {};
+    // handleGetStats returns data.bookings + data.analytics — map to the shape this UI expects
+    const b = data.bookings || {};
+    const a = data.analytics || {};
+    // Convert adminStats object { "Hunter": 5 } → array [{ name, jobs }]
+    const staffActivity = Object.entries(b.adminStats || {})
+      .map(([name, jobs]) => ({ name, jobs }))
+      .sort((x, y) => y.jobs - x.jobs);
+    const s = {
+      revenue30:       parseFloat(b.estimatedRev || 0),
+      jobsDone30:      b.done        || 0,
+      activeCustomers: b.customers   || 0,
+      needsInvoice:    0, // calculated below
+      staffActivity,
+    };
+    // Count rows that are done but not paid (yellow = needs invoice)
+    try {
+      s.needsInvoice = (allBookings || []).filter(bk => {
+        const paidRaw = String(bk.paymentMethod || bk.paidStatus || '');
+        const doneRaw = String(bk.done || '');
+        return doneRaw.includes('Done') && !paidRaw.includes('✅');
+      }).length;
+    } catch(e) {}
     el.innerHTML = `
       <div class="stats-grid">
         <div class="stat-card green">
