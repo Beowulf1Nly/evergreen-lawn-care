@@ -2681,8 +2681,66 @@ async function lookupLotSize(address, zip) {
   qState.detectedAcreage = null;
   qState.lotTierIdx      = 1;
 
-  // The county GIS is CORS-blocked from browsers and IP-blocked from servers.
-  // Route through Apps Script which calls citruspa.org (different server).
+  // ── Step 1: Geocode with Nominatim ───────────────────────────────────
+  let lat = null, lon = null;
+  try {
+    const geoRes  = await fetch(
+      'https://nominatim.openstreetmap.org/search?q='
+        + encodeURIComponent(address + (zip ? ', FL ' + zip : '') + ', US')
+        + '&format=json&limit=1&countrycodes=us',
+      { headers: { 'Accept': 'application/json' } }
+    );
+    const geoData = await geoRes.json();
+    if (geoData && geoData.length > 0) {
+      lat = parseFloat(geoData[0].lat);
+      lon = parseFloat(geoData[0].lon);
+    }
+  } catch(eGeo) {}
+
+  // ── Step 2: Florida Statewide Cadastral (ArcGIS Online — CORS enabled) ─
+  // Official Florida DOR parcel data for all 67 counties. Hosted on
+  // ArcGIS Online so CORS is always on — no proxy needed.
+  if (lat && lon) {
+    try {
+      const cadastralRes = await fetch(
+        'https://services9.arcgis.com/Gh9awoU677aKree0/arcgis/rest/services/Florida_Statewide_Cadastral/FeatureServer/0/query'
+        + '?geometry=' + encodeURIComponent(lon + ',' + lat)
+        + '&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects'
+        + '&outFields=LND_SQFOOT,PARCELID,PHY_ADDR1,PHY_CITY&returnGeometry=false&f=json'
+      );
+      const cadastralData = await cadastralRes.json();
+
+      if (cadastralData.features && cadastralData.features.length > 0) {
+        const attrs = cadastralData.features[0].attributes;
+        let sqft = parseFloat(attrs.LND_SQFOOT || 0);
+
+        // Fallback: use geometry area if LND_SQFOOT is missing (shouldn't happen)
+        if (!sqft && cadastralData.features[0].geometry) {
+          const rings = cadastralData.features[0].geometry.rings || [];
+          if (rings.length > 0) {
+            let area = 0;
+            const ring = rings[0];
+            for (let i = 0; i < ring.length - 1; i++) {
+              area += (ring[i][0] * ring[i+1][1]) - (ring[i+1][0] * ring[i][1]);
+            }
+            // Convert from deg² to sq ft at ~29°N
+            sqft = Math.abs(area / 2) * 1.21e10;
+          }
+        }
+
+        if (sqft > 0) {
+          const acres = sqft / 43560;
+          qState.detectedAcreage = Math.round(acres * 100) / 100;
+          qState.lotTierIdx      = acreageToTierIdx(acres);
+          qState.lotAutoDetected = true;
+          qState.lotEstimated    = false;
+          return; // got official DOR parcel data — done
+        }
+      }
+    } catch(eCadastral) {}
+  }
+
+  // ── Step 3: Apps Script (citruspa.org scrape fallback) ───────────────
   try {
     const url  = SHEETS_SCRIPT_URL + '?action=lookup_lot_size&address='
       + encodeURIComponent(address + (zip ? ', FL ' + zip : ''));
@@ -2695,9 +2753,9 @@ async function lookupLotSize(address, zip) {
       qState.lotEstimated    = !!data.estimated;
       return;
     }
-  } catch(e) { /* silent fail */ }
+  } catch(eScript) {}
 
-  // ZIP fallback for known Citrus County zips
+  // ── Step 4: ZIP fallback ─────────────────────────────────────────────
   const ZIP_TIERS = {
     '34428':1,'34429':1,
     '34450':1,'34451':1,'34452':1,'34453':1,
