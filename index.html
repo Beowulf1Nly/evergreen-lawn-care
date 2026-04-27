@@ -2681,100 +2681,23 @@ async function lookupLotSize(address, zip) {
   qState.detectedAcreage = null;
   qState.lotTierIdx      = 1;
 
-  const GIS_URL = 'https://gis.citrusbocc.com/arcgis/rest/services/PublicData/GeneralParcel/MapServer/0/query';
-
-  function extractAcres(a) {
-    let ac = parseFloat(
-      a.TOTALACRES || a.ACRES || a.GIS_ACRES || a.ACREAGE ||
-      a.totalacres || a.acres || a.gis_acres || a.acreage || 0
-    );
-    if (!ac && a.SHAPE_Area) ac = parseFloat(a.SHAPE_Area) / 43560;
-    if (!ac && a.Shape_Area) ac = parseFloat(a.Shape_Area) / 43560;
-    return ac;
-  }
-
-  async function queryGIS(url) {
+  // The county GIS is CORS-blocked from browsers and IP-blocked from servers.
+  // Route through Apps Script which calls citruspa.org (different server).
+  try {
+    const url  = SHEETS_SCRIPT_URL + '?action=lookup_lot_size&address='
+      + encodeURIComponent(address + (zip ? ', FL ' + zip : ''));
     const res  = await fetch(url);
     const data = await res.json();
-    if (data.features && data.features.length > 0) {
-      const ac = extractAcres(data.features[0].attributes);
-      console.log('[LotSize] GIS returned attributes:', data.features[0].attributes);
-      console.log('[LotSize] Extracted acres:', ac);
-      return ac;
+    if (data.success && typeof data.tierIdx === 'number') {
+      qState.lotTierIdx      = data.tierIdx;
+      qState.detectedAcreage = data.acreage || null;
+      qState.lotAutoDetected = true;
+      qState.lotEstimated    = !!data.estimated;
+      return;
     }
-    console.log('[LotSize] GIS returned no features. Raw response:', JSON.stringify(data).slice(0,300));
-    return 0;
-  }
+  } catch(e) { /* silent fail */ }
 
-  // Step 1: Geocode with Nominatim
-  let lat = null, lon = null;
-  try {
-    const fullAddr = address + (zip ? ', FL ' + zip : '') + ', US';
-    console.log('[LotSize] Geocoding:', fullAddr);
-    const geoRes  = await fetch(
-      'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(fullAddr) +
-      '&format=json&limit=1&countrycodes=us',
-      { headers: { 'Accept': 'application/json' } }
-    );
-    const geoData = await geoRes.json();
-    if (geoData && geoData.length > 0) {
-      lat = parseFloat(geoData[0].lat);
-      lon = parseFloat(geoData[0].lon);
-      console.log('[LotSize] Geocode OK:', lat, lon, '— display_name:', geoData[0].display_name);
-    } else {
-      console.log('[LotSize] Geocode returned no results');
-    }
-  } catch(eGeo) {
-    console.log('[LotSize] Geocode FAILED:', eGeo.message);
-  }
-
-  // Step 2: BOCC GIS — direct browser request
-  if (lat && lon) {
-    const gisParams = '?geometry=' + encodeURIComponent(lon + ',' + lat) +
-      '&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects' +
-      '&outFields=*&returnGeometry=false&f=json';
-
-    // Try direct first
-    try {
-      console.log('[LotSize] Trying direct GIS fetch...');
-      const acres = await queryGIS(GIS_URL + gisParams);
-      if (acres > 0) {
-        qState.detectedAcreage = Math.round(acres * 100) / 100;
-        qState.lotTierIdx      = acreageToTierIdx(acres);
-        qState.lotAutoDetected = true;
-        qState.lotEstimated    = false;
-        console.log('[LotSize] SUCCESS (direct) — acres:', acres, 'tierIdx:', qState.lotTierIdx);
-        return;
-      }
-    } catch(eDirect) {
-      console.log('[LotSize] Direct GIS FAILED (likely CORS):', eDirect.message);
-    }
-
-    // CORS proxy fallback — try two proxies
-    const proxies = [
-      'https://api.allorigins.win/raw?url=',
-      'https://corsproxy.io/?',
-    ];
-    for (const proxy of proxies) {
-      try {
-        console.log('[LotSize] Trying proxy:', proxy);
-        const acres = await queryGIS(proxy + encodeURIComponent(GIS_URL + gisParams));
-        if (acres > 0) {
-          qState.detectedAcreage = Math.round(acres * 100) / 100;
-          qState.lotTierIdx      = acreageToTierIdx(acres);
-          qState.lotAutoDetected = true;
-          qState.lotEstimated    = false;
-          console.log('[LotSize] SUCCESS (proxy) — acres:', acres, 'tierIdx:', qState.lotTierIdx);
-          return;
-        }
-      } catch(eProxy) {
-        console.log('[LotSize] Proxy FAILED:', proxy, eProxy.message);
-      }
-    }
-  }
-
-  // ZIP fallback — always works for known Citrus County zips
-  console.log('[LotSize] Falling back to ZIP tier for zip:', zip);
+  // ZIP fallback for known Citrus County zips
   const ZIP_TIERS = {
     '34428':1,'34429':1,
     '34450':1,'34451':1,'34452':1,'34453':1,
@@ -2789,9 +2712,6 @@ async function lookupLotSize(address, zip) {
     qState.lotTierIdx      = ZIP_TIERS[zip];
     qState.lotAutoDetected = true;
     qState.lotEstimated    = true;
-    console.log('[LotSize] ZIP fallback — tierIdx:', qState.lotTierIdx);
-  } else {
-    console.log('[LotSize] ZIP not in map — showing manual dropdown');
   }
 }
 
