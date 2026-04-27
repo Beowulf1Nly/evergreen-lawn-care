@@ -233,21 +233,21 @@
     border-top:1px solid var(--border); padding-top:10px; margin-top:2px;
   }
   .route-nav-btn {
-    display:inline-flex; align-items:center; gap:5px;
+    display:flex; align-items:center; justify-content:center; gap:5px;
     background:var(--green-mid); color:#fff; border:none; border-radius:8px;
     padding:7px 14px; font-family:inherit; font-size:12px; font-weight:700;
     cursor:pointer; text-decoration:none; transition:background .2s;
   }
   .route-nav-btn:hover { background:var(--green-deep); }
   .route-call-btn {
-    display:inline-flex; align-items:center; gap:5px;
+    display:flex; align-items:center; justify-content:center; gap:5px;
     background:#2563eb; color:#fff; border:none; border-radius:8px;
     padding:7px 14px; font-family:inherit; font-size:12px; font-weight:700;
     cursor:pointer; text-decoration:none; transition:background .2s;
   }
   .route-call-btn:hover { background:#1d4ed8; }
   .route-done-btn {
-    display:inline-flex; align-items:center; gap:5px;
+    display:flex; align-items:center; justify-content:center; gap:5px;
     background:#e8f5e9; color:var(--green-deep); border:1.5px solid var(--green-mid); border-radius:8px;
     padding:7px 14px; font-family:inherit; font-size:12px; font-weight:700;
     cursor:pointer; transition:all .2s; white-space:nowrap;
@@ -1135,6 +1135,25 @@ function cardHTML(b, rowIdx, isToday) {
         ${actions}
       </div>
     </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// CONFIRM MODAL
+// ═══════════════════════════════════════════════════════
+function openConfirm(title, msg, callback) {
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmMsg').textContent   = msg;
+  confirmCallback = callback;
+  document.getElementById('confirmOverlay').classList.add('open');
+}
+function closeConfirm() {
+  document.getElementById('confirmOverlay').classList.remove('open');
+  confirmCallback = null;
+}
+function confirmYes() {
+  const cb = confirmCallback;
+  closeConfirm();
+  if (cb) cb();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -2116,7 +2135,7 @@ function renderRouteTimeline(stops, startAddr, startTime) {
           +         '<div class="route-stop-time">Arrive '+fmtTime(s.arriveTime)+'</div>'
           +         '<div class="route-stop-name">'+esc(job.name||'—')+'</div>'
           +       '</div>'
-          +       '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">'
+          +       '<div style="display:flex;flex-direction:column;align-items:stretch;gap:6px;min-width:120px;">'
           +         '<a class="route-nav-btn" href="'+mapsUrl+'" target="_blank" rel="noopener">🧭 Navigate</a>'
           +         callBtn
           +         markDoneBtn
