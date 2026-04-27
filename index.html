@@ -2694,58 +2694,53 @@ async function lookupLotSize(address, zip) {
     if (geoData && geoData.length > 0) {
       lat = parseFloat(geoData[0].lat);
       lon = parseFloat(geoData[0].lon);
+      console.log('[Lot] Geocode OK:', lat, lon);
+    } else {
+      console.log('[Lot] Geocode: no results');
     }
-  } catch(eGeo) {}
+  } catch(eGeo) { console.log('[Lot] Geocode FAILED:', eGeo.message); }
 
   // ── Step 2: Florida Statewide Cadastral (ArcGIS Online — CORS enabled) ─
-  // Official Florida DOR parcel data for all 67 counties. Hosted on
-  // ArcGIS Online so CORS is always on — no proxy needed.
   if (lat && lon) {
     try {
-      const cadastralRes = await fetch(
-        'https://services9.arcgis.com/Gh9awoU677aKree0/arcgis/rest/services/Florida_Statewide_Cadastral/FeatureServer/0/query'
+      const cUrl = 'https://services9.arcgis.com/Gh9awoU677aKree0/arcgis/rest/services/Florida_Statewide_Cadastral/FeatureServer/0/query'
         + '?geometry=' + encodeURIComponent(lon + ',' + lat)
         + '&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects'
-        + '&outFields=LND_SQFOOT,PARCELID,PHY_ADDR1,PHY_CITY&returnGeometry=false&f=json'
-      );
+        + '&outFields=LND_SQFOOT,PARCELID,PHY_ADDR1,PHY_CITY&returnGeometry=false&f=json';
+      console.log('[Lot] Querying Florida Cadastral...');
+      const cadastralRes = await fetch(cUrl);
       const cadastralData = await cadastralRes.json();
+      console.log('[Lot] Cadastral response:', JSON.stringify(cadastralData).slice(0, 400));
 
       if (cadastralData.features && cadastralData.features.length > 0) {
         const attrs = cadastralData.features[0].attributes;
+        console.log('[Lot] Parcel attributes:', attrs);
         let sqft = parseFloat(attrs.LND_SQFOOT || 0);
-
-        // Fallback: use geometry area if LND_SQFOOT is missing (shouldn't happen)
-        if (!sqft && cadastralData.features[0].geometry) {
-          const rings = cadastralData.features[0].geometry.rings || [];
-          if (rings.length > 0) {
-            let area = 0;
-            const ring = rings[0];
-            for (let i = 0; i < ring.length - 1; i++) {
-              area += (ring[i][0] * ring[i+1][1]) - (ring[i+1][0] * ring[i][1]);
-            }
-            // Convert from deg² to sq ft at ~29°N
-            sqft = Math.abs(area / 2) * 1.21e10;
-          }
-        }
-
         if (sqft > 0) {
           const acres = sqft / 43560;
           qState.detectedAcreage = Math.round(acres * 100) / 100;
           qState.lotTierIdx      = acreageToTierIdx(acres);
           qState.lotAutoDetected = true;
           qState.lotEstimated    = false;
-          return; // got official DOR parcel data — done
+          console.log('[Lot] SUCCESS:', qState.detectedAcreage, 'acres, tier', qState.lotTierIdx);
+          return;
+        } else {
+          console.log('[Lot] LND_SQFOOT is 0 or missing. Full attrs:', JSON.stringify(attrs));
         }
+      } else {
+        console.log('[Lot] No features returned. Full response:', JSON.stringify(cadastralData));
       }
-    } catch(eCadastral) {}
+    } catch(eCadastral) { console.log('[Lot] Cadastral FAILED:', eCadastral.message); }
   }
 
-  // ── Step 3: Apps Script (citruspa.org scrape fallback) ───────────────
+  // ── Step 3: Apps Script fallback ─────────────────────────────────────
+  console.log('[Lot] Falling back to Apps Script...');
   try {
     const url  = SHEETS_SCRIPT_URL + '?action=lookup_lot_size&address='
       + encodeURIComponent(address + (zip ? ', FL ' + zip : ''));
     const res  = await fetch(url);
     const data = await res.json();
+    console.log('[Lot] Apps Script response:', data);
     if (data.success && typeof data.tierIdx === 'number') {
       qState.lotTierIdx      = data.tierIdx;
       qState.detectedAcreage = data.acreage || null;
@@ -2753,7 +2748,7 @@ async function lookupLotSize(address, zip) {
       qState.lotEstimated    = !!data.estimated;
       return;
     }
-  } catch(eScript) {}
+  } catch(eScript) { console.log('[Lot] Apps Script FAILED:', eScript.message); }
 
   // ── Step 4: ZIP fallback ─────────────────────────────────────────────
   const ZIP_TIERS = {
