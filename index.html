@@ -2750,21 +2750,26 @@ async function lookupLotSize(address, zip) {
       console.log('[LotSize] Direct GIS FAILED (likely CORS):', eDirect.message);
     }
 
-    // CORS proxy fallback
-    try {
-      console.log('[LotSize] Trying via CORS proxy...');
-      const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(GIS_URL + gisParams);
-      const acres = await queryGIS(proxyUrl);
-      if (acres > 0) {
-        qState.detectedAcreage = Math.round(acres * 100) / 100;
-        qState.lotTierIdx      = acreageToTierIdx(acres);
-        qState.lotAutoDetected = true;
-        qState.lotEstimated    = false;
-        console.log('[LotSize] SUCCESS (proxy) — acres:', acres, 'tierIdx:', qState.lotTierIdx);
-        return;
+    // CORS proxy fallback — try two proxies
+    const proxies = [
+      'https://api.allorigins.win/raw?url=',
+      'https://corsproxy.io/?',
+    ];
+    for (const proxy of proxies) {
+      try {
+        console.log('[LotSize] Trying proxy:', proxy);
+        const acres = await queryGIS(proxy + encodeURIComponent(GIS_URL + gisParams));
+        if (acres > 0) {
+          qState.detectedAcreage = Math.round(acres * 100) / 100;
+          qState.lotTierIdx      = acreageToTierIdx(acres);
+          qState.lotAutoDetected = true;
+          qState.lotEstimated    = false;
+          console.log('[LotSize] SUCCESS (proxy) — acres:', acres, 'tierIdx:', qState.lotTierIdx);
+          return;
+        }
+      } catch(eProxy) {
+        console.log('[LotSize] Proxy FAILED:', proxy, eProxy.message);
       }
-    } catch(eProxy) {
-      console.log('[LotSize] Proxy GIS FAILED:', eProxy.message);
     }
   }
 
