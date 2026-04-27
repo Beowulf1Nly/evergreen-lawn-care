@@ -2703,10 +2703,12 @@ async function lookupLotSize(address, zip) {
   // ── Step 2: Florida Statewide Cadastral (ArcGIS Online — CORS enabled) ─
   if (lat && lon) {
     try {
+      // ArcGIS FeatureServer requires where=1=1 for spatial-only queries
       const cUrl = 'https://services9.arcgis.com/Gh9awoU677aKree0/arcgis/rest/services/Florida_Statewide_Cadastral/FeatureServer/0/query'
-        + '?geometry=' + encodeURIComponent(lon + ',' + lat)
+        + '?where=1%3D1'
+        + '&geometry=' + lon + '%2C' + lat
         + '&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects'
-        + '&outFields=LND_SQFOOT,PARCELID,PHY_ADDR1,PHY_CITY&returnGeometry=false&f=json';
+        + '&outFields=*&returnGeometry=false&f=json';
       console.log('[Lot] Querying Florida Cadastral...');
       const cadastralRes = await fetch(cUrl);
       const cadastralData = await cadastralRes.json();
