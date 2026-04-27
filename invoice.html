@@ -120,6 +120,20 @@
   .route-cp-field input:focus { border-color:var(--green-mid); }
   .route-cp-field input[type="time"] { width:130px; }
   .route-cp-field input[type="text"]  { width:280px; }
+  .addr-suggestions {
+    position:absolute; top:100%; left:0; right:0; z-index:9999;
+    background:#fff; border:2px solid var(--green-mid); border-top:none;
+    border-radius:0 0 10px 10px; max-height:220px; overflow-y:auto;
+    box-shadow:0 8px 24px rgba(0,0,0,.12); display:none;
+  }
+  .addr-suggestion-item {
+    padding:10px 13px; font-size:13px; color:var(--text); cursor:pointer;
+    border-bottom:1px solid var(--border); line-height:1.4;
+  }
+  .addr-suggestion-item:last-child { border-bottom:none; }
+  .addr-suggestion-item:hover, .addr-suggestion-item.focused { background:var(--bg); color:var(--green-deep); font-weight:600; }
+  .addr-suggestion-loading { padding:10px 13px; font-size:12px; color:var(--text-muted); font-style:italic; }
+  .route-cp-field.addr-wrap { position:relative; }
   .route-optimize-btn {
     width:100%; padding:14px; background:linear-gradient(135deg,var(--green-mid),var(--green-deep));
     color:#fff; border:none; border-radius:12px; font-family:inherit; font-size:15px;
@@ -218,11 +232,11 @@
   }
   .route-nav-btn {
     display:inline-flex; align-items:center; gap:5px;
-    background:var(--blue); color:#fff; border:none; border-radius:8px;
+    background:var(--green-mid); color:#fff; border:none; border-radius:8px;
     padding:7px 14px; font-family:inherit; font-size:12px; font-weight:700;
     cursor:pointer; text-decoration:none; transition:background .2s;
   }
-  .route-nav-btn:hover { background:#2563eb; }
+  .route-nav-btn:hover { background:var(--green-deep); }
 
   /* Finish chip */
   .route-finish {
@@ -246,6 +260,8 @@
     text-align:center; padding:48px 20px; color:var(--text-muted);
   }
   .route-loading-icon { font-size:36px; animation:spin .9s linear infinite; display:inline-block; margin-bottom:14px; }
+  @keyframes spin    { to { transform:rotate(360deg); } }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
   .route-error {
     background:#fff5f5; border:1.5px solid #feb2b2; border-radius:12px;
     padding:16px 20px; color:#c53030; font-size:14px; margin-top:12px;
@@ -419,7 +435,12 @@
         <div class="section-label">
           📅 Today's Jobs <span class="badge" id="todayCount">0</span>
         </div>
-        <div id="todayList"><div class="empty-state">Loading…</div></div>
+        <div id="todayList"><div class="empty-state" style="padding:32px 20px;">
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div style="height:80px;background:linear-gradient(90deg,#eee 25%,#f5f5f5 50%,#eee 75%);background-size:200% 100%;border-radius:12px;animation:shimmer 1.4s infinite;"></div>
+            <div style="height:80px;background:linear-gradient(90deg,#eee 25%,#f5f5f5 50%,#eee 75%);background-size:200% 100%;border-radius:12px;animation:shimmer 1.4s infinite .2s;"></div>
+          </div>
+        </div></div>
       </div>
 
       <!-- ✓ Completed Jobs — done + paid (owner only) -->
@@ -540,9 +561,14 @@
             <label>🕗 Start time</label>
             <input type="time" id="routeStartTime" value="08:00">
           </div>
-          <div class="route-cp-field">
+          <div class="route-cp-field addr-wrap">
             <label>📍 Starting from <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
-            <input type="text" id="routeStartAddr" placeholder="Home base address or leave blank">
+            <input type="text" id="routeStartAddr" placeholder="Home base address or leave blank"
+              autocomplete="off"
+              oninput="routeAddrInput(this)"
+              onkeydown="routeAddrKeydown(event)"
+              onblur="setTimeout(()=>closeAddrSuggestions(),180)">
+            <div class="addr-suggestions" id="addrSuggestions"></div>
           </div>
         </div>
         <button class="route-optimize-btn" id="routeOptBtn" onclick="buildRoute()">⚡ Optimize Route</button>
@@ -941,8 +967,10 @@ function renderBookings() {
   }
 
   // Missed Deadline — past-date undone jobs (owner only, above Today)
+  // Guard: dateOf(b) must be non-empty — empty string sorts before any date string,
+  // so rows with no service date would otherwise always appear here.
   const missedBkgs = (adminRole === 'owner')
-    ? allBookings.filter(b => !isDone(b) && dateOf(b) < todayStr && matchesSearch(b))
+    ? allBookings.filter(b => !isDone(b) && dateOf(b) && dateOf(b) < todayStr && matchesSearch(b))
     : [];
   if (adminRole === 'owner') {
     const missedSec = document.getElementById('missedSection');
@@ -994,6 +1022,12 @@ function renderBookings() {
   document.getElementById('upcomingList').innerHTML = upcoming.length
     ? upcoming.map(b => cardHTML(b, allBookings.indexOf(b), false)).join('')
     : '<div class="empty-state" style="padding:20px;">Nothing else scheduled.</div>';
+
+  // Keep Route tab in sync — if it's currently visible, refresh its job count/state
+  // so switching tabs while data is still loading doesn't leave it stuck on "0 jobs"
+  if (document.getElementById('pane-route')?.classList.contains('active')) {
+    initRouteTab();
+  }
 }
 
 function cardHTML(b, rowIdx, isToday) {
@@ -1696,7 +1730,7 @@ async function optimiseOSRM(points) {
   const coords = points.map(p=>p.lon+','+p.lat).join(';');
   const src    = points[0] && points[0]._isStart ? 'first' : 'any';
   const url    = 'https://router.project-osrm.org/trip/v1/driving/'+coords
-               + '?roundtrip=false&source='+src+'&destination=last&annotations=duration,distance';
+               + '?roundtrip=false&source='+src+'&destination=any&annotations=duration,distance';
   try {
     const r    = await fetch(url);
     const data = await r.json();
@@ -1713,13 +1747,105 @@ async function optimiseOSRM(points) {
   } catch(e) { return null; }
 }
 
+/* ── Address autocomplete (Nominatim, Citrus County FL biased) ── */
+let _addrTimer = null;
+let _addrFocusIdx = -1;
+
+function routeAddrInput(inp) {
+  const val = inp.value.trim();
+  clearTimeout(_addrTimer);
+  _addrFocusIdx = -1;
+  if (val.length < 3) { closeAddrSuggestions(); return; }
+  const box = document.getElementById('addrSuggestions');
+  box.innerHTML = '<div class="addr-suggestion-loading">Searching…</div>';
+  box.style.display = 'block';
+  _addrTimer = setTimeout(() => fetchAddrSuggestions(val), 380);
+}
+
+async function fetchAddrSuggestions(q) {
+  const box = document.getElementById('addrSuggestions');
+  try {
+    // bias toward Citrus County FL with viewbox + countrycodes
+    const params = new URLSearchParams({
+      q: q + ', Citrus County, FL',
+      format: 'json',
+      addressdetails: '1',
+      limit: '6',
+      countrycodes: 'us',
+      viewbox: '-82.8,28.7,-82.1,29.1',
+      bounded: '0'
+    });
+    const res = await fetch('https://nominatim.openstreetmap.org/search?' + params, {
+      headers: { 'Accept-Language': 'en', 'User-Agent': 'EvergreenLawnCare/1.0' }
+    });
+    const data = await res.json();
+    if (!data || !data.length) {
+      box.innerHTML = '<div class="addr-suggestion-loading">No results found</div>';
+      box.style.display = 'block';
+      return;
+    }
+    _addrFocusIdx = -1;
+    box.innerHTML = data.map((item, i) => {
+      // Build a clean short label: street + city + state
+      const a = item.address || {};
+      const street = [a.house_number, a.road].filter(Boolean).join(' ');
+      const city   = a.city || a.town || a.village || a.county || '';
+      const state  = a.state_code || a.state || '';
+      const label  = [street, city, state].filter(Boolean).join(', ') || item.display_name;
+      return `<div class="addr-suggestion-item" data-idx="${i}" data-label="${label.replace(/"/g,'&quot;')}"
+                onmousedown="selectAddrSuggestion(this)">${label}</div>`;
+    }).join('');
+    box.style.display = 'block';
+  } catch(e) {
+    box.innerHTML = '<div class="addr-suggestion-loading">Search unavailable</div>';
+    box.style.display = 'block';
+  }
+}
+
+function selectAddrSuggestion(el) {
+  const label = el.getAttribute('data-label');
+  document.getElementById('routeStartAddr').value = label;
+  closeAddrSuggestions();
+}
+
+function closeAddrSuggestions() {
+  const box = document.getElementById('addrSuggestions');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+  _addrFocusIdx = -1;
+}
+
+function routeAddrKeydown(e) {
+  const box = document.getElementById('addrSuggestions');
+  if (!box || box.style.display === 'none') return;
+  const items = box.querySelectorAll('.addr-suggestion-item');
+  if (!items.length) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    _addrFocusIdx = Math.min(_addrFocusIdx + 1, items.length - 1);
+    items.forEach((el,i) => el.classList.toggle('focused', i === _addrFocusIdx));
+    items[_addrFocusIdx]?.scrollIntoView({ block:'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    _addrFocusIdx = Math.max(_addrFocusIdx - 1, 0);
+    items.forEach((el,i) => el.classList.toggle('focused', i === _addrFocusIdx));
+    items[_addrFocusIdx]?.scrollIntoView({ block:'nearest' });
+  } else if (e.key === 'Enter') {
+    if (_addrFocusIdx >= 0 && items[_addrFocusIdx]) {
+      e.preventDefault();
+      selectAddrSuggestion(items[_addrFocusIdx]);
+    }
+  } else if (e.key === 'Escape') {
+    closeAddrSuggestions();
+  }
+}
+
 function initRouteTab() {
-  const todayJobs = (allBookings||[]).filter(b=>dateOf(b)===todayDateStr());
+  const todayJobs = (allBookings||[]).filter(b=>dateOf(b)===todayDateStr() && !isDone(b));
   const sub = document.getElementById('routeCpSub');
   if (!sub) return;
   const d = new Date();
   const dateLabel = d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
-  sub.textContent = dateLabel+' · '+todayJobs.length+' job'+(todayJobs.length!==1?'s':'')+' scheduled';
+  sub.textContent = dateLabel+' · '+todayJobs.length+' job'+(todayJobs.length!==1?'s':'')+' remaining';
   const btn = document.getElementById('routeOptBtn');
   if (!todayJobs.length) {
     if (btn) btn.disabled = true;
@@ -1743,9 +1869,9 @@ async function buildRoute() {
   startDate.setHours(hh, mm, 0, 0);
 
   const todayStr  = todayDateStr();
-  const todayJobs = (allBookings||[]).filter(b=>dateOf(b)===todayStr);
+  const todayJobs = (allBookings||[]).filter(b=>dateOf(b)===todayStr && !isDone(b));
   if (!todayJobs.length) {
-    errEl.textContent='No jobs scheduled for today.'; errEl.style.display='block'; return;
+    errEl.textContent='No incomplete jobs scheduled for today.'; errEl.style.display='block'; return;
   }
 
   btn.disabled = true;

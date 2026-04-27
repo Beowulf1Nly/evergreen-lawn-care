@@ -342,6 +342,33 @@
   .mow-dot.pending { background:#fbbf24; }   /* last dot — next charge */
   .mow-dot-label   { font-size:12px; color:var(--text); font-weight:500; }
 
+  /* ── Staff Portal banner ── */
+  .staff-portal-section {
+    display:none;
+    margin-bottom:20px;
+    background:linear-gradient(135deg, var(--green-deep) 0%, #2d6a2d 100%);
+    border-radius:16px;
+    padding:20px 24px;
+    color:#fff;
+  }
+  .staff-portal-label {
+    font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+    color:rgba(255,255,255,.6); margin-bottom:6px;
+  }
+  .staff-portal-title {
+    font-family:'Playfair Display',serif; font-size:18px; margin-bottom:4px;
+  }
+  .staff-portal-sub {
+    font-size:13px; color:rgba(255,255,255,.7); margin-bottom:16px;
+  }
+  .btn-staff-portal {
+    display:inline-flex; align-items:center; gap:8px;
+    padding:11px 20px; background:#fff; color:var(--green-deep);
+    border:none; border-radius:10px; font-family:inherit; font-size:14px;
+    font-weight:700; cursor:pointer; text-decoration:none; transition:all .2s;
+  }
+  .btn-staff-portal:hover { background:var(--green-pale); transform:translateY(-1px); }
+
   /* ── Cancel plan button (Account Settings row) ── */
   .btn-cancel-sub {
     padding:7px 14px; background:#fff; color:var(--red);
@@ -489,6 +516,14 @@
           Loading booking history…
         </div>
       </div>
+    </div>
+
+    <!-- Staff Portal (hidden unless user is also a staff member) -->
+    <div class="staff-portal-section" id="staffPortalSection">
+      <div class="staff-portal-label">🛠 Staff Access</div>
+      <div class="staff-portal-title">Staff Portal</div>
+      <div class="staff-portal-sub">Manage jobs, routes, and client billing</div>
+      <a href="/invoice.html" class="btn-staff-portal">📋 Open Staff Portal →</a>
     </div>
 
     <!-- Account Settings -->
@@ -726,6 +761,10 @@ function renderProfile(data) {
   document.getElementById('greetingName').textContent  = 'Hey, ' + firstName + ' 👋';
   document.getElementById('greetingEmail').textContent = email;
   document.getElementById('settingsEmail').textContent = email;
+
+  // Staff portal banner
+  const staffSection = document.getElementById('staffPortalSection');
+  if (staffSection) staffSection.style.display = data.isStaff ? 'block' : 'none';
 
   // Autopay toggle state
   autopayEnabled = !!data.autopayEnabled;
@@ -1357,17 +1396,17 @@ async function confirmCancellation() {
       const keptMsg = (selectedCancelType === 'end_of_cycle' && data.kept > 0)
         ? `Your remaining ${data.kept} paid visit${data.kept !== 1 ? 's' : ''} will still be honoured — we'll see you then.`
         : 'All upcoming appointments have been removed. Hope to see you again!';
-      alert('✅ Subscription cancelled. ' + keptMsg);
+      alert(keptMsg || 'Your plan has been cancelled. Thank you for being a customer!');
     } else {
-      alert(data.error || 'Could not cancel. Please call us at (352) 462-0627.');
+      alert('Could not cancel: ' + (data.error || 'Unknown error'));
     }
   } catch(err) {
-    alert('Could not cancel. Please call us at (352) 462-0627.');
+    alert('Error: ' + err.message);
   } finally {
-    btn.disabled    = false;
-    btn.textContent = 'Confirm Cancel';
+    btn.disabled = false; btn.textContent = orig;
   }
 }
+
 </script>
 </body>
 </html>
