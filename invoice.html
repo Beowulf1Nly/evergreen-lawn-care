@@ -1253,7 +1253,8 @@ async function executeAutoCharge(rowIdx) {
     const data = await res.json();
     if (data.success) {
       alert('✅ Charged $' + (data.charged || '') + ' successfully!');
-      allBookings[rowIdx].invoiced = 'Autopay charged';
+      allBookings[rowIdx].invoiced    = 'Autopay charged';
+      allBookings[rowIdx].calendarEvent = '✅ Autopay charged'; // makes isPaidDone() return true
       renderBookings();
     } else {
       alert('Charge failed: ' + (data.error || 'Unknown error'));
