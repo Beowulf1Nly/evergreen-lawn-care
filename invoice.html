@@ -218,7 +218,6 @@
   <!-- Owner tab bar (hidden for employees) -->
   <div class="tab-bar" id="ownerTabs" style="display:none;">
     <button class="tab-btn active" onclick="showTab('jobs')" data-tab="jobs">📋 Jobs</button>
-    <button class="tab-btn" onclick="showTab('done')" data-tab="done">✓ Completed <span id="doneTabCount" style="background:#e2e8e2;color:#2d6a2d;border-radius:100px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px;">0</span></button>
     <button class="tab-btn" onclick="showTab('add')"  data-tab="add">➕ Add Client</button>
     <button class="tab-btn" onclick="showTab('stats')" data-tab="stats">📊 Stats</button>
   </div>
@@ -234,8 +233,22 @@
           <option value="all">All bookings</option>
           <option value="needs-action">Needs action</option>
           <option value="autopay">Auto-Pay</option>
-          <option value="done">Done</option>
         </select>
+      </div>
+
+      <!-- ✓ Completed Jobs (shown first, owner only) -->
+      <div id="doneSection" style="margin-bottom:32px;display:none;">
+        <div class="section-label" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <span>✓ Completed Jobs <span class="badge" id="doneCount">0</span></span>
+          <select id="doneSortSelect" onchange="renderBookings()" style="font-family:inherit;font-size:12px;padding:5px 10px;border:1.5px solid var(--border);border-radius:8px;background:#fff;color:var(--text);cursor:pointer;">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="name">Name A–Z</option>
+            <option value="price-high">Price high–low</option>
+            <option value="price-low">Price low–high</option>
+          </select>
+        </div>
+        <div id="doneList"><div class="empty-state">Loading…</div></div>
       </div>
 
       <!-- Today's Jobs -->
@@ -262,18 +275,6 @@
         <div id="upcomingList"><div class="empty-state">Loading…</div></div>
       </div>
 
-    </div>
-  </div>
-
-  <!-- ── COMPLETED TAB (owner only) ── -->
-  <div id="pane-done" class="tab-pane">
-    <div class="container">
-      <div id="doneSection" style="margin-bottom:32px;margin-top:24px;">
-        <div class="section-label">
-          ✓ Completed Jobs <span class="badge" id="doneCount">0</span>
-        </div>
-        <div id="doneList"><div class="empty-state">Loading…</div></div>
-      </div>
     </div>
   </div>
 
@@ -669,16 +670,36 @@ function renderBookings() {
 
   // Split: active (not done) vs completed
   const activeBkgs = bookings.filter(b => !isDone(b));
-  const doneBkgs   = allBookings.filter(b => isDone(b)); // always use full list for done tab
+  let doneBkgs     = allBookings.filter(b => isDone(b)); // always use full list for completed
+
+  // Apply sort to completed jobs
+  const doneSort = document.getElementById('doneSortSelect')?.value || 'newest';
+  if (doneSort === 'newest')     doneBkgs = doneBkgs.slice().sort((a,b) => (dateOf(b) > dateOf(a) ? 1 : -1));
+  else if (doneSort === 'oldest') doneBkgs = doneBkgs.slice().sort((a,b) => (dateOf(a) > dateOf(b) ? 1 : -1));
+  else if (doneSort === 'name')   doneBkgs = doneBkgs.slice().sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  else if (doneSort === 'price-high') doneBkgs = doneBkgs.slice().sort((a,b) => (parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))||0) - (parseFloat(String(a.price||'').replace(/[^0-9.]/g,''))||0));
+  else if (doneSort === 'price-low')  doneBkgs = doneBkgs.slice().sort((a,b) => (parseFloat(String(a.price||'').replace(/[^0-9.]/g,''))||0) - (parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))||0));
 
   // Active: split today vs upcoming
-  const today    = activeBkgs.filter(b => dateOf(b) === todayStr);
-  let upcoming   = activeBkgs.filter(b => dateOf(b) !== todayStr);
-  const needs    = allBookings.filter(b => needsAction(b));
+  const today  = activeBkgs.filter(b => dateOf(b) === todayStr);
+  let upcoming = activeBkgs.filter(b => dateOf(b) !== todayStr);
+  const needs  = allBookings.filter(b => needsAction(b));
 
   // Employees only see next 7 days
   if (adminRole === 'employee') {
     upcoming = upcoming.filter(b => { const d = new Date(dateOf(b)+'T12:00'); return d <= in7; });
+  }
+
+  // Completed section (owner only, above Today's Jobs)
+  const doneSectionEl = document.getElementById('doneSection');
+  const doneCountEl   = document.getElementById('doneCount');
+  const doneListEl    = document.getElementById('doneList');
+  if (adminRole === 'owner' && doneSectionEl) {
+    doneSectionEl.style.display = doneBkgs.length ? 'block' : 'none';
+    if (doneCountEl) doneCountEl.textContent = doneBkgs.length;
+    if (doneListEl)  doneListEl.innerHTML = doneBkgs.length
+      ? doneBkgs.map(b => cardHTML(b, allBookings.indexOf(b), false)).join('')
+      : '<div class="empty-state" style="padding:20px;">No completed jobs yet.</div>';
   }
 
   // Today (active only)
@@ -692,16 +713,6 @@ function renderBookings() {
   document.getElementById('upcomingList').innerHTML = upcoming.length
     ? upcoming.map(b => cardHTML(b, allBookings.indexOf(b), false)).join('')
     : '<div class="empty-state" style="padding:20px;">Nothing else scheduled.</div>';
-
-  // Completed tab
-  const doneCountEl = document.getElementById('doneCount');
-  const doneTabEl   = document.getElementById('doneTabCount');
-  const doneListEl  = document.getElementById('doneList');
-  if (doneCountEl) doneCountEl.textContent = doneBkgs.length;
-  if (doneTabEl)   doneTabEl.textContent   = doneBkgs.length;
-  if (doneListEl)  doneListEl.innerHTML = doneBkgs.length
-    ? doneBkgs.map(b => cardHTML(b, allBookings.indexOf(b), false)).join('')
-    : '<div class="empty-state" style="padding:20px;">No completed jobs yet.</div>';
 
   // Needs action (owner only)
   if (adminRole === 'owner') {

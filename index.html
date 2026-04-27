@@ -2962,26 +2962,17 @@ function updateLotDisplay() {
   if (iconEl)  iconEl.textContent  = tier ? tier.icon : '🏡';
 
   if (qState.lotAutoDetected && qState.detectedAcreage) {
-    if (sublabel) sublabel.innerHTML = '🛰️ <strong>' + qState.detectedAcreage + ' acres</strong> detected from county records · <a href="#" onclick="showLotManual(event)" style="color:var(--green-mid);font-weight:600;text-decoration:none;">Not right?</a>';
+    // Auto-detected: show acreage note, hide manual dropdown entirely
+    if (sublabel) sublabel.textContent = '🛰️ ' + qState.detectedAcreage + ' acres detected from county records';
     if (manual) manual.style.display = 'none';
   } else {
-    const mapsUrl = 'https://maps.google.com/?q=' + encodeURIComponent((qState.address||'') + ' ' + (qState.zip||'')) + '&t=k';
-    if (sublabel) sublabel.innerHTML = 'Not sure? <a href="' + mapsUrl + '" target="_blank" style="color:var(--green-mid);font-weight:600;text-decoration:none;">View satellite map ↗</a>';
+    // Detection failed: hide sublabel, show dropdown — customer must pick
+    if (sublabel) sublabel.textContent = 'Select your lot size below';
     if (manual) {
       manual.style.display = 'block';
       const sel = document.getElementById('q-lot-select');
       if (sel) sel.value = String(qState.lotTierIdx);
     }
-  }
-}
-
-function showLotManual(e) {
-  if (e) e.preventDefault();
-  const manual = document.getElementById('q-lot-manual');
-  if (manual) {
-    manual.style.display = 'block';
-    const sel = document.getElementById('q-lot-select');
-    if (sel) sel.value = String(qState.lotTierIdx);
   }
 }
 
