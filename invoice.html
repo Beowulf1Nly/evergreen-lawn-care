@@ -621,6 +621,18 @@ async function loadBookings() {
     const res  = await fetch(SCRIPT_URL + '?action=bookings&' + authParam());
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'Unauthorized');
+
+    // Re-apply live role from server (catches sheet edits without needing re-login)
+    if (data.role) {
+      const freshRole = String(data.role).toLowerCase().trim();
+      const validRole = (freshRole === 'owner' || freshRole === 'employee') ? freshRole : 'employee';
+      if (validRole !== adminRole) {
+        adminRole = validRole;
+        saveSession(adminToken, adminName, adminEmail, adminRole, adminRole === 'owner' ? 30 : 7);
+        showApp(); // re-draw header / tabs with correct role
+      }
+    }
+
     allBookings = data.bookings || [];
     renderBookings();
     const now = new Date();
@@ -819,7 +831,7 @@ function triggerMarkDone(rowIdx) {
   const cardTxt = b.cardLast4 ? `${cap(b.cardBrand||'card')} ••••${b.cardLast4}` : 'saved card';
 
   const title = `Mark "${b.name||'job'}" as done?`;
-  const msg   = 'This will log the job as completed. You can then charge their card from the job card.';
+  const msg   = 'Are you sure you want to mark this job as completed? This cannot be undone.';
   document.getElementById('confirmYesBtn').className = 'btn-confirm-yes';
   openConfirm(title, msg, () => executeMarkDone(rowIdx));
 }
