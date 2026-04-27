@@ -2649,24 +2649,99 @@ const LOT_TIERS = [
 ];
 
 // ── Lot size: call Apps Script → county GIS → ZIP fallback → manual
+// Maps acreage to LOT_TIERS index
+function acreageToTierIdx(acres) {
+  if (acres <= 0.25)  return 0;
+  if (acres <= 0.5)   return 1;
+  if (acres <= 1.0)   return 2;
+  if (acres <= 1.5)   return 3;
+  if (acres <= 2.0)   return 4;
+  if (acres <= 2.5)   return 5;
+  if (acres <= 3.0)   return 6;
+  if (acres <= 3.5)   return 7;
+  if (acres <= 4.0)   return 8;
+  if (acres <= 4.5)   return 9;
+  if (acres <= 5.0)   return 10;
+  if (acres <= 5.5)   return 11;
+  if (acres <= 6.0)   return 12;
+  if (acres <= 6.5)   return 13;
+  if (acres <= 7.0)   return 14;
+  if (acres <= 7.5)   return 15;
+  if (acres <= 8.0)   return 16;
+  if (acres <= 8.5)   return 17;
+  if (acres <= 9.0)   return 18;
+  if (acres <= 9.5)   return 19;
+  if (acres <= 10.0)  return 20;
+  return 21;
+}
+
 async function lookupLotSize(address, zip) {
   qState.lotAutoDetected = false;
   qState.lotEstimated    = false;
   qState.detectedAcreage = null;
-  qState.lotTierIdx      = 1; // default while lookup runs
+  qState.lotTierIdx      = 1;
 
+  // Run directly from the browser — county GIS blocks cloud server IPs
+  // but works fine from a real browser request.
+
+  // Step 1: Geocode with Nominatim
   try {
-    const url  = SHEETS_SCRIPT_URL + '?action=lookup_lot_size&address=' + encodeURIComponent(address + (zip ? ', FL ' + zip : ''));
-    const res  = await fetch(url);
-    const data = await res.json();
-    if (data.success && typeof data.tierIdx === 'number') {
-      qState.lotTierIdx      = data.tierIdx;
-      qState.detectedAcreage = data.acreage || null;
-      qState.lotAutoDetected = true;
-      qState.lotEstimated    = !!data.estimated; // true = ZIP-based estimate, false = county record
+    const fullAddr = address + (zip ? ', FL ' + zip : '') + ', US';
+    const geoRes = await fetch(
+      'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(fullAddr) +
+      '&format=json&limit=1&countrycodes=us',
+      { headers: { 'Accept': 'application/json' } }
+    );
+    const geoData = await geoRes.json();
+
+    if (geoData && geoData.length > 0) {
+      const lat = parseFloat(geoData[0].lat);
+      const lon = parseFloat(geoData[0].lon);
+
+      // Step 2: Citrus County BOCC GIS parcel lookup
+      try {
+        const gisRes = await fetch(
+          'https://gis.citrusbocc.com/arcgis/rest/services/PublicData/GeneralParcel/MapServer/0/query' +
+          '?geometry=' + encodeURIComponent(lon + ',' + lat) +
+          '&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects' +
+          '&outFields=*&returnGeometry=false&f=json'
+        );
+        const gisData = await gisRes.json();
+        if (gisData.features && gisData.features.length > 0) {
+          const a = gisData.features[0].attributes;
+          let acres = parseFloat(
+            a.TOTALACRES || a.ACRES || a.GIS_ACRES || a.ACREAGE ||
+            a.totalacres || a.acres || a.gis_acres || a.acreage || 0
+          );
+          if (!acres && a.SHAPE_Area) acres = parseFloat(a.SHAPE_Area) / 43560;
+          if (!acres && a.Shape_Area) acres = parseFloat(a.Shape_Area) / 43560;
+          if (acres > 0) {
+            qState.detectedAcreage = Math.round(acres * 100) / 100;
+            qState.lotTierIdx      = acreageToTierIdx(acres);
+            qState.lotAutoDetected = true;
+            qState.lotEstimated    = false;
+            return; // exact parcel data — done
+          }
+        }
+      } catch(eGis) { /* GIS unreachable, fall through to ZIP */ }
     }
-  } catch(e) {
-    // Silent fail — manual dropdown will show
+  } catch(eGeo) { /* geocode failed, fall through */ }
+
+  // ZIP fallback — always works for known Citrus County zips
+  const ZIP_TIERS = {
+    '34428':1,'34429':1,
+    '34450':1,'34451':1,'34452':1,'34453':1,
+    '34446':2,'34447':2,'34448':2,
+    '34460':1,'34461':2,
+    '34433':2,'34434':1,
+    '34436':2,
+    '34464':1,'34465':1,
+    '34481':2,'34432':2,'34431':2,
+  };
+  if (zip && ZIP_TIERS[zip] !== undefined) {
+    qState.lotTierIdx      = ZIP_TIERS[zip];
+    qState.lotAutoDetected = true;
+    qState.lotEstimated    = true;
   }
 }
 
