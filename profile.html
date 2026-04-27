@@ -463,7 +463,10 @@
   <!-- Header -->
   <header class="portal-header">
     <a href="/" class="portal-brand">🌿 Evergreen <span>&nbsp;Lawn Care</span></a>
-    <button class="btn-logout" onclick="logout()">Sign Out</button>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <a href="/invoice.html" id="adminHeaderBtn" style="display:none;padding:7px 14px;border-radius:8px;font-family:inherit;font-size:13px;font-weight:700;background:#fff;color:var(--green-deep);text-decoration:none;border:none;cursor:pointer;">🛠 Admin</a>
+      <button class="btn-logout" onclick="logout()">Sign Out</button>
+    </div>
   </header>
 
   <div class="portal-body">
@@ -762,9 +765,24 @@ function renderProfile(data) {
   document.getElementById('greetingEmail').textContent = email;
   document.getElementById('settingsEmail').textContent = email;
 
-  // Staff portal banner
+  // Admin button in header — show if API says isStaff, OR if there's a valid staff session
+  // in localStorage (handles case where Apps Script hasn't been redeployed yet)
+  let isAdmin = !!data.isStaff;
+  if (!isAdmin) {
+    try {
+      const raw = localStorage.getItem('eg_staff_session');
+      if (raw) {
+        const s = JSON.parse(raw);
+        const exp = s.expiry || s.exp;
+        if (s.token && exp && new Date() < new Date(exp)) isAdmin = true;
+      }
+    } catch(e) {}
+  }
+  const adminBtn = document.getElementById('adminHeaderBtn');
+  if (adminBtn) adminBtn.style.display = isAdmin ? 'inline-flex' : 'none';
+  // Staff portal banner (kept as secondary entry point)
   const staffSection = document.getElementById('staffPortalSection');
-  if (staffSection) staffSection.style.display = data.isStaff ? 'block' : 'none';
+  if (staffSection) staffSection.style.display = isAdmin ? 'block' : 'none';
 
   // Autopay toggle state
   autopayEnabled = !!data.autopayEnabled;

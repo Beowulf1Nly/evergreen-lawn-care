@@ -237,6 +237,30 @@
     cursor:pointer; text-decoration:none; transition:background .2s;
   }
   .route-nav-btn:hover { background:var(--green-deep); }
+  .route-done-btn {
+    display:inline-flex; align-items:center; gap:5px;
+    background:#e8f5e9; color:var(--green-deep); border:1.5px solid var(--green-mid); border-radius:8px;
+    padding:7px 14px; font-family:inherit; font-size:12px; font-weight:700;
+    cursor:pointer; transition:all .2s; white-space:nowrap;
+  }
+  .route-done-btn:hover:not(:disabled) { background:var(--green-mid); color:#fff; }
+  .route-done-btn:disabled { background:#f1f5f1; color:#94a3b8; border-color:#e2e8f0; cursor:not-allowed; }
+  .route-notes-btn {
+    background:none; border:none; cursor:pointer; padding:0;
+    display:inline-flex; align-items:center;
+  }
+  /* Notes popup overlay */
+  .notes-overlay {
+    position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1200;
+    display:none; align-items:center; justify-content:center; padding:20px;
+  }
+  .notes-popup {
+    background:#fff; border-radius:16px; padding:24px; max-width:420px; width:100%;
+    box-shadow:0 20px 60px rgba(0,0,0,.2);
+  }
+  .notes-popup-title { font-family:'Playfair Display',serif; font-size:17px; color:var(--green-deep); margin-bottom:12px; }
+  .notes-popup-body  { font-size:14px; color:var(--text); line-height:1.6; white-space:pre-wrap; word-break:break-word; }
+  .notes-popup-close { margin-top:18px; width:100%; padding:11px; background:var(--green-mid); color:#fff; border:none; border-radius:10px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; }
 
   /* Finish chip */
   .route-finish {
@@ -652,6 +676,15 @@
     </div>
     <div class="modal-error"   id="invoiceError"></div>
     <div class="modal-success" id="invoiceSuccess">✅ Invoice sent! Customer will receive it shortly.</div>
+  </div>
+</div>
+
+<!-- ══ NOTES POPUP ══ -->
+<div class="notes-overlay" id="notesOverlay" onclick="if(event.target===this)closeNotesPopup()">
+  <div class="notes-popup">
+    <div class="notes-popup-title" id="notesPopupTitle">📝 Notes</div>
+    <div class="notes-popup-body"  id="notesPopupBody"></div>
+    <button class="notes-popup-close" onclick="closeNotesPopup()">Close</button>
   </div>
 </div>
 
@@ -1747,6 +1780,42 @@ async function optimiseOSRM(points) {
   } catch(e) { return null; }
 }
 
+/* ── Notes popup ── */
+function showNotesPopup(name, notes) {
+  document.getElementById('notesPopupTitle').textContent = '📝 Notes — ' + name;
+  document.getElementById('notesPopupBody').textContent  = notes;
+  document.getElementById('notesOverlay').style.display  = 'flex';
+}
+function closeNotesPopup() {
+  document.getElementById('notesOverlay').style.display = 'none';
+}
+
+/* ── Route: Mark Done inline ── */
+async function routeMarkDone(rowIdx, btnEl) {
+  const b = allBookings[rowIdx];
+  if (!b) return;
+  const title = `Mark "${b.name||'job'}" as done?`;
+  const msg   = 'Are you sure you want to mark this job as completed? This cannot be undone.';
+  document.getElementById('confirmYesBtn').className = 'btn-confirm-yes';
+  openConfirm(title, msg, async () => {
+    if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Marking…'; }
+    await executeMarkDone(rowIdx);
+    // After marking done, re-render the route timeline with updated job states
+    // Find the stop card and update it visually without a full rebuild
+    if (btnEl) {
+      btnEl.textContent = '✓ Done';
+      btnEl.disabled = true;
+      // Grey out the number badge
+      const card = btnEl.closest('.route-stop');
+      if (card) {
+        const badge = card.querySelector('.route-stop-badge');
+        if (badge) badge.classList.add('done-badge');
+        card.querySelector('.route-stop-card')?.classList.remove('active-stop');
+      }
+    }
+  });
+}
+
 /* ── Address autocomplete (Nominatim, Citrus County FL biased) ── */
 let _addrTimer = null;
 let _addrFocusIdx = -1;
@@ -1847,12 +1916,22 @@ function initRouteTab() {
   const dateLabel = d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
   sub.textContent = dateLabel+' · '+todayJobs.length+' job'+(todayJobs.length!==1?'s':'')+' remaining';
   const btn = document.getElementById('routeOptBtn');
+  const tl = document.getElementById('routeTimeline');
   if (!todayJobs.length) {
     if (btn) btn.disabled = true;
-    const tl = document.getElementById('routeTimeline');
     if (tl) tl.innerHTML = '<div class="empty-state" style="padding:60px 20px;"><div style="font-size:48px;margin-bottom:12px;">🎉</div><div style="font-size:17px;font-weight:700;color:var(--green-deep);">No jobs today!</div><div style="font-size:13px;color:var(--text-muted);margin-top:6px;">Enjoy the day off.</div></div>';
   } else {
     if (btn) btn.disabled = false;
+    // If the timeline currently shows the "No jobs" empty-state, replace it with a ready prompt
+    // so the user knows data has loaded and they can now optimize
+    if (tl && tl.innerHTML.includes('No jobs today')) {
+      tl.innerHTML = '<div class="empty-state" style="padding:40px 20px;">'
+        + '<div style="font-size:36px;margin-bottom:12px;">📋</div>'
+        + '<div style="font-size:15px;font-weight:700;color:var(--green-deep);margin-bottom:6px;">'
+        + todayJobs.length+' job'+(todayJobs.length!==1?'s':'')+' ready</div>'
+        + '<div style="font-size:13px;color:var(--text-muted);">Hit ⚡ Optimize Route to build your schedule.</div>'
+        + '</div>';
+    }
   }
 }
 
@@ -2000,17 +2079,33 @@ function renderRouteTimeline(stops, startAddr, startTime) {
     const doneBadge  = isDone(job)
       ? '<span class="route-stop-pill" style="background:#fff8e1;color:#92400e;">✓ Done</span>' : '';
     const notesBadge = (job.notes && job.notes!=='(none)')
-      ? '<span class="route-stop-pill" style="background:#eff6ff;color:#1e40af;" title="'+esc(job.notes)+'">💬 Has notes</span>' : '';
+      ? '<button class="route-notes-btn" onclick="showNotesPopup('+JSON.stringify(esc(job.name||''))+','+JSON.stringify(job.notes)+')">'
+        + '<span class="route-stop-pill" style="background:#eff6ff;color:#1e40af;cursor:pointer;">💬 Has notes</span>'
+        + '</button>'
+      : '';
+
+    const rowIdx     = allBookings.indexOf(job);
+    const alreadyDone = isDone(job);
+    const markDoneBtn = (adminRole === 'owner' || dateOf(job) === todayDateStr())
+      ? '<button class="route-done-btn" '
+        + (alreadyDone ? 'disabled' : 'onclick="routeMarkDone('+rowIdx+',this)"')
+        + '>'
+        + (alreadyDone ? '✓ Done' : '✓ Mark Done')
+        + '</button>'
+      : '';
 
     html += '<div class="route-stop">'
-          +   '<div class="route-stop-badge'+(isDone(job)?' done-badge':'')+'">'+( i+1)+'</div>'
-          +   '<div class="route-stop-card'+(isDone(job)?'':' active-stop')+'">'
+          +   '<div class="route-stop-badge'+(alreadyDone?' done-badge':'')+'">'+( i+1)+'</div>'
+          +   '<div class="route-stop-card'+(alreadyDone?'':' active-stop')+'">'
           +     '<div class="route-stop-header">'
           +       '<div>'
           +         '<div class="route-stop-time">Arrive '+fmtTime(s.arriveTime)+'</div>'
           +         '<div class="route-stop-name">'+esc(job.name||'—')+'</div>'
           +       '</div>'
-          +       '<a class="route-nav-btn" href="'+mapsUrl+'" target="_blank" rel="noopener">🧭 Navigate</a>'
+          +       '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">'
+          +         '<a class="route-nav-btn" href="'+mapsUrl+'" target="_blank" rel="noopener">🧭 Navigate</a>'
+          +         markDoneBtn
+          +       '</div>'
           +     '</div>'
           +     '<div class="route-stop-addr">📍 '+esc(job.address||'—')+(job.zip?' · '+esc(job.zip):'')+'</div>'
           +     '<div class="route-stop-meta">'+planBadge+'<span class="route-stop-pill time-pill">⏱️ '+mowLabel(s.mowM)+'</span>'+priceBadge+doneBadge+notesBadge+'</div>'
