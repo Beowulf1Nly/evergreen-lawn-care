@@ -729,11 +729,11 @@ function cardHTML(b, rowIdx, isToday) {
       // If somehow done but not charged, show active retry
       const hasCard = !!(b.cardLast4);
       if (done && hasCard) {
-        // Done + card on file but not yet paid → allow manual retry
-        actions += `<button class="btn-action btn-charge" onclick="triggerAutoCharge(${rowIdx})">⚡ Retry Charge $${price.toFixed(0)}</button>`;
+        // Done + card on file → Pay button is now the primary action
+        actions += `<button class="btn-action btn-charge" onclick="triggerAutoCharge(${rowIdx})">💳 Pay $${price.toFixed(0)}</button>`;
       } else if (!done) {
-        // Not done yet — show greyed charge button as visual hint
-        actions += `<button class="btn-action btn-disabled" disabled title="Complete job first to charge card">⚡ Charge $${price.toFixed(0)}</button>`;
+        // Not done yet — Pay button greyed until job is marked complete
+        actions += `<button class="btn-action btn-disabled" disabled title="Mark job done first, then Pay">💳 Pay $${price.toFixed(0)}</button>`;
       }
     } else {
       // Manual invoice customer
@@ -1227,8 +1227,9 @@ function closeConfirm() {
   document.getElementById('confirmOverlay').classList.remove('open');
 }
 function confirmYes() {
+  const cb = confirmCallback; // capture before closeConfirm nulls it
   closeConfirm();
-  if (typeof confirmCallback === 'function') confirmCallback();
+  if (typeof cb === 'function') cb();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1247,20 +1248,40 @@ function needsAction(b) {
 function dateOf(b) {
   const raw = String(b.serviceDateRaw || b.serviceDate || '').trim();
   if (!raw) return '';
-  // Already YYYY-MM-DD — use directly (no timezone shift possible)
+  const fmt = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  // Already YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
   try {
-    // Force parse at local noon so UTC midnight never bleeds into the wrong calendar day
-    const normalized = raw.replace(/T.*$/, ''); // strip time if present
-    const attempt = new Date(normalized + ' 12:00:00');
-    if (isNaN(attempt.getTime())) {
-      // Last resort: parse raw as-is
-      const d2 = new Date(raw);
-      if (isNaN(d2.getTime())) return raw;
-      return d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
+    // Force parse at local noon to avoid UTC midnight bleed
+    const normalized = raw.replace(/T.*$/, '');
+    const a1 = new Date(normalized + ' 12:00:00');
+    if (!isNaN(a1.getTime())) return fmt(a1);
+    // Strip leading day-of-week ("Sunday, April 26, 2026" → "April 26, 2026")
+    const stripped = raw.replace(/^(sun|mon|tue|wed|thu|fri|sat)[a-z]*,?\s*/i, '');
+    if (stripped !== raw) {
+      const a2 = new Date(stripped + ' 12:00:00');
+      if (!isNaN(a2.getTime())) return fmt(a2);
     }
-    return attempt.getFullYear()+'-'+String(attempt.getMonth()+1).padStart(2,'0')+'-'+String(attempt.getDate()).padStart(2,'0');
-  } catch(e) { return raw; }
+    // Try raw as-is
+    const a3 = new Date(raw);
+    if (!isNaN(a3.getTime())) return fmt(a3);
+    // Last resort: extract ordinal day ("10am 26th" → day 26, assume current month/year)
+    const ordinal = raw.match(/\b(\d{1,2})(?:st|nd|rd|th)\b/);
+    if (ordinal) {
+      const day = parseInt(ordinal[1]);
+      const monthNames = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+      const mMatch = raw.match(new RegExp('(' + monthNames.join('|') + ')', 'i'));
+      const yMatch = raw.match(/\b(20\d{2})\b/);
+      const today  = new Date();
+      const month  = mMatch ? monthNames.indexOf(mMatch[1].toLowerCase().slice(0,3)) : today.getMonth();
+      const year   = yMatch ? parseInt(yMatch[1]) : today.getFullYear();
+      if (day >= 1 && day <= 31) {
+        const d = new Date(year, month, day, 12, 0, 0);
+        if (!isNaN(d.getTime()) && d.getDate() === day) return fmt(d);
+      }
+    }
+  } catch(e) {}
+  return raw;
 }
 function todayDateStr() {
   const d = new Date();

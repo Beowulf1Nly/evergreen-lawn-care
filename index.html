@@ -1362,8 +1362,8 @@
     </div>
     <div class="step reveal" style="transition-delay:.25s">
       <div class="step-num">3</div>
-      <h3>Pay $19 & Book</h3>
-      <p>Your first mow is just $19. Pay securely via Stripe — your card is saved for automatic billing going forward.</p>
+      <h3>Save Card & Book</h3>
+      <p>Your first mow is just $19 — billed after we complete the job. Save your card securely via Stripe for automatic billing going forward.</p>
     </div>
     <div class="step reveal" style="transition-delay:.35s">
       <div class="step-num">4</div>
@@ -1656,7 +1656,7 @@
       <div id="q-card-errors" style="color:#e53e3e;font-size:13px;min-height:18px;margin-bottom:14px;"></div>
       <button class="btn-pay" id="q-pay-btn" onclick="quotePaySubmit()">
         <div class="spinner"></div>
-        <span class="pay-text">🔒 Book Now — Pay $19 Today</span>
+        <span class="pay-text">🔒 Book Now — $19 Charged After First Mow</span>
       </button>
       <div class="stripe-note" style="margin-top:12px;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
@@ -2973,7 +2973,7 @@ function buildOrderSummary() {
   const isRet    = qState.isReturning || false;
   const afterTxt = !after ? 'Custom quote' : `$${after}/mow`;
   const todayAmt = isRet ? (after ? `$${after}` : 'Custom') : '$19';
-  const todayLbl = isRet ? 'Charged today' : 'Charged today (first visit)';
+  const todayLbl = isRet ? 'Charged after first service' : 'Charged after first service';
   document.getElementById('q-following-line').textContent = isRet ? `Per mow: ${afterTxt}` : `Following services: ${afterTxt}`;
   document.getElementById('quoteOrderSummary').innerHTML = `
     <div class="quote-order-row"><span>Service</span><span style="font-weight:600;color:var(--green-deep)">${planNames[planId]}</span></div>
@@ -2999,30 +2999,29 @@ async function quotePaySubmit() {
     const dateFmt  = new Date(qState.startDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
 
     const isReturning = qState.isReturning || false;
-    const chargeAmountCents = isReturning ? ((afterPrice === 'custom' ? 0 : Number(afterPrice)) * 100) : 1900;
+    // 1. Ask Apps Script to create a SetupIntent — saves card WITHOUT charging.
+    //    The $19 first-mow charge happens after the job is physically completed
+    //    via the "Pay" button in the admin dashboard.
     const intentParams = new URLSearchParams({
       action: 'booking_create_intent',
       email:  qState.email,
       name:   qState.name,
-      amount: String(chargeAmountCents || 1900),
     });
     let clientSecret='', customerId='';
     try {
       const res  = await fetch(SHEETS_SCRIPT_URL+'?'+intentParams.toString());
       const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'Could not create payment');
+      if (!data.success) throw new Error(data.error || 'Could not set up card');
       clientSecret = data.clientSecret;
       customerId   = data.customerId;
     } catch(fetchErr) {
-      // If CORS blocks the read, fall through to Stripe confirmation below
-      // This should not normally happen since Apps Script supports CORS
       throw new Error('Could not reach payment server. Please call (352) 462-0627.');
     }
 
     qState.stripeCustomerId = customerId;
 
-    // 2. Confirm the payment with the card element
-    const { paymentIntent, error } = await stripeInstance.confirmCardPayment(clientSecret, {
+    // 2. Save the card (no charge) using SetupIntent
+    const { setupIntent, error } = await stripeInstance.confirmCardSetup(clientSecret, {
       payment_method: {
         card: stripeCardEl,
         billing_details: { name: qState.name, email: qState.email, phone: qState.phone },
@@ -3037,7 +3036,7 @@ async function quotePaySubmit() {
     // 3. Log booking + save card in Apps Script
     const completeParams = new URLSearchParams({
       action:            'booking_complete',
-      pmId:              paymentIntent.payment_method,
+      pmId:              setupIntent.payment_method,
       stripeCustomerId:  customerId,
       name:              qState.name,
       email:             qState.email,
