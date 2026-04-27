@@ -439,11 +439,10 @@
       <div class="search-bar" id="searchBar" style="display:none;">
         <input type="text" id="searchInput" placeholder="Search by name, address, email…" oninput="debouncedRender()"/>
         <select class="filter-select" id="filterStatus" onchange="renderBookings()">
-          <option value="all">All bookings</option>
+          <option value="all">All</option>
           <option value="needs-action">Needs action</option>
           <option value="autopay">Auto-Pay</option>
           <option value="awaiting-payment">Awaiting Payment</option>
-          <option value="done">Completed</option>
         </select>
       </div>
 
@@ -476,26 +475,10 @@
         </div></div>
       </div>
 
-      <!-- ✓ Completed Jobs — done + paid (owner only) -->
-      <div id="doneSection" style="margin-bottom:32px;display:none;">
-        <div class="section-label">
-          ✓ Completed <span class="badge" id="doneCount">0</span>
-        </div>
-        <div id="doneList"><div class="empty-state">Loading…</div></div>
-      </div>
-
-      <!-- Needs Invoice / Charge (owner only) — shown ABOVE all other bookings -->
-      <div id="needsActionSection" style="display:none;margin-bottom:32px;">
-        <div class="section-label">
-          ⚠️ Needs Invoice / Charge <span class="badge" style="background:#e53e3e;" id="needsActionCount">0</span>
-        </div>
-        <div id="needsActionList"></div>
-      </div>
-
-      <!-- All Other Bookings (owner sees all; employee sees next 7 days) -->
+      <!-- Within 7 Days (everyone) -->
       <div id="upcomingSection">
         <div class="section-label">
-          📋 <span id="upcomingLabel">All Other Bookings</span> <span class="badge" id="upcomingCount">0</span>
+          📋 Within 7 Days <span class="badge" id="upcomingCount">0</span>
         </div>
         <div id="upcomingList"><div class="empty-state">Loading…</div></div>
       </div>
@@ -520,7 +503,7 @@
             <input type="email" id="ac-email" placeholder="jane@email.com"/>
           </div>
           <div class="form-field">
-            <label>Phone</label>
+            <label>Phone <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
             <input type="tel" id="ac-phone" placeholder="(352) 555-0123"/>
           </div>
           <div class="form-field">
@@ -549,7 +532,7 @@
               <option value="two">2–4 acres</option>
               <option value="four">4–6 acres</option>
               <option value="six">6–8 acres</option>
-              <option value="xl">8+ acres (custom quote)</option>
+              <option value="xl">8–10 acres</option>
             </select>
           </div>
           <div class="form-field">
@@ -966,26 +949,21 @@ function renderBookings() {
   if      (f === 'needs-action')     allFiltered = allFiltered.filter(b => needsAction(b));
   else if (f === 'autopay')          allFiltered = allFiltered.filter(b => isAutoPay(b));
   else if (f === 'awaiting-payment') allFiltered = allFiltered.filter(b => isDone(b) && !isPaidDone(b));
-  else if (f === 'done')             allFiltered = allFiltered.filter(b => isDone(b) && isPaidDone(b));
 
-  // Split: active (not done) vs completed
-  const activeBkgs = allFiltered.filter(b => !isDone(b));
-  const doneBkgs   = allFiltered.filter(b =>  isDone(b));
-
+  // Split: active (not done) vs done
+  const activeBkgs   = allFiltered.filter(b => !isDone(b));
+  const doneBkgs     = allFiltered.filter(b =>  isDone(b));
   const needsPayBkgs = doneBkgs.filter(b => !isPaidDone(b));
-  const paidDoneBkgs = doneBkgs.filter(b =>  isPaidDone(b));
 
-  // Active: split today vs upcoming
-  const today  = activeBkgs.filter(b => dateOf(b) === todayStr);
-  let upcoming = activeBkgs.filter(b => dateOf(b) !== todayStr);
-  // Employees only see next 7 days
-  if (adminRole === 'employee') {
-    upcoming = upcoming.filter(b => { const d = new Date(dateOf(b)+'T12:00'); return d <= in7; });
-  }
+  // Active: today vs within-7-days upcoming (everyone capped at 7 days)
+  const today    = activeBkgs.filter(b => dateOf(b) === todayStr);
+  const upcoming = activeBkgs.filter(b => {
+    const d = dateOf(b);
+    if (!d || d === todayStr) return false;
+    return new Date(d + 'T12:00') <= in7;
+  });
 
-  // Missed Deadline — past-date undone jobs (owner only, above Today)
-  // Guard: dateOf(b) must be non-empty — empty string sorts before any date string,
-  // so rows with no service date would otherwise always appear here.
+  // Missed Deadline — past-date undone jobs (owner only)
   const missedBkgs = (adminRole === 'owner')
     ? allBookings.filter(b => !isDone(b) && dateOf(b) && dateOf(b) < todayStr && matchesSearch(b))
     : [];
@@ -1000,7 +978,7 @@ function renderBookings() {
     }
   }
 
-  // Needs Payment section — done but not yet paid (VERY TOP, owner only)
+  // Needs Payment section — done but not yet paid (owner only)
   if (adminRole === 'owner') {
     const npSec = document.getElementById('needsPaySection');
     if (npSec) {
@@ -1012,33 +990,17 @@ function renderBookings() {
     }
   }
 
-  // Completed section — done + paid (owner only)
-  const doneSectionEl = document.getElementById('doneSection');
-  const doneCountEl   = document.getElementById('doneCount');
-  const doneListEl    = document.getElementById('doneList');
-  if (adminRole === 'owner' && doneSectionEl) {
-    doneSectionEl.style.display = paidDoneBkgs.length ? 'block' : 'none';
-    if (doneCountEl) doneCountEl.textContent = paidDoneBkgs.length;
-    if (doneListEl)  doneListEl.innerHTML = paidDoneBkgs.length
-      ? paidDoneBkgs.map(b => cardHTML(b, allBookings.indexOf(b), false)).join('')
-      : '<div class="empty-state" style="padding:20px;">No completed jobs yet.</div>';
-  }
-
-  // Hide legacy needsAction section (replaced by needsPaySection + missedSection)
-  const nasSec = document.getElementById('needsActionSection');
-  if (nasSec) nasSec.style.display = 'none';
-
-  // Today (active only — exclude missed)
+  // Today's Jobs
   document.getElementById('todayCount').textContent = today.length;
   document.getElementById('todayList').innerHTML = today.length
-    ? today.map((b,i) => cardHTML(b, allBookings.indexOf(b), true)).join('')
+    ? today.map(b => cardHTML(b, allBookings.indexOf(b), true)).join('')
     : '<div class="empty-state" style="padding:20px;">No jobs today 🎉</div>';
 
-  // Upcoming (active only — future dates)
+  // Within 7 Days
   document.getElementById('upcomingCount').textContent = upcoming.length;
   document.getElementById('upcomingList').innerHTML = upcoming.length
     ? upcoming.map(b => cardHTML(b, allBookings.indexOf(b), false)).join('')
-    : '<div class="empty-state" style="padding:20px;">Nothing else scheduled.</div>';
+    : '<div class="empty-state" style="padding:20px;">Nothing in the next 7 days.</div>';
 
   // Keep Route tab in sync — if it's currently visible, refresh its job count/state
   // so switching tabs while data is still loading doesn't leave it stuck on "0 jobs"
@@ -1434,41 +1396,43 @@ async function sendInvoice() {
 // ADD CLIENT (owner only)
 // ═══════════════════════════════════════════════════════
 const YARD_PRICING = {
-  small:  { bw:45,  w:40  },  // under ¼ acre
-  medium: { bw:60,  w:50  },  // ¼–½ acre
-  half:   { bw:80,  w:70  },  // ½–1 acre
-  one:    { bw:100, w:88  },  // 1–2 acres
-  two:    { bw:150, w:130 },  // 2–4 acres
-  four:   { bw:220, w:195 },  // 4–6 acres
-  six:    { bw:310, w:275 },  // 6–8 acres
-  // xl (8+) = custom, no auto-fill
+  small:  { bw:45,  w:40,  ot:65  },  // under ¼ acre
+  medium: { bw:60,  w:50,  ot:85  },  // ¼–½ acre
+  half:   { bw:80,  w:70,  ot:110 },  // ½–1 acre
+  one:    { bw:100, w:88,  ot:135 },  // 1–2 acres
+  two:    { bw:150, w:130, ot:195 },  // 2–4 acres
+  four:   { bw:220, w:195, ot:280 },  // 4–6 acres
+  six:    { bw:310, w:275, ot:385 },  // 6–8 acres
+  xl:     { bw:420, w:375, ot:500 },  // 8–10 acres (suggested — adjust as needed)
 };
 
 function onAcPlanChange() {
-  const plan       = document.getElementById('ac-plan')?.value || '';
-  const isOneTime  = plan === 'One-time visit';
-  const yardField  = document.getElementById('ac-yard')?.closest('.form-field');
-  if (yardField) yardField.style.opacity = isOneTime ? '.4' : '1';
-  const priceInput = document.getElementById('ac-price');
-  if (isOneTime) {
-    if (priceInput) { priceInput.placeholder = 'Enter price for this job'; priceInput.value = ''; }
-    const prev = document.getElementById('ac-price-preview');
-    if (prev) prev.textContent = 'Enter a custom price for this one-time job.';
-  } else {
-    if (priceInput) priceInput.placeholder = 'Auto-filled';
-    updateAcPricePreview();
-  }
+  updateAcPricePreview();
 }
 
 function updateAcPricePreview() {
   const yard = document.getElementById('ac-yard')?.value || 'medium';
   const plan = document.getElementById('ac-plan')?.value || 'Bi-Weekly Plan';
-  if (plan === 'One-time visit') return; // handled by onAcPlanChange
   const p    = YARD_PRICING[yard];
-  if (!p) { document.getElementById('ac-price-preview').textContent = 'Custom quote required'; return; }
-  const rate = plan.includes('Weekly') && !plan.includes('Bi') ? p.w : p.bw;
-  document.getElementById('ac-price').value = rate;
-  document.getElementById('ac-price-preview').textContent = `Suggested rate: $${rate}/mow`;
+  const prev = document.getElementById('ac-price-preview');
+  const priceInput = document.getElementById('ac-price');
+  if (!p) {
+    if (prev) prev.textContent = 'Custom quote required — enter price manually.';
+    return;
+  }
+  let rate, label;
+  if (plan === 'One-time visit') {
+    rate  = p.ot;
+    label = `Suggested one-time rate: $${rate}`;
+  } else if (plan.includes('Weekly') && !plan.includes('Bi')) {
+    rate  = p.w;
+    label = `Suggested rate: $${rate}/mow`;
+  } else {
+    rate  = p.bw;
+    label = `Suggested rate: $${rate}/mow`;
+  }
+  if (priceInput) priceInput.value = rate;
+  if (prev) prev.textContent = label;
 }
 
 async function addClient() {
