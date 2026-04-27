@@ -1163,8 +1163,17 @@ function bookingCardHTML(b, isUpcoming) {
   const rowIndex   = b._rowIndex || 0;
   const rawDate    = b.serviceDate || b.serviceDateRaw || '';
 
+  // Same-day lockout: no self-service reschedule/cancel if appointment is today or past
+  const _apptDateObj = parseBookingDate(rawDate);
+  const _todayMid    = new Date(); _todayMid.setHours(0,0,0,0);
+  const _apptMid     = _apptDateObj ? new Date(_apptDateObj.getFullYear(), _apptDateObj.getMonth(), _apptDateObj.getDate()) : null;
+  const isLockedOut  = _apptMid && _apptMid <= _todayMid;
+
   // Reschedule + Cancel only on upcoming (not done) appointments
-  const apptActions = isUpcoming && !isDone ? `
+  const apptActions = isUpcoming && !isDone ? (isLockedOut ? `
+    <div style="margin-top:10px;padding:9px 14px;background:#fef9c3;border:1.5px solid #fde047;border-radius:8px;font-size:12px;color:#854d0e;line-height:1.6;">
+      ⚠️ Same-day changes can't be made online — give us a call: <a href="tel:3524620627" style="color:#854d0e;font-weight:700;white-space:nowrap;">(352) 462-0627</a>
+    </div>` : `
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
       <button onclick="openRescheduleModal(${rowIndex}, '${esc(rawDate)}')"
         style="flex:1;padding:9px 12px;background:#fff;color:var(--green-mid);border:1.5px solid var(--green-mid);border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;min-width:120px;">
@@ -1174,7 +1183,7 @@ function bookingCardHTML(b, isUpcoming) {
         style="flex:1;padding:9px 12px;background:#fff;color:var(--red);border:1.5px solid #fca5a5;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;min-width:120px;">
         ✕ Cancel
       </button>
-    </div>` : '';
+    </div>`) : '';
 
   return `
     <div class="booking-card ${isUpcoming ? 'upcoming' : ''}">
@@ -1459,6 +1468,13 @@ let _rescheduleRowIdx  = 0;
 let _rescheduleScope   = '';
 
 function openRescheduleModal(rowIndex, currentDateStr) {
+  // Same-day lockout (defence-in-depth — UI already hides the button, but guard the modal too)
+  const _ad = parseBookingDate(currentDateStr);
+  const _td = new Date(); _td.setHours(0,0,0,0);
+  if (_ad && new Date(_ad.getFullYear(), _ad.getMonth(), _ad.getDate()) <= _td) {
+    alert('Same-day changes can\'t be made online.\nPlease call us at (352) 462-0627.');
+    return;
+  }
   _rescheduleRowIdx = rowIndex;
   _rescheduleScope  = '';
   document.getElementById('rescheduleDate').value = '';
@@ -1466,12 +1482,18 @@ function openRescheduleModal(rowIndex, currentDateStr) {
   document.getElementById('confirmRescheduleBtn').disabled = true;
   document.getElementById('rScopeOne').classList.remove('selected');
   document.getElementById('rScopeAll').classList.remove('selected');
-  // Pre-fill date input with current date if parseable
+  // Set minimum date to tomorrow — today and earlier are not allowed
+  const _tmrw = new Date(Date.now() + 24*60*60*1000);
+  const _tMin = `${_tmrw.getFullYear()}-${String(_tmrw.getMonth()+1).padStart(2,'0')}-${String(_tmrw.getDate()).padStart(2,'0')}`;
+  document.getElementById('rescheduleDate').min = _tMin;
+
+  // Pre-fill with the existing appointment date (only if it's in the future)
   try {
     const d = new Date(currentDateStr);
     if (!isNaN(d.getTime())) {
       const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
-      document.getElementById('rescheduleDate').value = `${y}-${m}-${day}`;
+      const pre = `${y}-${m}-${day}`;
+      document.getElementById('rescheduleDate').value = pre >= _tMin ? pre : _tMin;
     }
   } catch(e) {}
   document.getElementById('rescheduleModal').classList.add('open');
@@ -1531,6 +1553,13 @@ async function submitReschedule() {
 let _cancelApptRowIdx = 0;
 
 function openCancelApptModal(rowIndex, dateStr) {
+  // Same-day lockout (defence-in-depth)
+  const _ad = parseBookingDate(dateStr);
+  const _td = new Date(); _td.setHours(0,0,0,0);
+  if (_ad && new Date(_ad.getFullYear(), _ad.getMonth(), _ad.getDate()) <= _td) {
+    alert('Same-day cancellations can\'t be made online.\nPlease call us at (352) 462-0627.');
+    return;
+  }
   _cancelApptRowIdx = rowIndex;
   document.getElementById('cancelApptError').style.display = 'none';
   document.getElementById('cancelApptSub').textContent =
