@@ -2701,38 +2701,83 @@ async function lookupLotSize(address, zip) {
   } catch(eGeo) { console.log('[Lot] Geocode FAILED:', eGeo.message); }
 
   // ── Step 2: Florida Statewide Cadastral (ArcGIS Online — CORS enabled) ─
-  if (lat && lon) {
-    try {
-      // ArcGIS FeatureServer requires where=1=1 for spatial-only queries
-      const cUrl = 'https://services9.arcgis.com/Gh9awoU677aKree0/arcgis/rest/services/Florida_Statewide_Cadastral/FeatureServer/0/query'
-        + '?where=1%3D1'
-        + '&geometry=' + lon + '%2C' + lat
-        + '&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects'
-        + '&outFields=*&returnGeometry=false&f=json';
-      console.log('[Lot] Querying Florida Cadastral...');
-      const cadastralRes = await fetch(cUrl);
-      const cadastralData = await cadastralRes.json();
-      console.log('[Lot] Cadastral response:', JSON.stringify(cadastralData).slice(0, 400));
+  const FL_CADASTRAL = 'https://services9.arcgis.com/Gh9awoU677aKree0/arcgis/rest/services/Florida_Statewide_Cadastral/FeatureServer/0/query';
 
-      if (cadastralData.features && cadastralData.features.length > 0) {
-        const attrs = cadastralData.features[0].attributes;
-        console.log('[Lot] Parcel attributes:', attrs);
-        let sqft = parseFloat(attrs.LND_SQFOOT || 0);
-        if (sqft > 0) {
-          const acres = sqft / 43560;
-          qState.detectedAcreage = Math.round(acres * 100) / 100;
-          qState.lotTierIdx      = acreageToTierIdx(acres);
-          qState.lotAutoDetected = true;
-          qState.lotEstimated    = false;
-          console.log('[Lot] SUCCESS:', qState.detectedAcreage, 'acres, tier', qState.lotTierIdx);
-          return;
-        } else {
-          console.log('[Lot] LND_SQFOOT is 0 or missing. Full attrs:', JSON.stringify(attrs));
-        }
-      } else {
-        console.log('[Lot] No features returned. Full response:', JSON.stringify(cadastralData));
+  async function cadastralQuery(params) {
+    const qs = Object.entries(params).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
+    const res  = await fetch(FL_CADASTRAL + '?' + qs);
+    const data = await res.json();
+    if (data.features && data.features.length > 0) return data.features[0].attributes;
+    return null;
+  }
+
+  function sqftToAcres(attrs) {
+    // Try every known acreage/sqft field from the DOR dataset
+    const sqft = parseFloat(
+      attrs.LND_SQFOOT || attrs.LAND_SQFOOT || attrs.LAND_SF || attrs.LOT_SIZE ||
+      attrs.CALC_SQFOOT || attrs.SQFOOTAGE || 0
+    );
+    if (sqft > 100) return sqft / 43560;
+    const ac = parseFloat(
+      attrs.ACRES || attrs.ACREAGE || attrs.TOT_ACRES || attrs.GIS_ACRES ||
+      attrs.CALC_ACRES || attrs.PARCEL_ACRES || 0
+    );
+    if (ac > 0) return ac;
+    // Last resort: Shape__Area is in sq meters, convert to acres
+    const shapeM2 = parseFloat(attrs.Shape__Area || attrs.SHAPE_Area || 0);
+    if (shapeM2 > 1) return shapeM2 / 4046.86;
+    return 0;
+  }
+
+  if (lat && lon) {
+    let attrs = null;
+
+    // 2a — Spatial query: JSON point geometry + small buffer (more forgiving than strict intersect)
+    try {
+      console.log('[Lot] Spatial query...');
+      attrs = await cadastralQuery({
+        where: '1=1',
+        geometry: JSON.stringify({ x: lon, y: lat, spatialReference: { wkid: 4326 } }),
+        geometryType: 'esriGeometryPoint',
+        inSR: '4326',
+        spatialRel: 'esriSpatialRelIntersects',
+        distance: '50',
+        units: 'esriSRUnit_Meter',
+        outFields: '*',
+        returnGeometry: 'false',
+        f: 'json'
+      });
+      console.log('[Lot] Spatial attrs:', attrs ? JSON.stringify(attrs).slice(0,300) : 'null');
+    } catch(e) { console.log('[Lot] Spatial FAILED:', e.message); }
+
+    // 2b — Address text query fallback
+    if (!attrs) {
+      try {
+        const street = address.replace(/,.*/, '').trim().toUpperCase().replace(/'/g, "''");
+        console.log('[Lot] Address query for:', street);
+        attrs = await cadastralQuery({
+          where: "UPPER(PHY_ADDR1) LIKE '%" + street + "%'",
+          outFields: '*',
+          returnGeometry: 'false',
+          resultRecordCount: '1',
+          f: 'json'
+        });
+        console.log('[Lot] Address attrs:', attrs ? JSON.stringify(attrs).slice(0,300) : 'null');
+      } catch(e) { console.log('[Lot] Address query FAILED:', e.message); }
+    }
+
+    if (attrs) {
+      const acres = sqftToAcres(attrs);
+      console.log('[Lot] Acres computed:', acres, '| Raw attrs:', JSON.stringify(attrs));
+      if (acres > 0) {
+        qState.detectedAcreage = Math.round(acres * 100) / 100;
+        qState.lotTierIdx      = acreageToTierIdx(acres);
+        qState.lotAutoDetected = true;
+        qState.lotEstimated    = false;
+        console.log('[Lot] SUCCESS:', qState.detectedAcreage, 'acres — tier', qState.lotTierIdx);
+        return;
       }
-    } catch(eCadastral) { console.log('[Lot] Cadastral FAILED:', eCadastral.message); }
+    }
   }
 
   // ── Step 3: Apps Script fallback ─────────────────────────────────────
