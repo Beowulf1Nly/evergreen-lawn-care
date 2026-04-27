@@ -771,19 +771,16 @@ function cardHTML(b, rowIdx, isToday) {
       } else if (done && !hasCard) {
         // Done but no card saved — fall back to invoice
         actions += `<button class="btn-action btn-invoice" onclick="openInvoiceModal(${rowIdx})">📧 Invoice $${price.toFixed(0)}</button>`;
-      } else {
-        // Not done yet — charge button greyed
-        actions += `<button class="btn-action btn-disabled" disabled title="Mark job done first">💳 Charge Card</button>`;
       }
+      // Not done yet — no button shown; Mark Done unlocks it
     } else {
       // One-time / manual invoice customer
       if (invoiced) {
         actions += `<button class="btn-action btn-disabled" disabled>📧 Sent ✓</button>`;
       } else if (done) {
         actions += `<button class="btn-action btn-invoice" onclick="openInvoiceModal(${rowIdx})">📧 Invoice $${price.toFixed(0)}</button>`;
-      } else {
-        actions += `<button class="btn-action btn-disabled" disabled title="Complete job first to send invoice">📧 Invoice $${price.toFixed(0)}</button>`;
       }
+      // Not done yet — no button; Mark Done unlocks it
     }
   }
 
@@ -821,16 +818,9 @@ function triggerMarkDone(rowIdx) {
   const price = parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))||0;
   const cardTxt = b.cardLast4 ? `${cap(b.cardBrand||'card')} ••••${b.cardLast4}` : 'saved card';
 
-  let title = `Mark "${b.name||'job'}" as done?`;
-  let msg   = 'This will log the job as completed and schedule their next appointment automatically.';
-
-  if ((auto || isSubscribed(b)) && price > 0) {
-    msg = `💳 Their ${cardTxt} will be charged $${price.toFixed(2)} after you confirm.\n\nDo NOT send a separate invoice.`;
-    document.getElementById('confirmYesBtn').className = 'btn-confirm-yes';
-  } else {
-    document.getElementById('confirmYesBtn').className = 'btn-confirm-yes';
-  }
-
+  const title = `Mark "${b.name||'job'}" as done?`;
+  const msg   = 'This will log the job as completed. You can then charge their card from the job card.';
+  document.getElementById('confirmYesBtn').className = 'btn-confirm-yes';
   openConfirm(title, msg, () => executeMarkDone(rowIdx));
 }
 
@@ -862,12 +852,7 @@ async function executeMarkDone(rowIdx) {
       allBookings[rowIdx].markedBy = adminName || adminEmail || 'Staff';
       allBookings[rowIdx].doneDate = todayLabel;
       renderBookings();
-      const chargeMsg = data.autopayCharged ? ' · Card charged ✓' : (isAutoPay(b) ? ' · Card charge pending' : '');
-      showToast('✓ ' + (b.name||'Job') + ' marked done!' + chargeMsg);
-      // If autopay charged successfully, update the paid status locally so the charge button disappears
-      if (data.autopayCharged) {
-        allBookings[rowIdx].calendarEvent = '✅ PAID — Autopay';
-      }
+      showToast('✓ ' + (b.name||'Job') + ' marked done!');
     } else {
       renderBookings(); // restore button state
       alert('Error: ' + (data.error || 'Could not mark done.'));
