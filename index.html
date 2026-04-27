@@ -3062,7 +3062,11 @@ async function runAnalyzingAnimation() {
     { pct:70, text:'Measuring your yard...' },
     { pct:90, text:'Calculating your price...' },
   ];
-  let i=0; fill.style.width='0%';
+  // Show first step immediately so there's never a stale "Price calculated!" flash
+  fill.style.transition = 'none';
+  fill.style.width = '0%';
+  textEl.textContent = steps[0].text;
+  let i = 1;
 
   await new Promise(resolve => {
     const iv = setInterval(() => {
