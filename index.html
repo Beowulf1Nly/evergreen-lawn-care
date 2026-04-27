@@ -1629,13 +1629,14 @@
         <label style="font-size:12px;font-weight:700;color:var(--green-deep);letter-spacing:.05em;text-transform:uppercase;display:block;margin-bottom:6px;">Select Your Lot Size</label>
         <select id="q-lot-select" onchange="onLotSelectChange()" style="width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;background:#fff;outline:none;">
           <option value="" disabled selected>— Select your yard size —</option>
-          <option value="1">Small · Under ½ acre</option>
+          <option value="0">Small · Under ¼ acre</option>
+          <option value="1">Medium · ¼–½ acre</option>
           <option value="2">½–1 acre</option>
           <option value="4">1–2 acres</option>
           <option value="8">2–4 acres</option>
           <option value="12">4–6 acres</option>
           <option value="16">6–8 acres</option>
-          <option value="21">8+ acres (large estate)</option></select>
+          <option value="21">8+ acres</option></select>
       </div>
 
       <div id="q-returning-banner" style="display:none;margin-bottom:14px;padding:12px 16px;background:#fff7ed;border:1.5px solid #fde68a;border-radius:10px;font-size:13px;color:#92400e;line-height:1.5;">
@@ -2666,20 +2667,28 @@ async function lookupLotSize(address, zip) {
   qState.detectedAcreage = null;
   qState.lotTierIdx      = 1;
 
-  // ── Step 1: Geocode with Nominatim ───────────────────────────────────
+  // ── Step 1: Geocode with Nominatim (with 1 retry for rate-limit flakiness) ─
   let lat = null, lon = null;
-  try {
-    const geoRes  = await fetch(
-      'https://nominatim.openstreetmap.org/search?q='
-        + encodeURIComponent(address + (zip ? ', FL ' + zip : '') + ', US')
+  async function nominatimGeocode(q) {
+    const r = await fetch(
+      'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(q)
         + '&format=json&limit=1&countrycodes=us',
       { headers: { 'Accept': 'application/json' } }
     );
-    const geoData = await geoRes.json();
-    if (geoData && geoData.length > 0) {
-      lat = parseFloat(geoData[0].lat);
-      lon = parseFloat(geoData[0].lon);
-    } else {
+    const d = await r.json();
+    return (d && d.length > 0) ? d[0] : null;
+  }
+  try {
+    const query = address + (zip ? ', FL ' + zip : '') + ', US';
+    let hit = await nominatimGeocode(query);
+    if (!hit) {
+      // Brief pause then retry (handles Nominatim rate-limit blips)
+      await new Promise(r => setTimeout(r, 1200));
+      hit = await nominatimGeocode(query);
+    }
+    if (hit) {
+      lat = parseFloat(hit.lat);
+      lon = parseFloat(hit.lon);
     }
   } catch(eGeo) {}
 
@@ -2695,7 +2704,6 @@ async function lookupLotSize(address, zip) {
   }
 
   function sqftToAcres(attrs) {
-    // Try every known acreage/sqft field from the DOR dataset
     const sqft = parseFloat(
       attrs.LND_SQFOOT || attrs.LAND_SQFOOT || attrs.LAND_SF || attrs.LOT_SIZE ||
       attrs.CALC_SQFOOT || attrs.SQFOOTAGE || 0
@@ -2706,42 +2714,56 @@ async function lookupLotSize(address, zip) {
       attrs.CALC_ACRES || attrs.PARCEL_ACRES || 0
     );
     if (ac > 0) return ac;
-    // Last resort: Shape__Area is in sq meters, convert to acres
+    // Shape__Area is in sq meters
     const shapeM2 = parseFloat(attrs.Shape__Area || attrs.SHAPE_Area || 0);
     if (shapeM2 > 1) return shapeM2 / 4046.86;
     return 0;
   }
 
-  if (lat && lon) {
-    let attrs = null;
-
-    // 2a — Spatial query: JSON point geometry + small buffer (more forgiving than strict intersect)
+  async function spatialLookup(lt, ln, bufferMeters) {
     try {
-      attrs = await cadastralQuery({
+      return await cadastralQuery({
         where: '1=1',
-        geometry: JSON.stringify({ x: lon, y: lat, spatialReference: { wkid: 4326 } }),
+        geometry: JSON.stringify({ x: ln, y: lt, spatialReference: { wkid: 4326 } }),
         geometryType: 'esriGeometryPoint',
         inSR: '4326',
         spatialRel: 'esriSpatialRelIntersects',
-        distance: '50',
+        distance: String(bufferMeters),
         units: 'esriSRUnit_Meter',
         outFields: '*',
         returnGeometry: 'false',
         f: 'json'
       });
-    } catch(e) {}
+    } catch(e) { return null; }
+  }
 
-    // 2b — Address text query fallback
+  if (lat && lon) {
+    let attrs = null;
+
+    // 2a — 100m buffer (covers most residential lots even when geocode lands at road edge)
+    attrs = await spatialLookup(lat, lon, 100);
+
+    // 2b — 250m buffer retry for large/rural lots or off-center geocodes
+    if (!attrs) attrs = await spatialLookup(lat, lon, 250);
+
+    // 2c — Address text query: house number + street name (more precise than street-only)
     if (!attrs) {
       try {
-        const street = address.replace(/,.*/, '').trim().toUpperCase().replace(/'/g, "''");
+        const cleanAddr = address.replace(/,.*/, '').trim().toUpperCase().replace(/'/g, "''");
+        const parts     = cleanAddr.split(/\s+/);
+        const houseNum  = parts[0];
+        const streetPart = parts.slice(1).join(' ');
+        // Try with house number first, then fall back to street-only
+        const whereHouse  = `PHY_ADDR1 LIKE '${houseNum}%${streetPart}%'`;
+        const whereStreet = `PHY_ADDR1 LIKE '%${streetPart}%'`;
         attrs = await cadastralQuery({
-          where: "UPPER(PHY_ADDR1) LIKE '%" + street + "%'",
-          outFields: '*',
-          returnGeometry: 'false',
-          resultRecordCount: '1',
-          f: 'json'
+          where: whereHouse, outFields: '*', returnGeometry: 'false', resultRecordCount: '1', f: 'json'
         });
+        if (!attrs) {
+          attrs = await cadastralQuery({
+            where: whereStreet, outFields: '*', returnGeometry: 'false', resultRecordCount: '1', f: 'json'
+          });
+        }
       } catch(e) {}
     }
 
@@ -3090,9 +3112,7 @@ function updateLotDisplay() {
     if (manual) manual.style.display = 'none';
   } else {
     // ZIP estimate or detection failed — show dropdown, force manual confirmation
-    if (sublabel) sublabel.textContent = qState.lotAutoDetected
-      ? '📍 Approximate size — please confirm your yard below:'
-      : "We couldn't detect your lot — please select your yard size:";
+    if (sublabel) sublabel.textContent = "Couldn't find your yard size — please select below:";
     if (manual) {
       manual.style.display = 'block';
       const sel = document.getElementById('q-lot-select');
