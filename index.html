@@ -2648,23 +2648,25 @@ const LOT_TIERS = [
   { key: 'xl',      label: '10+ acres · Custom Quote',    icon: '🗺️' },
 ];
 
-// ── Lot size: call Apps Script which geocodes + queries Citrus County GIS
+// ── Lot size: call Apps Script → county GIS → ZIP fallback → manual
 async function lookupLotSize(address, zip) {
   qState.lotAutoDetected = false;
+  qState.lotEstimated    = false;
   qState.detectedAcreage = null;
-  qState.lotTierIdx = 1; // default medium while lookup runs
+  qState.lotTierIdx      = 1; // default while lookup runs
 
   try {
-    const url = SHEETS_SCRIPT_URL + '?action=lookup_lot_size&address=' + encodeURIComponent(address + (zip ? ', FL ' + zip : ''));
+    const url  = SHEETS_SCRIPT_URL + '?action=lookup_lot_size&address=' + encodeURIComponent(address + (zip ? ', FL ' + zip : ''));
     const res  = await fetch(url);
     const data = await res.json();
     if (data.success && typeof data.tierIdx === 'number') {
       qState.lotTierIdx      = data.tierIdx;
       qState.detectedAcreage = data.acreage || null;
       qState.lotAutoDetected = true;
+      qState.lotEstimated    = !!data.estimated; // true = ZIP-based estimate, false = county record
     }
   } catch(e) {
-    // Silent fail — manual selector will show in buildStep3
+    // Silent fail — manual dropdown will show
   }
 }
 
@@ -2797,7 +2799,7 @@ function qCalNextMonth() { qCalMonth++; if(qCalMonth>11){qCalMonth=0;qCalYear++;
 function openQuoteModal(preselectedPlan) {
   // Default to biweekly; ignore one-time if somehow passed
   const validPlan = (preselectedPlan === 'weekly') ? 'weekly' : 'biweekly';
-  qState = { name:'',email:'',phone:'',address:'',zip:'',lotTierIdx:1,lotAutoDetected:false,detectedAcreage:null,selectedPlan:validPlan,startDate:'',stripeCustomerId:'',isReturning:false };
+  qState = { name:'',email:'',phone:'',address:'',zip:'',lotTierIdx:1,lotAutoDetected:false,lotEstimated:false,detectedAcreage:null,selectedPlan:validPlan,startDate:'',stripeCustomerId:'',isReturning:false };
   _lotLookupPromise = null;
   const satFrame = document.getElementById('qSatFrame');
   if (satFrame) satFrame.src = 'about:blank';
@@ -2952,22 +2954,27 @@ function buildStep3() {
 }
 
 function updateLotDisplay() {
-  const tier    = LOT_TIERS[qState.lotTierIdx];
-  const labelEl = document.getElementById('q-lot-label');
-  const iconEl  = document.getElementById('q-lot-icon');
+  const tier     = LOT_TIERS[qState.lotTierIdx];
+  const labelEl  = document.getElementById('q-lot-label');
+  const iconEl   = document.getElementById('q-lot-icon');
   const sublabel = document.getElementById('q-lot-sublabel');
-  const manual  = document.getElementById('q-lot-manual');
+  const manual   = document.getElementById('q-lot-manual');
 
   if (labelEl) labelEl.textContent = tier ? tier.label : '—';
   if (iconEl)  iconEl.textContent  = tier ? tier.icon : '🏡';
 
-  if (qState.lotAutoDetected && qState.detectedAcreage) {
-    // Auto-detected: show acreage note, hide manual dropdown entirely
-    if (sublabel) sublabel.textContent = '🛰️ ' + qState.detectedAcreage + ' acres detected from county records';
+  if (qState.lotAutoDetected) {
+    if (qState.detectedAcreage && !qState.lotEstimated) {
+      // Exact county record
+      if (sublabel) sublabel.textContent = '🛰️ ' + qState.detectedAcreage + ' acres · from county records';
+    } else {
+      // ZIP-based estimate — still auto-selected, no dropdown
+      if (sublabel) sublabel.textContent = '📍 Estimated based on your area';
+    }
     if (manual) manual.style.display = 'none';
   } else {
-    // Detection failed: hide sublabel, show dropdown — customer must pick
-    if (sublabel) sublabel.textContent = 'Select your lot size below';
+    // Complete failure — show manual dropdown
+    if (sublabel) sublabel.textContent = "Couldn't detect your lot size — please select:";
     if (manual) {
       manual.style.display = 'block';
       const sel = document.getElementById('q-lot-select');

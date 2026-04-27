@@ -236,27 +236,20 @@
         </select>
       </div>
 
-      <!-- ✓ Completed Jobs (shown first, owner only) -->
-      <div id="doneSection" style="margin-bottom:32px;display:none;">
-        <div class="section-label" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-          <span>✓ Completed Jobs <span class="badge" id="doneCount">0</span></span>
-          <select id="doneSortSelect" onchange="renderBookings()" style="font-family:inherit;font-size:12px;padding:5px 10px;border:1.5px solid var(--border);border-radius:8px;background:#fff;color:var(--text);cursor:pointer;">
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-            <option value="name">Name A–Z</option>
-            <option value="price-high">Price high–low</option>
-            <option value="price-low">Price low–high</option>
-          </select>
-        </div>
-        <div id="doneList"><div class="empty-state">Loading…</div></div>
-      </div>
-
       <!-- Today's Jobs -->
       <div id="todaySection" style="margin-bottom:32px;">
         <div class="section-label">
           📅 Today's Jobs <span class="badge" id="todayCount">0</span>
         </div>
         <div id="todayList"><div class="empty-state">Loading…</div></div>
+      </div>
+
+      <!-- ✓ Completed Jobs (owner only, below Today's Jobs) -->
+      <div id="doneSection" style="margin-bottom:32px;display:none;">
+        <div class="section-label">
+          ✓ Completed Jobs <span class="badge" id="doneCount">0</span>
+        </div>
+        <div id="doneList"><div class="empty-state">Loading…</div></div>
       </div>
 
       <!-- Needs Invoice / Charge (owner only) — shown ABOVE all other bookings -->
@@ -670,15 +663,8 @@ function renderBookings() {
 
   // Split: active (not done) vs completed
   const activeBkgs = bookings.filter(b => !isDone(b));
-  let doneBkgs     = allBookings.filter(b => isDone(b)); // always use full list for completed
+  const doneBkgs   = allBookings.filter(b => isDone(b)); // always use full list, newest first
 
-  // Apply sort to completed jobs
-  const doneSort = document.getElementById('doneSortSelect')?.value || 'newest';
-  if (doneSort === 'newest')     doneBkgs = doneBkgs.slice().sort((a,b) => (dateOf(b) > dateOf(a) ? 1 : -1));
-  else if (doneSort === 'oldest') doneBkgs = doneBkgs.slice().sort((a,b) => (dateOf(a) > dateOf(b) ? 1 : -1));
-  else if (doneSort === 'name')   doneBkgs = doneBkgs.slice().sort((a,b) => (a.name||'').localeCompare(b.name||''));
-  else if (doneSort === 'price-high') doneBkgs = doneBkgs.slice().sort((a,b) => (parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))||0) - (parseFloat(String(a.price||'').replace(/[^0-9.]/g,''))||0));
-  else if (doneSort === 'price-low')  doneBkgs = doneBkgs.slice().sort((a,b) => (parseFloat(String(a.price||'').replace(/[^0-9.]/g,''))||0) - (parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))||0));
 
   // Active: split today vs upcoming
   const today  = activeBkgs.filter(b => dateOf(b) === todayStr);
