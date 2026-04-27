@@ -1121,6 +1121,38 @@
   .quote-progress-bar { width:100%; height:6px; background:rgba(26,58,26,0.08); border-radius:3px; overflow:hidden; margin:20px 0; }
   .quote-progress-fill { height:100%; width:0%; background:linear-gradient(90deg, var(--green-bright), var(--green-mid)); border-radius:3px; }
 
+  /* ── Satellite orb (step 2) ── */
+  .satellite-orb {
+    width: 200px; height: 200px; border-radius: 50%;
+    overflow: hidden; position: relative; margin: 0 auto 20px;
+    border: 3px solid var(--green-mid);
+    box-shadow: 0 0 0 6px rgba(45,106,45,0.12), 0 8px 32px rgba(0,0,0,0.18);
+    background: #1a2a1a;
+  }
+  .satellite-orb iframe {
+    width: 420px; height: 420px; border: none;
+    margin: -110px 0 0 -110px; pointer-events: none;
+  }
+  .satellite-scan-ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 2px solid rgba(76,175,80,0.5);
+    animation: satPulse 2s ease-in-out infinite;
+  }
+  .satellite-scan-line {
+    position: absolute; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(76,175,80,0.9), transparent);
+    top: 50%; animation: satSweep 2.2s linear infinite;
+  }
+  @keyframes satPulse {
+    0%,100% { box-shadow: inset 0 0 12px rgba(76,175,80,0.1), 0 0 0 0 rgba(76,175,80,0.3); }
+    50%      { box-shadow: inset 0 0 24px rgba(76,175,80,0.2), 0 0 0 10px rgba(76,175,80,0); }
+  }
+  @keyframes satSweep {
+    0%   { transform: translateY(-100px); opacity:0.6; }
+    50%  { opacity:1; }
+    100% { transform: translateY(100px);  opacity:0.6; }
+  }
+
   /* Lot size bar */
   .quote-lot-bar {
     background:var(--green-pale); border:1px solid rgba(45,106,45,0.15);
@@ -1569,10 +1601,14 @@
     </div>
 
     <!-- ── STEP 2: Analyzing animation ── -->
-    <div id="quoteStep2" style="display:none;text-align:center;padding:24px 0;">
-      <div class="quote-analyzing-icon">📍</div>
-      <h3 id="q-analyzing-text" style="font-family:'Playfair Display',serif;font-size:20px;color:var(--green-deep);margin-bottom:8px;">Locating your property...</h3>
-      <div id="q-address-confirm" style="font-size:13px;color:var(--text-muted);margin-bottom:16px;"></div>
+    <div id="quoteStep2" style="display:none;text-align:center;padding:16px 0 24px;">
+      <div class="satellite-orb">
+        <iframe id="qSatFrame" src="about:blank" title="Satellite view"></iframe>
+        <div class="satellite-scan-ring"></div>
+        <div class="satellite-scan-line"></div>
+      </div>
+      <h3 id="q-analyzing-text" style="font-family:'Playfair Display',serif;font-size:19px;color:var(--green-deep);margin-bottom:6px;">Locating your property...</h3>
+      <div id="q-address-confirm" style="font-size:12px;color:var(--text-muted);margin-bottom:14px;"></div>
       <div class="quote-progress-bar"><div class="quote-progress-fill" id="quoteProgressFill"></div></div>
     </div>
 
@@ -1582,8 +1618,8 @@
         <div class="quote-lot-info">
           <span class="quote-lot-icon" id="q-lot-icon">🏘️</span>
           <div>
-            <div class="quote-lot-label" id="q-lot-label">Select your yard size below</div>
-            <div class="quote-lot-sublabel" id="q-lot-sublabel">Not sure? Check satellite map</div>
+            <div class="quote-lot-label" id="q-lot-label">Detecting yard size...</div>
+            <div class="quote-lot-sublabel" id="q-lot-sublabel"></div>
           </div>
         </div>
         <!-- No manual adjust — tier is locked to county record or manual selection below -->
@@ -2612,27 +2648,23 @@ const LOT_TIERS = [
   { key: 'xl',      label: '10+ acres · Custom Quote',    icon: '🗺️' },
 ];
 
-// ── Lot size selector — shown immediately (auto-detect not reliable)
-// Customer picks from dropdown; satellite map link helps them estimate.
+// ── Lot size: call Apps Script which geocodes + queries Citrus County GIS
 async function lookupLotSize(address, zip) {
-  const sublabel = document.getElementById('q-lot-sublabel');
-  const label    = document.getElementById('q-lot-label');
-  const manual   = document.getElementById('q-lot-manual');
+  qState.lotAutoDetected = false;
+  qState.detectedAcreage = null;
+  qState.lotTierIdx = 1; // default medium while lookup runs
 
-  // Default to medium, show selector right away — no API call
-  qState.lotTierIdx = 1;
-  updateLotDisplay();
-
-  if (label) label.textContent = 'Select your yard size below';
-  if (sublabel) {
-    const mapsUrl = 'https://maps.google.com/?q=' + encodeURIComponent((address || '') + ' ' + (zip || '')) + '&t=k';
-    sublabel.innerHTML = 'Not sure? <a href="' + mapsUrl + '" target="_blank" style="color:var(--green-mid);font-weight:600;text-decoration:none;">View satellite map ↗</a> to estimate';
-  }
-
-  if (manual) {
-    manual.style.display = 'block';
-    const sel = document.getElementById('q-lot-select');
-    if (sel) sel.value = '1'; // default medium
+  try {
+    const url = SHEETS_SCRIPT_URL + '?action=lookup_lot_size&address=' + encodeURIComponent(address + (zip ? ', FL ' + zip : ''));
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (data.success && typeof data.tierIdx === 'number') {
+      qState.lotTierIdx      = data.tierIdx;
+      qState.detectedAcreage = data.acreage || null;
+      qState.lotAutoDetected = true;
+    }
+  } catch(e) {
+    // Silent fail — manual selector will show in buildStep3
   }
 }
 
@@ -2687,10 +2719,13 @@ let qState = {
   name:'', email:'', phone:'', address:'', zip:'',
   isReturning: false,
   lotTierIdx: 1,
+  lotAutoDetected: false,
+  detectedAcreage: null,
   selectedPlan: 'biweekly',
   startDate: '',
   stripeCustomerId: '',
 };
+let _lotLookupPromise = null;
 
 // ── Calendar for Step 3 ──
 let qCalYear, qCalMonth, qCalSelected = '';
@@ -2762,7 +2797,10 @@ function qCalNextMonth() { qCalMonth++; if(qCalMonth>11){qCalMonth=0;qCalYear++;
 function openQuoteModal(preselectedPlan) {
   // Default to biweekly; ignore one-time if somehow passed
   const validPlan = (preselectedPlan === 'weekly') ? 'weekly' : 'biweekly';
-  qState = { name:'',email:'',phone:'',address:'',zip:'',lotTierIdx:1,selectedPlan:validPlan,startDate:'',stripeCustomerId:'',isReturning:false };
+  qState = { name:'',email:'',phone:'',address:'',zip:'',lotTierIdx:1,lotAutoDetected:false,detectedAcreage:null,selectedPlan:validPlan,startDate:'',stripeCustomerId:'',isReturning:false };
+  _lotLookupPromise = null;
+  const satFrame = document.getElementById('qSatFrame');
+  if (satFrame) satFrame.src = 'about:blank';
   ['q-name','q-email','q-phone','q-address','q-zip'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('q-step1-error').style.display = 'none';
   document.getElementById('quoteStepsBar').style.display = 'flex';
@@ -2857,37 +2895,52 @@ async function quoteStep1Submit() {
   if (btn) { btn.textContent = 'Get My Price →'; btn.disabled = false; }
 
   qState.name=name; qState.email=email; qState.phone=phone; qState.address=address; qState.zip=zip;
+
+  // Load satellite image into the orb
+  const satFrame = document.getElementById('qSatFrame');
+  if (satFrame) satFrame.src = 'https://maps.google.com/maps?q=' + encodeURIComponent(address + ', FL ' + zip) + '&t=k&z=19&output=embed';
+
   showQuoteStep(2);
   document.getElementById('q-address-confirm').textContent = address + (zip ? ', ' + zip : '');
+
+  // Kick off parcel lookup in parallel — promise captured so animation can wait for it
+  _lotLookupPromise = lookupLotSize(address, zip);
   runAnalyzingAnimation();
-  // Kick off parcel lookup in parallel — updates lot display when step 3 is shown
-  lookupLotSize(address, zip);
 }
 
-function runAnalyzingAnimation() {
+async function runAnalyzingAnimation() {
   const fill   = document.getElementById('quoteProgressFill');
   const textEl = document.getElementById('q-analyzing-text');
   const steps  = [
-    { pct:18, text:'Locating your property...' },
-    { pct:45, text:'Analyzing your property...' },
-    { pct:72, text:'Estimating yard size...' },
-    { pct:92, text:'Calculating your price...' },
+    { pct:15, text:'Locating your property...' },
+    { pct:42, text:'Scanning with satellite imagery...' },
+    { pct:70, text:'Measuring your yard...' },
+    { pct:90, text:'Calculating your price...' },
   ];
   let i=0; fill.style.width='0%';
-  const iv = setInterval(() => {
-    if (i >= steps.length) {
-      clearInterval(iv);
-      fill.style.transition='width 0.4s ease';
-      fill.style.width='100%';
-      textEl.textContent='Price calculated! ✓';
-      setTimeout(() => { buildStep3(); showQuoteStep(3); initQCal(); }, 500);
-      return;
-    }
-    fill.style.transition='width 0.55s ease';
-    fill.style.width = steps[i].pct+'%';
-    textEl.textContent = steps[i].text;
-    i++;
-  }, 550);
+
+  await new Promise(resolve => {
+    const iv = setInterval(() => {
+      if (i >= steps.length) { clearInterval(iv); resolve(); return; }
+      fill.style.transition = 'width 0.55s ease';
+      fill.style.width = steps[i].pct + '%';
+      textEl.textContent = steps[i].text;
+      i++;
+    }, 600);
+  });
+
+  // Wait up to 2.5s for the lot size lookup to finish
+  if (_lotLookupPromise) {
+    textEl.textContent = 'Finalizing your quote...';
+    fill.style.transition = 'width 1s ease';
+    fill.style.width = '96%';
+    try { await Promise.race([_lotLookupPromise, new Promise(r => setTimeout(r, 2500))]); } catch(e) {}
+  }
+
+  fill.style.transition = 'width 0.35s ease';
+  fill.style.width = '100%';
+  textEl.textContent = 'Price calculated! ✓';
+  setTimeout(() => { buildStep3(); showQuoteStep(3); initQCal(); }, 420);
 }
 
 // ── STEP 3 ──
@@ -2899,15 +2952,38 @@ function buildStep3() {
 }
 
 function updateLotDisplay() {
-  const tier = LOT_TIERS[qState.lotTierIdx];
+  const tier    = LOT_TIERS[qState.lotTierIdx];
   const labelEl = document.getElementById('q-lot-label');
   const iconEl  = document.getElementById('q-lot-icon');
+  const sublabel = document.getElementById('q-lot-sublabel');
+  const manual  = document.getElementById('q-lot-manual');
+
   if (labelEl) labelEl.textContent = tier ? tier.label : '—';
-  if (iconEl)  iconEl.textContent  = tier.icon;
+  if (iconEl)  iconEl.textContent  = tier ? tier.icon : '🏡';
+
+  if (qState.lotAutoDetected && qState.detectedAcreage) {
+    if (sublabel) sublabel.innerHTML = '🛰️ <strong>' + qState.detectedAcreage + ' acres</strong> detected from county records · <a href="#" onclick="showLotManual(event)" style="color:var(--green-mid);font-weight:600;text-decoration:none;">Not right?</a>';
+    if (manual) manual.style.display = 'none';
+  } else {
+    const mapsUrl = 'https://maps.google.com/?q=' + encodeURIComponent((qState.address||'') + ' ' + (qState.zip||'')) + '&t=k';
+    if (sublabel) sublabel.innerHTML = 'Not sure? <a href="' + mapsUrl + '" target="_blank" style="color:var(--green-mid);font-weight:600;text-decoration:none;">View satellite map ↗</a>';
+    if (manual) {
+      manual.style.display = 'block';
+      const sel = document.getElementById('q-lot-select');
+      if (sel) sel.value = String(qState.lotTierIdx);
+    }
+  }
 }
 
-// adjustLotSize removed — lot size is now locked to county parcel lookup
-// (manual selector appears automatically if lookup fails)
+function showLotManual(e) {
+  if (e) e.preventDefault();
+  const manual = document.getElementById('q-lot-manual');
+  if (manual) {
+    manual.style.display = 'block';
+    const sel = document.getElementById('q-lot-select');
+    if (sel) sel.value = String(qState.lotTierIdx);
+  }
+}
 
 function renderPlanCards() {
   const tierKey = LOT_TIERS[qState.lotTierIdx].key;
@@ -2920,20 +2996,27 @@ function renderPlanCards() {
   document.getElementById('quotePlanCards').innerHTML = plans.map(p => {
     const noPrice = isXL || p.afterPrice===null;
     const firstPrice = qState.isReturning ? p.afterPrice : 19;
-    const afterLabel = noPrice ? 'Custom quote' : (qState.isReturning ? 'regular rate' : `$${p.afterPrice}/mow after`);
+    const afterLabel = noPrice ? 'Custom quote' : (qState.isReturning ? 'regular rate' : '$' + p.afterPrice + '/mow after');
     const isSelected = qState.selectedPlan === p.id;
+    const planFirstText = qState.isReturning
+      ? (noPrice ? 'Custom quote' : '$' + p.afterPrice + '/mow')
+      : '<strong>First mow: $19</strong> — billed after service';
+    const notePart = p.note && p.note.split('·')[1] ? p.note.split('·')[1].trim() : 'cancel anytime';
+    const planAfterText = noPrice
+      ? "Custom quote — we'll follow up"
+      : (qState.isReturning ? p.note : 'Then <strong>$' + p.afterPrice + '/mow</strong> every mow after that · ' + notePart);
     return `
       <div class="quote-plan-card${isSelected?' selected':''}" onclick="selectQuotePlan('${p.id}')">
-        ${p.badge ? `<div class="quote-plan-badge">${p.badge}</div>` : ''}
+        ${p.badge ? '<div class="quote-plan-badge">' + p.badge + '</div>' : ''}
         <div class="quote-plan-radio"></div>
         <div class="quote-plan-details">
           <div class="quote-plan-name">${p.icon} ${p.name}</div>
-          <div class="quote-plan-first">${qState.isReturning ? (noPrice ? ‘Custom quote’ : `$${p.afterPrice}/mow`) : ‘<strong>First mow: $19</strong> — billed after service’}</div>
-          <div class="quote-plan-after">${noPrice ? "Custom quote — we’ll follow up" : (qState.isReturning ? p.note : `Then <strong>$${p.afterPrice}/mow</strong> every mow after that · ${p.note.split(‘·’)[1]?.trim() || ‘cancel anytime’}`)}</div>
+          <div class="quote-plan-first">${planFirstText}</div>
+          <div class="quote-plan-after">${planAfterText}</div>
         </div>
         <div class="quote-plan-price">
-          <div class="quote-plan-price-num">${noPrice ? ‘—‘ : ‘$’ + firstPrice}</div>
-          <div class="quote-plan-price-period">${qState.isReturning ? ‘per mow’ : ‘1st mow’}<br><span style="color:var(--green-mid)">${afterLabel}</span></div>
+          <div class="quote-plan-price-num">${noPrice ? '—' : '$' + firstPrice}</div>
+          <div class="quote-plan-price-period">${qState.isReturning ? 'per mow' : '1st mow'}<br><span style="color:var(--green-mid)">${afterLabel}</span></div>
         </div>
       </div>`;
   }).join('');
@@ -2951,22 +3034,22 @@ function quoteStep3Submit() {
 }
 
 function buildOrderSummary() {
-  const tierKey  = LOT_TIERS[qState.lotTierIdx].key;
-  const prices   = PLAN_PRICING[tierKey];
-  const planId   = qState.selectedPlan;
+  const tierKey   = LOT_TIERS[qState.lotTierIdx].key;
+  const prices    = PLAN_PRICING[tierKey];
+  const planId    = qState.selectedPlan;
   const planNames = {'biweekly':'Bi-Weekly Plan','weekly':'Weekly Plan'};
-  const dateFmt  = new Date(qState.startDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
-  const after    = prices[planId];
-  const isRet    = qState.isReturning || false;
-  const afterTxt = !after ? 'Custom quote' : `$${after}/mow`;
-  const todayAmt = isRet ? (after ? `$${after}` : 'Custom') : '$19';
-  const todayLbl = isRet ? 'Charged after first service' : 'Charged after first service';
-  document.getElementById('q-following-line').textContent = isRet ? `Per mow: ${afterTxt}` : `Following services: ${afterTxt}`;
-  document.getElementById('quoteOrderSummary').innerHTML = `
-    <div class="quote-order-row"><span>Service</span><span style="font-weight:600;color:var(--green-deep)">${planNames[planId]}</span></div>
-    <div class="quote-order-row"><span>Start Date</span><span style="font-weight:600;color:var(--green-deep)">${dateFmt}</span></div>
-    ${!isRet ? `<div class="quote-order-row"><span>Following services</span><span style="color:var(--green-mid);font-weight:600">${afterTxt}</span></div>` : ''}
-    <div class="quote-order-total"><span>${todayLbl}</span><span class="quote-order-amount">${todayAmt}</span></div>`;
+  const dateFmt   = new Date(qState.startDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  const after     = prices[planId];
+  const isRet     = qState.isReturning || false;
+  const afterTxt  = !after ? 'Custom quote' : '$' + after + '/mow';
+  const todayAmt  = isRet ? (after ? '$' + after : 'Custom') : '$19';
+  const todayLbl  = 'Charged after first service';
+  document.getElementById('q-following-line').textContent = isRet ? 'Per mow: ' + afterTxt : 'Following services: ' + afterTxt;
+  document.getElementById('quoteOrderSummary').innerHTML =
+    '<div class="quote-order-row"><span>Service</span><span style="font-weight:600;color:var(--green-deep)">' + planNames[planId] + '</span></div>' +
+    '<div class="quote-order-row"><span>Start Date</span><span style="font-weight:600;color:var(--green-deep)">' + dateFmt + '</span></div>' +
+    (!isRet ? '<div class="quote-order-row"><span>Following services</span><span style="color:var(--green-mid);font-weight:600">' + afterTxt + '</span></div>' : '') +
+    '<div class="quote-order-total"><span>' + todayLbl + '</span><span class="quote-order-amount">' + todayAmt + '</span></div>';
 }
 
 // ── STEP 4 — Payment ──
@@ -2976,19 +3059,15 @@ async function quotePaySubmit() {
   btn.classList.add('loading'); btn.disabled=true; errEl.textContent='';
 
   try {
-    // 1. Ask Apps Script to create a PaymentIntent for $19
-    const tierKey  = LOT_TIERS[qState.lotTierIdx].key;
-    const prices   = PLAN_PRICING[tierKey];
-    const planId   = qState.selectedPlan;
+    const tierKey    = LOT_TIERS[qState.lotTierIdx].key;
+    const prices     = PLAN_PRICING[tierKey];
+    const planId     = qState.selectedPlan;
     const planNames  = {'biweekly':'Bi-Weekly Plan','weekly':'Weekly Plan'};
     const freqLabels = {'biweekly':'Bi-Weekly Plan','weekly':'Weekly Plan'};
     const afterPrice = prices[planId] || 'custom';
-    const dateFmt  = new Date(qState.startDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-
+    const dateFmt    = new Date(qState.startDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
     const isReturning = qState.isReturning || false;
-    // 1. Ask Apps Script to create a SetupIntent — saves card WITHOUT charging.
-    //    The $19 first-mow charge happens after the job is physically completed
-    //    via the "Pay" button in the admin dashboard.
+
     const intentParams = new URLSearchParams({
       action: 'booking_create_intent',
       email:  qState.email,
@@ -3007,7 +3086,6 @@ async function quotePaySubmit() {
 
     qState.stripeCustomerId = customerId;
 
-    // 2. Save the card (no charge) using SetupIntent
     const { setupIntent, error } = await stripeInstance.confirmCardSetup(clientSecret, {
       payment_method: {
         card: stripeCardEl,
@@ -3020,32 +3098,29 @@ async function quotePaySubmit() {
       btn.classList.remove('loading'); btn.disabled=false; return;
     }
 
-    // 3. Log booking + save card in Apps Script
     const completeParams = new URLSearchParams({
-      action:            'booking_complete',
-      pmId:              setupIntent.payment_method,
-      stripeCustomerId:  customerId,
-      name:              qState.name,
-      email:             qState.email,
-      phone:             qState.phone,
-      address:           qState.address,
-      zip:               qState.zip,
-      service:           planNames[planId],
-      frequency:         freqLabels[planId],
-      followingPrice:    String(afterPrice),
-      serviceDateRaw:    qState.startDate,
-      serviceDate:       dateFmt,
-      yardSize:          tierKey,
-      notes:             isReturning
+      action:           'booking_complete',
+      pmId:             setupIntent.payment_method,
+      stripeCustomerId: customerId,
+      name:             qState.name,
+      email:            qState.email,
+      phone:            qState.phone,
+      address:          qState.address,
+      zip:              qState.zip,
+      service:          planNames[planId],
+      frequency:        freqLabels[planId],
+      followingPrice:   String(afterPrice),
+      serviceDateRaw:   qState.startDate,
+      serviceDate:      dateFmt,
+      yardSize:         tierKey,
+      notes:            isReturning
         ? 'Returning customer. Per-mow rate: ' + afterPrice
         : 'First service $19 promo. Following: ' + afterPrice,
     });
-    // Fire-and-forget — payment already confirmed by Stripe
     fetch(SHEETS_SCRIPT_URL+'?'+completeParams.toString(), { method:'GET', mode:'no-cors' }).catch(()=>{});
 
     btn.classList.remove('loading'); btn.disabled=false;
 
-    // Show success
     document.getElementById('q-success-date').textContent =
       new Date(qState.startDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
     document.getElementById('quoteStepsBar').style.display='none';
