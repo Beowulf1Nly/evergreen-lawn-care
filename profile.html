@@ -611,6 +611,69 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════
+     RESCHEDULE MODAL
+═══════════════════════════════════════════ -->
+<div id="rescheduleModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title">📅 Reschedule Appointment</div>
+    <div class="modal-sub" id="rescheduleSub">Choose a new date for your appointment.</div>
+    <div style="margin:18px 0 8px;">
+      <label style="display:block;font-size:13px;font-weight:600;color:var(--green-deep);margin-bottom:8px;">New Date</label>
+      <input type="date" id="rescheduleDate" style="width:100%;padding:11px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:15px;outline:none;" oninput="this.style.borderColor='var(--green-mid)'"/>
+    </div>
+    <div style="margin-bottom:18px;">
+      <label style="display:block;font-size:13px;font-weight:600;color:var(--green-deep);margin-bottom:8px;">Apply to</label>
+      <button class="cancel-option" id="rScopeOne" onclick="selectRescheduleScope('single')" style="margin-bottom:8px;">
+        <div class="cancel-option-title">Just this appointment</div>
+        <div class="cancel-option-desc">Only this one visit moves to the new date.</div>
+      </button>
+      <button class="cancel-option" id="rScopeAll" onclick="selectRescheduleScope('all')">
+        <div class="cancel-option-title">All upcoming appointments</div>
+        <div class="cancel-option-desc">Every future visit shifts by the same number of days.</div>
+      </button>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeRescheduleModal()">Back</button>
+      <button class="btn-confirm-cancel" id="confirmRescheduleBtn" disabled onclick="submitReschedule()" style="background:var(--green-mid);">Confirm Reschedule</button>
+    </div>
+    <div id="rescheduleError" style="color:var(--red);font-size:13px;margin-top:10px;display:none;"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     CANCEL SINGLE APPOINTMENT MODAL
+═══════════════════════════════════════════ -->
+<div id="cancelApptModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title">🗑️ Cancel Appointment</div>
+    <div class="modal-sub" id="cancelApptSub">Are you sure you want to cancel this appointment?</div>
+    <div class="modal-btns" style="margin-top:20px;">
+      <button class="btn-cancel" onclick="closeCancelApptModal()">Keep It</button>
+      <button class="btn-confirm-cancel" id="confirmCancelApptBtn" onclick="confirmCancelAppt()">Yes, Cancel It</button>
+    </div>
+    <div id="cancelApptError" style="color:var(--red);font-size:13px;margin-top:10px;display:none;"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     CHANGE PLAN MODAL
+═══════════════════════════════════════════ -->
+<div id="changePlanModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title">🔄 Change Plan</div>
+    <div class="modal-sub" id="changePlanSub">Switch your recurring service plan.</div>
+    <div style="margin:18px 0 20px;padding:14px 16px;background:var(--green-pale);border-radius:10px;font-size:14px;line-height:1.7;color:var(--green-deep);">
+      Your upcoming appointments will be updated to the new plan. Pricing adjusts on your next visit.
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeChangePlanModal()">Back</button>
+      <button class="btn-confirm-cancel" id="confirmChangePlanBtn" onclick="confirmChangePlan()" style="background:var(--green-mid);">Confirm Change</button>
+    </div>
+    <div id="changePlanError" style="color:var(--red);font-size:13px;margin-top:10px;display:none;"></div>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════════════════════════════
 // CONFIG — update this to match your deployed Apps Script URL
@@ -972,7 +1035,10 @@ function renderBillingCard(bookings) {
       ${alertBox}
       <div style="margin-top:12px;padding:10px 14px;background:#f0fdf4;border-radius:10px;font-size:12px;color:#166534;line-height:1.6;">
         💡 How it works: your first mow is just $19. After that, your card is automatically charged $35 after each weekly mow. No invoices, no reminders.
-      </div>`;
+      </div>
+      <button onclick="openChangePlanModal('Bi-Weekly Plan')" style="margin-top:14px;width:100%;padding:11px;background:#fff;color:var(--green-mid);border:1.5px solid var(--green-mid);border-radius:10px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">
+        Switch to Bi-Weekly Plan →
+      </button>`;
 
   } else {
     // Bi-weekly: mow 1 = $80 payment, mow 2 = covered free
@@ -1055,7 +1121,10 @@ function renderBillingCard(bookings) {
       ${alertBox}
       <div style="margin-top:12px;padding:10px 14px;background:#f0fdf4;border-radius:10px;font-size:12px;color:#166534;line-height:1.6;">
         💡 How it works: your first mow is just $19. After that, your card is automatically charged $40 after each bi-weekly mow. No invoices, no reminders.
-      </div>`;
+      </div>
+      <button onclick="openChangePlanModal('Weekly Plan')" style="margin-top:14px;width:100%;padding:11px;background:#fff;color:var(--green-mid);border:1.5px solid var(--green-mid);border-radius:10px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">
+        Upgrade to Weekly Plan →
+      </button>`;
   }
 
   // Store plan name for cancel modal, and reveal the Cancel Plan settings row
@@ -1091,6 +1160,22 @@ function bookingCardHTML(b, isUpcoming) {
       : (price ? `<span>💵 $${price}</span>` : '');
   const addrTag  = address ? `<span>📍 ${address}</span>` : '';
 
+  const rowIndex   = b._rowIndex || 0;
+  const rawDate    = b.serviceDate || b.serviceDateRaw || '';
+
+  // Reschedule + Cancel only on upcoming (not done) appointments
+  const apptActions = isUpcoming && !isDone ? `
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+      <button onclick="openRescheduleModal(${rowIndex}, '${esc(rawDate)}')"
+        style="flex:1;padding:9px 12px;background:#fff;color:var(--green-mid);border:1.5px solid var(--green-mid);border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;min-width:120px;">
+        📅 Reschedule
+      </button>
+      <button onclick="openCancelApptModal(${rowIndex}, '${esc(rawDate)}')"
+        style="flex:1;padding:9px 12px;background:#fff;color:var(--red);border:1.5px solid #fca5a5;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;min-width:120px;">
+        ✕ Cancel
+      </button>
+    </div>` : '';
+
   return `
     <div class="booking-card ${isUpcoming ? 'upcoming' : ''}">
       <div class="booking-top">
@@ -1105,6 +1190,7 @@ function bookingCardHTML(b, isUpcoming) {
         ${priceTag}
         ${esc(b.frequency || '')}
       </div>
+      ${apptActions}
     </div>`;
 }
 
@@ -1363,6 +1449,163 @@ async function openInvoiceByFetch(invoiceId, btn) {
     alert('Could not load invoice. Please check your email or call (352) 462-0627.');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = origText; }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// RESCHEDULE APPOINTMENT
+// ═══════════════════════════════════════════════════════════════════════
+let _rescheduleRowIdx  = 0;
+let _rescheduleScope   = '';
+
+function openRescheduleModal(rowIndex, currentDateStr) {
+  _rescheduleRowIdx = rowIndex;
+  _rescheduleScope  = '';
+  document.getElementById('rescheduleDate').value = '';
+  document.getElementById('rescheduleError').style.display = 'none';
+  document.getElementById('confirmRescheduleBtn').disabled = true;
+  document.getElementById('rScopeOne').classList.remove('selected');
+  document.getElementById('rScopeAll').classList.remove('selected');
+  // Pre-fill date input with current date if parseable
+  try {
+    const d = new Date(currentDateStr);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+      document.getElementById('rescheduleDate').value = `${y}-${m}-${day}`;
+    }
+  } catch(e) {}
+  document.getElementById('rescheduleModal').classList.add('open');
+}
+function closeRescheduleModal() {
+  document.getElementById('rescheduleModal').classList.remove('open');
+}
+function selectRescheduleScope(scope) {
+  _rescheduleScope = scope;
+  document.getElementById('rScopeOne').classList.toggle('selected', scope === 'single');
+  document.getElementById('rScopeAll').classList.toggle('selected', scope === 'all');
+  updateRescheduleBtn();
+}
+function updateRescheduleBtn() {
+  const hasDate  = !!document.getElementById('rescheduleDate').value;
+  const hasScope = !!_rescheduleScope;
+  document.getElementById('confirmRescheduleBtn').disabled = !(hasDate && hasScope);
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('rescheduleDate')?.addEventListener('input', updateRescheduleBtn);
+});
+
+async function submitReschedule() {
+  const session = getStoredSession();
+  if (!session) return;
+  const newDate = document.getElementById('rescheduleDate').value;
+  if (!newDate || !_rescheduleScope) return;
+  const btn = document.getElementById('confirmRescheduleBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  document.getElementById('rescheduleError').style.display = 'none';
+  try {
+    const data = await apiGet({
+      action:       'portal_reschedule_appointment',
+      sessionToken: session.token,
+      rowIndex:     _rescheduleRowIdx,
+      newDate,
+      scope:        _rescheduleScope,
+    });
+    if (data.success) {
+      closeRescheduleModal();
+      await loadProfile(session.token);
+    } else {
+      document.getElementById('rescheduleError').textContent = data.error || 'Could not reschedule.';
+      document.getElementById('rescheduleError').style.display = 'block';
+    }
+  } catch(err) {
+    document.getElementById('rescheduleError').textContent = 'Error: ' + err.message;
+    document.getElementById('rescheduleError').style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Confirm Reschedule';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CANCEL SINGLE APPOINTMENT
+// ═══════════════════════════════════════════════════════════════════════
+let _cancelApptRowIdx = 0;
+
+function openCancelApptModal(rowIndex, dateStr) {
+  _cancelApptRowIdx = rowIndex;
+  document.getElementById('cancelApptError').style.display = 'none';
+  document.getElementById('cancelApptSub').textContent =
+    'Are you sure you want to cancel your appointment on ' + dateStr + '? This cannot be undone.';
+  document.getElementById('cancelApptModal').classList.add('open');
+}
+function closeCancelApptModal() {
+  document.getElementById('cancelApptModal').classList.remove('open');
+}
+async function confirmCancelAppt() {
+  const session = getStoredSession();
+  if (!session) return;
+  const btn = document.getElementById('confirmCancelApptBtn');
+  btn.disabled = true; btn.textContent = 'Cancelling…';
+  document.getElementById('cancelApptError').style.display = 'none';
+  try {
+    const data = await apiGet({
+      action:       'portal_cancel_appointment',
+      sessionToken: session.token,
+      rowIndex:     _cancelApptRowIdx,
+    });
+    if (data.success) {
+      closeCancelApptModal();
+      await loadProfile(session.token);
+    } else {
+      document.getElementById('cancelApptError').textContent = data.error || 'Could not cancel.';
+      document.getElementById('cancelApptError').style.display = 'block';
+    }
+  } catch(err) {
+    document.getElementById('cancelApptError').textContent = 'Error: ' + err.message;
+    document.getElementById('cancelApptError').style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Yes, Cancel It';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CHANGE PLAN
+// ═══════════════════════════════════════════════════════════════════════
+let _pendingNewFreq = '';
+
+function openChangePlanModal(newFrequency) {
+  _pendingNewFreq = newFrequency;
+  document.getElementById('changePlanError').style.display = 'none';
+  document.getElementById('changePlanSub').innerHTML =
+    'Switch to <strong>' + newFrequency + '</strong>? Your upcoming appointments and pricing will be updated.';
+  document.getElementById('changePlanModal').classList.add('open');
+}
+function closeChangePlanModal() {
+  document.getElementById('changePlanModal').classList.remove('open');
+}
+async function confirmChangePlan() {
+  const session = getStoredSession();
+  if (!session || !_pendingNewFreq) return;
+  const btn = document.getElementById('confirmChangePlanBtn');
+  btn.disabled = true; btn.textContent = 'Updating…';
+  document.getElementById('changePlanError').style.display = 'none';
+  try {
+    const data = await apiGet({
+      action:        'portal_change_plan',
+      sessionToken:  session.token,
+      newFrequency:  _pendingNewFreq,
+    });
+    if (data.success) {
+      closeChangePlanModal();
+      await loadProfile(session.token);
+    } else {
+      document.getElementById('changePlanError').textContent = data.error || 'Could not change plan.';
+      document.getElementById('changePlanError').style.display = 'block';
+    }
+  } catch(err) {
+    document.getElementById('changePlanError').textContent = 'Error: ' + err.message;
+    document.getElementById('changePlanError').style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Confirm Change';
   }
 }
 
