@@ -87,6 +87,8 @@
   .btn-charge  { background:#166534; color:#fff; }
   .btn-charge:hover  { background:#14532d; }
   .btn-disabled { background:#e2e8f0; color:#9ca3af; cursor:not-allowed; }
+  .btn-cancel-job { background:#fff; color:var(--red); border:1.5px solid #fca5a5; }
+  .btn-cancel-job:hover { background:var(--red-pale); border-color:var(--red); }
   .btn-action:disabled { opacity:.55; cursor:not-allowed; }
 
   /* ── Empty / loading ── */
@@ -391,6 +393,8 @@
           <option value="all">All bookings</option>
           <option value="needs-action">Needs action</option>
           <option value="autopay">Auto-Pay</option>
+          <option value="awaiting-payment">Awaiting Payment</option>
+          <option value="done">Completed</option>
         </select>
       </div>
 
@@ -400,6 +404,14 @@
           💰 Needs Payment <span class="badge" style="background:#e53e3e;" id="needsPayCount">0</span>
         </div>
         <div id="needsPayList"></div>
+      </div>
+
+      <!-- ⚠️ Missed Deadline — past-date undone jobs (owner only) -->
+      <div id="missedSection" style="margin-bottom:32px;display:none;">
+        <div class="section-label">
+          ⚠️ Missed Deadline <span class="badge" style="background:#c05621;" id="missedCount">0</span>
+        </div>
+        <div id="missedList"></div>
       </div>
 
       <!-- Today's Jobs -->
@@ -703,15 +715,18 @@ function loadSavedSession() {
     const raw = localStorage.getItem('eg_staff_session');
     if (!raw) return null;
     const s = JSON.parse(raw);
-    if (!s.token || !s.expiry) return null;
-    if (new Date() > new Date(s.expiry)) { localStorage.removeItem('eg_staff_session'); return null; }
-    return s;
+    const expiryStr = s.expiry || s.exp; // handle both key names for backwards compat
+    if (!s.token || !expiryStr) return null;
+    if (new Date() > new Date(expiryStr)) { localStorage.removeItem('eg_staff_session'); return null; }
+    return { ...s, expiry: expiryStr }; // normalise to 'expiry' key
   } catch(e) { return null; }
 }
 
 function saveSession(token, name, email, role, days) {
-  const expiry = new Date(Date.now() + (days || 30) * 24 * 60 * 60 * 1000);
-  localStorage.setItem('eg_staff_session', JSON.stringify({ token, name, email, role, expiry: expiry.toISOString() }));
+  try {
+    const expiry = new Date(Date.now() + (days || 30) * 24 * 60 * 60 * 1000).toISOString();
+    localStorage.setItem('eg_staff_session', JSON.stringify({ token, name, email, role, expiry }));
+  } catch(e) {}
 }
 
 // ═══════════════════════════════════════════════════════
@@ -775,6 +790,14 @@ function backToEmail() {
 function showLoginError(msg) {
   const el = document.getElementById('loginError');
   el.textContent = msg; el.style.display = msg ? 'block' : 'none';
+}
+
+function showLogin(errorMsg) {
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('appScreen').style.display   = 'none';
+  document.getElementById('loginStep1').style.display  = 'block';
+  document.getElementById('loginStep2').style.display  = 'none';
+  if (errorMsg) showLoginError(errorMsg);
 }
 
 function showApp() {
@@ -855,8 +878,17 @@ async function loadBookings() {
     document.getElementById('lastRefresh').textContent =
       'Updated ' + now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
   } catch(err) {
-    document.getElementById('lastRefresh').textContent = '⚠️ Load failed';
-    document.getElementById('todayList').innerHTML = `<div class="empty-state">⚠️ ${esc(err.message)}<br><br><button class="btn-sm" onclick="loadBookings()">Try Again</button></div>`;
+    const errMsg = (err.message || '').toLowerCase();
+    const isAuthErr = errMsg.includes('unauthorized') || errMsg.includes('invalid session') || errMsg.includes('expired');
+    if (isAuthErr) {
+      // Session is no longer valid — clear and force re-login
+      localStorage.removeItem('eg_staff_session');
+      adminToken = ''; adminName = ''; adminEmail = ''; adminRole = 'employee';
+      showLogin('Your session has expired. Please sign in again.');
+    } else {
+      document.getElementById('lastRefresh').textContent = '⚠️ Load failed';
+      document.getElementById('todayList').innerHTML = `<div class="empty-state">⚠️ ${esc(err.message)}<br><br><button class="btn-sm" onclick="loadBookings()">Try Again</button></div>`;
+    }
   }
 }
 
@@ -867,25 +899,8 @@ function renderBookings() {
   const todayStr = todayDateStr();
   const in7      = new Date(); in7.setDate(in7.getDate() + 7);
 
-  let bookings = [...allBookings];
-
-  // Owner search/filter
-  if (adminRole === 'owner') {
-    const q = (document.getElementById('searchInput')?.value || '').toLowerCase();
-    if (q) bookings = bookings.filter(b =>
-      (b.name||'').toLowerCase().includes(q) ||
-      (b.address||'').toLowerCase().includes(q) ||
-      (b.email||'').toLowerCase().includes(q)
-    );
-    const f = document.getElementById('filterStatus')?.value || 'all';
-    if (f === 'needs-action') bookings = bookings.filter(b => needsAction(b));
-    else if (f === 'autopay') bookings = bookings.filter(b => isAutoPay(b));
-    else if (f === 'done')    bookings = bookings.filter(b => isDone(b));
-  }
-
-  // Split: active (not done) vs completed
-  const activeBkgs = bookings.filter(b => !isDone(b));
-  const doneBkgs   = allBookings.filter(b => isDone(b)); // always use full list, newest first
+  const f = (adminRole === 'owner') ? (document.getElementById('filterStatus')?.value || 'all') : 'all';
+  const q = (adminRole === 'owner') ? (document.getElementById('searchInput')?.value || '').toLowerCase() : '';
 
   // Helper: is a done job fully paid/free?
   function isPaidDone(b) {
@@ -893,17 +908,51 @@ function renderBookings() {
     const free = String(b.frequency||'').toLowerCase().includes('free');
     return free || raw.includes('✅') || raw.toLowerCase().includes('autopay') || raw.toLowerCase().includes('auto-pay');
   }
+
+  // Text search helper — applies across all sections
+  function matchesSearch(b) {
+    if (!q) return true;
+    return (b.name||'').toLowerCase().includes(q) ||
+           (b.address||'').toLowerCase().includes(q) ||
+           (b.email||'').toLowerCase().includes(q);
+  }
+
+  let allFiltered = allBookings.filter(matchesSearch);
+
+  // Apply status filter
+  if      (f === 'needs-action')     allFiltered = allFiltered.filter(b => needsAction(b));
+  else if (f === 'autopay')          allFiltered = allFiltered.filter(b => isAutoPay(b));
+  else if (f === 'awaiting-payment') allFiltered = allFiltered.filter(b => isDone(b) && !isPaidDone(b));
+  else if (f === 'done')             allFiltered = allFiltered.filter(b => isDone(b) && isPaidDone(b));
+
+  // Split: active (not done) vs completed
+  const activeBkgs = allFiltered.filter(b => !isDone(b));
+  const doneBkgs   = allFiltered.filter(b =>  isDone(b));
+
   const needsPayBkgs = doneBkgs.filter(b => !isPaidDone(b));
   const paidDoneBkgs = doneBkgs.filter(b =>  isPaidDone(b));
 
   // Active: split today vs upcoming
   const today  = activeBkgs.filter(b => dateOf(b) === todayStr);
   let upcoming = activeBkgs.filter(b => dateOf(b) !== todayStr);
-  const needs  = allBookings.filter(b => needsAction(b));
-
   // Employees only see next 7 days
   if (adminRole === 'employee') {
     upcoming = upcoming.filter(b => { const d = new Date(dateOf(b)+'T12:00'); return d <= in7; });
+  }
+
+  // Missed Deadline — past-date undone jobs (owner only, above Today)
+  const missedBkgs = (adminRole === 'owner')
+    ? allBookings.filter(b => !isDone(b) && dateOf(b) < todayStr && matchesSearch(b))
+    : [];
+  if (adminRole === 'owner') {
+    const missedSec = document.getElementById('missedSection');
+    if (missedSec) {
+      missedSec.style.display = missedBkgs.length ? 'block' : 'none';
+      document.getElementById('missedCount').textContent = missedBkgs.length;
+      document.getElementById('missedList').innerHTML = missedBkgs.length
+        ? missedBkgs.map(b => cardHTML(b, allBookings.indexOf(b), false)).join('')
+        : '';
+    }
   }
 
   // Needs Payment section — done but not yet paid (VERY TOP, owner only)
@@ -930,25 +979,21 @@ function renderBookings() {
       : '<div class="empty-state" style="padding:20px;">No completed jobs yet.</div>';
   }
 
-  // Today (active only)
+  // Hide legacy needsAction section (replaced by needsPaySection + missedSection)
+  const nasSec = document.getElementById('needsActionSection');
+  if (nasSec) nasSec.style.display = 'none';
+
+  // Today (active only — exclude missed)
   document.getElementById('todayCount').textContent = today.length;
   document.getElementById('todayList').innerHTML = today.length
     ? today.map((b,i) => cardHTML(b, allBookings.indexOf(b), true)).join('')
     : '<div class="empty-state" style="padding:20px;">No jobs today 🎉</div>';
 
-  // Upcoming (active only)
+  // Upcoming (active only — future dates)
   document.getElementById('upcomingCount').textContent = upcoming.length;
   document.getElementById('upcomingList').innerHTML = upcoming.length
     ? upcoming.map(b => cardHTML(b, allBookings.indexOf(b), false)).join('')
     : '<div class="empty-state" style="padding:20px;">Nothing else scheduled.</div>';
-
-  // Needs action (owner only)
-  if (adminRole === 'owner') {
-    document.getElementById('needsActionCount').textContent = needs.length;
-    document.getElementById('needsActionList').innerHTML = needs.length
-      ? needs.map(b => cardHTML(b, allBookings.indexOf(b), false)).join('')
-      : '<div class="empty-state" style="padding:20px;">Nothing needs attention ✅</div>';
-  }
 }
 
 function cardHTML(b, rowIdx, isToday) {
@@ -984,8 +1029,8 @@ function cardHTML(b, rowIdx, isToday) {
   // ── Action buttons ──
   let actions = '';
 
-  // Mark Done button — always shown while job is not done
-  if (!done) {
+  // Mark Done button — employees can only mark today's jobs; owners can mark any upcoming job
+  if (!done && (adminRole === 'owner' || isToday)) {
     actions += `<button class="btn-action btn-done" onclick="triggerMarkDone(${rowIdx})">✓ Mark Done</button>`;
   }
 
@@ -1012,16 +1057,21 @@ function cardHTML(b, rowIdx, isToday) {
     }
   }
 
+  // Cancel Job — owner only, not available on already-done/paid jobs
+  if (adminRole === 'owner' && !isPaid) {
+    actions += `<button class="btn-action btn-cancel-job" onclick="triggerCancelJob(${rowIdx})" style="margin-top:4px;">✕ Cancel Job</button>`;
+  }
+
   return `
     <div class="booking-card ${isToday?'today':''} ${done?'done':''}">
       <div>
         <div class="card-name">${esc(b.name||'—')}</div>
         <div class="card-meta">
-          📍 ${esc(b.address||'—')}${b.zip?' · '+esc(b.zip):''}<br>
+          ${b.address?`<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((b.address||'')+(b.zip?', '+b.zip:'')+', FL')}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">📍 ${esc(b.address)}${b.zip?' · '+esc(b.zip):''}</a>`:'📍 —'}<br>
           📅 ${esc(displayDate(b.serviceDate||b.serviceDateRaw)||'—')}
           ${b.frequency&&!done?' · '+esc(b.frequency):''}<br>
           ${b.email?`✉️ <a href="mailto:${esc(b.email)}">${esc(b.email)}</a><br>`:''}
-          ${b.phone?`📞 ${esc(b.phone)}<br>`:''}
+          ${b.phone?`<a href="tel:${esc(b.phone)}" style="color:inherit;text-decoration:none;">📞 ${esc(b.phone)}</a><br>`:''}
           ${b.notes&&b.notes!=='(none)'?`💬 ${esc(b.notes)}<br>`:''}
         </div>
         <div class="card-badges">
@@ -1087,6 +1137,41 @@ async function executeMarkDone(rowIdx) {
     }
   } catch(err) {
     renderBookings();
+    alert('Network error: ' + err.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// CANCEL JOB (owner only)
+// ═══════════════════════════════════════════════════════
+function triggerCancelJob(rowIdx) {
+  const b = allBookings[rowIdx];
+  if (!b) return;
+  const title = `Cancel "${b.name||'job'}" — ${b.serviceDate||b.serviceDateRaw||''}?`;
+  const msg   = 'This will permanently remove the booking. This cannot be undone.';
+  document.getElementById('confirmYesBtn').className = 'btn-confirm-yes danger';
+  openConfirm(title, msg, () => executeCancelJob(rowIdx));
+}
+
+async function executeCancelJob(rowIdx) {
+  const b = allBookings[rowIdx];
+  if (!b) return;
+  const params = new URLSearchParams({
+    action:     'cancel_job',
+    rowIndex:   b._rowIndex || (rowIdx + 2),
+    adminToken: adminToken,
+  });
+  try {
+    const res  = await fetch(SCRIPT_URL + '?' + params.toString());
+    const data = await res.json();
+    if (data.success) {
+      allBookings.splice(rowIdx, 1); // remove from local list
+      renderBookings();
+      showToast('Job cancelled and removed.');
+    } else {
+      alert('Error: ' + (data.error || 'Could not cancel job.'));
+    }
+  } catch(err) {
     alert('Network error: ' + err.message);
   }
 }
@@ -1519,12 +1604,7 @@ function esc(s) {
 }
 function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
 
-function saveSession(token, name, email, role, days) {
-  try {
-    const exp = new Date(Date.now() + (days||1)*24*60*60*1000).toISOString();
-    localStorage.setItem('eg_staff_session', JSON.stringify({ token, name, email, role, exp }));
-  } catch(e) {}
-}
+// saveSession defined above near loadSavedSession
 
 let _toastTimer = null;
 function showToast(msg, duration=3000) {
@@ -1820,21 +1900,17 @@ function renderRouteTimeline(stops, startAddr, startTime) {
     const last = stops[stops.length-1];
     html += '<div class="route-connector"><div class="route-connector-line" style="min-height:36px;"></div></div>'
           + '<div class="route-finish">'
-          +   '<div class="route-finish-badge">✓</div>'
+          +   '<div class="route-finish-badge">🏁</div>'
           +   '<div class="route-finish-card">'
-          +     '<div class="route-finish-label">All done for the day!</div>'
+          +     '<div class="route-finish-label">Estimated finish</div>'
           +     '<div class="route-finish-time">'+fmtTime(last.departTime)+'</div>'
-          +     '<div style="font-size:12px;color:var(--green-mid);margin-top:3px;font-weight:500;">estimated wrap-up time</div>'
           +   '</div>'
           + '</div>';
   }
+
   return html;
 }
+
 </script>
-
-<!-- Toast -->
-<div id="toast" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#1a3a1a;color:#fff;padding:12px 24px;border-radius:30px;font-size:14px;font-weight:600;box-shadow:0 8px 32px rgba(0,0,0,.25);opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;z-index:9999;white-space:nowrap;"></div>
-<style>#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}</style>
-
 </body>
 </html>
