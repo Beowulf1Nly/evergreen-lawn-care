@@ -1582,14 +1582,39 @@
         <div class="quote-lot-info">
           <span class="quote-lot-icon" id="q-lot-icon">🏘️</span>
           <div>
-            <div class="quote-lot-label" id="q-lot-label">Medium lot · ¼–½ acre</div>
-            <div class="quote-lot-sublabel">Estimated from your location — adjust if needed</div>
+            <div class="quote-lot-label" id="q-lot-label">Looking up your property…</div>
+            <div class="quote-lot-sublabel" id="q-lot-sublabel">Checking county records</div>
           </div>
         </div>
-        <div class="quote-lot-adjust">
-          <button class="quote-adj-btn" onclick="adjustLotSize(-1)" title="Smaller">−</button>
-          <button class="quote-adj-btn" onclick="adjustLotSize(1)" title="Larger">＋</button>
-        </div>
+        <!-- No manual adjust — tier is locked to county record or manual selection below -->
+      </div>
+      <!-- Shown only if parcel lookup fails -->
+      <div id="q-lot-manual" style="display:none;margin-bottom:12px;">
+        <label style="font-size:12px;font-weight:700;color:var(--green-deep);letter-spacing:.05em;text-transform:uppercase;display:block;margin-bottom:6px;">Select Your Lot Size</label>
+        <select id="q-lot-select" onchange="onLotSelectChange()" style="width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;background:#fff;outline:none;">
+          <option value="0">Small · Up to ¼ acre</option>
+          <option value="1">Medium · ¼–½ acre</option>
+          <option value="2">½–1 acre</option>
+          <option value="3">1–1.5 acres</option>
+          <option value="4">1.5–2 acres</option>
+          <option value="5">2–2.5 acres</option>
+          <option value="6">2.5–3 acres</option>
+          <option value="7">3–3.5 acres</option>
+          <option value="8">3.5–4 acres</option>
+          <option value="9">4–4.5 acres</option>
+          <option value="10">4.5–5 acres</option>
+          <option value="11">5–5.5 acres</option>
+          <option value="12">5.5–6 acres</option>
+          <option value="13">6–6.5 acres</option>
+          <option value="14">6.5–7 acres</option>
+          <option value="15">7–7.5 acres</option>
+          <option value="16">7.5–8 acres</option>
+          <option value="17">8–8.5 acres</option>
+          <option value="18">8.5–9 acres</option>
+          <option value="19">9–9.5 acres</option>
+          <option value="20">9.5–10 acres</option>
+          <option value="21">10+ acres · Custom Quote</option>
+        </select>
       </div>
 
       <div id="q-returning-banner" style="display:none;margin-bottom:14px;padding:12px 16px;background:#fff7ed;border:1.5px solid #fde68a;border-radius:10px;font-size:13px;color:#92400e;line-height:1.5;">
@@ -2587,8 +2612,52 @@ const LOT_TIERS = [
   { key: 'xl',      label: '10+ acres · Custom Quote',    icon: '🗺️' },
 ];
 
-// Zip → default lot tier index (0=small, 1=medium, 2=half-acre, 3=1-1.5ac...)
-// Most Citrus County residential lots are ¼-½ acre (tier 1=medium or 2=half)
+// ── Parcel lookup: acreage → tier index ───────────────────────────────
+// Called after step 1 submit. Queries Apps Script which hits Citrus County PA.
+async function lookupLotSize(address, zip) {
+  const sublabel = document.getElementById('q-lot-sublabel');
+  const label    = document.getElementById('q-lot-label');
+  const manual   = document.getElementById('q-lot-manual');
+  if (label)    label.textContent    = 'Looking up your property…';
+  if (sublabel) sublabel.textContent = 'Checking county records';
+  if (manual)   manual.style.display = 'none';
+
+  try {
+    const url = SHEETS_SCRIPT_URL + '?action=lookup_lot_size&address=' + encodeURIComponent(address) + '&zip=' + encodeURIComponent(zip);
+    const res  = await fetch(url);
+    const data = await res.json();
+
+    if (data.success && data.tierIdx !== undefined && data.tierIdx >= 0 && data.tierIdx < LOT_TIERS.length - 1) {
+      qState.lotTierIdx = data.tierIdx;
+      updateLotDisplay();
+      if (sublabel) sublabel.textContent = data.acreage
+        ? `${data.acreage} acres — confirmed from county records`
+        : 'Confirmed from county records';
+    } else {
+      throw new Error('not found');
+    }
+  } catch(e) {
+    // Lookup failed — show manual selector
+    qState.lotTierIdx = 1; // default medium
+    updateLotDisplay();
+    if (sublabel) sublabel.textContent = 'Could not detect — please select your lot size';
+    if (manual) {
+      manual.style.display = 'block';
+      const sel = document.getElementById('q-lot-select');
+      if (sel) sel.value = String(qState.lotTierIdx);
+    }
+  }
+}
+
+function onLotSelectChange() {
+  const sel = document.getElementById('q-lot-select');
+  if (!sel) return;
+  qState.lotTierIdx = parseInt(sel.value) || 0;
+  updateLotDisplay();
+  renderPlanCards();
+}
+
+// LEGACY fallback map — no longer used for new bookings (kept for reference)
 const ZIP_LOT_MAP = {
   '34428':1,'34429':1,                    // Crystal River (mostly medium)
   '34450':1,'34451':1,'34452':1,'34453':1,// Inverness (medium)
@@ -2801,10 +2870,11 @@ async function quoteStep1Submit() {
   if (btn) { btn.textContent = 'Get My Price →'; btn.disabled = false; }
 
   qState.name=name; qState.email=email; qState.phone=phone; qState.address=address; qState.zip=zip;
-  if (zip && ZIP_LOT_MAP[zip] !== undefined) qState.lotTierIdx = ZIP_LOT_MAP[zip];
   showQuoteStep(2);
   document.getElementById('q-address-confirm').textContent = address + (zip ? ', ' + zip : '');
   runAnalyzingAnimation();
+  // Kick off parcel lookup in parallel — updates lot display when step 3 is shown
+  lookupLotSize(address, zip);
 }
 
 function runAnalyzingAnimation() {
@@ -2845,15 +2915,12 @@ function updateLotDisplay() {
   const tier = LOT_TIERS[qState.lotTierIdx];
   const labelEl = document.getElementById('q-lot-label');
   const iconEl  = document.getElementById('q-lot-icon');
-  if (labelEl) labelEl.textContent = tier.label;
+  if (labelEl) labelEl.textContent = tier ? tier.label : '—';
   if (iconEl)  iconEl.textContent  = tier.icon;
 }
 
-function adjustLotSize(dir) {
-  qState.lotTierIdx = Math.max(0, Math.min(LOT_TIERS.length-1, qState.lotTierIdx+dir));
-  updateLotDisplay();
-  renderPlanCards();
-}
+// adjustLotSize removed — lot size is now locked to county parcel lookup
+// (manual selector appears automatically if lookup fails)
 
 function renderPlanCards() {
   const tierKey = LOT_TIERS[qState.lotTierIdx].key;
@@ -2911,7 +2978,7 @@ function buildOrderSummary() {
   document.getElementById('quoteOrderSummary').innerHTML = `
     <div class="quote-order-row"><span>Service</span><span style="font-weight:600;color:var(--green-deep)">${planNames[planId]}</span></div>
     <div class="quote-order-row"><span>Start Date</span><span style="font-weight:600;color:var(--green-deep)">${dateFmt}</span></div>
-    ${!isRet ? `<div class="quote-order-row"><span>Following services</span><span style="color:var(--green-mid);font-weight:600">${afterTxt}/mow</span></div>` : ''}
+    ${!isRet ? `<div class="quote-order-row"><span>Following services</span><span style="color:var(--green-mid);font-weight:600">${afterTxt}</span></div>` : ''}
     <div class="quote-order-total"><span>${todayLbl}</span><span class="quote-order-amount">${todayAmt}</span></div>`;
 }
 

@@ -136,6 +136,10 @@
   .btn-primary-lg:hover { background:var(--green-deep); }
   .btn-primary-lg:disabled { background:#a0aec0; cursor:not-allowed; }
 
+  /* ── Toast ── */
+  #toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(20px); background:#1a3a1a; color:#fff; padding:12px 24px; border-radius:12px; font-size:14px; font-weight:600; z-index:2000; opacity:0; transition:opacity .25s, transform .25s; pointer-events:none; white-space:nowrap; }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
   /* ── Stats ── */
   .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-bottom:28px; }
   .stat-card { background:#fff; border:1.5px solid var(--border); border-radius:14px; padding:20px 24px; }
@@ -144,6 +148,13 @@
   .stat-card.green { border-left:4px solid var(--green-bright); }
   .stat-card.gold  { border-left:4px solid var(--gold); }
   .stat-card.blue  { border-left:4px solid #3b82f6; }
+
+  /* ── Mow log table ── */
+  .mow-log-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .mow-log-table th { text-align:left; padding:10px 12px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); border-bottom:2px solid var(--border); background:#f8faf8; }
+  .mow-log-table td { padding:10px 12px; border-bottom:1px solid var(--border); color:var(--text); vertical-align:top; }
+  .mow-log-table tr:last-child td { border-bottom:none; }
+  .mow-log-table tr:hover td { background:#f8faf8; }
 
   /* ── Confirm modal ── */
   .confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; z-index:1100; padding:20px; }
@@ -234,20 +245,20 @@
         <div id="todayList"><div class="empty-state">Loading…</div></div>
       </div>
 
-      <!-- Upcoming (owner sees all; employee sees next 7 days) -->
-      <div id="upcomingSection">
-        <div class="section-label">
-          📋 <span id="upcomingLabel">Upcoming Jobs</span> <span class="badge" id="upcomingCount">0</span>
-        </div>
-        <div id="upcomingList"><div class="empty-state">Loading…</div></div>
-      </div>
-
-      <!-- Needs Action (owner only) -->
-      <div id="needsActionSection" style="display:none;margin-top:32px;">
+      <!-- Needs Invoice / Charge (owner only) — shown ABOVE all other bookings -->
+      <div id="needsActionSection" style="display:none;margin-bottom:32px;">
         <div class="section-label">
           ⚠️ Needs Invoice / Charge <span class="badge" style="background:#e53e3e;" id="needsActionCount">0</span>
         </div>
         <div id="needsActionList"></div>
+      </div>
+
+      <!-- All Other Bookings (owner sees all; employee sees next 7 days) -->
+      <div id="upcomingSection">
+        <div class="section-label">
+          📋 <span id="upcomingLabel">All Other Bookings</span> <span class="badge" id="upcomingCount">0</span>
+        </div>
+        <div id="upcomingList"><div class="empty-state">Loading…</div></div>
       </div>
 
     </div>
@@ -283,9 +294,10 @@
           </div>
           <div class="form-field">
             <label>Plan *</label>
-            <select id="ac-plan">
+            <select id="ac-plan" onchange="onAcPlanChange()">
               <option value="Bi-Weekly Plan">Bi-Weekly</option>
               <option value="Weekly Plan">Weekly</option>
+              <option value="One-time visit">One-Time Visit</option>
             </select>
           </div>
           <div class="form-field">
@@ -674,48 +686,53 @@ function renderBookings() {
 }
 
 function cardHTML(b, rowIdx, isToday) {
-  const auto    = isAutoPay(b);
-  const done    = isDone(b);
-  const invoiced= !!b.invoiced && String(b.invoiced).length > 2;
-  const price   = parseFloat(String(b.price||'').replace(/[^0-9.]/g,'')) || 0;
-  const cardInfo= b.cardLast4 ? ` ·&nbsp;${cap(b.cardBrand||'Card')} ••${b.cardLast4}` : '';
+  const auto     = isAutoPay(b);
+  const done     = isDone(b);
+  const paidRaw  = String(b.calendarEvent || b.payMethod || '');
+  const isPaid   = paidRaw.includes('✅') || paidRaw.toLowerCase().includes('autopay') || paidRaw.toLowerCase().includes('auto-pay');
+  const invoiced = !!b.invoiced && String(b.invoiced).length > 2;
+  const isFree   = String(b.frequency||'').toLowerCase().includes('free');
+  const price    = parseFloat(String(b.price||'').replace(/[^0-9.]/g,'')) || 0;
+  const cardInfo = b.cardLast4 ? ` · ${cap(b.cardBrand||'Card')} ••${b.cardLast4}` : '';
 
-  // Payment badge
-  let payBadge = auto
-    ? `<span class="badge-autopay">🔄 Autopay${cardInfo}</span>`
-    : `<span class="badge-paylater">📧 Manual Invoice</span>`;
+  // ── Single clean payment badge ──
+  let payBadge = '';
+  if (isFree) {
+    payBadge = `<span class="badge-invoiced">🌿 Free Mow</span>`;
+  } else if (isPaid) {
+    payBadge = `<span class="badge-invoiced">✅ Paid</span>`;
+  } else if (invoiced) {
+    payBadge = `<span class="badge-invoiced">📧 Invoice sent</span>`;
+  } else if (auto) {
+    payBadge = `<span class="badge-autopay">⚡ Autopay${cardInfo}</span>`;
+  } else {
+    payBadge = `<span class="badge-paylater">📋 Manual invoice</span>`;
+  }
 
-  // Done badge
-  const doneBadge = done ? `<span class="badge-done">✓ Done${b.markedBy ? ' — ' + esc(b.markedBy) : ''}</span>` : '';
-
-  // Invoice badge
-  const invBadge = invoiced ? `<span class="badge-invoiced">✉️ Invoiced</span>` : '';
-
-  // Needs action badge
-  const needsBadge = (!done && !auto && !invoiced && adminRole==='owner')
-    ? `<span class="badge-needs">⚡ Action needed</span>` : '';
+  // Done badge shows who completed it and when
+  const doneLabel = b.doneDate || (String(b.done||'').replace(/^✓ Done —?\s*/i,'').trim());
+  const doneBadge = done
+    ? `<span class="badge-done">✓ Done${b.markedBy ? ' by ' + esc(b.markedBy) : ''}${doneLabel ? ' · ' + esc(doneLabel) : ''}</span>`
+    : '';
 
   // ── Action buttons ──
   let actions = '';
 
-  // Mark done button (everyone can do this)
   if (!done) {
     actions += `<button class="btn-action btn-done" onclick="triggerMarkDone(${rowIdx})">✓ Mark Done</button>`;
   }
 
-  // Invoice / charge buttons (owner only)
-  if (adminRole === 'owner') {
-    if (done && auto && !invoiced) {
-      // Autopay: charge their card
-      actions += `<button class="btn-action btn-charge" onclick="triggerAutoCharge(${rowIdx})">⚡ Charge $${price.toFixed(0)}</button>`;
-    } else if (done && !auto && !invoiced) {
-      // Manual invoice
+  if (adminRole === 'owner' && !isFree && !isPaid) {
+    if (auto && !invoiced) {
+      // Autopay customer — show Charge button (available even before done, owner's discretion)
+      if (done) {
+        actions += `<button class="btn-action btn-charge" onclick="triggerAutoCharge(${rowIdx})">⚡ Charge $${price.toFixed(0)}</button>`;
+      }
+    } else if (!auto && !invoiced) {
+      // Manual invoice — show button always (owner might invoice before or after job)
       actions += `<button class="btn-action btn-invoice" onclick="openInvoiceModal(${rowIdx})">📧 Invoice $${price.toFixed(0)}</button>`;
-    } else if (invoiced) {
+    } else if (invoiced && done) {
       actions += `<button class="btn-action btn-disabled" disabled>Sent ✓</button>`;
-    } else if (!done) {
-      // Not done yet — show grayed out
-      actions += `<button class="btn-action btn-disabled" disabled style="font-size:12px;">Complete job first</button>`;
     }
   }
 
@@ -725,18 +742,19 @@ function cardHTML(b, rowIdx, isToday) {
         <div class="card-name">${esc(b.name||'—')}</div>
         <div class="card-meta">
           📍 ${esc(b.address||'—')}${b.zip?' · '+esc(b.zip):''}<br>
-          📅 ${esc(displayDate(b.serviceDate||b.serviceDateRaw)||'—')}<br>
+          📅 ${esc(displayDate(b.serviceDate||b.serviceDateRaw)||'—')}
+          ${b.frequency&&!done?' · '+esc(b.frequency):''}<br>
           ${b.email?`✉️ <a href="mailto:${esc(b.email)}">${esc(b.email)}</a><br>`:''}
           ${b.phone?`📞 ${esc(b.phone)}<br>`:''}
           ${b.notes&&b.notes!=='(none)'?`💬 ${esc(b.notes)}<br>`:''}
         </div>
         <div class="card-badges">
-          <span class="badge-service">${esc(b.service||b.frequency||'Service')}</span>
-          ${payBadge}${doneBadge}${invBadge}${needsBadge}
+          <span class="badge-service">${esc(b.service||'Lawn Mow & Blow')}</span>
+          ${payBadge}${doneBadge}
         </div>
       </div>
       <div class="card-actions">
-        <div class="price-tag">${price?'$'+price.toFixed(0):'—'}</div>
+        <div class="price-tag">${price&&!isFree?'$'+price.toFixed(0):'—'}</div>
         ${actions}
       </div>
     </div>`;
@@ -768,6 +786,16 @@ function triggerMarkDone(rowIdx) {
 async function executeMarkDone(rowIdx) {
   const b = allBookings[rowIdx];
   if (!b) return;
+
+  // Immediately disable the done button in the DOM for snappy feedback
+  const cardEls = document.querySelectorAll('.booking-card');
+  cardEls.forEach(el => {
+    if (el.innerHTML.includes(esc(b.name||''))) {
+      const btn = el.querySelector('.btn-done');
+      if (btn) { btn.disabled = true; btn.textContent = 'Marking done…'; }
+    }
+  });
+
   const params = new URLSearchParams({
     action:   'mark_done',
     rowIndex: rowIdx + 2,
@@ -778,13 +806,21 @@ async function executeMarkDone(rowIdx) {
     const res  = await fetch(SCRIPT_URL + '?' + params.toString());
     const data = await res.json();
     if (data.success) {
-      allBookings[rowIdx].done = '✓ Done — ' + (adminName || 'Staff');
-      allBookings[rowIdx].markedBy = adminName || 'Staff';
+      const todayLabel = new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+      allBookings[rowIdx].done     = '✓ Done — ' + todayLabel;
+      allBookings[rowIdx].markedBy = adminName || adminEmail || 'Staff';
+      allBookings[rowIdx].doneDate = todayLabel;
       renderBookings();
+      const chargeMsg = data.autopayCharged ? ' · Card charged ✓' : '';
+      showToast('✓ ' + (b.name||'Job') + ' marked done!' + chargeMsg);
     } else {
+      renderBookings(); // restore button state
       alert('Error: ' + (data.error || 'Could not mark done.'));
     }
-  } catch(err) { alert('Network error: ' + err.message); }
+  } catch(err) {
+    renderBookings();
+    alert('Network error: ' + err.message);
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -964,9 +1000,26 @@ const YARD_PRICING = {
   eight5:  {bw:390,w:340},nine:   {bw:410,w:358}, nine5:  {bw:430,w:375},
 };
 
+function onAcPlanChange() {
+  const plan       = document.getElementById('ac-plan')?.value || '';
+  const isOneTime  = plan === 'One-time visit';
+  const yardField  = document.getElementById('ac-yard')?.closest('.form-field');
+  if (yardField) yardField.style.opacity = isOneTime ? '.4' : '1';
+  const priceInput = document.getElementById('ac-price');
+  if (isOneTime) {
+    if (priceInput) { priceInput.placeholder = 'Enter price for this job'; priceInput.value = ''; }
+    const prev = document.getElementById('ac-price-preview');
+    if (prev) prev.textContent = 'Enter a custom price for this one-time job.';
+  } else {
+    if (priceInput) priceInput.placeholder = 'Auto-filled';
+    updateAcPricePreview();
+  }
+}
+
 function updateAcPricePreview() {
   const yard = document.getElementById('ac-yard')?.value || 'medium';
   const plan = document.getElementById('ac-plan')?.value || 'Bi-Weekly Plan';
+  if (plan === 'One-time visit') return; // handled by onAcPlanChange
   const p    = YARD_PRICING[yard];
   if (!p) { document.getElementById('ac-price-preview').textContent = 'Custom quote required'; return; }
   const rate = plan.includes('Weekly') && !plan.includes('Bi') ? p.w : p.bw;
@@ -1068,15 +1121,44 @@ async function loadStats() {
         return doneRaw.includes('Done') && !paidRaw.includes('✅');
       }).length;
     } catch(e) {}
+    // Build detailed mow log from allBookings (already loaded)
+    const mowLog = (allBookings || [])
+      .filter(bk => isDone(bk))
+      .map(bk => ({
+        date:    bk.doneDate || String(bk.done||'').replace(/^✓ Done —?\s*/i,'').trim() || displayDate(bk.serviceDate) || '—',
+        name:    bk.name    || '—',
+        address: (bk.address||'—') + (bk.zip ? ', '+bk.zip : ''),
+        price:   parseFloat(String(bk.price||'').replace(/[^0-9.]/g,''))||0,
+        by:      bk.markedBy || '—',
+      }))
+      .sort((a,z) => (z.date > a.date ? 1 : -1)); // newest first
+
+    const mowLogHtml = mowLog.length
+      ? `<div style="overflow-x:auto;"><table class="mow-log-table">
+          <thead><tr>
+            <th>Date</th><th>Customer</th><th>Address</th><th>Price</th><th>Completed By</th>
+          </tr></thead>
+          <tbody>
+            ${mowLog.map(r=>`<tr>
+              <td style="white-space:nowrap;">${esc(r.date)}</td>
+              <td style="font-weight:600;">${esc(r.name)}</td>
+              <td style="color:var(--text-muted);">${esc(r.address)}</td>
+              <td style="font-weight:700;color:var(--green-deep);">${r.price?'$'+r.price.toFixed(0):'—'}</td>
+              <td>${esc(r.by)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>`
+      : '<div class="empty-state" style="padding:20px;">No completed jobs yet.</div>';
+
     el.innerHTML = `
       <div class="stats-grid">
         <div class="stat-card green">
           <div class="stat-num">$${(s.revenue30||0).toFixed(0)}</div>
-          <div class="stat-label">Revenue (last 30 days)</div>
+          <div class="stat-label">Estimated revenue</div>
         </div>
         <div class="stat-card green">
           <div class="stat-num">${s.jobsDone30||0}</div>
-          <div class="stat-label">Jobs completed (30 days)</div>
+          <div class="stat-label">Jobs completed</div>
         </div>
         <div class="stat-card blue">
           <div class="stat-num">${s.activeCustomers||0}</div>
@@ -1087,15 +1169,26 @@ async function loadStats() {
           <div class="stat-label">Pending invoices</div>
         </div>
       </div>
-      <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px;">
-        <div class="section-label" style="margin-bottom:16px;">Employee Activity</div>
+
+      <!-- Who did each mow -->
+      <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:24px;">
+        <div class="section-label" style="margin-bottom:16px;">
+          Mow Log — All Completed Jobs
+          <span style="font-size:11px;font-weight:500;color:var(--text-muted);text-transform:none;letter-spacing:0;margin-left:8px;">${mowLog.length} total</span>
+        </div>
+        ${mowLogHtml}
+      </div>
+
+      <!-- Employee summary -->
+      <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;">
+        <div class="section-label" style="margin-bottom:16px;">Employee Summary</div>
         ${(s.staffActivity||[]).length
           ? (s.staffActivity||[]).map(row =>
-              `<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px;">
-                <span>${esc(row.name)}</span>
-                <span style="color:var(--text-muted);">${row.jobs} jobs done</span>
+              `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+                <span style="font-weight:600;font-size:14px;">${esc(row.name)}</span>
+                <span style="background:var(--green-pale);color:var(--green-deep);border-radius:6px;padding:3px 10px;font-size:13px;font-weight:700;">${row.jobs} job${row.jobs!==1?'s':''}</span>
               </div>`).join('')
-          : '<div class="empty-state" style="padding:20px;">No activity data yet.</div>'
+          : '<div class="empty-state" style="padding:20px;">No activity yet.</div>'
         }
       </div>`;
   } catch(err) {
@@ -1135,13 +1228,22 @@ function needsAction(b) {
   return true; // not done and not invoiced
 }
 function dateOf(b) {
-  const raw = b.serviceDateRaw || b.serviceDate || '';
+  const raw = String(b.serviceDateRaw || b.serviceDate || '').trim();
+  if (!raw) return '';
+  // Already YYYY-MM-DD — use directly (no timezone shift possible)
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
   try {
-    const d = new Date(raw);
-    if (isNaN(d)) return raw;
-    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-  } catch { return raw; }
+    // Force parse at local noon so UTC midnight never bleeds into the wrong calendar day
+    const normalized = raw.replace(/T.*$/, ''); // strip time if present
+    const attempt = new Date(normalized + ' 12:00:00');
+    if (isNaN(attempt.getTime())) {
+      // Last resort: parse raw as-is
+      const d2 = new Date(raw);
+      if (isNaN(d2.getTime())) return raw;
+      return d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
+    }
+    return attempt.getFullYear()+'-'+String(attempt.getMonth()+1).padStart(2,'0')+'-'+String(attempt.getDate()).padStart(2,'0');
+  } catch(e) { return raw; }
 }
 function todayDateStr() {
   const d = new Date();
@@ -1157,6 +1259,21 @@ function esc(str) {
   return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function cap(str) { return str ? str.charAt(0).toUpperCase()+str.slice(1).toLowerCase() : ''; }
+
+// ── Toast ──────────────────────────────────────────────────────────────
+let _toastTimer = null;
+function showToast(msg, duration=3000) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), duration);
+}
 </script>
+
+<!-- Toast -->
+<div id="toast"></div>
+
 </body>
 </html>
