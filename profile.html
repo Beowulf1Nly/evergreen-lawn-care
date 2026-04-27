@@ -942,6 +942,26 @@ function renderBillingCard(bookings) {
     ? nextDateStr.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' })
     : 'TBD';
 
+  // Ongoing rate = price from a completed booking, or from any upcoming booking priced > $20,
+  // or fall back to the plan default. This avoids showing the $19 promo as the "per-mow rate".
+  const _donePrices = subBookings
+    .filter(b => String(b.done||'').includes('Done'))
+    .map(b => parseFloat(String(b.price||'').replace(/[^0-9.]/g,'')))
+    .filter(p => p > 20);
+  const _upcomingPrices = subBookings
+    .filter(b => !String(b.done||'').includes('Done'))
+    .map(b => parseFloat(String(b.price||'').replace(/[^0-9.]/g,'')))
+    .filter(p => p > 20);
+  const _ongoingRaw = _donePrices[0] || _upcomingPrices[0] || (isWeekly ? 35 : 40);
+  const mowRate    = _ongoingRaw;
+  const mowRateStr = '$' + mowRate.toFixed(0);
+
+  // Promo: if their very next mow is priced lower than the ongoing rate, note it
+  const _nextPrice = nextAppt ? parseFloat(String(nextAppt.price||'').replace(/[^0-9.]/g,'')) : 0;
+  const promoNote  = (_nextPrice > 0 && _nextPrice < mowRate)
+    ? `<div style="margin-top:8px;font-size:12px;color:#92400e;">🎉 Your first visit is just $${_nextPrice.toFixed(0)} — then ${mowRateStr} per mow ongoing.</div>`
+    : '';
+
   let html = '';
 
   if (isWeekly) {
@@ -1022,7 +1042,7 @@ function renderBillingCard(bookings) {
       <div class="billing-plan-row">
         <div>
           <div class="billing-plan-name">📅 Weekly Plan</div>
-          <div class="billing-plan-sub">$35/mow — charged after each visit</div>
+          <div class="billing-plan-sub">${mowRateStr}/mow — charged after each visit</div>
         </div>
       </div>
       <hr class="billing-divider">
@@ -1032,14 +1052,14 @@ function renderBillingCard(bookings) {
       </div>
       <div class="billing-info-row">
         <span class="billing-info-label">Per-mow rate</span>
-        <span class="billing-info-value">$35/visit — charged after each mow</span>
+        <span class="billing-info-value">${mowRateStr}/visit — charged after each mow</span>
       </div>
       ${chargeInfo ? `<div class="billing-info-row"><span class="billing-info-label">This month</span>${chargeInfo}</div>` : ''}
       <div class="mow-dots">${dotsHtml}</div>
       ${alertBox}
       <div style="margin-top:12px;padding:10px 14px;background:#f0fdf4;border-radius:10px;font-size:12px;color:#166534;line-height:1.6;">
-        💡 Your card is automatically charged $35 after each weekly mow. No invoices, no reminders.
-      </div>`;
+        💡 Your card is automatically charged ${mowRateStr} after each weekly mow. No invoices, no reminders.
+      </div>${promoNote}`;
 
   } else {
     // Bi-weekly: mow 1 = $80 payment, mow 2 = covered free
@@ -1102,7 +1122,7 @@ function renderBillingCard(bookings) {
       <div class="billing-plan-row">
         <div>
           <div class="billing-plan-name">📅 Bi-Weekly Plan</div>
-          <div class="billing-plan-sub">$40/mow — charged after each visit</div>
+          <div class="billing-plan-sub">${mowRateStr}/mow — charged after each visit</div>
         </div>
       </div>
       <hr class="billing-divider">
@@ -1112,13 +1132,13 @@ function renderBillingCard(bookings) {
       </div>
       <div class="billing-info-row">
         <span class="billing-info-label">Per-mow rate</span>
-        <span class="billing-info-value">$40/visit — charged after each mow</span>
+        <span class="billing-info-value">${mowRateStr}/visit — charged after each mow</span>
       </div>
       ${chargeInfo ? `<div class="billing-info-row"><span class="billing-info-label">This month</span>${chargeInfo}</div>` : ''}
       <div class="mow-dots">${dotsHtml}</div>
       ${alertBox}
       <div style="margin-top:12px;padding:10px 14px;background:#f0fdf4;border-radius:10px;font-size:12px;color:#166534;line-height:1.6;">
-        💡 Your card is automatically charged $40 after each bi-weekly mow. No invoices, no reminders.
+        💡 Your card is automatically charged ${mowRateStr} after each bi-weekly mow. No invoices, no reminders.
       </div>`;
   }
 
