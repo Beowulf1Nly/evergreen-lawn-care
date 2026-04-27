@@ -718,21 +718,34 @@ function cardHTML(b, rowIdx, isToday) {
   // ── Action buttons ──
   let actions = '';
 
+  // Mark Done button — always shown while job is not done
   if (!done) {
     actions += `<button class="btn-action btn-done" onclick="triggerMarkDone(${rowIdx})">✓ Mark Done</button>`;
   }
 
   if (adminRole === 'owner' && !isFree && !isPaid) {
-    if (auto && !invoiced) {
-      // Autopay customer — show Charge button (available even before done, owner's discretion)
-      if (done) {
-        actions += `<button class="btn-action btn-charge" onclick="triggerAutoCharge(${rowIdx})">⚡ Charge $${price.toFixed(0)}</button>`;
+    if (auto) {
+      // Autopay customer — Charge button greyed until done (auto-charges on mark done)
+      // If somehow done but not charged, show active retry
+      const hasCard = !!(b.cardLast4);
+      if (done && hasCard) {
+        // Done + card on file but not yet paid → allow manual retry
+        actions += `<button class="btn-action btn-charge" onclick="triggerAutoCharge(${rowIdx})">⚡ Retry Charge $${price.toFixed(0)}</button>`;
+      } else if (!done) {
+        // Not done yet — show greyed charge button as visual hint
+        actions += `<button class="btn-action btn-disabled" disabled title="Complete job first to charge card">⚡ Charge $${price.toFixed(0)}</button>`;
       }
-    } else if (!auto && !invoiced) {
-      // Manual invoice — show button always (owner might invoice before or after job)
-      actions += `<button class="btn-action btn-invoice" onclick="openInvoiceModal(${rowIdx})">📧 Invoice $${price.toFixed(0)}</button>`;
-    } else if (invoiced && done) {
-      actions += `<button class="btn-action btn-disabled" disabled>Sent ✓</button>`;
+    } else {
+      // Manual invoice customer
+      if (invoiced) {
+        actions += `<button class="btn-action btn-disabled" disabled>📧 Sent ✓</button>`;
+      } else if (done) {
+        // Done — Invoice button now active
+        actions += `<button class="btn-action btn-invoice" onclick="openInvoiceModal(${rowIdx})">📧 Invoice $${price.toFixed(0)}</button>`;
+      } else {
+        // Not done yet — invoice button greyed
+        actions += `<button class="btn-action btn-disabled" disabled title="Complete job first to send invoice">📧 Invoice $${price.toFixed(0)}</button>`;
+      }
     }
   }
 
@@ -798,7 +811,7 @@ async function executeMarkDone(rowIdx) {
 
   const params = new URLSearchParams({
     action:   'mark_done',
-    rowIndex: rowIdx + 2,
+    rowIndex: b._rowIndex || (rowIdx + 2), // prefer server-provided row index
     markedBy: adminName || adminEmail || 'Staff',
     adminToken: adminToken,
   });
@@ -811,8 +824,12 @@ async function executeMarkDone(rowIdx) {
       allBookings[rowIdx].markedBy = adminName || adminEmail || 'Staff';
       allBookings[rowIdx].doneDate = todayLabel;
       renderBookings();
-      const chargeMsg = data.autopayCharged ? ' · Card charged ✓' : '';
+      const chargeMsg = data.autopayCharged ? ' · Card charged ✓' : (isAutoPay(b) ? ' · Card charge pending' : '');
       showToast('✓ ' + (b.name||'Job') + ' marked done!' + chargeMsg);
+      // If autopay charged successfully, update the paid status locally so the charge button disappears
+      if (data.autopayCharged) {
+        allBookings[rowIdx].calendarEvent = '✅ PAID — Autopay';
+      }
     } else {
       renderBookings(); // restore button state
       alert('Error: ' + (data.error || 'Could not mark done.'));
@@ -843,7 +860,7 @@ async function executeAutoCharge(rowIdx) {
   if (!b) return;
   const params = new URLSearchParams({
     action:     'manual_charge',
-    rowIndex:   rowIdx + 2,
+    rowIndex:   b._rowIndex || (rowIdx + 2),
     adminToken: adminToken,
   });
   try {
