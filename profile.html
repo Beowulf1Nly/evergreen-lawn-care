@@ -560,6 +560,13 @@
           </div>
           <button class="btn-add-card" id="addCardBtn" onclick="openCardModal()">Add Card</button>
         </div>
+        <div class="settings-row" id="switchPlanRow" style="display:none;">
+          <div>
+            <div class="settings-label">Switch Plan</div>
+            <div class="settings-sub" id="switchPlanSub">Change your visit frequency</div>
+          </div>
+          <button class="btn-add-card" id="switchPlanBtn" onclick="">Switch</button>
+        </div>
         <div class="settings-row" id="cancelSubscriptionRow" style="display:none;">
           <div>
             <div class="settings-label" style="color:var(--red);">Cancel Subscription</div>
@@ -982,7 +989,7 @@ function renderBillingCard(bookings) {
         chargeInfo = '<span class="billing-info-value green">✅ First mow paid ($19) — card saved for future billing</span>';
         cycleLabel = '● = first mow (paid)  ○ = included mows';
       } else {
-        chargeInfo = '<span class="billing-info-value gold">⚡ Payment due on your next visit</span>';
+        chargeInfo = '';
         cycleLabel = '● = payment mow  ○ = included mows';
       }
     } else if (isPaymentMow) {
@@ -1002,7 +1009,7 @@ function renderBillingCard(bookings) {
         chargeInfo = '<span class="billing-info-value green">✅ Paid — your next 3 visits are already covered</span>';
         cycleLabel = '● = paid  ○ = already covered mows';
       } else {
-        chargeInfo = '<span class="billing-info-value gold">⚡ Payment due on your next visit</span>';
+        chargeInfo = '';
         cycleLabel = '● = payment mow  ○ = included mows';
       }
     } else {
@@ -1027,18 +1034,12 @@ function renderBillingCard(bookings) {
         <span class="billing-info-label">Per-mow rate</span>
         <span class="billing-info-value">$35/visit — charged after each mow</span>
       </div>
-      <div class="billing-info-row">
-        <span class="billing-info-label">This month</span>
-        ${chargeInfo}
-      </div>
+      ${chargeInfo ? `<div class="billing-info-row"><span class="billing-info-label">This month</span>${chargeInfo}</div>` : ''}
       <div class="mow-dots">${dotsHtml}</div>
       ${alertBox}
       <div style="margin-top:12px;padding:10px 14px;background:#f0fdf4;border-radius:10px;font-size:12px;color:#166534;line-height:1.6;">
-        💡 How it works: your first mow is just $19. After that, your card is automatically charged $35 after each weekly mow. No invoices, no reminders.
-      </div>
-      <button onclick="openChangePlanModal('Bi-Weekly Plan')" style="margin-top:14px;width:100%;padding:11px;background:#fff;color:var(--green-mid);border:1.5px solid var(--green-mid);border-radius:10px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">
-        Switch to Bi-Weekly Plan →
-      </button>`;
+        💡 Your card is automatically charged $35 after each weekly mow. No invoices, no reminders.
+      </div>`;
 
   } else {
     // Bi-weekly: mow 1 = $80 payment, mow 2 = covered free
@@ -1074,7 +1075,7 @@ function renderBillingCard(bookings) {
         chargeInfo = '<span class="billing-info-value green">✅ First mow paid ($19) — card saved for future billing</span>';
         cycleLabel = '● = first mow (paid)  ○ = included mow';
       } else {
-        chargeInfo = '<span class="billing-info-value gold">⚡ Payment due on your next visit</span>';
+        chargeInfo = '';
         cycleLabel = '● = payment mow  ○ = included mow';
       }
     } else if (bwInvoiceSent) {
@@ -1093,7 +1094,7 @@ function renderBillingCard(bookings) {
       chargeInfo = '<span class="billing-info-value green">✅ Paid — your next visit is already covered</span>';
       cycleLabel = '● = paid  ○ = already covered';
     } else {
-      chargeInfo = '<span class="billing-info-value gold">⚡ Payment due on your next visit</span>';
+      chargeInfo = '';
       cycleLabel = '● = payment mow  ○ = included mow';
     }
 
@@ -1113,24 +1114,29 @@ function renderBillingCard(bookings) {
         <span class="billing-info-label">Per-mow rate</span>
         <span class="billing-info-value">$40/visit — charged after each mow</span>
       </div>
-      <div class="billing-info-row">
-        <span class="billing-info-label">This month</span>
-        ${chargeInfo}
-      </div>
+      ${chargeInfo ? `<div class="billing-info-row"><span class="billing-info-label">This month</span>${chargeInfo}</div>` : ''}
       <div class="mow-dots">${dotsHtml}</div>
       ${alertBox}
       <div style="margin-top:12px;padding:10px 14px;background:#f0fdf4;border-radius:10px;font-size:12px;color:#166534;line-height:1.6;">
-        💡 How it works: your first mow is just $19. After that, your card is automatically charged $40 after each bi-weekly mow. No invoices, no reminders.
-      </div>
-      <button onclick="openChangePlanModal('Weekly Plan')" style="margin-top:14px;width:100%;padding:11px;background:#fff;color:var(--green-mid);border:1.5px solid var(--green-mid);border-radius:10px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">
-        Upgrade to Weekly Plan →
-      </button>`;
+        💡 Your card is automatically charged $40 after each bi-weekly mow. No invoices, no reminders.
+      </div>`;
   }
 
-  // Store plan name for cancel modal, and reveal the Cancel Plan settings row
+  // Store plan name for cancel modal, reveal cancel + switch plan rows
   activePlanFreq = freq;
   const cancelRow = document.getElementById('cancelSubscriptionRow');
   if (cancelRow) cancelRow.style.display = '';
+  const switchRow = document.getElementById('switchPlanRow');
+  const switchBtn = document.getElementById('switchPlanBtn');
+  const switchSub = document.getElementById('switchPlanSub');
+  if (switchRow && switchBtn && switchSub) {
+    const otherPlan = isWeekly ? 'Bi-Weekly Plan' : 'Weekly Plan';
+    const otherLabel = isWeekly ? 'Switch to Bi-Weekly' : 'Upgrade to Weekly';
+    switchSub.textContent = isWeekly ? 'Every two weeks instead of every week' : 'Every week instead of every two weeks';
+    switchBtn.textContent = otherLabel;
+    switchBtn.onclick = () => openChangePlanModal(otherPlan);
+    switchRow.style.display = '';
+  }
 
   card.innerHTML = html;
   section.style.display = 'block';
@@ -1416,9 +1422,11 @@ function esc(str) {
 function parseBookingDate(str) {
   if (!str) return null;
   // Strip leading weekday name if present — "Monday, May 4 2026" → "May 4 2026"
-  // new Date() chokes on full weekday prefixes in some V8 versions
-  const cleaned = String(str).replace(/^[A-Za-z]+,\s*/, '');
-  const d = new Date(cleaned);
+  const cleaned = String(str).replace(/^[A-Za-z]+,\s*/, '').trim();
+  // ISO date-only strings (YYYY-MM-DD) parse as UTC midnight in browsers,
+  // which shifts the date by up to a day in US timezones. Force noon local time.
+  const s = /^\d{4}-\d{2}-\d{2}$/.test(cleaned) ? cleaned + 'T12:00:00' : cleaned;
+  const d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
 }
 
@@ -1488,9 +1496,10 @@ function openRescheduleModal(rowIndex, currentDateStr) {
   document.getElementById('rescheduleDate').min = _tMin;
 
   // Pre-fill with the existing appointment date (only if it's in the future)
+  // Use parseBookingDate so ISO strings don't shift a day due to UTC midnight parsing
   try {
-    const d = new Date(currentDateStr);
-    if (!isNaN(d.getTime())) {
+    const d = parseBookingDate(currentDateStr);
+    if (d) {
       const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
       const pre = `${y}-${m}-${day}`;
       document.getElementById('rescheduleDate').value = pre >= _tMin ? pre : _tMin;
@@ -1563,7 +1572,7 @@ function openCancelApptModal(rowIndex, dateStr) {
   _cancelApptRowIdx = rowIndex;
   document.getElementById('cancelApptError').style.display = 'none';
   document.getElementById('cancelApptSub').textContent =
-    'Are you sure you want to cancel your appointment on ' + dateStr + '? This cannot be undone.';
+    'Cancel your appointment on ' + dateStr + '? Your plan continues — your next appointment will be automatically scheduled.';
   document.getElementById('cancelApptModal').classList.add('open');
 }
 function closeCancelApptModal() {
