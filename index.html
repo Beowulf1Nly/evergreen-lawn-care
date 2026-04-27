@@ -1628,6 +1628,7 @@
       <div id="q-lot-manual" style="display:none;margin-bottom:12px;">
         <label style="font-size:12px;font-weight:700;color:var(--green-deep);letter-spacing:.05em;text-transform:uppercase;display:block;margin-bottom:6px;">Select Your Lot Size</label>
         <select id="q-lot-select" onchange="onLotSelectChange()" style="width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;background:#fff;outline:none;">
+          <option value="" disabled selected>— Select your yard size —</option>
           <option value="0">Small · Up to ¼ acre</option>
           <option value="1">Medium · ¼–½ acre</option>
           <option value="2">½–1 acre</option>
@@ -2817,7 +2818,8 @@ async function lookupLotSize(address, zip) {
 
 function onLotSelectChange() {
   const sel = document.getElementById('q-lot-select');
-  if (!sel) return;
+  if (!sel || sel.value === '') return;
+  sel._userPicked = true;
   qState.lotTierIdx = parseInt(sel.value) || 0;
   updateLotDisplay();
   renderPlanCards();
@@ -3108,22 +3110,20 @@ function updateLotDisplay() {
   if (labelEl) labelEl.textContent = tier ? tier.label : '—';
   if (iconEl)  iconEl.textContent  = tier ? tier.icon : '🏡';
 
-  if (qState.lotAutoDetected) {
-    if (qState.detectedAcreage && !qState.lotEstimated) {
-      // Exact county record
-      if (sublabel) sublabel.textContent = '🛰️ ' + qState.detectedAcreage + ' acres · from county records';
-    } else {
-      // ZIP-based estimate — still auto-selected, no dropdown
-      if (sublabel) sublabel.textContent = '📍 Estimated based on your area';
-    }
+  if (qState.lotAutoDetected && !qState.lotEstimated) {
+    // Exact county record — auto-selected, no dropdown needed
+    if (sublabel) sublabel.textContent = '🛰️ ' + qState.detectedAcreage + ' acres · from county records';
     if (manual) manual.style.display = 'none';
   } else {
-    // Complete failure — show manual dropdown
-    if (sublabel) sublabel.textContent = "Couldn't detect your lot size — please select:";
+    // ZIP estimate or detection failed — show dropdown, force manual confirmation
+    if (sublabel) sublabel.textContent = qState.lotAutoDetected
+      ? '📍 Approximate size — please confirm your yard below:'
+      : 'We couldn't detect your lot — please select your yard size:';
     if (manual) {
       manual.style.display = 'block';
       const sel = document.getElementById('q-lot-select');
-      if (sel) sel.value = String(qState.lotTierIdx);
+      // Only set a value if the user already picked one; otherwise show blank
+      if (sel && !sel._userPicked) sel.value = '';
     }
   }
 }
@@ -3141,13 +3141,18 @@ function renderPlanCards() {
     const firstPrice = qState.isReturning ? p.afterPrice : 19;
     const afterLabel = noPrice ? 'Custom quote' : (qState.isReturning ? 'regular rate' : '$' + p.afterPrice + '/mow after');
     const isSelected = qState.selectedPlan === p.id;
-    const planFirstText = qState.isReturning
-      ? (noPrice ? 'Custom quote' : '$' + p.afterPrice + '/mow')
-      : '<strong>First mow: $19</strong> — billed after service';
+    // No $19 promo for lots over 1 acre (tier 3+) — margin is too thin
+    const bigLot       = qState.lotTierIdx >= 3;
+    const showPromo    = !qState.isReturning && !bigLot;
+    const planFirstText = showPromo
+      ? '<strong>First mow: $19</strong> — billed after service'
+      : (noPrice ? 'Custom quote' : '$' + p.afterPrice + '/mow');
     const notePart = p.note && p.note.split('·')[1] ? p.note.split('·')[1].trim() : 'cancel anytime';
     const planAfterText = noPrice
       ? "Custom quote — we'll follow up"
-      : (qState.isReturning ? p.note : 'Then <strong>$' + p.afterPrice + '/mow</strong> every mow after that · ' + notePart);
+      : (showPromo
+          ? 'Then <strong>$' + p.afterPrice + '/mow</strong> every mow after that · ' + notePart
+          : p.note);
     return `
       <div class="quote-plan-card${isSelected?' selected':''}" onclick="selectQuotePlan('${p.id}')">
         ${p.badge ? '<div class="quote-plan-badge">' + p.badge + '</div>' : ''}
@@ -3168,10 +3173,21 @@ function renderPlanCards() {
 function selectQuotePlan(planId) { qState.selectedPlan=planId; renderPlanCards(); }
 
 function quoteStep3Submit() {
-  if (!qState.startDate) {
-    document.getElementById('q-date-error').style.display='block'; return;
+  const errEl  = document.getElementById('q-date-error');
+  const manual = document.getElementById('q-lot-manual');
+  const sel    = document.getElementById('q-lot-select');
+  // If manual dropdown is visible, require a selection
+  if (manual && manual.style.display !== 'none') {
+    if (!sel || sel.value === '') {
+      errEl.textContent = 'Please select your yard size above before continuing.';
+      errEl.style.display = 'block'; return;
+    }
   }
-  document.getElementById('q-date-error').style.display='none';
+  if (!qState.startDate) {
+    errEl.textContent = 'Please select your first service date.';
+    errEl.style.display = 'block'; return;
+  }
+  errEl.style.display = 'none';
   buildOrderSummary();
   showQuoteStep(4);
 }
