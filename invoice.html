@@ -1113,6 +1113,28 @@ function cardHTML(b, rowIdx, isToday) {
     actions += `<button class="btn-action btn-cancel-job" onclick="triggerCancelJob(${rowIdx})" style="margin-top:4px;">✕ Cancel Job</button>`;
   }
 
+  // ── Employee view: name, address, date, phone, notes, done status only ──
+  if (adminRole === 'employee') {
+    return `
+      <div class="booking-card ${isToday?'today':''} ${done?'done':''}">
+        <div>
+          <div class="card-name">${esc(b.name||'—')}</div>
+          <div class="card-meta">
+            ${b.address?`<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((b.address||'')+(b.zip?', '+b.zip:'')+', FL')}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">📍 ${esc(b.address)}${b.zip?' · '+esc(b.zip):''}</a>`:'📍 —'}<br>
+            📅 ${esc(displayDate(b.serviceDate||b.serviceDateRaw)||'—')}<br>
+            ${b.phone?`<a href="tel:${esc(b.phone)}" style="color:inherit;text-decoration:none;">📞 ${esc(b.phone)}</a><br>`:''}
+            ${b.notes&&b.notes!=='(none)'?`💬 ${esc(b.notes)}<br>`:''}
+          </div>
+          <div class="card-badges">
+            <span class="badge-service">${esc(b.service||'Lawn Mow & Blow')}</span>
+            ${doneBadge}
+          </div>
+        </div>
+        <div class="card-actions">${actions}</div>
+      </div>`;
+  }
+
+  // ── Owner view: full details ──
   return `
     <div class="booking-card ${isToday?'today':''} ${done?'done':''}">
       <div>
@@ -1160,16 +1182,14 @@ function confirmYes() {
 // MARK DONE
 // ═══════════════════════════════════════════════════════
 function triggerMarkDone(rowIdx) {
-  const b     = allBookings[rowIdx];
+  const b = allBookings[rowIdx];
   if (!b) return;
-  const auto  = isAutoPay(b);
-  const price = parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))||0;
-  const cardTxt = b.cardLast4 ? `${cap(b.cardBrand||'card')} ••••${b.cardLast4}` : 'saved card';
-
-  const title = `Mark "${b.name||'job'}" as done?`;
-  const msg   = 'Are you sure you want to mark this job as completed? This cannot be undone.';
   document.getElementById('confirmYesBtn').className = 'btn-confirm-yes';
-  openConfirm(title, msg, () => executeMarkDone(rowIdx));
+  openConfirm(
+    `Mark "${b.name||'job'}" as done?`,
+    'Are you sure you want to mark this job as completed? This cannot be undone.',
+    () => executeMarkDone(rowIdx)
+  );
 }
 
 async function executeMarkDone(rowIdx) {
@@ -1548,8 +1568,6 @@ async function loadStats() {
       needsInvoice:    localPending,
       staffActivity,
     };
-    // (needsInvoice already set above)
-    try {} catch(e) {}
     // Build detailed mow log from allBookings (already loaded)
     const mowLog = (allBookings || [])
       .filter(bk => isDone(bk))
@@ -1696,10 +1714,13 @@ function showToast(msg, duration=3000) {
 // ROUTE TAB
 // ═══════════════════════════════════════════════════════════════════════
 
-// Mow time estimates (minutes) by yard-size key
+// Full service time estimates (minutes) — includes mowing + weed whacking + blowing
+// Small example: ~15min mow + 12min weed whack + 5min blow = 32, rounded to 35
 const MOW_MINS = {
-  small:20, medium:30, half:45, one:60, two:90, four:120, six:155, xl:180
+  small:35, medium:50, half:70, one:95, two:140, four:185, six:240, xl:285
 };
+// Extra minutes per stop for trailer unload/load, equipment swap, gas check
+const EQUIP_BUFFER_MINS = 8;
 
 function estimateMowMinutes(job) {
   const notes = (job.notes || '').toLowerCase();
@@ -2032,10 +2053,11 @@ async function buildRoute() {
   }
 
   const stops = orderedJobs.map((job,i)=>{
-    const arriveTime = new Date(cursor);
-    const mowM       = estimateMowMinutes(job);
-    const departTime = new Date(cursor.getTime()+mowM*60000);
-    totalMowM += mowM;
+    const arriveTime  = new Date(cursor);
+    const mowM        = estimateMowMinutes(job);          // service time (mow + ww + blow)
+    const totalStopM  = mowM + EQUIP_BUFFER_MINS;         // + unload/load trailer, gas check
+    const departTime  = new Date(cursor.getTime() + totalStopM * 60000);
+    totalMowM += totalStopM;
     const leg = legs[i]||{driveMins:0,distMeters:0};
     if (i < orderedJobs.length-1) {
       cursor = new Date(departTime.getTime()+leg.driveMins*60000);
