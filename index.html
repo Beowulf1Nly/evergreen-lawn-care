@@ -1582,8 +1582,8 @@
         <div class="quote-lot-info">
           <span class="quote-lot-icon" id="q-lot-icon">🏘️</span>
           <div>
-            <div class="quote-lot-label" id="q-lot-label">Looking up your property…</div>
-            <div class="quote-lot-sublabel" id="q-lot-sublabel">Checking county records</div>
+            <div class="quote-lot-label" id="q-lot-label">Select your yard size below</div>
+            <div class="quote-lot-sublabel" id="q-lot-sublabel">Not sure? Check satellite map</div>
           </div>
         </div>
         <!-- No manual adjust — tier is locked to county record or manual selection below -->
@@ -2612,40 +2612,27 @@ const LOT_TIERS = [
   { key: 'xl',      label: '10+ acres · Custom Quote',    icon: '🗺️' },
 ];
 
-// ── Parcel lookup: acreage → tier index ───────────────────────────────
-// Called after step 1 submit. Queries Apps Script which hits Citrus County PA.
+// ── Lot size selector — shown immediately (auto-detect not reliable)
+// Customer picks from dropdown; satellite map link helps them estimate.
 async function lookupLotSize(address, zip) {
   const sublabel = document.getElementById('q-lot-sublabel');
   const label    = document.getElementById('q-lot-label');
   const manual   = document.getElementById('q-lot-manual');
-  if (label)    label.textContent    = 'Looking up your property…';
-  if (sublabel) sublabel.textContent = 'Checking county records';
-  if (manual)   manual.style.display = 'none';
 
-  try {
-    const url = SHEETS_SCRIPT_URL + '?action=lookup_lot_size&address=' + encodeURIComponent(address) + '&zip=' + encodeURIComponent(zip);
-    const res  = await fetch(url);
-    const data = await res.json();
+  // Default to medium, show selector right away — no API call
+  qState.lotTierIdx = 1;
+  updateLotDisplay();
 
-    if (data.success && data.tierIdx !== undefined && data.tierIdx >= 0 && data.tierIdx < LOT_TIERS.length - 1) {
-      qState.lotTierIdx = data.tierIdx;
-      updateLotDisplay();
-      if (sublabel) sublabel.textContent = data.acreage
-        ? `${data.acreage} acres — confirmed from county records`
-        : 'Confirmed from county records';
-    } else {
-      throw new Error('not found');
-    }
-  } catch(e) {
-    // Lookup failed — show manual selector
-    qState.lotTierIdx = 1; // default medium
-    updateLotDisplay();
-    if (sublabel) sublabel.textContent = 'Could not detect — please select your lot size';
-    if (manual) {
-      manual.style.display = 'block';
-      const sel = document.getElementById('q-lot-select');
-      if (sel) sel.value = String(qState.lotTierIdx);
-    }
+  if (label) label.textContent = 'Select your yard size below';
+  if (sublabel) {
+    const mapsUrl = 'https://maps.google.com/?q=' + encodeURIComponent((address || '') + ' ' + (zip || '')) + '&t=k';
+    sublabel.innerHTML = 'Not sure? <a href="' + mapsUrl + '" target="_blank" style="color:var(--green-mid);font-weight:600;text-decoration:none;">View satellite map ↗</a> to estimate';
+  }
+
+  if (manual) {
+    manual.style.display = 'block';
+    const sel = document.getElementById('q-lot-select');
+    if (sel) sel.value = '1'; // default medium
   }
 }
 
@@ -2941,12 +2928,12 @@ function renderPlanCards() {
         <div class="quote-plan-radio"></div>
         <div class="quote-plan-details">
           <div class="quote-plan-name">${p.icon} ${p.name}</div>
-          <div class="quote-plan-first">${qState.isReturning ? (noPrice ? 'Custom quote' : `$${p.afterPrice}/mow`) : 'First service: $19'}</div>
-          <div class="quote-plan-after">${noPrice ? "Custom quote — we’ll follow up" : p.note}</div>
+          <div class="quote-plan-first">${qState.isReturning ? (noPrice ? ‘Custom quote’ : `$${p.afterPrice}/mow`) : ‘<strong>First mow: $19</strong> — billed after service’}</div>
+          <div class="quote-plan-after">${noPrice ? "Custom quote — we’ll follow up" : (qState.isReturning ? p.note : `Then <strong>$${p.afterPrice}/mow</strong> every mow after that · ${p.note.split(‘·’)[1]?.trim() || ‘cancel anytime’}`)}</div>
         </div>
         <div class="quote-plan-price">
-          <div class="quote-plan-price-num">${noPrice ? '—' : '$' + firstPrice}</div>
-          <div class="quote-plan-price-period">${qState.isReturning ? 'per mow' : 'today'}<br><span style="color:var(--green-mid)">${afterLabel}</span></div>
+          <div class="quote-plan-price-num">${noPrice ? ‘—‘ : ‘$’ + firstPrice}</div>
+          <div class="quote-plan-price-period">${qState.isReturning ? ‘per mow’ : ‘1st mow’}<br><span style="color:var(--green-mid)">${afterLabel}</span></div>
         </div>
       </div>`;
   }).join('');

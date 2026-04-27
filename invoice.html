@@ -63,7 +63,7 @@
   .booking-card { background:#fff; border:1.5px solid var(--border); border-radius:14px; padding:18px 20px; margin-bottom:12px; display:grid; grid-template-columns:1fr auto; gap:12px; align-items:start; transition:box-shadow .2s,border-color .2s; }
   .booking-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.07); border-color:#c8ddc8; }
   .booking-card.today { border-left:4px solid var(--green-bright); }
-  .booking-card.done  { opacity:.65; background:#f8faf8; }
+  .booking-card.done  { background:#f8faf8; border-color:#dde8dd; }
   .card-name { font-size:16px; font-weight:600; color:var(--green-deep); margin-bottom:4px; }
   .card-meta { font-size:13px; color:var(--text-muted); line-height:1.7; }
   .card-meta a { color:var(--green-mid); text-decoration:none; font-weight:500; }
@@ -218,6 +218,7 @@
   <!-- Owner tab bar (hidden for employees) -->
   <div class="tab-bar" id="ownerTabs" style="display:none;">
     <button class="tab-btn active" onclick="showTab('jobs')" data-tab="jobs">📋 Jobs</button>
+    <button class="tab-btn" onclick="showTab('done')" data-tab="done">✓ Completed <span id="doneTabCount" style="background:#e2e8e2;color:#2d6a2d;border-radius:100px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px;">0</span></button>
     <button class="tab-btn" onclick="showTab('add')"  data-tab="add">➕ Add Client</button>
     <button class="tab-btn" onclick="showTab('stats')" data-tab="stats">📊 Stats</button>
   </div>
@@ -261,6 +262,18 @@
         <div id="upcomingList"><div class="empty-state">Loading…</div></div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ── COMPLETED TAB (owner only) ── -->
+  <div id="pane-done" class="tab-pane">
+    <div class="container">
+      <div id="doneSection" style="margin-bottom:32px;margin-top:24px;">
+        <div class="section-label">
+          ✓ Completed Jobs <span class="badge" id="doneCount">0</span>
+        </div>
+        <div id="doneList"><div class="empty-state">Loading…</div></div>
+      </div>
     </div>
   </div>
 
@@ -654,9 +667,13 @@ function renderBookings() {
     else if (f === 'done')    bookings = bookings.filter(b => isDone(b));
   }
 
-  // Split sections
-  const today    = bookings.filter(b => dateOf(b) === todayStr);
-  let upcoming   = bookings.filter(b => dateOf(b) !== todayStr);
+  // Split: active (not done) vs completed
+  const activeBkgs = bookings.filter(b => !isDone(b));
+  const doneBkgs   = allBookings.filter(b => isDone(b)); // always use full list for done tab
+
+  // Active: split today vs upcoming
+  const today    = activeBkgs.filter(b => dateOf(b) === todayStr);
+  let upcoming   = activeBkgs.filter(b => dateOf(b) !== todayStr);
   const needs    = allBookings.filter(b => needsAction(b));
 
   // Employees only see next 7 days
@@ -664,17 +681,27 @@ function renderBookings() {
     upcoming = upcoming.filter(b => { const d = new Date(dateOf(b)+'T12:00'); return d <= in7; });
   }
 
-  // Today
+  // Today (active only)
   document.getElementById('todayCount').textContent = today.length;
   document.getElementById('todayList').innerHTML = today.length
     ? today.map((b,i) => cardHTML(b, allBookings.indexOf(b), true)).join('')
     : '<div class="empty-state" style="padding:20px;">No jobs today 🎉</div>';
 
-  // Upcoming
+  // Upcoming (active only)
   document.getElementById('upcomingCount').textContent = upcoming.length;
   document.getElementById('upcomingList').innerHTML = upcoming.length
     ? upcoming.map(b => cardHTML(b, allBookings.indexOf(b), false)).join('')
     : '<div class="empty-state" style="padding:20px;">Nothing else scheduled.</div>';
+
+  // Completed tab
+  const doneCountEl = document.getElementById('doneCount');
+  const doneTabEl   = document.getElementById('doneTabCount');
+  const doneListEl  = document.getElementById('doneList');
+  if (doneCountEl) doneCountEl.textContent = doneBkgs.length;
+  if (doneTabEl)   doneTabEl.textContent   = doneBkgs.length;
+  if (doneListEl)  doneListEl.innerHTML = doneBkgs.length
+    ? doneBkgs.map(b => cardHTML(b, allBookings.indexOf(b), false)).join('')
+    : '<div class="empty-state" style="padding:20px;">No completed jobs yet.</div>';
 
   // Needs action (owner only)
   if (adminRole === 'owner') {
