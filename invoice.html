@@ -446,6 +446,14 @@
         </select>
       </div>
 
+      <!-- ⭐ Completed — done+paid, awaiting review (owner only) -->
+      <div id="completedSection" style="margin-bottom:32px;display:none;">
+        <div class="section-label">
+          ⭐ Completed <span class="badge" style="background:#276749;" id="completedCount">0</span>
+        </div>
+        <div id="completedList"></div>
+      </div>
+
       <!-- ⚡ Needs Payment (done but unpaid — owner only, very top) -->
       <div id="needsPaySection" style="margin-bottom:32px;display:none;">
         <div class="section-label">
@@ -975,6 +983,19 @@ function renderBookings() {
     }
   }
 
+  // Completed section — done+paid, no review sent yet (owner only)
+  if (adminRole === 'owner') {
+    const compBkgs = doneBkgs.filter(b => isPaidDone(b) && !b.reviewSent);
+    const compSec  = document.getElementById('completedSection');
+    if (compSec) {
+      compSec.style.display = compBkgs.length ? 'block' : 'none';
+      document.getElementById('completedCount').textContent = compBkgs.length;
+      document.getElementById('completedList').innerHTML = compBkgs.length
+        ? compBkgs.map(b => completedCardHTML(b, allBookings.indexOf(b))).join('')
+        : '';
+    }
+  }
+
   // Needs Payment section — done but not yet paid (owner only)
   if (adminRole === 'owner') {
     const npSec = document.getElementById('needsPaySection');
@@ -1116,6 +1137,60 @@ function cardHTML(b, rowIdx, isToday) {
         ${actions}
       </div>
     </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// COMPLETED CARD (done + paid, awaiting review)
+// ═══════════════════════════════════════════════════════
+function completedCardHTML(b, rowIdx) {
+  const price    = parseFloat(String(b.price||'').replace(/[^0-9.]/g,'')) || 0;
+  const isFree   = String(b.frequency||'').toLowerCase().includes('free');
+  const doneLabel = b.doneDate || (String(b.done||'').replace(/^✓ Done —?\s*/i,'').trim());
+  return `
+    <div class="booking-card done" id="compCard_${rowIdx}">
+      <div>
+        <div class="card-name">${esc(b.name||'—')}</div>
+        <div class="card-meta">
+          ${b.address?`📍 ${esc(b.address)}${b.zip?' · '+esc(b.zip):''}<br>`:''}
+          📅 ${esc(displayDate(b.serviceDate||b.serviceDateRaw)||'—')}<br>
+          ${b.email?`✉️ <a href="mailto:${esc(b.email)}">${esc(b.email)}</a><br>`:''}
+        </div>
+        <div class="card-badges">
+          <span class="badge-done">✓ Done${doneLabel?' · '+esc(doneLabel):''}</span>
+          <span class="badge-invoiced">✅ Paid</span>
+        </div>
+      </div>
+      <div class="card-actions">
+        <div class="price-tag">${price&&!isFree?'$'+price.toFixed(0):'—'}</div>
+        <button class="btn-action btn-charge" style="background:#276749;" onclick="sendReviewRequest(${rowIdx})">⭐ Request Review</button>
+      </div>
+    </div>`;
+}
+
+async function sendReviewRequest(rowIdx) {
+  const b = allBookings[rowIdx];
+  if (!b) return;
+  if (!b.email) { alert('No email on file for ' + (b.name||'this customer') + '.'); return; }
+  if (!confirm(`Send a review request email to ${b.name} (${b.email})?`)) return;
+
+  const btn = document.querySelector(`#compCard_${rowIdx} button`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+
+  try {
+    const res  = await fetch(SCRIPT_URL + '?action=send_review_request&rowIndex=' + (rowIdx+2) + '&' + authParam());
+    const data = await res.json();
+    if (data.success) {
+      allBookings[rowIdx].reviewSent = data.date || new Date().toLocaleDateString();
+      renderBookings();
+      showToast('⭐ Review request sent to ' + (b.name||'customer') + '!');
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = '⭐ Request Review'; }
+      alert('Error: ' + (data.error || 'Could not send.'));
+    }
+  } catch(err) {
+    if (btn) { btn.disabled = false; btn.textContent = '⭐ Request Review'; }
+    alert('Network error: ' + err.message);
+  }
 }
 
 // ═══════════════════════════════════════════════════════
