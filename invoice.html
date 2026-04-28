@@ -1976,9 +1976,22 @@ async function buildRoute() {
   let orderedJobs=[], legs=[], totalDistM=0;
   window._routeStartLeg = null;
 
-  if (withGeo.length < 2) {
+  if (withGeo.length === 0) {
     orderedJobs = geocoded;
-    legs = orderedJobs.slice(0,-1).map(()=>({driveMins:0,distMeters:0}));
+    legs = [];
+  } else if (withGeo.length === 1 && startAddrRaw) {
+    // Single stop — still calculate drive time from start address
+    const sg = await geocodeForRoute(startAddrRaw);
+    if (sg) {
+      const points = [{lat:sg.lat,lon:sg.lon,_isStart:true,name:'Start',address:startAddrRaw}, withGeo[0]];
+      const osrm = await optimiseOSRM(points);
+      if (osrm && osrm.legs.length) {
+        window._routeStartLeg = osrm.legs[0];
+        totalDistM = osrm.totalDist;
+      }
+    }
+    orderedJobs = geocoded;
+    legs = [];
   } else {
     let points = [...withGeo];
     if (startAddrRaw) {
