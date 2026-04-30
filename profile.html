@@ -1297,6 +1297,7 @@ async function handleAutopayToggle(checkbox) {
 // ═══════════════════════════════════════════════════════════════════════
 let stripe, cardElement;
 let stripeJsLoaded = false;
+let cardMounted = false;
 
 // Load Stripe.js on demand (only when user clicks Add Card — no impact on page load)
 function loadStripeJS(callback) {
@@ -1331,14 +1332,19 @@ function openCardModal() {
     initStripe();
     document.getElementById('card-errors').textContent = '';
     document.getElementById('cardModal').classList.add('open');
-    // Mount after modal is visible so Stripe can measure the container
-    setTimeout(() => {
-      try { cardElement.unmount(); } catch(e) {}
-      cardElement.mount('#card-element');
-      cardElement.on('change', evt => {
-        document.getElementById('card-errors').textContent = evt.error ? evt.error.message : '';
-      });
-    }, 60);
+    if (!cardMounted) {
+      // First open: mount the iframe. Small delay so the modal has rendered dimensions.
+      setTimeout(() => {
+        cardElement.mount('#card-element');
+        cardMounted = true;
+        cardElement.on('change', evt => {
+          document.getElementById('card-errors').textContent = evt.error ? evt.error.message : '';
+        });
+      }, 60);
+    } else {
+      // Subsequent opens: iframe already exists — just clear previous input.
+      cardElement.clear();
+    }
   });
 }
 
@@ -1383,6 +1389,12 @@ async function saveCard() {
     const brand = capitalize(saveData.brand || 'Card');
     const last4 = saveData.last4 || '••••';
     updateSavedCardUI(brand, last4);
+
+    // If this customer was on cash and just switched to card, enable the autopay toggle in UI
+    if (saveData.autopayEnabled) {
+      const toggle = document.getElementById('autopayToggle');
+      if (toggle) toggle.checked = true;
+    }
 
   } catch(err) {
     document.getElementById('card-errors').textContent = err.message || 'Something went wrong. Please try again.';
