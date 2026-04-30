@@ -862,7 +862,11 @@ function renderProfile(data) {
     updateSavedCardUI(brand, data.cardLast4);
     document.getElementById('noCardBanner').style.display = 'none';
   } else {
-    document.getElementById('noCardBanner').style.display = 'block';
+    // Don't show the banner if customer pays cash
+    const isCashCustomer = (data.bookings || []).some(b =>
+      String(b.payMethod || '').toLowerCase().includes('cash')
+    );
+    document.getElementById('noCardBanner').style.display = isCashCustomer ? 'none' : 'block';
   }
 
   // Split upcoming (not done) vs past/done

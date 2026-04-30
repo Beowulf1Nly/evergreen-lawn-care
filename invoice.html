@@ -562,6 +562,13 @@
             <input type="date" id="ac-date"/>
           </div>
           <div class="form-field">
+            <label>Payment Method *</label>
+            <select id="ac-paymethod">
+              <option value="card">💳 Card (Autopay)</option>
+              <option value="cash">💵 Cash Only</option>
+            </select>
+          </div>
+          <div class="form-field">
             <label>Per-Mow Rate ($)</label>
             <input type="number" id="ac-price" placeholder="Auto-filled" step="0.01" min="0"/>
           </div>
@@ -1104,9 +1111,12 @@ function renderBookings() {
 
   // Helper: is a done job fully paid/free?
   function isPaidDone(b) {
-    const raw  = String(b.calendarEvent || b.payMethod || '');
+    const cal  = String(b.calendarEvent || '');
+    const pm   = String(b.payMethod || '');
     const free = String(b.frequency||'').toLowerCase().includes('free');
-    return free || raw.includes('✅') || raw.toLowerCase().includes('autopay') || raw.toLowerCase().includes('auto-pay');
+    return free
+      || cal.includes('✅') || cal.toLowerCase().includes('autopay') || cal.toLowerCase().includes('auto-pay')
+      || pm.toLowerCase().includes('✅ cash');
   }
 
   // Text search helper — applies across all sections
@@ -1198,9 +1208,12 @@ function renderBookings() {
 
 function cardHTML(b, rowIdx, isToday) {
   const auto     = isAutoPay(b);
+  const cash     = isCash(b);
   const done     = isDone(b);
-  const paidRaw  = String(b.calendarEvent || b.payMethod || '');
-  const isPaid   = paidRaw.includes('✅') || paidRaw.toLowerCase().includes('autopay') || paidRaw.toLowerCase().includes('auto-pay');
+  const cal      = String(b.calendarEvent || '');
+  const pm       = String(b.payMethod || '');
+  const isPaid   = cal.includes('✅') || cal.toLowerCase().includes('autopay') || cal.toLowerCase().includes('auto-pay')
+                || pm.toLowerCase().includes('✅ cash');
   const invoiced = !!b.invoiced && String(b.invoiced).length > 2;
   const isFree   = String(b.frequency||'').toLowerCase().includes('free');
   const price    = parseFloat(String(b.price||'').replace(/[^0-9.]/g,'')) || 0;
@@ -1210,8 +1223,12 @@ function cardHTML(b, rowIdx, isToday) {
   let payBadge = '';
   if (isFree) {
     payBadge = `<span class="badge-invoiced">🌿 Free Mow</span>`;
+  } else if (isPaid && cash) {
+    payBadge = `<span class="badge-invoiced">✅ Cash Paid</span>`;
   } else if (isPaid) {
     payBadge = `<span class="badge-invoiced">✅ Paid</span>`;
+  } else if (cash) {
+    payBadge = `<span class="badge-paylater" style="background:#fef9c3;color:#854d0e;border-color:#fde047;">💵 Cash</span>`;
   } else if (invoiced) {
     payBadge = `<span class="badge-invoiced">📧 Invoice sent</span>`;
   } else if (auto) {
@@ -1235,25 +1252,28 @@ function cardHTML(b, rowIdx, isToday) {
   }
 
   if (adminRole === 'owner' && !isFree && !isPaid) {
-    const subscribed = isSubscribed(b);
-    if (subscribed || auto) {
-      // Subscribed/autopay customer → Charge Card flow
-      const hasCard = !!(b.cardLast4);
-      if (done && hasCard) {
-        actions += `<button class="btn-action btn-charge" onclick="triggerAutoCharge(${rowIdx})">💳 Charge Card</button>`;
-      } else if (done && !hasCard) {
-        // Done but no card saved — fall back to invoice
-        actions += `<button class="btn-action btn-invoice" onclick="openInvoiceModal(${rowIdx})">📧 Invoice $${price.toFixed(0)}</button>`;
+    if (cash) {
+      // Cash customer — collect in person, mark paid manually
+      if (done) {
+        actions += `<button class="btn-action btn-charge" style="background:#854d0e;" onclick="triggerCashPaid(${rowIdx})">💵 Mark Cash Paid</button>`;
       }
-      // Not done yet — no button shown; Mark Done unlocks it
+      // Not done yet — nothing shown; Mark Done unlocks it
     } else {
-      // One-time / manual invoice customer
-      if (invoiced) {
-        actions += `<button class="btn-action btn-disabled" disabled>📧 Sent ✓</button>`;
-      } else if (done) {
-        actions += `<button class="btn-action btn-invoice" onclick="openInvoiceModal(${rowIdx})">📧 Invoice $${price.toFixed(0)}</button>`;
+      const subscribed = isSubscribed(b);
+      if (subscribed || auto) {
+        const hasCard = !!(b.cardLast4);
+        if (done && hasCard) {
+          actions += `<button class="btn-action btn-charge" onclick="triggerAutoCharge(${rowIdx})">💳 Charge Card</button>`;
+        } else if (done && !hasCard) {
+          actions += `<button class="btn-action btn-invoice" onclick="openInvoiceModal(${rowIdx})">📧 Invoice $${price.toFixed(0)}</button>`;
+        }
+      } else {
+        if (invoiced) {
+          actions += `<button class="btn-action btn-disabled" disabled>📧 Sent ✓</button>`;
+        } else if (done) {
+          actions += `<button class="btn-action btn-invoice" onclick="openInvoiceModal(${rowIdx})">📧 Invoice $${price.toFixed(0)}</button>`;
+        }
       }
-      // Not done yet — no button; Mark Done unlocks it
     }
   }
 
@@ -1535,6 +1555,34 @@ async function executeCancelJob(rowIdx) {
 }
 
 // ═══════════════════════════════════════════════════════
+// CASH PAID (owner)
+// ═══════════════════════════════════════════════════════
+function triggerCashPaid(rowIdx) {
+  const b = allBookings[rowIdx];
+  openConfirm(
+    `Mark Cash Received — ${b.name}?`,
+    `Confirm you collected $${(parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))||0).toFixed(2)} cash from ${b.name}.`,
+    () => executeCashPaid(rowIdx)
+  );
+}
+
+async function executeCashPaid(rowIdx) {
+  const b = allBookings[rowIdx];
+  try {
+    const params = new URLSearchParams({ action: 'mark_cash_paid', rowIndex: rowIdx + 2, adminToken });
+    const res  = await fetch(SCRIPT_URL + '?' + params.toString());
+    const data = await res.json();
+    if (data.success) {
+      allBookings[rowIdx].payMethod = '✅ Cash paid';
+      renderBookings();
+      showToast('💵 Cash payment recorded for ' + (b.name || 'customer'));
+    } else {
+      alert('Error: ' + (data.error || 'Could not record payment.'));
+    }
+  } catch(err) { alert('Network error: ' + err.message); }
+}
+
+// ═══════════════════════════════════════════════════════
 // AUTO-CHARGE (owner)
 // ═══════════════════════════════════════════════════════
 function triggerAutoCharge(rowIdx) {
@@ -1752,17 +1800,22 @@ async function addClient() {
   const yard    = document.getElementById('ac-yard').value;
   const date    = document.getElementById('ac-date').value;
   const price   = document.getElementById('ac-price').value;
-  const notes   = document.getElementById('ac-notes').value.trim() || '(none)';
+  const notes     = document.getElementById('ac-notes').value.trim() || '(none)';
+  const paymethod = document.getElementById('ac-paymethod').value; // 'card' or 'cash'
   const errEl   = document.getElementById('ac-error');
   const okEl    = document.getElementById('ac-success');
   errEl.style.display = 'none';
   okEl.style.display  = 'none';
 
-  if (!name||!email||!address||!date) {
-    errEl.textContent = 'Please fill in name, email, address, and start date.';
+  if (!name||!address||!date) {
+    errEl.textContent = 'Please fill in name, address, and start date.';
     errEl.style.display = 'block'; return;
   }
-  if (!email.includes('@')) {
+  if (paymethod === 'card' && !email) {
+    errEl.textContent = 'Email is required for card customers.';
+    errEl.style.display = 'block'; return;
+  }
+  if (email && !email.includes('@')) {
     errEl.textContent = 'Enter a valid email.';
     errEl.style.display = 'block'; return;
   }
@@ -1778,6 +1831,7 @@ async function addClient() {
     serviceDate: date,
     price:       price || '0',
     notes,
+    payMethod:   paymethod,
     adminToken,
   });
 
@@ -1916,6 +1970,9 @@ async function loadStats() {
 // ═══════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════
+function isCash(b) {
+  return String(b.payMethod||'').toLowerCase().includes('cash');
+}
 function isAutoPay(b) {
   const pm  = (b.payMethod||'').toLowerCase();
   const cal = (b.calendarEvent||'');
@@ -2448,7 +2505,7 @@ function renderRouteTimeline(stops, startAddr, startTime) {
           +       '</div>'
           +     '</div>'
           +     '<div class="route-stop-addr">📍 '+esc(job.address||'—')+(job.zip?' · '+esc(job.zip):'')+'</div>'
-          +     '<div class="route-stop-meta">'+planBadge+'<span class="route-stop-pill time-pill">⏱️ '+mowLabel(s.mowM)+'</span>'+priceBadge+doneBadge+notesBadge+'</div>'
+          +     '<div class="route-stop-meta">'+planBadge+'<span class="route-stop-pill time-pill">⏱️ '+mowLabel(s.mowM)+'</span>'+priceBadge+doneBadge+notesBadge+(isCash(job)?'<span class="route-stop-pill" style="background:#fef9c3;color:#854d0e;font-weight:700;">💵 Collect Cash</span>':'')+'</div>'
           +     '<div class="route-stop-footer">'
           +       '<span>Depart <strong>'+fmtTime(s.departTime)+'</strong></span>'
           +     '</div>'
