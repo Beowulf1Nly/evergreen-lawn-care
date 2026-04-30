@@ -785,8 +785,10 @@ async function verifyToken(token) {
     const data = await apiGet({ action: 'portal_verify_token', token });
     if (data.success && data.sessionToken) {
       storeSession({ token: data.sessionToken, email: data.email, expiry: data.expiry });
-      // Full reload without token param — DOMContentLoaded picks up the stored session
-      window.location.href = window.location.pathname;
+      // Clean the token out of the URL without reloading the page
+      history.replaceState(null, '', window.location.pathname);
+      // Load the profile directly — script is still warm, saves a full cold-start
+      await loadProfile(data.sessionToken);
     } else {
       hideLoading();
       showLogin();
@@ -814,23 +816,72 @@ async function verifySession(sessionToken) {
 // ═══════════════════════════════════════════════════════════════════════
 // PROFILE — load and render (used on page reload with existing session)
 // ═══════════════════════════════════════════════════════════════════════
+const PROFILE_CACHE_KEY = 'eg_profile_cache';
+const PROFILE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCachedProfile() {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > PROFILE_CACHE_TTL) return null;
+    return data;
+  } catch(e) { return null; }
+}
+
+function setCachedProfile(data) {
+  try { localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ data, ts: Date.now() })); } catch(e) {}
+}
+
+function clearProfileCache() {
+  try { localStorage.removeItem(PROFILE_CACHE_KEY); } catch(e) {}
+}
+
 async function loadProfile(sessionToken) {
+  // Show cached data instantly so the page feels immediate
+  const cached = getCachedProfile();
+  if (cached) {
+    renderProfile(cached);
+    showProfile();
+    // Then refresh silently in the background
+    refreshProfileInBackground(sessionToken);
+    return;
+  }
+
+  // No cache — fetch and wait (first visit or cache expired)
   try {
     const data = await apiGet({ action: 'portal_get_profile', sessionToken });
     if (!data.success) {
       clearSession();
+      clearProfileCache();
       showLogin();
       showLoginError('Session expired. Please sign in again.');
       return;
     }
+    setCachedProfile(data);
     renderProfile(data);
     showProfile();
   } catch(err) {
-    // Don't clear session on render errors — just show a message
     hideLoading();
     showLogin();
     showLoginError('Error loading profile: ' + (err.message || err));
   }
+}
+
+async function refreshProfileInBackground(sessionToken) {
+  try {
+    const data = await apiGet({ action: 'portal_get_profile', sessionToken });
+    if (!data.success) {
+      // Session expired — clear everything and kick to login
+      clearSession();
+      clearProfileCache();
+      showLogin();
+      showLoginError('Session expired. Please sign in again.');
+      return;
+    }
+    setCachedProfile(data);
+    renderProfile(data); // silently re-render with fresh data
+  } catch(e) { /* silent — user already has cached view */ }
 }
 
 function renderProfile(data) {
@@ -863,6 +914,9 @@ function renderProfile(data) {
     document.getElementById('noCardBanner').style.display = 'none';
   } else {
     document.getElementById('noCardBanner').style.display = 'block';
+    // Pre-mount the Stripe card element in the background so the iframe is warm
+    // before the user opens the modal. Fixes Stripe Link autofill race condition.
+    premountCardElement();
   }
 
   // Split upcoming (not done) vs past/done
@@ -1241,6 +1295,7 @@ function bookingCardHTML(b, isUpcoming) {
 async function logout() {
   const session = getStoredSession();
   clearSession();
+  clearProfileCache();
   if (session) {
     try {
       await apiGet({ action: 'portal_logout', sessionToken: session.token });
@@ -1326,6 +1381,24 @@ function initStripe() {
   });
 }
 
+// Pre-mount the Stripe iframe in the background (card-element container is in the DOM
+// but inside the hidden modal). Called as soon as we know the user has no card.
+// By the time they click "Add Card", the iframe is fully loaded and Link autofill works.
+function premountCardElement() {
+  loadStripeJS(() => {
+    initStripe();
+    if (!cardMounted) {
+      // The modal is hidden (display:none via .modal-overlay), but the #card-element
+      // container is in the DOM. Stripe can mount into it regardless of visibility.
+      cardElement.mount('#card-element');
+      cardMounted = true;
+      cardElement.on('change', evt => {
+        document.getElementById('card-errors').textContent = evt.error ? evt.error.message : '';
+      });
+    }
+  });
+}
+
 function openCardModal() {
   // Load Stripe.js first (if not already loaded), then open the modal
   loadStripeJS(() => {
@@ -1333,7 +1406,7 @@ function openCardModal() {
     document.getElementById('card-errors').textContent = '';
     document.getElementById('cardModal').classList.add('open');
     if (!cardMounted) {
-      // First open: mount the iframe. Small delay so the modal has rendered dimensions.
+      // Fallback: wasn't pre-mounted (user has existing card being updated)
       setTimeout(() => {
         cardElement.mount('#card-element');
         cardMounted = true;
@@ -1342,7 +1415,7 @@ function openCardModal() {
         });
       }, 60);
     } else {
-      // Subsequent opens: iframe already exists — just clear previous input.
+      // Already mounted — just clear previous input when opening
       cardElement.clear();
     }
   });
