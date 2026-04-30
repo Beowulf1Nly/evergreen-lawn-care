@@ -590,9 +590,15 @@
   <!-- ── CUSTOMERS TAB (owner only) ── -->
   <div id="pane-customers" class="tab-pane">
     <div class="container" style="padding-top:20px;">
-      <input type="text" id="custSearch" placeholder="Search by name, email, phone…"
-        oninput="renderCustomers()"
-        style="width:100%;max-width:480px;padding:10px 14px;border:1.5px solid #d1d5db;border-radius:10px;font-size:14px;box-sizing:border-box;margin-bottom:20px;display:block;"/>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:20px;">
+        <input type="text" id="custSearch" placeholder="Search by name, email, phone…"
+          oninput="renderCustomers()"
+          style="flex:1;min-width:200px;padding:10px 14px;border:1.5px solid #d1d5db;border-radius:10px;font-size:14px;box-sizing:border-box;"/>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);cursor:pointer;white-space:nowrap;">
+          <input type="checkbox" id="showInactive" onchange="renderCustomers()" style="cursor:pointer;">
+          Show inactive
+        </label>
+      </div>
       <div id="custList"></div>
     </div>
   </div>
@@ -1034,16 +1040,20 @@ async function toggleReminders() {
 // CUSTOMERS TAB
 // ═══════════════════════════════════════════════════════
 function renderCustomers() {
-  const q   = (document.getElementById('custSearch')?.value || '').toLowerCase().trim();
-  const el  = document.getElementById('custList');
+  const q            = (document.getElementById('custSearch')?.value || '').toLowerCase().trim();
+  const showInactive = document.getElementById('showInactive')?.checked || false;
+  const el           = document.getElementById('custList');
   if (!el) return;
 
   // Deduplicate by email — keep the most recent booking per customer for metadata
-  const map = new Map();
+  // Also track if ANY booking for this customer has customerInactive = true
+  const map      = new Map();
+  const inactive = new Map(); // email → true/false
   for (const b of allBookings) {
     const email = String(b.email || '').toLowerCase().trim();
     const key   = email || b.name; // fallback to name if no email
     if (!key) continue;
+    if (b.customerInactive) inactive.set(key, true);
     const existing = map.get(key);
     // Prefer the booking with a future/undone date for "next appt" display
     if (!existing || (!isDone(b) && isDone(existing))) {
@@ -1063,6 +1073,14 @@ function renderCustomers() {
   }
 
   let custs = [...map.values()];
+
+  // Filter out inactive customers unless checkbox is checked
+  if (!showInactive) {
+    custs = custs.filter(b => {
+      const k = String(b.email || '').toLowerCase().trim() || b.name;
+      return !inactive.get(k);
+    });
+  }
 
   // Search filter
   if (q) {
@@ -1085,33 +1103,37 @@ function renderCustomers() {
   const todayStr = todayDateStr();
 
   el.innerHTML = custs.map(b => {
-    const email   = String(b.email || '').toLowerCase().trim();
-    const key     = email || b.name;
-    const rows    = rowsMap.get(key) || [];
+    const email      = String(b.email || '').toLowerCase().trim();
+    const key        = email || b.name;
+    const rows       = rowsMap.get(key) || [];
+    const isInactive = inactive.get(key) || false;
     // Find best row index for single-action buttons (next undone booking)
     const nextRow = rows.find(i => !isDone(allBookings[i])) ?? rows[rows.length - 1];
-    const isSub   = isSubscribed(b);
+    const isSub   = isSubscribed(b) && !isInactive;
     const hasEmail = !!b.email;
     const reviewDone = !!b.reviewSent;
     const nextDate = b.serviceDate || b.serviceDateRaw || '';
-    const nextLabel = nextDate ? displayDate(nextDate) : '—';
+    const nextLabel = isInactive ? '—' : (nextDate ? displayDate(nextDate) : '—');
     const planLabel = b.frequency ? esc(b.frequency) : (isSub ? 'Subscription' : 'One-time');
+    const inactiveBadge = isInactive
+      ? `<span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:#fee2e2;color:#991b1b;margin-left:6px;">Inactive</span>`
+      : '';
 
-    return `<div class="cust-card">
+    return `<div class="cust-card"${isInactive ? ' style="opacity:0.65;"' : ''}>
       <div class="cust-info">
-        <div class="cust-name">${esc(b.name || '—')}</div>
+        <div class="cust-name">${esc(b.name || '—')}${inactiveBadge}</div>
         <div class="cust-meta">
           ${hasEmail ? `✉️ <a href="mailto:${esc(b.email)}" style="color:inherit;">${esc(b.email)}</a><br>` : ''}
           ${b.phone ? `📞 <a href="tel:${esc(b.phone)}" style="color:inherit;">${esc(b.phone)}</a><br>` : ''}
           ${b.address ? `📍 ${esc(b.address)}${b.zip ? ' · ' + esc(b.zip) : ''}<br>` : ''}
-          📋 ${planLabel} · Next: ${nextLabel}
+          📋 ${planLabel}${!isInactive ? ' · Next: ' + nextLabel : ' · Cancelled'}
         </div>
       </div>
       <div class="cust-actions">
-        ${nextRow !== undefined ? `<button class="cust-btn cust-btn-yellow" onclick="openOwnerResched(${nextRow})">📅 Reschedule</button>` : ''}
+        ${!isInactive && nextRow !== undefined ? `<button class="cust-btn cust-btn-yellow" onclick="openOwnerResched(${nextRow})">📅 Reschedule</button>` : ''}
         ${hasEmail && !reviewDone ? `<button class="cust-btn cust-btn-green" onclick="custSendReview(${nextRow ?? rows[0]})">⭐ Review Email</button>` : ''}
         ${hasEmail && reviewDone  ? `<button class="cust-btn cust-btn-gray" disabled title="Review already sent">⭐ Sent</button>` : ''}
-        ${hasEmail ? `<button class="cust-btn cust-btn-blue" onclick="openInvoiceModal(${nextRow ?? rows[0]})">📧 Invoice</button>` : ''}
+        ${hasEmail && !isInactive ? `<button class="cust-btn cust-btn-blue" onclick="openInvoiceModal(${nextRow ?? rows[0]})">📧 Invoice</button>` : ''}
         ${isSub ? `<button class="cust-btn cust-btn-red" onclick="custCancelPlan('${esc(email)}', '${esc(b.name||'')}')">✕ Cancel Plan</button>` : ''}
         ${b.phone ? `<button class="cust-btn cust-btn-gray" onclick="window.location='tel:${esc(b.phone)}'">📞 Call</button>` : ''}
       </div>
