@@ -862,11 +862,7 @@ function renderProfile(data) {
     updateSavedCardUI(brand, data.cardLast4);
     document.getElementById('noCardBanner').style.display = 'none';
   } else {
-    // Don't show the banner if customer pays cash
-    const isCashCustomer = (data.bookings || []).some(b =>
-      String(b.payMethod || '').toLowerCase().includes('cash')
-    );
-    document.getElementById('noCardBanner').style.display = isCashCustomer ? 'none' : 'block';
+    document.getElementById('noCardBanner').style.display = 'block';
   }
 
   // Split upcoming (not done) vs past/done
@@ -922,6 +918,9 @@ function renderBillingCard(bookings) {
   // Find the customer's active subscription plan (most recent booking with a plan, excluding free mows)
   const subBookings = bookings.filter(b => b.frequency && b.frequency !== 'One-time visit' && b.frequency !== 'Free Mow');
   if (!subBookings.length) { section.style.display = 'none'; return; }
+
+  // Detect cash customer — any sub booking with payMethod containing 'cash'
+  const isCashCustomer = subBookings.some(b => String(b.payMethod || '').toLowerCase().includes('cash'));
 
   const freq = subBookings.slice().sort((a, b) =>
     (parseBookingDate(b.serviceDate) || 0) - (parseBookingDate(a.serviceDate) || 0)
@@ -1045,7 +1044,7 @@ function renderBillingCard(bookings) {
       <div class="billing-plan-row">
         <div>
           <div class="billing-plan-name">📅 Weekly Plan</div>
-          <div class="billing-plan-sub">${mowRateStr}/mow — charged after each visit</div>
+          <div class="billing-plan-sub">${mowRateStr}/mow — ${isCashCustomer ? '💵 cash, collected after each visit' : 'charged after each visit'}</div>
         </div>
       </div>
       <hr class="billing-divider">
@@ -1055,13 +1054,15 @@ function renderBillingCard(bookings) {
       </div>
       <div class="billing-info-row">
         <span class="billing-info-label">Per-mow rate</span>
-        <span class="billing-info-value">${mowRateStr}/visit — charged after each mow</span>
+        <span class="billing-info-value">${mowRateStr}/visit — ${isCashCustomer ? '💵 paid in cash' : 'charged after each mow'}</span>
       </div>
       ${chargeInfo ? `<div class="billing-info-row"><span class="billing-info-label">This month</span>${chargeInfo}</div>` : ''}
       <div class="mow-dots">${dotsHtml}</div>
       ${alertBox}
-      <div style="margin-top:12px;padding:10px 14px;background:#f0fdf4;border-radius:10px;font-size:12px;color:#166534;line-height:1.6;">
-        💡 Your card is automatically charged ${mowRateStr} after each weekly mow. No invoices, no reminders.
+      <div style="margin-top:12px;padding:10px 14px;background:${isCashCustomer ? '#fef9c3' : '#f0fdf4'};border-radius:10px;font-size:12px;color:${isCashCustomer ? '#854d0e' : '#166534'};line-height:1.6;">
+        ${isCashCustomer
+          ? `💵 Cash customer — we'll collect ${mowRateStr} after each weekly visit. <a href="#" onclick="openCardModal();return false;" style="color:#854d0e;font-weight:700;">Add a card →</a> to switch to autopay.`
+          : `💡 Your card is automatically charged ${mowRateStr} after each weekly mow. No invoices, no reminders.`}
       </div>${promoNote}`;
 
   } else {
@@ -1125,7 +1126,7 @@ function renderBillingCard(bookings) {
       <div class="billing-plan-row">
         <div>
           <div class="billing-plan-name">📅 Bi-Weekly Plan</div>
-          <div class="billing-plan-sub">${mowRateStr}/mow — charged after each visit</div>
+          <div class="billing-plan-sub">${mowRateStr}/mow — ${isCashCustomer ? '💵 cash, collected after each visit' : 'charged after each visit'}</div>
         </div>
       </div>
       <hr class="billing-divider">
@@ -1135,13 +1136,15 @@ function renderBillingCard(bookings) {
       </div>
       <div class="billing-info-row">
         <span class="billing-info-label">Per-mow rate</span>
-        <span class="billing-info-value">${mowRateStr}/visit — charged after each mow</span>
+        <span class="billing-info-value">${mowRateStr}/visit — ${isCashCustomer ? '💵 paid in cash' : 'charged after each mow'}</span>
       </div>
       ${chargeInfo ? `<div class="billing-info-row"><span class="billing-info-label">This month</span>${chargeInfo}</div>` : ''}
       <div class="mow-dots">${dotsHtml}</div>
       ${alertBox}
-      <div style="margin-top:12px;padding:10px 14px;background:#f0fdf4;border-radius:10px;font-size:12px;color:#166534;line-height:1.6;">
-        💡 Your card is automatically charged ${mowRateStr} after each bi-weekly mow. No invoices, no reminders.
+      <div style="margin-top:12px;padding:10px 14px;background:${isCashCustomer ? '#fef9c3' : '#f0fdf4'};border-radius:10px;font-size:12px;color:${isCashCustomer ? '#854d0e' : '#166534'};line-height:1.6;">
+        ${isCashCustomer
+          ? `💵 Cash customer — we'll collect ${mowRateStr} after each bi-weekly visit. <a href="#" onclick="openCardModal();return false;" style="color:#854d0e;font-weight:700;">Add a card →</a> to switch to autopay.`
+          : `💡 Your card is automatically charged ${mowRateStr} after each bi-weekly mow. No invoices, no reminders.`}
       </div>`;
   }
 
