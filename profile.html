@@ -1685,7 +1685,7 @@ function openCancelApptModal(rowIndex, dateStr) {
   _cancelApptRowIdx = rowIndex;
   document.getElementById('cancelApptError').style.display = 'none';
   document.getElementById('cancelApptSub').textContent =
-    'Cancel your appointment on ' + dateStr + '? Your plan continues — your next appointment will be automatically scheduled.';
+    'This will cancel your entire lawn care subscription. All upcoming appointments will be removed. Are you sure?';
   document.getElementById('cancelApptModal').classList.add('open');
 }
 function closeCancelApptModal() {
@@ -1698,14 +1698,16 @@ async function confirmCancelAppt() {
   btn.disabled = true; btn.textContent = 'Cancelling…';
   document.getElementById('cancelApptError').style.display = 'none';
   try {
+    // Cancel the full subscription, not just the single appointment
     const data = await apiGet({
-      action:       'portal_cancel_appointment',
+      action:       'portal_cancel_subscription',
       sessionToken: session.token,
-      rowIndex:     _cancelApptRowIdx,
+      cancelType:   'immediate',
     });
     if (data.success) {
       closeCancelApptModal();
       await loadProfile(session.token);
+      alert('Your subscription has been cancelled. Hope to see you again!');
     } else {
       document.getElementById('cancelApptError').textContent = data.error || 'Could not cancel.';
       document.getElementById('cancelApptError').style.display = 'block';
