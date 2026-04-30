@@ -70,6 +70,19 @@
   .card-meta { font-size:13px; color:var(--text-muted); line-height:1.7; }
   .card-meta a { color:var(--green-mid); text-decoration:none; font-weight:500; }
   .card-badges { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  /* ── Customer cards ── */
+  .cust-card { background:#fff; border:1.5px solid var(--border); border-radius:14px; padding:16px 18px; margin-bottom:12px; display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  .cust-info { flex:1; min-width:200px; }
+  .cust-name { font-size:15px; font-weight:700; color:var(--green-deep); margin-bottom:4px; }
+  .cust-meta { font-size:13px; color:var(--text-muted); line-height:1.7; }
+  .cust-actions { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .cust-btn { padding:7px 13px; font-size:12px; font-weight:600; border:none; border-radius:8px; cursor:pointer; white-space:nowrap; }
+  .cust-btn-red    { background:#fee2e2; color:#b91c1c; }
+  .cust-btn-blue   { background:#dbeafe; color:#1d4ed8; }
+  .cust-btn-green  { background:#dcfce7; color:#15803d; }
+  .cust-btn-yellow { background:#fef9c3; color:#854d0e; }
+  .cust-btn-gray   { background:#f3f4f6; color:#374151; }
+
   .badge-service { background:var(--green-pale); color:var(--green-deep); border-radius:6px; padding:3px 10px; font-size:12px; font-weight:600; }
   .badge-autopay { background:#1a3a1a; color:#fff; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:700; }
   .badge-invoiced { background:#f0fdf4; color:#16a34a; border:1px solid #86efac; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:600; }
@@ -429,6 +442,7 @@
     <button class="tab-btn" onclick="showTab('route')" data-tab="route">🗺️ Route</button>
     <button class="tab-btn owner-only" onclick="showTab('add')"   data-tab="add">➕ Add Client</button>
     <button class="tab-btn owner-only" onclick="showTab('stats')" data-tab="stats">📊 Stats</button>
+    <button class="tab-btn owner-only" onclick="showTab('customers')" data-tab="customers">👥 Customers</button>
   </div>
 
   <!-- ── JOBS TAB ── -->
@@ -565,6 +579,16 @@
     </div>
   </div>
 
+  <!-- ── CUSTOMERS TAB (owner only) ── -->
+  <div id="pane-customers" class="tab-pane">
+    <div class="container" style="padding-top:20px;">
+      <input type="text" id="custSearch" placeholder="Search by name, email, phone…"
+        oninput="renderCustomers()"
+        style="width:100%;max-width:480px;padding:10px 14px;border:1.5px solid #d1d5db;border-radius:10px;font-size:14px;box-sizing:border-box;margin-bottom:20px;display:block;"/>
+      <div id="custList"></div>
+    </div>
+  </div>
+
   <!-- ── STATS TAB (owner only) ── -->
   <div id="pane-stats" class="tab-pane">
     <div class="container">
@@ -685,6 +709,29 @@
     <div class="notes-popup-title" id="notesPopupTitle">📝 Notes</div>
     <div class="notes-popup-body"  id="notesPopupBody"></div>
     <button class="notes-popup-close" onclick="closeNotesPopup()">Close</button>
+  </div>
+</div>
+
+<!-- ══ OWNER RESCHEDULE MODAL ══ -->
+<div class="confirm-overlay" id="ownerReschedOverlay">
+  <div class="confirm-box" style="max-width:360px;">
+    <h4>Reschedule Appointment</h4>
+    <p id="ownerReschedName" style="margin:0 0 12px;font-weight:600;color:#276749;"></p>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:13px;color:#555;display:block;margin-bottom:4px;">New Date</label>
+      <input type="date" id="ownerReschedDate" style="width:100%;padding:8px 10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;"/>
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="font-size:13px;color:#555;display:block;margin-bottom:4px;">Scope</label>
+      <select id="ownerReschedScope" style="width:100%;padding:8px 10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;">
+        <option value="single">Only this appointment</option>
+        <option value="all">All future appointments</option>
+      </select>
+    </div>
+    <div class="confirm-actions">
+      <button class="btn-confirm-no" onclick="closeOwnerResched()">Cancel</button>
+      <button class="btn-confirm-yes" id="ownerReschedBtn" onclick="submitOwnerResched()">Move It</button>
+    </div>
   </div>
 </div>
 
@@ -876,8 +923,130 @@ function showTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
   document.getElementById('pane-' + tab).classList.add('active');
-  if (tab === 'stats') loadStats();
-  if (tab === 'route') initRouteTab();
+  if (tab === 'stats')     loadStats();
+  if (tab === 'route')     initRouteTab();
+  if (tab === 'customers') renderCustomers();
+}
+
+// ═══════════════════════════════════════════════════════
+// CUSTOMERS TAB
+// ═══════════════════════════════════════════════════════
+function renderCustomers() {
+  const q   = (document.getElementById('custSearch')?.value || '').toLowerCase().trim();
+  const el  = document.getElementById('custList');
+  if (!el) return;
+
+  // Deduplicate by email — keep the most recent booking per customer for metadata
+  const map = new Map();
+  for (const b of allBookings) {
+    const email = String(b.email || '').toLowerCase().trim();
+    const key   = email || b.name; // fallback to name if no email
+    if (!key) continue;
+    const existing = map.get(key);
+    // Prefer the booking with a future/undone date for "next appt" display
+    if (!existing || (!isDone(b) && isDone(existing))) {
+      map.set(key, b);
+    }
+  }
+
+  // Collect all row indices per customer for actions that need them
+  const rowsMap = new Map();
+  for (let i = 0; i < allBookings.length; i++) {
+    const b     = allBookings[i];
+    const email = String(b.email || '').toLowerCase().trim();
+    const key   = email || b.name;
+    if (!key) continue;
+    if (!rowsMap.has(key)) rowsMap.set(key, []);
+    rowsMap.get(key).push(i);
+  }
+
+  let custs = [...map.values()];
+
+  // Search filter
+  if (q) {
+    custs = custs.filter(b =>
+      (b.name    || '').toLowerCase().includes(q) ||
+      (b.email   || '').toLowerCase().includes(q) ||
+      (b.phone   || '').toLowerCase().includes(q) ||
+      (b.address || '').toLowerCase().includes(q)
+    );
+  }
+
+  // Sort alphabetically by name
+  custs.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+  if (!custs.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:40px;">No customers found.</div>';
+    return;
+  }
+
+  const todayStr = todayDateStr();
+
+  el.innerHTML = custs.map(b => {
+    const email   = String(b.email || '').toLowerCase().trim();
+    const key     = email || b.name;
+    const rows    = rowsMap.get(key) || [];
+    // Find best row index for single-action buttons (next undone booking)
+    const nextRow = rows.find(i => !isDone(allBookings[i])) ?? rows[rows.length - 1];
+    const isSub   = isSubscribed(b);
+    const hasEmail = !!b.email;
+    const reviewDone = !!b.reviewSent;
+    const nextDate = b.serviceDate || b.serviceDateRaw || '';
+    const nextLabel = nextDate ? displayDate(nextDate) : '—';
+    const planLabel = b.frequency ? esc(b.frequency) : (isSub ? 'Subscription' : 'One-time');
+
+    return `<div class="cust-card">
+      <div class="cust-info">
+        <div class="cust-name">${esc(b.name || '—')}</div>
+        <div class="cust-meta">
+          ${hasEmail ? `✉️ <a href="mailto:${esc(b.email)}" style="color:inherit;">${esc(b.email)}</a><br>` : ''}
+          ${b.phone ? `📞 <a href="tel:${esc(b.phone)}" style="color:inherit;">${esc(b.phone)}</a><br>` : ''}
+          ${b.address ? `📍 ${esc(b.address)}${b.zip ? ' · ' + esc(b.zip) : ''}<br>` : ''}
+          📋 ${planLabel} · Next: ${nextLabel}
+        </div>
+      </div>
+      <div class="cust-actions">
+        ${nextRow !== undefined ? `<button class="cust-btn cust-btn-yellow" onclick="openOwnerResched(${nextRow})">📅 Reschedule</button>` : ''}
+        ${hasEmail && !reviewDone ? `<button class="cust-btn cust-btn-green" onclick="custSendReview(${nextRow ?? rows[0]})">⭐ Review Email</button>` : ''}
+        ${hasEmail && reviewDone  ? `<button class="cust-btn cust-btn-gray" disabled title="Review already sent">⭐ Sent</button>` : ''}
+        ${hasEmail ? `<button class="cust-btn cust-btn-blue" onclick="openInvoiceModal(${nextRow ?? rows[0]})">📧 Invoice</button>` : ''}
+        ${isSub ? `<button class="cust-btn cust-btn-red" onclick="custCancelPlan('${esc(email)}', '${esc(b.name||'')}')">✕ Cancel Plan</button>` : ''}
+        ${b.phone ? `<button class="cust-btn cust-btn-gray" onclick="window.location='tel:${esc(b.phone)}'">📞 Call</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function custSendReview(rowIdx) {
+  const b = allBookings[rowIdx];
+  if (!b) return;
+  if (!confirm(`Send review request to ${b.name} (${b.email})?`)) return;
+  await sendReviewRequest(rowIdx);
+  renderCustomers();
+}
+
+function custCancelPlan(email, name) {
+  if (!confirm(`Cancel ${name}'s subscription? This will remove all upcoming appointments.`)) return;
+  openConfirm(
+    'Cancel Plan — ' + name,
+    'Remove all upcoming appointments and cancel the subscription?',
+    async () => {
+      try {
+        const params = new URLSearchParams({ action: 'portal_cancel_subscription', cancelType: 'immediate' });
+        // Owner cancelling on behalf of customer — use admin auth + customer email
+        const res  = await fetch(SCRIPT_URL + '?' + params + '&ownerEmail=' + encodeURIComponent(email) + '&' + authParam());
+        const data = await res.json();
+        if (data.success) {
+          allBookings = allBookings.filter(b => String(b.email||'').toLowerCase().trim() !== email);
+          renderBookings();
+          renderCustomers();
+          showToast('Plan cancelled for ' + name);
+        } else {
+          alert('Error: ' + (data.error || 'Could not cancel.'));
+        }
+      } catch(err) { alert('Network error: ' + err.message); }
+    }
+  );
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1088,6 +1257,11 @@ function cardHTML(b, rowIdx, isToday) {
     }
   }
 
+  // Reschedule — owner only, undone jobs only
+  if (adminRole === 'owner' && !done) {
+    actions += `<button class="btn-action btn-invoice" onclick="openOwnerResched(${rowIdx})" style="margin-top:4px;">📅 Reschedule</button>`;
+  }
+
   // Cancel Job — owner only, not available on already-done/paid jobs
   if (adminRole === 'owner' && !isPaid) {
     actions += `<button class="btn-action btn-cancel-job" onclick="triggerCancelJob(${rowIdx})" style="margin-top:4px;">✕ Cancel Job</button>`;
@@ -1189,6 +1363,66 @@ async function sendReviewRequest(rowIdx) {
     }
   } catch(err) {
     if (btn) { btn.disabled = false; btn.textContent = '⭐ Request Review'; }
+    alert('Network error: ' + err.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// OWNER RESCHEDULE MODAL
+// ═══════════════════════════════════════════════════════
+let ownerReschedRowIdx = null;
+
+function openOwnerResched(rowIdx) {
+  const b = allBookings[rowIdx];
+  if (!b) return;
+  ownerReschedRowIdx = rowIdx;
+  document.getElementById('ownerReschedName').textContent = b.name || '—';
+  // Pre-fill with existing date
+  const existing = b.serviceDate || b.serviceDateRaw || '';
+  const iso = /^\d{4}-\d{2}-\d{2}/.test(existing) ? existing.substring(0, 10) : '';
+  document.getElementById('ownerReschedDate').value = iso;
+  document.getElementById('ownerReschedScope').value = 'single';
+  document.getElementById('ownerReschedBtn').disabled = false;
+  document.getElementById('ownerReschedBtn').textContent = 'Move It';
+  document.getElementById('ownerReschedOverlay').classList.add('open');
+}
+
+function closeOwnerResched() {
+  document.getElementById('ownerReschedOverlay').classList.remove('open');
+  ownerReschedRowIdx = null;
+}
+
+async function submitOwnerResched() {
+  if (ownerReschedRowIdx === null) return;
+  const newDate = document.getElementById('ownerReschedDate').value;
+  const scope   = document.getElementById('ownerReschedScope').value;
+  if (!newDate) { alert('Pick a date.'); return; }
+
+  const btn = document.getElementById('ownerReschedBtn');
+  btn.disabled = true; btn.textContent = 'Moving…';
+
+  try {
+    const params = new URLSearchParams({
+      action:   'owner_reschedule',
+      rowIndex: ownerReschedRowIdx + 2,
+      newDate,
+      scope,
+    });
+    const res  = await fetch(SCRIPT_URL + '?' + params.toString() + '&' + authParam());
+    const data = await res.json();
+    if (data.success) {
+      // Update local state
+      allBookings[ownerReschedRowIdx].serviceDate    = newDate;
+      allBookings[ownerReschedRowIdx].serviceDateRaw = newDate;
+      closeOwnerResched();
+      renderBookings();
+      showToast('📅 Rescheduled!');
+    } else {
+      btn.disabled = false; btn.textContent = 'Move It';
+      alert('Error: ' + (data.error || 'Could not reschedule.'));
+    }
+  } catch(err) {
+    btn.disabled = false; btn.textContent = 'Move It';
     alert('Network error: ' + err.message);
   }
 }
