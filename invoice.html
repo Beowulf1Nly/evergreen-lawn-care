@@ -1111,12 +1111,12 @@ function renderBookings() {
 
   // Helper: is a done job fully paid/free?
   function isPaidDone(b) {
-    const cal  = String(b.calendarEvent || '');
-    const pm   = String(b.payMethod || '');
+    const cal  = String(b.calendarEvent || '').toLowerCase();
+    const pm   = String(b.payMethod || '').toLowerCase();
+    const inv  = String(b.invoiced || '').toLowerCase();
     const free = String(b.frequency||'').toLowerCase().includes('free');
-    return free
-      || cal.includes('✅') || cal.toLowerCase().includes('autopay') || cal.toLowerCase().includes('auto-pay')
-      || pm.toLowerCase().includes('✅ cash');
+    const paidPattern = s => s.includes('✅') || s.includes('autopay') || s.includes('auto-pay') || s === 'paid' || s.startsWith('paid');
+    return free || paidPattern(cal) || paidPattern(pm) || paidPattern(inv);
   }
 
   // Text search helper — applies across all sections
@@ -1210,10 +1210,11 @@ function cardHTML(b, rowIdx, isToday) {
   const auto     = isAutoPay(b);
   const cash     = isCash(b);
   const done     = isDone(b);
-  const cal      = String(b.calendarEvent || '');
-  const pm       = String(b.payMethod || '');
-  const isPaid   = cal.includes('✅') || cal.toLowerCase().includes('autopay') || cal.toLowerCase().includes('auto-pay')
-                || pm.toLowerCase().includes('✅ cash');
+  const cal      = String(b.calendarEvent || '').toLowerCase();
+  const pm       = String(b.payMethod || '').toLowerCase();
+  const inv      = String(b.invoiced || '').toLowerCase();
+  const _paid    = s => s.includes('✅') || s.includes('autopay') || s.includes('auto-pay') || s === 'paid' || s.startsWith('paid');
+  const isPaid   = _paid(cal) || _paid(pm) || _paid(inv);
   const invoiced = !!b.invoiced && String(b.invoiced).length > 2;
   const isFree   = String(b.frequency||'').toLowerCase().includes('free');
   const price    = parseFloat(String(b.price||'').replace(/[^0-9.]/g,'')) || 0;
@@ -1839,7 +1840,9 @@ async function addClient() {
     const res  = await fetch(SCRIPT_URL + '?' + params.toString());
     const data = await res.json();
     if (data.success) {
-      okEl.textContent  = `✅ ${name} added! Welcome email sent to ${email}.`;
+      okEl.textContent  = data.cash
+        ? `✅ ${name} added as a cash customer!`
+        : `✅ ${name} added! Welcome email sent to ${email}.`;
       okEl.style.display = 'block';
       // Clear form
       ['ac-name','ac-email','ac-phone','ac-address','ac-zip','ac-notes'].forEach(id => {
