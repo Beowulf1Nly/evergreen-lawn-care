@@ -1115,7 +1115,12 @@ function renderBookings() {
     const pm   = String(b.payMethod || '').toLowerCase();
     const inv  = String(b.invoiced || '').toLowerCase();
     const free = String(b.frequency||'').toLowerCase().includes('free');
-    const paidPattern = s => s.includes('✅') || s.includes('autopay') || s.includes('auto-pay') || s === 'paid' || s.startsWith('paid');
+    // Guard: strings containing "not paid" or "pending" are explicitly NOT paid,
+    // even if they also contain keywords like "autopay" (e.g. "Autopay pending").
+    const paidPattern = s => {
+      if (s.includes('not paid') || s.includes('pending')) return false;
+      return s.includes('✅') || s.includes('autopay') || s.includes('auto-pay') || s === 'paid' || s.startsWith('paid');
+    };
     return free || paidPattern(cal) || paidPattern(pm) || paidPattern(inv);
   }
 
