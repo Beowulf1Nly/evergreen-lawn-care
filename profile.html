@@ -837,19 +837,8 @@ function renderProfile(data) {
   document.getElementById('greetingEmail').textContent = email;
   document.getElementById('settingsEmail').textContent = email;
 
-  // Admin button in header — show if API says isStaff, OR if there's a valid staff session
-  // in localStorage (handles case where Apps Script hasn't been redeployed yet)
-  let isAdmin = !!data.isStaff;
-  if (!isAdmin) {
-    try {
-      const raw = localStorage.getItem('eg_staff_session');
-      if (raw) {
-        const s = JSON.parse(raw);
-        const exp = s.expiry || s.exp;
-        if (s.token && exp && new Date() < new Date(exp)) isAdmin = true;
-      }
-    } catch(e) {}
-  }
+  // Admin button — server is the source of truth. Revoked = hidden immediately.
+  const isAdmin = !!data.isStaff;
   const adminBtn = document.getElementById('adminHeaderBtn');
   if (adminBtn) adminBtn.style.display = isAdmin ? 'inline-flex' : 'none';
   // Staff portal banner (kept as secondary entry point)
