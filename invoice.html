@@ -1218,7 +1218,10 @@ function cardHTML(b, rowIdx, isToday) {
   const cal      = String(b.calendarEvent || '').toLowerCase();
   const pm       = String(b.payMethod || '').toLowerCase();
   const inv      = String(b.invoiced || '').toLowerCase();
-  const _paid    = s => s.includes('✅') || s.includes('autopay') || s.includes('auto-pay') || s === 'paid' || s.startsWith('paid');
+  const _paid    = s => {
+    if (s.includes('not paid') || s.includes('pending')) return false;
+    return s.includes('✅') || s.includes('autopay') || s.includes('auto-pay') || s === 'paid' || s.startsWith('paid');
+  };
   const isPaid   = _paid(cal) || _paid(pm) || _paid(inv);
   const invoiced = !!b.invoiced && String(b.invoiced).length > 2;
   const isFree   = String(b.frequency||'').toLowerCase().includes('free');
@@ -1983,8 +1986,9 @@ function isCash(b) {
 }
 function isAutoPay(b) {
   const pm  = (b.payMethod||'').toLowerCase();
-  const cal = (b.calendarEvent||'');
-  return pm.includes('auto')||pm.includes('stripe')||cal.includes('✅')||cal.toLowerCase().includes('auto-pay');
+  const cal = (b.calendarEvent||'').toLowerCase();
+  if (pm.includes('not paid') || pm.includes('pending')) return false;
+  return pm.includes('auto') || pm.includes('stripe') || cal.includes('✅') || cal.includes('auto-pay');
 }
 function isSubscribed(b) {
   const freq = (b.frequency||'').toLowerCase();
