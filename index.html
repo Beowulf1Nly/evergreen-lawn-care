@@ -2871,6 +2871,7 @@ function acreageToTierIdx(acres) {
 }
 
 async function lookupLotSize(address, zip) {
+  console.log('[lot] starting lookup for:', address, zip);
   qState.lotAutoDetected = false;
   qState.lotEstimated    = false;
   qState.detectedAcreage = null;
@@ -2898,8 +2899,11 @@ async function lookupLotSize(address, zip) {
     if (hit) {
       lat = parseFloat(hit.lat);
       lon = parseFloat(hit.lon);
+      console.log('[lot] geocoded to lat/lon:', lat, lon);
+    } else {
+      console.log('[lot] geocode failed — no hit from Nominatim');
     }
-  } catch(eGeo) {}
+  } catch(eGeo) { console.log('[lot] geocode threw:', eGeo); }
 
   // ── Step 2: Florida Statewide Cadastral (ArcGIS Online — CORS enabled) ─
   const FL_CADASTRAL = 'https://services9.arcgis.com/Gh9awoU677aKree0/arcgis/rest/services/Florida_Statewide_Cadastral/FeatureServer/0/query';
@@ -2941,7 +2945,13 @@ async function lookupLotSize(address, zip) {
     const qs = Object.entries(params).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
     const res  = await fetch(FL_CADASTRAL + '?' + qs);
     const data = await res.json();
-    return (data.features && data.features.length > 0) ? pickBestParcel(data.features) : null;
+    console.log('[lot] ArcGIS response — feature count:', data.features ? data.features.length : 0, '| error:', data.error || 'none');
+    if (data.features && data.features.length > 0) {
+      const best = pickBestParcel(data.features);
+      console.log('[lot] picked parcel — acres:', best ? sqftToAcres(best) : 'null', '| PHY_ADDR1:', best ? (best.PHY_ADDR1 || best.SITE_ADDR || '—') : 'null');
+      return best;
+    }
+    return null;
   }
 
   if (lat && lon) {
@@ -2991,13 +3001,16 @@ async function lookupLotSize(address, zip) {
       } catch(e) {}
     }
 
+    console.log('[lot] final attrs after Step 2:', attrs ? 'found' : 'null');
     if (attrs) {
       const acres = sqftToAcres(attrs);
+      console.log('[lot] sqftToAcres result:', acres, '| CALC_ACRES:', attrs.CALC_ACRES, '| LND_SQFOOT:', attrs.LND_SQFOOT, '| Shape__Area:', attrs.Shape__Area);
       if (acres > 0) {
         qState.detectedAcreage = Math.round(acres * 100) / 100;
         qState.lotTierIdx      = acreageToTierIdx(acres);
         qState.lotAutoDetected = true;
         qState.lotEstimated    = false;
+        console.log('[lot] SUCCESS — detected', qState.detectedAcreage, 'acres, tier', qState.lotTierIdx);
         return;
       }
     }
