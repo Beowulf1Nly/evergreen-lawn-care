@@ -949,6 +949,11 @@ function renderCustomers() {
   const showInactive = document.getElementById('showInactive')?.checked || false;
   const el           = document.getElementById('custList');
   if (!el) return;
+  // If bookings haven't loaded yet, show a spinner and bail — loadBookings() will call us again
+  if (!allBookings.length && document.getElementById('lastRefresh')?.textContent === 'Loading…') {
+    el.innerHTML = '<div class="empty-state">⏳ Loading customers…</div>';
+    return;
+  }
 
   // Deduplicate by email — keep the most recent booking per customer for metadata
   // Also track if ANY booking for this customer has customerInactive = true
@@ -1103,6 +1108,9 @@ async function loadBookings() {
 
     allBookings = data.bookings || [];
     renderBookings();
+    // If the customers tab is already open (user clicked it before data loaded), refresh it now
+    const custPane = document.getElementById('pane-customers');
+    if (custPane && custPane.classList.contains('active')) renderCustomers();
     const now = new Date();
     document.getElementById('lastRefresh').textContent =
       'Updated ' + now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
@@ -1604,7 +1612,8 @@ async function executeCashPaid(rowIdx) {
     const res  = await fetch(SCRIPT_URL + '?' + params.toString());
     const data = await res.json();
     if (data.success) {
-      allBookings[rowIdx].payMethod = '✅ Cash paid';
+      // calendarEvent maps to col M (paidStatus) — that's what isPaidDone() checks
+      allBookings[rowIdx].calendarEvent = '✅ Cash paid';
       renderBookings();
       showToast('💵 Cash payment recorded for ' + (b.name || 'customer'));
     } else {

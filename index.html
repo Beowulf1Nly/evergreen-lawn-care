@@ -2826,8 +2826,10 @@ async function lookupLotSize(address, zip) {
 function onLotSelectChange() {
   const sel = document.getElementById('q-lot-select');
   if (!sel || sel.value === '') return;
+  // Don't allow manual pick while lookup is still running — the result will refresh the display
+  if (!_lotLookupDone) { sel.value = ''; return; }
   sel._userPicked = true;
-  qState.lotTierIdx = parseInt(sel.value) || 0;
+  qState.lotTierIdx = parseInt(sel.value) || 1;
   updateLotDisplay();
   renderPlanCards();
 }
@@ -2882,6 +2884,7 @@ let qState = {
   stripeCustomerId: '',
 };
 let _lotLookupPromise = null;
+let _lotLookupDone    = false;
 
 // ── Calendar for Step 3 ──
 let qCalYear, qCalMonth, qCalSelected = '';
@@ -2955,6 +2958,7 @@ function openQuoteModal(preselectedPlan) {
   const validPlan = (preselectedPlan === 'weekly') ? 'weekly' : 'biweekly';
   qState = { name:'',email:'',phone:'',address:'',zip:'',lotTierIdx:1,lotAutoDetected:false,lotEstimated:false,detectedAcreage:null,selectedPlan:validPlan,startDate:'',stripeCustomerId:'',isReturning:false };
   _lotLookupPromise = null;
+  _lotLookupDone    = false;
   const satFrame = document.getElementById('qSatFrame');
   if (satFrame) satFrame.src = 'about:blank';
   ['q-name','q-email','q-phone','q-address','q-zip'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
@@ -3061,6 +3065,18 @@ async function quoteStep1Submit() {
 
   // Kick off parcel lookup in parallel — promise captured so animation can wait for it
   _lotLookupPromise = lookupLotSize(address, zip);
+  _lotLookupDone = false;
+  // After lookup settles (even if animation already moved on), refresh step 3 if user hasn't
+  // manually picked a yard size yet — prevents stale pricing from a late-arriving result.
+  _lotLookupPromise.then(() => {
+    _lotLookupDone = true;
+    const step3 = document.getElementById('quoteStep3');
+    const sel   = document.getElementById('q-lot-select');
+    if (step3 && step3.style.display !== 'none' && !(sel && sel._userPicked)) {
+      updateLotDisplay();
+      renderPlanCards();
+    }
+  }).catch(() => { _lotLookupDone = true; });
   runAnalyzingAnimation();
 }
 
@@ -3089,12 +3105,13 @@ async function runAnalyzingAnimation() {
     }, 600);
   });
 
-  // Wait up to 2.5s for the lot size lookup to finish
+  // Wait up to 8s for the lot size lookup — covers slow geocode + multiple ArcGIS retries.
+  // This prevents step 3 from appearing with stale/default pricing when the lookup takes 5+ sec.
   if (_lotLookupPromise) {
     textEl.textContent = 'Finalizing your quote...';
-    fill.style.transition = 'width 1s ease';
+    fill.style.transition = 'width 4s ease';
     fill.style.width = '96%';
-    try { await Promise.race([_lotLookupPromise, new Promise(r => setTimeout(r, 2500))]); } catch(e) {}
+    try { await Promise.race([_lotLookupPromise, new Promise(r => setTimeout(r, 8000))]); } catch(e) {}
   }
 
   fill.style.transition = 'width 0.35s ease';
@@ -3138,6 +3155,7 @@ function updateLotDisplay() {
 }
 
 function renderPlanCards() {
+  if (!LOT_TIERS[qState.lotTierIdx]) { qState.lotTierIdx = 1; } // safety guard
   const tierKey = LOT_TIERS[qState.lotTierIdx].key;
   const prices  = PLAN_PRICING[tierKey];
   const isXL    = tierKey === 'xl';
