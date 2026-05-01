@@ -452,9 +452,9 @@
           <label>Preferred Service Date</label>
           <div class="cal-widget">
             <div class="cal-header">
-              <button class="cal-nav" id="calPrev" onclick="calPrevMonth()" type="button">‹</button>
-              <span class="cal-month-label" id="calMonthLabel"></span>
-              <button class="cal-nav" id="calNext" onclick="calNextMonth()" type="button">›</button>
+              <button class="cal-nav" id="calPrev" onclick="calPrevMonth()" type="button" aria-label="Previous month">‹</button>
+              <span class="cal-month-label" id="calMonthLabel" aria-live="polite"></span>
+              <button class="cal-nav" id="calNext" onclick="calNextMonth()" type="button" aria-label="Next month">›</button>
             </div>
             <div class="cal-day-names">
               <div class="cal-day-name">Su</div>
@@ -465,8 +465,8 @@
               <div class="cal-day-name">Fr</div>
               <div class="cal-day-name">Sa</div>
             </div>
-            <div class="cal-grid" id="calGrid"></div>
-            <div class="cal-picked none" id="calPicked">Select a date above</div>
+            <div class="cal-grid" id="calGrid" role="grid" aria-label="Service date picker"></div>
+            <div class="cal-picked none" id="calPicked" aria-live="polite">Select a date above</div>
           </div>
           <input type="hidden" id="preferredDay"/>
           <div id="date-error" class="field-error">Please select an available date.</div>
@@ -578,6 +578,7 @@ function getCookie(name) {
 // ─────────────────────────────────────────────
 // BOOKING CALENDAR CONFIG
 // ─────────────────────────────────────────────
+const MIN_BOOKING_DAYS = 1;   // earliest bookable day (1 = tomorrow)
 const MAX_BOOKING_DAYS = 30;
 
 // Dates to block (format: 'YYYY-MM-DD'). Add/remove as needed.
@@ -625,7 +626,7 @@ let calYear, calMonth, calSelected = '';
 function initCalendar() {
   calSelected = '';
   const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 5);  // 5-day minimum booking delay
+  tomorrow.setDate(tomorrow.getDate() + MIN_BOOKING_DAYS);
   calYear  = tomorrow.getFullYear();
   calMonth = tomorrow.getMonth();
   document.getElementById('preferredDay').value = '';
@@ -635,7 +636,7 @@ function initCalendar() {
 
 function renderCalendar() {
   const today    = new Date(); today.setHours(0,0,0,0);
-  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 5);  // 5-day minimum
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + MIN_BOOKING_DAYS);
   const maxDate  = new Date(today); maxDate.setDate(today.getDate() + MAX_BOOKING_DAYS);
   const MONTHS   = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
@@ -660,7 +661,7 @@ function renderCalendar() {
   for (let d = 1; d <= daysInMonth; d++) {
     const date    = new Date(calYear, calMonth, d);
     const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const isWknd  = date.getDay() === 0 || date.getDay() === 6;
+    const isWknd  = date.getDay() === 0;  // Sundays only — Saturdays available
     const isPast  = date < tomorrow;
     const isFar   = date > maxDate;
     const isBlock = BLOCKED_DATES.has(dateStr);
@@ -668,12 +669,37 @@ function renderCalendar() {
 
     const el = document.createElement('div');
     el.textContent = d;
+    el.setAttribute('role','gridcell');
+    el.setAttribute('data-date', dateStr);
+    const dateLabel = date.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
 
-    if (isSel)                      el.className = 'cal-cell selected', el.onclick = () => pickDate(dateStr);
-    else if (isPast || isFar)       el.className = 'cal-cell disabled';
-    else if (isBlock)               el.className = 'cal-cell blocked';
-    else if (isWknd)                el.className = 'cal-cell wknd-cell disabled';
-    else { el.className = 'cal-cell available'; el.onclick = () => pickDate(dateStr); }
+    if (isSel) {
+      el.className = 'cal-cell selected';
+      el.setAttribute('tabindex','0');
+      el.setAttribute('aria-selected','true');
+      el.setAttribute('aria-label','Selected: ' + dateLabel);
+      el.onclick = () => pickDate(dateStr);
+      el.onkeydown = (e) => freeLawnCalKey(e, dateStr);
+    } else if (isPast || isFar) {
+      el.className = 'cal-cell disabled';
+      el.setAttribute('aria-disabled','true');
+      el.setAttribute('aria-label', dateLabel + ' — unavailable');
+    } else if (isBlock) {
+      el.className = 'cal-cell blocked';
+      el.setAttribute('aria-disabled','true');
+      el.setAttribute('aria-label', dateLabel + ' — unavailable');
+    } else if (isWknd) {
+      el.className = 'cal-cell wknd-cell disabled';
+      el.setAttribute('aria-disabled','true');
+      el.setAttribute('aria-label', dateLabel + ' — unavailable');
+    } else {
+      el.className = 'cal-cell available';
+      el.setAttribute('tabindex','0');
+      el.setAttribute('aria-selected','false');
+      el.setAttribute('aria-label', dateLabel);
+      el.onclick = () => pickDate(dateStr);
+      el.onkeydown = (e) => freeLawnCalKey(e, dateStr);
+    }
 
     grid.appendChild(el);
   }
@@ -695,6 +721,30 @@ function pickDate(dateStr) {
   renderCalendar();
 }
 
+function freeLawnCalKey(e, dateStr) {
+  if (![13,32,37,38,39,40].includes(e.keyCode)) return;
+  e.preventDefault();
+  if (e.keyCode === 13 || e.keyCode === 32) { pickDate(dateStr); return; }
+  const offsets = { 37:-1, 39:1, 38:-7, 40:7 };
+  const delta = offsets[e.keyCode];
+  const today = new Date(); today.setHours(0,0,0,0);
+  const earliest = new Date(today); earliest.setDate(today.getDate() + MIN_BOOKING_DAYS);
+  const maxDate  = new Date(today); maxDate.setDate(today.getDate() + MAX_BOOKING_DAYS);
+  let cur = new Date(dateStr + 'T12:00:00');
+  let attempts = 0;
+  do {
+    cur.setDate(cur.getDate() + delta);
+    attempts++;
+    if (cur < earliest || cur > maxDate) return;
+  } while ((cur.getDay() === 0 || BLOCKED_DATES.has(cur.toISOString().slice(0,10))) && attempts < 14);
+  const targetStr = cur.toISOString().slice(0,10);
+  if (cur.getMonth() !== calMonth || cur.getFullYear() !== calYear) {
+    calMonth = cur.getMonth(); calYear = cur.getFullYear(); renderCalendar();
+  }
+  const target = document.querySelector(`#calGrid [data-date="${targetStr}"]`);
+  if (target && target.getAttribute('tabindex') === '0') target.focus();
+}
+
 function calPrevMonth() {
   calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; }
   renderCalendar();
@@ -708,13 +758,14 @@ function calNextMonth() {
 // CITRUS COUNTY ZIP CODES
 // ─────────────────────────────────────────────
 const VALID_ZIPS = new Set([
-  '34428','34429',
-  '34450','34452','34453',
-  '34446','34448',
-  '34460','34461',
-  '34433','34434',
-  '34436',
-  '34464'
+  '34428','34429',               // Crystal River
+  '34450','34451','34452','34453', // Inverness
+  '34446','34447','34448',       // Homosassa / Homosassa Springs
+  '34460','34461',               // Lecanto
+  '34433','34434',               // Citrus Springs
+  '34436',                       // Floral City
+  '34464','34465',               // Beverly Hills
+  '34431','34432',               // Dunnellon (Citrus/Marion border)
 ]);
 
 document.addEventListener('DOMContentLoaded', () => {
