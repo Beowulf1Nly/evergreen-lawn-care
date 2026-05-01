@@ -2904,124 +2904,90 @@ async function lookupLotSize(address, zip) {
   // ── Step 2: Florida Statewide Cadastral (ArcGIS Online — CORS enabled) ─
   const FL_CADASTRAL = 'https://services9.arcgis.com/Gh9awoU677aKree0/arcgis/rest/services/Florida_Statewide_Cadastral/FeatureServer/0/query';
 
+  // Extract house number from address once — used for parcel matching
+  const houseNum = address.trim().split(/\s+/)[0] || '';
+
+  // Read acreage from a single ArcGIS attributes object.
+  // Tries direct acreage fields first, then sqft → acres, then shape area.
+  function sqftToAcres(a) {
+    const ac = parseFloat(a.CALC_ACRES || a.GIS_ACRES || a.ACRES || a.ACREAGE || a.TOT_ACRES || a.PARCEL_ACRES || 0);
+    if (ac > 0) return ac;
+    const sqft = parseFloat(a.LND_SQFOOT || a.LAND_SQFOOT || a.CALC_SQFOOT || a.LAND_SF || a.LOT_SIZE || a.SQFOOTAGE || 0);
+    if (sqft > 100) return sqft / 43560;
+    // Florida Statewide Cadastral uses State Plane FL (feet), so Shape__Area is sq ft
+    const shapeSqft = parseFloat(a.Shape__Area || a.SHAPE_Area || 0);
+    if (shapeSqft > 100) return shapeSqft / 43560;
+    return 0;
+  }
+
+  // Given a list of parcel attribute objects, return the best one:
+  //   1. Prefer a parcel whose PHY_ADDR1 starts with the user's house number
+  //   2. Otherwise pick the parcel with the largest acreage
+  //      (road strips / easements are always smaller than the residential lot)
+  function pickBestParcel(features) {
+    if (!features || features.length === 0) return null;
+    const attrs = features.map(f => f.attributes);
+    if (attrs.length === 1) return attrs[0];
+    // Address match takes priority
+    if (houseNum) {
+      const match = attrs.filter(a => String(a.PHY_ADDR1 || a.SITE_ADDR || '').trim().startsWith(houseNum));
+      if (match.length > 0) return match.reduce((b, a) => sqftToAcres(a) > sqftToAcres(b) ? a : b, match[0]);
+    }
+    // Fall back to largest acreage
+    return attrs.reduce((b, a) => sqftToAcres(a) > sqftToAcres(b) ? a : b, attrs[0]);
+  }
+
   async function cadastralQuery(params) {
     const qs = Object.entries(params).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
     const res  = await fetch(FL_CADASTRAL + '?' + qs);
     const data = await res.json();
-    if (data.features && data.features.length > 0) return data.features.map(f => f.attributes);
-    return null;
+    return (data.features && data.features.length > 0) ? pickBestParcel(data.features) : null;
   }
-
-  function sqftToAcres(attrs) {
-    // 1. Explicit acreage fields first — cleanest, no conversion needed.
-    const ac = parseFloat(
-      attrs.CALC_ACRES || attrs.GIS_ACRES || attrs.ACRES || attrs.ACREAGE ||
-      attrs.TOT_ACRES  || attrs.PARCEL_ACRES || 0
-    );
-    if (ac > 0) return ac;
-
-    // 2. Square-footage fields → convert to acres.
-    //    LND_SQFOOT / LAND_SQFOOT are the primary parcel sqft fields in the
-    //    Florida Statewide Cadastral service and must be included here.
-    const sqft = parseFloat(
-      attrs.LND_SQFOOT || attrs.LAND_SQFOOT || attrs.CALC_SQFOOT ||
-      attrs.LAND_SF    || attrs.LOT_SIZE    || attrs.SQFOOTAGE || 0
-    );
-    if (sqft > 100) return sqft / 43560;
-
-    // 3. GIS shape area. Florida Statewide Cadastral uses State Plane Florida
-    //    (feet-based), so Shape__Area is in square feet, not square metres.
-    const shapeSqft = parseFloat(attrs.Shape__Area || attrs.SHAPE_Area || 0);
-    if (shapeSqft > 100) return shapeSqft / 43560;
-
-    return 0;
-  }
-
-  // Pick the best parcel from a list of ArcGIS attribute objects.
-  // Strategy (in order of priority):
-  //   1. Exact house-number match on PHY_ADDR1 — most reliable when available
-  //   2. Largest acreage among remaining results — road strips/easements are always smaller
-  //      than the residential lot, so this beats the arbitrary ArcGIS sort order
-  function bestAttrs(attrsList, houseNum) {
-    if (!attrsList || attrsList.length === 0) return null;
-    if (attrsList.length === 1) return attrsList[0];
-
-    // 1. Prefer the parcel whose PHY_ADDR1 starts with the user's house number
-    if (houseNum) {
-      const hn = String(houseNum).trim();
-      const addrMatch = attrsList.filter(a => {
-        const phy = String(a.PHY_ADDR1 || a.SITE_ADDR || a.SITUS_ADDR || '').trim();
-        return phy.startsWith(hn);
-      });
-      if (addrMatch.length === 1) return addrMatch[0];
-      // Multiple address matches — fall through to largest-acreage among them
-      if (addrMatch.length > 1) {
-        return addrMatch.reduce((best, a) => sqftToAcres(a) > sqftToAcres(best) ? a : best, addrMatch[0]);
-      }
-    }
-
-    // 2. Fall back to largest acreage — avoids road strips/easements that sort first
-    return attrsList.reduce((best, a) => sqftToAcres(a) > sqftToAcres(best) ? a : best, attrsList[0]);
-  }
-
-  async function spatialLookup(lt, ln, bufferMeters) {
-    try {
-      const results = await cadastralQuery({
-        where: '1=1',
-        geometry: JSON.stringify({ x: ln, y: lt, spatialReference: { wkid: 4326 } }),
-        geometryType: 'esriGeometryPoint',
-        inSR: '4326',
-        spatialRel: 'esriSpatialRelIntersects',
-        distance: String(bufferMeters),
-        units: 'esriSRUnit_Meter',
-        outFields: '*',
-        returnGeometry: 'false',
-        resultRecordCount: '5',
-        f: 'json'
-      });
-      const best = bestAttrs(results, houseNumGlobal);
-      // Only return if we actually got a usable acreage — otherwise let the
-      // caller try the next buffer size or fallback strategy
-      if (best && sqftToAcres(best) > 0) return best;
-      return null;
-    } catch(e) { return null; }
-  }
-
-  // Extract house number once — used by bestAttrs for address-match prioritisation
-  const houseNumGlobal = address.trim().split(/\s+/)[0] || '';
 
   if (lat && lon) {
     let attrs = null;
 
-    // 2a — tight 10m buffer first: hits only the parcel the geocode landed in.
-    //      Nominatim usually places the point inside the parcel for residential addresses,
-    //      so a 10m radius avoids accidentally matching a neighbouring parcel or road strip.
-    attrs = await spatialLookup(lat, lon, 10);
+    // 2a — 100m buffer: reliably intersects the parcel even when Nominatim
+    //      geocodes to the road edge. Return up to 5 features so pickBestParcel
+    //      can choose the residential lot over any road strip / easement.
+    if (!attrs) {
+      try {
+        attrs = await cadastralQuery({
+          where: '1=1',
+          geometry: JSON.stringify({ x: lon, y: lat, spatialReference: { wkid: 4326 } }),
+          geometryType: 'esriGeometryPoint',
+          inSR: '4326', spatialRel: 'esriSpatialRelIntersects',
+          distance: '100', units: 'esriSRUnit_Meter',
+          outFields: '*', returnGeometry: 'false', resultRecordCount: '5', f: 'json'
+        });
+      } catch(e) {}
+    }
 
-    // 2b — 50m retry: covers cases where Nominatim lands at the kerb/road edge
-    if (!attrs) attrs = await spatialLookup(lat, lon, 50);
+    // 2b — 250m retry for large/rural lots or off-centre geocodes
+    if (!attrs) {
+      try {
+        attrs = await cadastralQuery({
+          where: '1=1',
+          geometry: JSON.stringify({ x: lon, y: lat, spatialReference: { wkid: 4326 } }),
+          geometryType: 'esriGeometryPoint',
+          inSR: '4326', spatialRel: 'esriSpatialRelIntersects',
+          distance: '250', units: 'esriSRUnit_Meter',
+          outFields: '*', returnGeometry: 'false', resultRecordCount: '5', f: 'json'
+        });
+      } catch(e) {}
+    }
 
-    // 2c — 150m retry for large/rural lots or off-center geocodes
-    if (!attrs) attrs = await spatialLookup(lat, lon, 150);
-
-    // 2d — Address text query: house number + street name (more precise than street-only)
+    // 2c — Address text query fallback
     if (!attrs) {
       try {
         const cleanAddr  = address.replace(/,.*/, '').trim().toUpperCase().replace(/'/g, "''");
         const parts      = cleanAddr.split(/\s+/);
-        const houseNum   = parts[0];
+        const hn         = parts[0];
         const streetPart = parts.slice(1).join(' ');
-        // Try with house number first, then fall back to street-only
-        const whereHouse  = `PHY_ADDR1 LIKE '${houseNum}%${streetPart}%'`;
+        const whereHouse  = `PHY_ADDR1 LIKE '${hn}%${streetPart}%'`;
         const whereStreet = `PHY_ADDR1 LIKE '%${streetPart}%'`;
-        attrs = bestAttrs(await cadastralQuery({
-          where: whereHouse, outFields: '*', returnGeometry: 'false', resultRecordCount: '5', f: 'json'
-        }), houseNum);
-        if (!attrs) {
-          attrs = bestAttrs(await cadastralQuery({
-            where: whereStreet, outFields: '*', returnGeometry: 'false', resultRecordCount: '5', f: 'json'
-          }), houseNum);
-        }
+        attrs = await cadastralQuery({ where: whereHouse, outFields: '*', returnGeometry: 'false', resultRecordCount: '5', f: 'json' });
+        if (!attrs) attrs = await cadastralQuery({ where: whereStreet, outFields: '*', returnGeometry: 'false', resultRecordCount: '5', f: 'json' });
       } catch(e) {}
     }
 
