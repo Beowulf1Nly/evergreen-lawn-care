@@ -2913,23 +2913,23 @@ async function lookupLotSize(address, zip) {
   }
 
   function sqftToAcres(attrs) {
-    // 1. Explicit acreage fields — most direct and reliable.
-    //    CALC_ACRES / GIS_ACRES are the canonical Florida DOR parcel acreage fields.
+    // 1. Explicit acreage fields first — cleanest, no conversion needed.
     const ac = parseFloat(
       attrs.CALC_ACRES || attrs.GIS_ACRES || attrs.ACRES || attrs.ACREAGE ||
       attrs.TOT_ACRES  || attrs.PARCEL_ACRES || 0
     );
     if (ac > 0) return ac;
 
-    // 2. Computed square-footage fields → convert to acres.
-    //    NOTE: LND_SQFOOT / LAND_SQFOOT are Florida DOR *assessed land value* fields,
-    //    not parcel boundary area — intentionally excluded here.
+    // 2. Square-footage fields → convert to acres.
+    //    LND_SQFOOT / LAND_SQFOOT are the primary parcel sqft fields in the
+    //    Florida Statewide Cadastral service and must be included here.
     const sqft = parseFloat(
-      attrs.CALC_SQFOOT || attrs.LOT_SIZE || attrs.SQFOOTAGE || 0
+      attrs.LND_SQFOOT || attrs.LAND_SQFOOT || attrs.CALC_SQFOOT ||
+      attrs.LAND_SF    || attrs.LOT_SIZE    || attrs.SQFOOTAGE || 0
     );
     if (sqft > 100) return sqft / 43560;
 
-    // 3. GIS shape area.  Florida Statewide Cadastral uses State Plane Florida
+    // 3. GIS shape area. Florida Statewide Cadastral uses State Plane Florida
     //    (feet-based), so Shape__Area is in square feet, not square metres.
     const shapeSqft = parseFloat(attrs.Shape__Area || attrs.SHAPE_Area || 0);
     if (shapeSqft > 100) return shapeSqft / 43560;
