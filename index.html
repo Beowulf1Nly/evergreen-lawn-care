@@ -2908,30 +2908,65 @@ async function lookupLotSize(address, zip) {
     const qs = Object.entries(params).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
     const res  = await fetch(FL_CADASTRAL + '?' + qs);
     const data = await res.json();
-    if (data.features && data.features.length > 0) return data.features[0].attributes;
+    if (data.features && data.features.length > 0) return data.features.map(f => f.attributes);
     return null;
   }
 
   function sqftToAcres(attrs) {
-    const sqft = parseFloat(
-      attrs.LND_SQFOOT || attrs.LAND_SQFOOT || attrs.LAND_SF || attrs.LOT_SIZE ||
-      attrs.CALC_SQFOOT || attrs.SQFOOTAGE || 0
-    );
-    if (sqft > 100) return sqft / 43560;
+    // 1. Explicit acreage fields — most direct and reliable.
+    //    CALC_ACRES / GIS_ACRES are the canonical Florida DOR parcel acreage fields.
     const ac = parseFloat(
-      attrs.ACRES || attrs.ACREAGE || attrs.TOT_ACRES || attrs.GIS_ACRES ||
-      attrs.CALC_ACRES || attrs.PARCEL_ACRES || 0
+      attrs.CALC_ACRES || attrs.GIS_ACRES || attrs.ACRES || attrs.ACREAGE ||
+      attrs.TOT_ACRES  || attrs.PARCEL_ACRES || 0
     );
     if (ac > 0) return ac;
-    // Shape__Area is in sq meters
-    const shapeM2 = parseFloat(attrs.Shape__Area || attrs.SHAPE_Area || 0);
-    if (shapeM2 > 1) return shapeM2 / 4046.86;
+
+    // 2. Computed square-footage fields → convert to acres.
+    //    NOTE: LND_SQFOOT / LAND_SQFOOT are Florida DOR *assessed land value* fields,
+    //    not parcel boundary area — intentionally excluded here.
+    const sqft = parseFloat(
+      attrs.CALC_SQFOOT || attrs.LOT_SIZE || attrs.SQFOOTAGE || 0
+    );
+    if (sqft > 100) return sqft / 43560;
+
+    // 3. GIS shape area.  Florida Statewide Cadastral uses State Plane Florida
+    //    (feet-based), so Shape__Area is in square feet, not square metres.
+    const shapeSqft = parseFloat(attrs.Shape__Area || attrs.SHAPE_Area || 0);
+    if (shapeSqft > 100) return shapeSqft / 43560;
+
     return 0;
+  }
+
+  // Pick the best parcel from a list of ArcGIS attribute objects.
+  // Strategy (in order of priority):
+  //   1. Exact house-number match on PHY_ADDR1 — most reliable when available
+  //   2. Largest acreage among remaining results — road strips/easements are always smaller
+  //      than the residential lot, so this beats the arbitrary ArcGIS sort order
+  function bestAttrs(attrsList, houseNum) {
+    if (!attrsList || attrsList.length === 0) return null;
+    if (attrsList.length === 1) return attrsList[0];
+
+    // 1. Prefer the parcel whose PHY_ADDR1 starts with the user's house number
+    if (houseNum) {
+      const hn = String(houseNum).trim();
+      const addrMatch = attrsList.filter(a => {
+        const phy = String(a.PHY_ADDR1 || a.SITE_ADDR || a.SITUS_ADDR || '').trim();
+        return phy.startsWith(hn);
+      });
+      if (addrMatch.length === 1) return addrMatch[0];
+      // Multiple address matches — fall through to largest-acreage among them
+      if (addrMatch.length > 1) {
+        return addrMatch.reduce((best, a) => sqftToAcres(a) > sqftToAcres(best) ? a : best, addrMatch[0]);
+      }
+    }
+
+    // 2. Fall back to largest acreage — avoids road strips/easements that sort first
+    return attrsList.reduce((best, a) => sqftToAcres(a) > sqftToAcres(best) ? a : best, attrsList[0]);
   }
 
   async function spatialLookup(lt, ln, bufferMeters) {
     try {
-      return await cadastralQuery({
+      const results = await cadastralQuery({
         where: '1=1',
         geometry: JSON.stringify({ x: ln, y: lt, spatialReference: { wkid: 4326 } }),
         geometryType: 'esriGeometryPoint',
@@ -2941,10 +2976,19 @@ async function lookupLotSize(address, zip) {
         units: 'esriSRUnit_Meter',
         outFields: '*',
         returnGeometry: 'false',
+        resultRecordCount: '5',
         f: 'json'
       });
+      const best = bestAttrs(results, houseNumGlobal);
+      // Only return if we actually got a usable acreage — otherwise let the
+      // caller try the next buffer size or fallback strategy
+      if (best && sqftToAcres(best) > 0) return best;
+      return null;
     } catch(e) { return null; }
   }
+
+  // Extract house number once — used by bestAttrs for address-match prioritisation
+  const houseNumGlobal = address.trim().split(/\s+/)[0] || '';
 
   if (lat && lon) {
     let attrs = null;
@@ -2963,20 +3007,20 @@ async function lookupLotSize(address, zip) {
     // 2d — Address text query: house number + street name (more precise than street-only)
     if (!attrs) {
       try {
-        const cleanAddr = address.replace(/,.*/, '').trim().toUpperCase().replace(/'/g, "''");
-        const parts     = cleanAddr.split(/\s+/);
-        const houseNum  = parts[0];
+        const cleanAddr  = address.replace(/,.*/, '').trim().toUpperCase().replace(/'/g, "''");
+        const parts      = cleanAddr.split(/\s+/);
+        const houseNum   = parts[0];
         const streetPart = parts.slice(1).join(' ');
         // Try with house number first, then fall back to street-only
         const whereHouse  = `PHY_ADDR1 LIKE '${houseNum}%${streetPart}%'`;
         const whereStreet = `PHY_ADDR1 LIKE '%${streetPart}%'`;
-        attrs = await cadastralQuery({
-          where: whereHouse, outFields: '*', returnGeometry: 'false', resultRecordCount: '1', f: 'json'
-        });
+        attrs = bestAttrs(await cadastralQuery({
+          where: whereHouse, outFields: '*', returnGeometry: 'false', resultRecordCount: '5', f: 'json'
+        }), houseNum);
         if (!attrs) {
-          attrs = await cadastralQuery({
-            where: whereStreet, outFields: '*', returnGeometry: 'false', resultRecordCount: '1', f: 'json'
-          });
+          attrs = bestAttrs(await cadastralQuery({
+            where: whereStreet, outFields: '*', returnGeometry: 'false', resultRecordCount: '5', f: 'json'
+          }), houseNum);
         }
       } catch(e) {}
     }
