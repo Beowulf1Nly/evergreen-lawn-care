@@ -3043,14 +3043,18 @@ async function quoteStep1Submit() {
   }
   errEl.style.display = 'none';
 
-  // Check if returning customer (no $19 promo for repeat bookings)
+  // Check if returning customer (no $19 promo for repeat bookings).
+  // Hard 4-second timeout — if Apps Script is slow we move on and assume new customer.
   if (btn) { btn.textContent = 'Checking…'; btn.disabled = true; }
   try {
-    const res  = await fetch(SHEETS_SCRIPT_URL + '?action=check_customer&email=' + encodeURIComponent(email));
-    const data = await res.json();
+    const ctrl    = new AbortController();
+    const tId     = setTimeout(() => ctrl.abort(), 4000);
+    const res     = await fetch(SHEETS_SCRIPT_URL + '?action=check_customer&email=' + encodeURIComponent(email), { signal: ctrl.signal });
+    clearTimeout(tId);
+    const data    = await res.json();
     qState.isReturning = data.success && data.isExisting;
   } catch(e) {
-    qState.isReturning = false; // network error — assume new customer
+    qState.isReturning = false; // timeout or network error — assume new customer, show promo
   }
   if (btn) { btn.textContent = 'Get My Price →'; btn.disabled = false; }
 
