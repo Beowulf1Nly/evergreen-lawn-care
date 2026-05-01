@@ -2943,15 +2943,24 @@ async function lookupLotSize(address, zip) {
 
   async function cadastralQuery(params) {
     const qs = Object.entries(params).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
-    const res  = await fetch(FL_CADASTRAL + '?' + qs);
-    const data = await res.json();
-    console.log('[lot] ArcGIS response — feature count:', data.features ? data.features.length : 0, '| error:', data.error || 'none');
-    if (data.features && data.features.length > 0) {
-      const best = pickBestParcel(data.features);
-      console.log('[lot] picked parcel — acres:', best ? sqftToAcres(best) : 'null', '| PHY_ADDR1:', best ? (best.PHY_ADDR1 || best.SITE_ADDR || '—') : 'null');
-      return best;
+    console.log('[lot] calling ArcGIS:', FL_CADASTRAL.slice(-30) + '?' + qs.slice(0, 80));
+    try {
+      const res  = await fetch(FL_CADASTRAL + '?' + qs);
+      console.log('[lot] ArcGIS HTTP status:', res.status, res.statusText);
+      const text = await res.text();
+      console.log('[lot] ArcGIS raw response (first 200):', text.slice(0, 200));
+      const data = JSON.parse(text);
+      console.log('[lot] ArcGIS feature count:', data.features ? data.features.length : 0, '| error:', data.error || 'none');
+      if (data.features && data.features.length > 0) {
+        const best = pickBestParcel(data.features);
+        console.log('[lot] picked parcel — acres:', best ? sqftToAcres(best) : 'null', '| PHY_ADDR1:', best ? (best.PHY_ADDR1 || best.SITE_ADDR || '—') : 'null');
+        return best;
+      }
+      return null;
+    } catch(e) {
+      console.log('[lot] ArcGIS fetch/parse THREW:', e.message || e);
+      return null;
     }
-    return null;
   }
 
   if (lat && lon) {
@@ -2968,7 +2977,7 @@ async function lookupLotSize(address, zip) {
           geometryType: 'esriGeometryPoint',
           inSR: '4326', spatialRel: 'esriSpatialRelIntersects',
           distance: '100', units: 'esriSRUnit_Meter',
-          outFields: '*', returnGeometry: 'false', resultRecordCount: '5', f: 'json'
+          outFields: '*', returnGeometry: 'false', f: 'json'
         });
       } catch(e) {}
     }
@@ -2982,7 +2991,7 @@ async function lookupLotSize(address, zip) {
           geometryType: 'esriGeometryPoint',
           inSR: '4326', spatialRel: 'esriSpatialRelIntersects',
           distance: '250', units: 'esriSRUnit_Meter',
-          outFields: '*', returnGeometry: 'false', resultRecordCount: '5', f: 'json'
+          outFields: '*', returnGeometry: 'false', f: 'json'
         });
       } catch(e) {}
     }
@@ -2996,8 +3005,8 @@ async function lookupLotSize(address, zip) {
         const streetPart = parts.slice(1).join(' ');
         const whereHouse  = `PHY_ADDR1 LIKE '${hn}%${streetPart}%'`;
         const whereStreet = `PHY_ADDR1 LIKE '%${streetPart}%'`;
-        attrs = await cadastralQuery({ where: whereHouse, outFields: '*', returnGeometry: 'false', resultRecordCount: '5', f: 'json' });
-        if (!attrs) attrs = await cadastralQuery({ where: whereStreet, outFields: '*', returnGeometry: 'false', resultRecordCount: '5', f: 'json' });
+        attrs = await cadastralQuery({ where: whereHouse, outFields: '*', returnGeometry: 'false', f: 'json' });
+        if (!attrs) attrs = await cadastralQuery({ where: whereStreet, outFields: '*', returnGeometry: 'false', f: 'json' });
       } catch(e) {}
     }
 
