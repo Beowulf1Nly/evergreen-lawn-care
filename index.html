@@ -92,7 +92,7 @@
         "itemOffered": {
           "@type": "Service",
           "name": "First Mow Introductory Offer",
-          "description": "First lawn service for new customers — just $19, charged after the mow is complete."
+          "description": "First lawn service for new customers — as low as $19, charged after the mow is complete."
         },
         "price": "19",
         "priceCurrency": "USD"
@@ -1491,7 +1491,7 @@
 <!-- QUOTE CTA STRIP (replaces service cards) -->
 <section id="services" style="background:var(--white);padding:80px 60px;text-align:center;">
   <div class="section-label reveal">How It Works</div>
-  <h2 class="section-title reveal" style="transition-delay:.05s">First Mow Just $19</h2>
+  <h2 class="section-title reveal" style="transition-delay:.05s">First Cut as Low as $19</h2>
   <p class="section-sub reveal" style="transition-delay:.1s">Enter your address and we'll calculate your price in seconds — based on your actual yard size. No surprises, no phone tag.</p>
 
   <div class="reveal" style="transition-delay:.15s;display:flex;flex-wrap:wrap;justify-content:center;gap:24px;max-width:860px;margin:0 auto 40px;">
@@ -1507,7 +1507,7 @@
     </div>
     <div style="flex:1;min-width:220px;max-width:260px;background:var(--green-pale);border-radius:16px;padding:28px 24px;text-align:left;">
       <div style="font-size:28px;margin-bottom:12px;">💳</div>
-      <div style="font-weight:700;font-size:15px;color:var(--green-deep);margin-bottom:6px;">First mow is just $19</div>
+      <div style="font-weight:700;font-size:15px;color:var(--green-deep);margin-bottom:6px;">First cut as low as $19</div>
       <div style="font-size:13px;color:var(--text-muted);line-height:1.6;">Your card is charged after each visit. No contracts, cancel anytime.</div>
     </div>
   </div>
@@ -1515,7 +1515,7 @@
   <button onclick="openQuoteModal()" class="btn-primary reveal" style="border:none;cursor:pointer;font-size:17px;padding:18px 48px;transition-delay:.2s;">
     Get My Free Quote →
   </button>
-  <div class="reveal" style="transition-delay:.25s;font-size:13px;color:var(--text-muted);margin-top:12px;">✅ Takes under 2 minutes · First mow $19 · Cancel anytime</div>
+  <div class="reveal" style="transition-delay:.25s;font-size:13px;color:var(--text-muted);margin-top:12px;">✅ Takes under 2 minutes · First cut as low as $19 · Cancel anytime</div>
 </section>
 
 <!-- HOW IT WORKS -->
@@ -1538,7 +1538,7 @@
     <div class="step reveal" style="transition-delay:.25s">
       <div class="step-num">3</div>
       <h3>Save Card & Book</h3>
-      <p>Your first mow is just $19 — billed after we complete the job. Save your card securely via Stripe for automatic billing going forward.</p>
+      <p>Your first cut starts as low as $19 — billed after we complete the job. Save your card securely via Stripe for automatic billing going forward.</p>
     </div>
     <div class="step reveal" style="transition-delay:.35s">
       <div class="step-num">4</div>
@@ -1714,7 +1714,7 @@
     <!-- ── STEP 1: Address + Contact ── -->
     <div id="quoteStep1">
       <h2 style="font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:var(--green-deep);margin-bottom:6px;">Get your free quote</h2>
-      <p style="font-size:14px;color:var(--text-muted);margin-bottom:22px;line-height:1.6;">Enter your address and we'll calculate your price instantly. First service only $19.</p>
+      <p style="font-size:14px;color:var(--text-muted);margin-bottom:22px;line-height:1.6;">Enter your address and we'll calculate your price instantly. First cut as low as $19.</p>
       <div class="form-row">
         <label>Property Address</label>
         <input type="text" id="q-address" placeholder="123 Oak St, Inverness, FL" autocomplete="street-address"/>
@@ -1740,7 +1740,7 @@
       <button class="btn-primary" onclick="quoteStep1Submit()" style="width:100%;font-size:16px;padding:16px;border:none;cursor:pointer;">
         Get My Price →
       </button>
-      <div style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:10px;">✅ No commitment · Under 2 minutes · First service $19</div>
+      <div style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:10px;">✅ No commitment · Under 2 minutes · First cut as low as $19</div>
     </div>
 
     <!-- ── STEP 2: Analyzing animation ── -->
@@ -2173,7 +2173,7 @@ function calNextMonth() {
 // ─────────────────────────────────────────────
 const PROMO_BANNER = {
   enabled: false,                                         // ← true = show banner, false = hide it
-  text: 'First mow just $19 — get your instant quote.',
+  text: 'First cut as low as $19 — get your instant quote.',
   url: '#services',                                       // ← change this to send to any page/link
 };
 
@@ -2645,7 +2645,35 @@ function renderTestimonials() {
 document.addEventListener('DOMContentLoaded', () => {
   loadData();
   initScrollEffects();
+  initViewportKeyboardFix();
 });
+
+// ── MOBILE KEYBOARD FIX ──────────────────────────────────────────────────────
+// When the virtual keyboard opens on iOS/Android it shrinks the visual viewport.
+// position:fixed overlays don't automatically reflow, so the top of the modal
+// gets pushed above the screen. We listen to visualViewport resize and force the
+// overlay to match the visible area exactly.
+function initViewportKeyboardFix() {
+  if (!window.visualViewport) return;
+  const overlays = () => document.querySelectorAll('.modal-overlay.open');
+  function applyVP() {
+    const vp = window.visualViewport;
+    overlays().forEach(el => {
+      el.style.top    = vp.offsetTop + 'px';
+      el.style.height = vp.height + 'px';
+    });
+  }
+  function resetVP() {
+    overlays().forEach(el => {
+      el.style.top    = '';
+      el.style.height = '';
+    });
+  }
+  window.visualViewport.addEventListener('resize', applyVP);
+  window.visualViewport.addEventListener('scroll', applyVP);
+  // Reset when a modal closes so the style doesn't linger
+  document.addEventListener('focusout', () => setTimeout(resetVP, 100));
+}
 
 // ─────────────────────────────────────────────
 // SCROLL EFFECTS ENGINE
@@ -2921,13 +2949,18 @@ async function lookupLotSize(address, zip) {
   if (lat && lon) {
     let attrs = null;
 
-    // 2a — 100m buffer (covers most residential lots even when geocode lands at road edge)
-    attrs = await spatialLookup(lat, lon, 100);
+    // 2a — tight 10m buffer first: hits only the parcel the geocode landed in.
+    //      Nominatim usually places the point inside the parcel for residential addresses,
+    //      so a 10m radius avoids accidentally matching a neighbouring parcel or road strip.
+    attrs = await spatialLookup(lat, lon, 10);
 
-    // 2b — 250m buffer retry for large/rural lots or off-center geocodes
-    if (!attrs) attrs = await spatialLookup(lat, lon, 250);
+    // 2b — 50m retry: covers cases where Nominatim lands at the kerb/road edge
+    if (!attrs) attrs = await spatialLookup(lat, lon, 50);
 
-    // 2c — Address text query: house number + street name (more precise than street-only)
+    // 2c — 150m retry for large/rural lots or off-center geocodes
+    if (!attrs) attrs = await spatialLookup(lat, lon, 150);
+
+    // 2d — Address text query: house number + street name (more precise than street-only)
     if (!attrs) {
       try {
         const cleanAddr = address.replace(/,.*/, '').trim().toUpperCase().replace(/'/g, "''");
@@ -3461,7 +3494,7 @@ function renderPlanCards() {
     const bigLot       = qState.lotTierIdx >= 3;
     const showPromo    = !qState.isReturning && !bigLot;
     const planFirstText = showPromo
-      ? '<strong>First mow: $19</strong> — billed after service'
+      ? '<strong>First cut: as low as $19</strong> — billed after service'
       : (noPrice ? 'Custom quote' : '$' + p.afterPrice + '/mow');
     const notePart = p.note && p.note.split('·')[1] ? p.note.split('·')[1].trim() : 'cancel anytime';
     const planAfterText = noPrice
