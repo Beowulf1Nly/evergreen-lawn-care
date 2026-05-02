@@ -477,20 +477,21 @@
           </div>
           <div class="amount">FREE</div>
         </div>
-
-        <button class="btn-submit" id="submitBtn" onclick="handleSubmit()">
-          <div class="spinner"></div>
-          <span class="btn-text">Claim My Free Lawn Service →</span>
-        </button>
-        <div class="trust-note">No payment required · No commitment · Citrus County, FL only</div>
       </div>
 
       <!-- LARGE YARD NOTE (1+ acre — redirects to main quote flow) -->
       <div id="quoteSection" style="display:none;">
-        <div style="background:var(--green-pale);border:1.5px solid rgba(45,106,45,0.2);border-radius:12px;padding:16px 18px;font-size:13px;color:var(--green-deep);line-height:1.65;">
-          <strong>No problem!</strong> Properties over 1 acre aren't eligible for the free first mow, but we'll come out and give you a <strong>free on-site quote</strong> instead. Click below and we'll take you right to our booking flow with your info already filled in.
+        <div style="background:var(--green-pale);border:1.5px solid rgba(45,106,45,0.2);border-radius:12px;padding:16px 18px;margin-bottom:16px;font-size:13px;color:var(--green-deep);line-height:1.65;">
+          <strong>No problem!</strong> Properties over 1 acre aren't eligible for the free first mow, but we'll come out and give you a <strong>free quote</strong> instead — we'll scan your property and give you exact pricing, just like on our main site.
         </div>
       </div>
+
+      <!-- BUTTON — always visible, text changes based on yard size -->
+      <button class="btn-submit" id="submitBtn" onclick="handleSubmit()">
+        <div class="spinner"></div>
+        <span class="btn-text">Claim My Free Lawn Service →</span>
+      </button>
+      <div class="trust-note" id="trustNote">No payment required · No commitment · Citrus County, FL only</div>
 
     </div>
 
@@ -769,10 +770,12 @@ function handleYardSize() {
   const isLarge = document.getElementById('largeYard').checked;
   document.getElementById('bookingSection').style.display = isLarge ? 'none' : 'block';
   document.getElementById('quoteSection').style.display  = isLarge ? 'block' : 'none';
-  const btn = document.getElementById('submitBtn');
-  btn.querySelector('.btn-text').textContent = isLarge
+  document.getElementById('submitBtn').querySelector('.btn-text').textContent = isLarge
     ? 'Get My Price →'
     : 'Claim My Free Lawn Service →';
+  document.getElementById('trustNote').textContent = isLarge
+    ? 'No commitment · We scan your property and give you exact pricing'
+    : 'No payment required · No commitment · Citrus County, FL only';
 }
 
 async function handleSubmit() {
