@@ -971,17 +971,23 @@ function renderCustomers() {
   }
 
   // Deduplicate by email — keep the most recent booking per customer for metadata
-  // Also track if ANY booking for this customer has customerInactive = true
-  const map      = new Map();
-  const inactive = new Map(); // email → true/false
+  // Also track if ANY booking for this customer has customerInactive = true,
+  // and whether ALL bookings are row-cancelled (job cancelled, customer still real).
+  const map            = new Map();
+  const inactive       = new Map(); // key → true if flagged inactive in Customers sheet
+  const hasActiveJob   = new Map(); // key → true if at least one non-cancelled booking exists
   for (const b of allBookings) {
     const email = String(b.email || '').toLowerCase().trim();
     const key   = email || b.name; // fallback to name if no email
     if (!key) continue;
     if (b.customerInactive) inactive.set(key, true);
+    if (!b.rowCancelled) hasActiveJob.set(key, true);
     const existing = map.get(key);
-    // Prefer the booking with a future/undone date for "next appt" display
-    if (!existing || (!isDone(b) && isDone(existing))) {
+    // Prefer non-cancelled over cancelled, then undone over done
+    const existingCancelled = existing?.rowCancelled ?? true;
+    if (!existing ||
+        (existingCancelled && !b.rowCancelled) ||
+        (!b.rowCancelled && !isDone(b) && isDone(existing))) {
       map.set(key, b);
     }
   }
@@ -1003,20 +1009,22 @@ function renderCustomers() {
   const filterVal = document.getElementById('custFilter')?.value || 'all';
   if (filterVal !== 'all') {
     custs = custs.filter(b => {
-      const k         = String(b.email || '').toLowerCase().trim() || b.name;
-      const isInactv  = inactive.get(k) || false;
-      const freq      = (b.frequency || '').toLowerCase();
-      const isFree    = freq.includes('free');
-      const isWeekly  = freq.includes('weekly') && !freq.includes('bi');
-      const isBiweek  = freq.includes('bi');
-      const isOnetime = !isSubscribed(b) && !isFree;
+      const k           = String(b.email || '').toLowerCase().trim() || b.name;
+      const isInactv    = inactive.get(k) || false;
+      const jobsCancd   = !hasActiveJob.get(k);
+      const isDisabledF = isInactv || jobsCancd;
+      const freq        = (b.frequency || '').toLowerCase();
+      const isFree      = freq.includes('free');
+      const isWeekly    = freq.includes('weekly') && !freq.includes('bi');
+      const isBiweek    = freq.includes('bi');
+      const isOnetime   = !isSubscribed(b) && !isFree;
       switch (filterVal) {
-        case 'active':   return !isInactv;
-        case 'inactive': return isInactv;
+        case 'active':   return !isDisabledF;
+        case 'inactive': return isInactv || jobsCancd;
         case 'free':     return isFree;
-        case 'weekly':   return isWeekly && !isInactv;
-        case 'biweekly': return isBiweek && !isInactv;
-        case 'onetime':  return isOnetime && !isInactv;
+        case 'weekly':   return isWeekly && !isDisabledF;
+        case 'biweekly': return isBiweek && !isDisabledF;
+        case 'onetime':  return isOnetime && !isDisabledF;
         default:         return true;
       }
     });
@@ -1069,34 +1077,38 @@ function renderCustomers() {
     const email      = String(b.email || '').toLowerCase().trim();
     const key        = email || b.name;
     const rows       = rowsMap.get(key) || [];
-    const isInactive = inactive.get(key) || false;
-    // Find best row index for single-action buttons (next undone booking)
-    const nextRow = rows.find(i => !isDone(allBookings[i])) ?? rows[rows.length - 1];
-    const isSub   = isSubscribed(b) && !isInactive;
+    const isInactive   = inactive.get(key) || false;
+    const jobsCancelled = !hasActiveJob.get(key); // all bookings for this customer are cancelled
+    const isDisabled   = isInactive || jobsCancelled;
+    // Find best row index for single-action buttons (next undone, non-cancelled booking)
+    const nextRow = rows.find(i => !isDone(allBookings[i]) && !allBookings[i]?.rowCancelled) ?? rows[rows.length - 1];
+    const isSub   = isSubscribed(b) && !isDisabled;
     const hasEmail = !!b.email;
     const reviewDone = !!b.reviewSent;
     const nextDate = b.serviceDate || b.serviceDateRaw || '';
-    const nextLabel = isInactive ? '—' : (nextDate ? displayDate(nextDate) : '—');
+    const nextLabel = isDisabled ? '—' : (nextDate ? displayDate(nextDate) : '—');
     const planLabel = b.frequency ? esc(b.frequency) : (isSub ? 'Subscription' : 'One-time');
-    const inactiveBadge = isInactive
+    const statusBadge = isInactive
       ? `<span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:#fee2e2;color:#991b1b;margin-left:6px;">Inactive</span>`
-      : '';
+      : jobsCancelled
+        ? `<span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:#fef3c7;color:#92400e;margin-left:6px;">Job Cancelled</span>`
+        : '';
 
-    return `<div class="cust-card"${isInactive ? ' style="opacity:0.65;"' : ''}>
+    return `<div class="cust-card"${isDisabled ? ' style="opacity:0.65;"' : ''}>
       <div class="cust-info">
-        <div class="cust-name">${esc(b.name || '—')}${inactiveBadge}</div>
+        <div class="cust-name">${esc(b.name || '—')}${statusBadge}</div>
         <div class="cust-meta">
           ${hasEmail ? `✉️ <a href="mailto:${esc(b.email)}" style="color:inherit;">${esc(b.email)}</a><br>` : ''}
           ${b.phone ? `📞 <a href="tel:${esc(b.phone)}" style="color:inherit;">${esc(b.phone)}</a><br>` : ''}
           ${b.address ? `📍 ${esc(b.address)}${b.zip ? ' · ' + esc(b.zip) : ''}<br>` : ''}
-          📋 ${planLabel}${!isInactive ? ' · Next: ' + nextLabel : ' · Cancelled'}
+          📋 ${planLabel}${!isDisabled ? ' · Next: ' + nextLabel : ' · Cancelled'}
         </div>
       </div>
       <div class="cust-actions">
-        ${!isInactive && nextRow !== undefined ? `<button class="cust-btn cust-btn-yellow" onclick="openOwnerResched(${nextRow})">📅 Reschedule</button>` : ''}
+        ${!isDisabled && nextRow !== undefined ? `<button class="cust-btn cust-btn-yellow" onclick="openOwnerResched(${nextRow})">📅 Reschedule</button>` : ''}
         ${hasEmail && !reviewDone ? `<button class="cust-btn cust-btn-green" onclick="custSendReview(${nextRow ?? rows[0]})">⭐ Review Email</button>` : ''}
         ${hasEmail && reviewDone  ? `<button class="cust-btn cust-btn-gray" disabled title="Review already sent">⭐ Sent</button>` : ''}
-        ${hasEmail && !isInactive ? `<button class="cust-btn cust-btn-blue" onclick="openInvoiceModal(${nextRow ?? rows[0]})">📧 Invoice</button>` : ''}
+        ${hasEmail && !isDisabled ? `<button class="cust-btn cust-btn-blue" onclick="openInvoiceModal(${nextRow ?? rows[0]})">📧 Invoice</button>` : ''}
         ${isSub ? `<button class="cust-btn cust-btn-red" onclick="custCancelPlan('${esc(email)}', '${esc(b.name||'')}')">✕ Cancel Plan</button>` : ''}
         ${b.phone ? `<button class="cust-btn cust-btn-gray" onclick="window.location='tel:${esc(b.phone)}'">📞 Call</button>` : ''}
       </div>
@@ -1215,7 +1227,8 @@ function renderBookings() {
            (b.email||'').toLowerCase().includes(q);
   }
 
-  let allFiltered = allBookings.filter(matchesSearch);
+  // Cancelled bookings are passed from the backend (for Customers tab) — exclude from Jobs view
+  let allFiltered = allBookings.filter(b => !b.rowCancelled).filter(matchesSearch);
 
   // Apply status filter
   if      (f === 'needs-action')     allFiltered = allFiltered.filter(b => needsAction(b));
@@ -2083,7 +2096,10 @@ function isAutoPay(b) {
 }
 function isSubscribed(b) {
   const freq = (b.frequency||'').toLowerCase();
-  return freq.includes('weekly plan') || freq.includes('bi-weekly') || freq.includes('biweekly');
+  // Match any weekly/bi-weekly subscription — covers "Weekly", "Weekly Plan", "Bi-Weekly", etc.
+  // Exclude free mow and one-time jobs.
+  if (freq.includes('free') || freq.includes('one-time') || freq.includes('onetime')) return false;
+  return freq.includes('weekly') || freq.includes('subscription') || freq.includes('plan');
 }
 function isDone(b) { return b.done && String(b.done).includes('Done') || String(b.done||'').includes('✓'); }
 function needsAction(b) {
