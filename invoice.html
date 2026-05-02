@@ -2180,8 +2180,12 @@ function todayDateStr() {
 function displayDate(raw) {
   if (!raw) return '';
   try {
+    // Try parsing directly first (handles full JS date strings from Sheets)
+    let d = new Date(raw);
+    if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+    // Fallback: strip ISO time portion and re-parse
     const s = String(raw).replace(/T.*$/, '');
-    const d = new Date(s + ' 12:00:00');
+    d = new Date(s + ' 12:00:00');
     if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
   } catch(e) {}
   return String(raw);
