@@ -786,7 +786,8 @@ let adminEmail = '';
 let adminRole  = 'employee'; // 'owner' or 'employee'
 
 // ─────────── Data state ───────────
-let allBookings = [];
+let allBookings  = [];
+let allCustomers = []; // rich customer records from Customers sheet
 let activeRowIdx = null;
 let currentTipPct = 0;
 let currentTipFixed = 0;
@@ -954,89 +955,124 @@ function showTab(tab) {
   document.getElementById('pane-' + tab).classList.add('active');
   if (tab === 'stats')     loadStats();
   if (tab === 'route')     initRouteTab();
-  if (tab === 'customers') renderCustomers();
+  if (tab === 'customers') { allCustomers = []; loadCustomers(); }
 }
 
 // ═══════════════════════════════════════════════════════
 // CUSTOMERS TAB
 // ═══════════════════════════════════════════════════════
+async function loadCustomers() {
+  const el = document.getElementById('custList');
+  if (el) el.innerHTML = '<div class="empty-state">⏳ Loading customers…</div>';
+  try {
+    const res  = await fetch(SCRIPT_URL + '?action=customers_list&' + authParam());
+    const data = await res.json();
+    if (data.success && Array.isArray(data.customers)) {
+      allCustomers = data.customers;
+    }
+  } catch(err) {
+    console.error('loadCustomers error:', err);
+  }
+  renderCustomers();
+}
+
 function renderCustomers() {
   const q  = (document.getElementById('custSearch')?.value || '').toLowerCase().trim();
   const el = document.getElementById('custList');
   if (!el) return;
-  // If bookings haven't loaded yet, show a spinner and bail — loadBookings() will call us again
-  if (!allBookings.length && document.getElementById('lastRefresh')?.textContent === 'Loading…') {
-    el.innerHTML = '<div class="empty-state">⏳ Loading customers…</div>';
-    return;
-  }
 
-  // Deduplicate by email — keep the most recent booking per customer for metadata
-  // Also track if ANY booking for this customer has customerInactive = true,
-  // and whether ALL bookings are row-cancelled (job cancelled, customer still real).
-  const map            = new Map();
-  const inactive       = new Map(); // key → true if flagged inactive in Customers sheet
-  const hasActiveJob   = new Map(); // key → true if at least one non-cancelled booking exists
-  for (const b of allBookings) {
-    const email = String(b.email || '').toLowerCase().trim();
-    const key   = email || b.name; // fallback to name if no email
-    if (!key) continue;
-    if (b.customerInactive) inactive.set(key, true);
-    if (!b.rowCancelled) hasActiveJob.set(key, true);
-    const existing = map.get(key);
-    // Prefer non-cancelled over cancelled, then undone over done
-    const existingCancelled = existing?.rowCancelled ?? true;
-    if (!existing ||
-        (existingCancelled && !b.rowCancelled) ||
-        (!b.rowCancelled && !isDone(b) && isDone(existing))) {
-      map.set(key, b);
-    }
-  }
-
-  // Collect all row indices per customer for actions that need them
-  const rowsMap = new Map();
+  // Build a lookup: email → array of allBookings indices (for action buttons)
+  const rowsByEmail = new Map();
   for (let i = 0; i < allBookings.length; i++) {
-    const b     = allBookings[i];
-    const email = String(b.email || '').toLowerCase().trim();
-    const key   = email || b.name;
-    if (!key) continue;
-    if (!rowsMap.has(key)) rowsMap.set(key, []);
-    rowsMap.get(key).push(i);
+    const em = String(allBookings[i].email || '').toLowerCase().trim();
+    if (!em) continue;
+    if (!rowsByEmail.has(em)) rowsByEmail.set(em, []);
+    rowsByEmail.get(em).push(i);
   }
 
-  let custs = [...map.values()];
+  // Use rich Customers sheet data if loaded; otherwise fall back to deduplicating allBookings
+  let custs;
+  if (allCustomers.length) {
+    custs = allCustomers.map(c => ({
+      // Normalise field names so the rest of the function uses consistent keys
+      email:      String(c.Email      || '').toLowerCase().trim(),
+      name:       String(c.Name       || '—'),
+      phone:      String(c.Phone      || ''),
+      address:    String(c.Address    || ''),
+      zip:        String(c.Zip        || ''),
+      status:     String(c.Status     || 'Active'),
+      plan:       String(c.Plan       || ''),
+      source:     String(c.Source     || ''),
+      dateAdded:  String(c['Date Added']      || ''),
+      firstJob:   String(c['First Job Date']  || ''),
+      lastDone:   String(c['Last Completed']  || ''),
+      nextSched:  String(c['Next Scheduled']  || ''),
+      totalPaid:  parseFloat(String(c['Total Paid']  || '0').replace(/[^0-9.]/g, '')) || 0,
+      totalMows:  parseInt(String(c['Total Mows']    || '0')) || 0,
+      cardLast4:  String(c.CardLast4  || ''),
+      cardBrand:  String(c.CardBrand  || ''),
+      autopay:    String(c.AutopayEnabled || '').toLowerCase() === 'true',
+      reviewSent: String(c['Review Sent'] || ''),
+      notes:      String(c.Notes      || ''),
+    }));
+  } else {
+    // Fallback: deduplicate allBookings (used before Customers sheet is populated)
+    const map = new Map();
+    for (const b of allBookings) {
+      const em = String(b.email || '').toLowerCase().trim() || b.name;
+      if (!em) continue;
+      const ex = map.get(em);
+      if (!ex || (!b.rowCancelled && (ex.rowCancelled || (!isDone(b) && isDone(ex))))) map.set(em, b);
+    }
+    custs = [...map.values()].map(b => ({
+      email:      String(b.email || '').toLowerCase().trim(),
+      name:       String(b.name  || '—'),
+      phone:      String(b.phone || ''),
+      address:    String(b.address || ''),
+      zip:        String(b.zip   || ''),
+      status:     b.customerInactive ? 'Inactive' : 'Active',
+      plan:       String(b.frequency || ''),
+      source:     '',
+      dateAdded:  '',
+      firstJob:   '',
+      lastDone:   '',
+      nextSched:  b.serviceDate || b.serviceDateRaw || '',
+      totalPaid:  0,
+      totalMows:  0,
+      cardLast4:  String(b.cardLast4 || ''),
+      cardBrand:  String(b.cardBrand || ''),
+      autopay:    false,
+      reviewSent: String(b.reviewSent || ''),
+      notes:      '',
+    }));
+  }
 
-  // Filter by custFilter dropdown
+  // Filter
   const filterVal = document.getElementById('custFilter')?.value || 'all';
   if (filterVal !== 'all') {
-    custs = custs.filter(b => {
-      const k           = String(b.email || '').toLowerCase().trim() || b.name;
-      const isInactv    = inactive.get(k) || false;
-      const jobsCancd   = !hasActiveJob.get(k);
-      const isDisabledF = isInactv || jobsCancd;
-      const freq        = (b.frequency || '').toLowerCase();
-      const isFree      = freq.includes('free');
-      const isWeekly    = freq.includes('weekly') && !freq.includes('bi');
-      const isBiweek    = freq.includes('bi');
-      const isOnetime   = !isSubscribed(b) && !isFree;
+    custs = custs.filter(c => {
+      const st     = c.status.toLowerCase();
+      const pl     = c.plan.toLowerCase();
+      const active = !st.includes('inactive') && !st.includes('cancelled');
       switch (filterVal) {
-        case 'active':   return !isDisabledF;
-        case 'inactive': return isInactv || jobsCancd;
-        case 'free':     return isFree;
-        case 'weekly':   return isWeekly && !isDisabledF;
-        case 'biweekly': return isBiweek && !isDisabledF;
-        case 'onetime':  return isOnetime && !isDisabledF;
+        case 'active':   return active;
+        case 'inactive': return !active;
+        case 'free':     return pl.includes('free');
+        case 'weekly':   return pl.includes('weekly') && !pl.includes('bi') && active;
+        case 'biweekly': return pl.includes('bi') && active;
+        case 'onetime':  return !pl.includes('weekly') && !pl.includes('free') && active;
         default:         return true;
       }
     });
   }
 
-  // Search filter
+  // Search
   if (q) {
-    custs = custs.filter(b =>
-      (b.name    || '').toLowerCase().includes(q) ||
-      (b.email   || '').toLowerCase().includes(q) ||
-      (b.phone   || '').toLowerCase().includes(q) ||
-      (b.address || '').toLowerCase().includes(q)
+    custs = custs.filter(c =>
+      c.name.toLowerCase().includes(q)    ||
+      c.email.toLowerCase().includes(q)   ||
+      c.phone.toLowerCase().includes(q)   ||
+      c.address.toLowerCase().includes(q)
     );
   }
 
@@ -1044,25 +1080,14 @@ function renderCustomers() {
   const sortVal = document.getElementById('custSort')?.value || 'name-az';
   custs.sort((a, b) => {
     switch (sortVal) {
-      case 'name-za':  return (b.name || '').localeCompare(a.name || '');
-      case 'recent': {
-        const da = a.serviceDate || a.serviceDateRaw || '';
-        const db = b.serviceDate || b.serviceDateRaw || '';
-        return db.localeCompare(da);
-      }
-      case 'plan':
-        return (a.frequency || 'zzz').localeCompare(b.frequency || 'zzz');
-      case 'status': {
-        const ka = String(a.email || '').toLowerCase().trim() || a.name;
-        const kb = String(b.email || '').toLowerCase().trim() || b.name;
-        return (inactive.get(ka) ? 1 : 0) - (inactive.get(kb) ? 1 : 0);
-      }
-      default: // name-az
-        return (a.name || '').localeCompare(b.name || '');
+      case 'name-za':  return b.name.localeCompare(a.name);
+      case 'recent':   return b.lastDone.localeCompare(a.lastDone);
+      case 'plan':     return a.plan.localeCompare(b.plan);
+      case 'status':   return a.status.localeCompare(b.status);
+      default:         return a.name.localeCompare(b.name);
     }
   });
 
-  // Update count display
   const countEl = document.getElementById('custCount');
   if (countEl) countEl.textContent = custs.length + ' customer' + (custs.length !== 1 ? 's' : '');
 
@@ -1071,61 +1096,88 @@ function renderCustomers() {
     return;
   }
 
-  const todayStr = todayDateStr();
+  el.innerHTML = custs.map(c => {
+    const isInactive = /inactive|cancelled/i.test(c.status);
+    const isFree     = /free/i.test(c.plan);
+    const isSub      = !isFree && /weekly/i.test(c.plan) && !isInactive;
 
-  el.innerHTML = custs.map(b => {
-    const email      = String(b.email || '').toLowerCase().trim();
-    const key        = email || b.name;
-    const rows       = rowsMap.get(key) || [];
-    const isInactive   = inactive.get(key) || false;
-    const jobsCancelled = !hasActiveJob.get(key); // all bookings for this customer are cancelled
-    const isDisabled   = isInactive || jobsCancelled;
-    // Find best row index for single-action buttons (next undone, non-cancelled booking)
+    // Find booking row indices for action buttons
+    const rows   = rowsByEmail.get(c.email) || [];
     const nextRow = rows.find(i => !isDone(allBookings[i]) && !allBookings[i]?.rowCancelled) ?? rows[rows.length - 1];
-    const isSub   = isSubscribed(b) && !isDisabled;
-    const hasEmail = !!b.email;
-    const reviewDone = !!b.reviewSent;
-    const nextDate = b.serviceDate || b.serviceDateRaw || '';
-    const nextLabel = isDisabled ? '—' : (nextDate ? displayDate(nextDate) : '—');
-    const planLabel = b.frequency ? esc(b.frequency) : (isSub ? 'Subscription' : 'One-time');
-    const statusBadge = isInactive
-      ? `<span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:#fee2e2;color:#991b1b;margin-left:6px;">Inactive</span>`
-      : jobsCancelled
-        ? `<span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:#fef3c7;color:#92400e;margin-left:6px;">Job Cancelled</span>`
-        : '';
 
-    return `<div class="cust-card"${isDisabled ? ' style="opacity:0.65;"' : ''}>
+    // Status badge
+    const badge = isInactive
+      ? `<span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:#fee2e2;color:#991b1b;margin-left:6px;">${esc(c.status)}</span>`
+      : '';
+
+    // Stats line
+    const statsLine = (c.totalPaid > 0 || c.totalMows > 0)
+      ? `💰 $${c.totalPaid.toFixed(2)} paid · ${c.totalMows} mow${c.totalMows !== 1 ? 's' : ''}<br>`
+      : '';
+    const lastDoneLine = c.lastDone
+      ? `✓ Last completed: ${displayDate(c.lastDone)}<br>` : '';
+    const nextSchedLine = !isInactive && c.nextSched
+      ? `📅 Next: ${displayDate(c.nextSched)}<br>` : '';
+    const cardLine = c.cardLast4
+      ? `💳 ${cap(c.cardBrand || 'Card')} ••${c.cardLast4}${c.autopay ? ' · autopay on' : ''}<br>` : '';
+    const sourceLine = c.source
+      ? `🔗 Source: ${esc(c.source)}<br>` : '';
+    const addedLine = c.dateAdded
+      ? `📆 Added: ${displayDate(c.dateAdded)}` : '';
+
+    return `<div class="cust-card"${isInactive ? ' style="opacity:0.65;"' : ''}>
       <div class="cust-info">
-        <div class="cust-name">${esc(b.name || '—')}${statusBadge}</div>
+        <div class="cust-name">${esc(c.name)}${badge}</div>
         <div class="cust-meta">
-          ${hasEmail ? `✉️ <a href="mailto:${esc(b.email)}" style="color:inherit;">${esc(b.email)}</a><br>` : ''}
-          ${b.phone ? `📞 <a href="tel:${esc(b.phone)}" style="color:inherit;">${esc(b.phone)}</a><br>` : ''}
-          ${b.address ? `📍 ${esc(b.address)}${b.zip ? ' · ' + esc(b.zip) : ''}<br>` : ''}
-          📋 ${planLabel}${!isDisabled ? ' · Next: ' + nextLabel : ' · Cancelled'}
+          ${c.email ? `✉️ <a href="mailto:${esc(c.email)}" style="color:inherit;">${esc(c.email)}</a><br>` : ''}
+          ${c.phone ? `📞 <a href="tel:${esc(c.phone)}" style="color:inherit;">${esc(c.phone)}</a><br>` : ''}
+          ${c.address ? `📍 ${esc(c.address)}${c.zip ? ' · ' + esc(c.zip) : ''}<br>` : ''}
+          📋 ${esc(c.plan || 'Unknown')} · ${isInactive ? 'Cancelled' : (c.nextSched ? 'Next: ' + displayDate(c.nextSched) : 'TBD')}<br>
+          ${statsLine}${lastDoneLine}${cardLine}${sourceLine}${addedLine}
         </div>
       </div>
       <div class="cust-actions">
-        ${!isDisabled && nextRow !== undefined ? `<button class="cust-btn cust-btn-yellow" onclick="openOwnerResched(${nextRow})">📅 Reschedule</button>` : ''}
-        ${hasEmail && !reviewDone ? `<button class="cust-btn cust-btn-green" onclick="custSendReview(${nextRow ?? rows[0]})">⭐ Review Email</button>` : ''}
-        ${hasEmail && reviewDone  ? `<button class="cust-btn cust-btn-gray" disabled title="Review already sent">⭐ Sent</button>` : ''}
-        ${hasEmail && !isDisabled ? `<button class="cust-btn cust-btn-blue" onclick="openInvoiceModal(${nextRow ?? rows[0]})">📧 Invoice</button>` : ''}
-        ${isSub ? `<button class="cust-btn cust-btn-red" onclick="custCancelPlan('${esc(email)}', '${esc(b.name||'')}')">✕ Cancel Plan</button>` : ''}
-        ${b.phone ? `<button class="cust-btn cust-btn-gray" onclick="window.location='tel:${esc(b.phone)}'">📞 Call</button>` : ''}
+        ${!isInactive && nextRow !== undefined ? `<button class="cust-btn cust-btn-yellow" onclick="openOwnerResched(${nextRow})">📅 Reschedule</button>` : ''}
+        ${c.email && !c.reviewSent ? `<button class="cust-btn cust-btn-green" onclick="custSendReviewByEmail('${esc(c.email)}')">⭐ Review Email</button>` : ''}
+        ${c.email && c.reviewSent  ? `<button class="cust-btn cust-btn-gray" disabled title="Review sent ${esc(c.reviewSent)}">⭐ Sent</button>` : ''}
+        ${c.email && !isInactive && nextRow !== undefined ? `<button class="cust-btn cust-btn-blue" onclick="openInvoiceModal(${nextRow})">📧 Invoice</button>` : ''}
+        ${isSub ? `<button class="cust-btn cust-btn-red" onclick="custCancelPlan('${esc(c.email)}','${esc(c.name)}')">✕ Cancel Plan</button>` : ''}
+        ${c.phone ? `<button class="cust-btn cust-btn-gray" onclick="window.location='tel:${esc(c.phone)}'">📞 Call</button>` : ''}
       </div>
     </div>`;
   }).join('');
 }
 
+async function custSendReviewByEmail(email) {
+  const norm = email.toLowerCase().trim();
+  const rowIdx = allBookings.findIndex(b => String(b.email||'').toLowerCase().trim() === norm);
+  if (rowIdx < 0) { showToast('No booking found for ' + email); return; }
+  const b = allBookings[rowIdx];
+  openConfirm(
+    'Send Review Request',
+    `Send a Google review request to ${b.name} (${email})?`,
+    async () => {
+      await sendReviewRequest(rowIdx, true); // true = skip built-in confirm (already confirmed above)
+      loadCustomers();
+    }
+  );
+}
+
+// Legacy alias (kept for any inline references that may still use old name)
 async function custSendReview(rowIdx) {
   const b = allBookings[rowIdx];
   if (!b) return;
-  if (!confirm(`Send review request to ${b.name} (${b.email})?`)) return;
-  await sendReviewRequest(rowIdx);
-  renderCustomers();
+  openConfirm(
+    'Send Review Request',
+    `Send a Google review request to ${b.name} (${b.email})?`,
+    async () => {
+      await sendReviewRequest(rowIdx, true); // true = skip built-in confirm
+      loadCustomers();
+    }
+  );
 }
 
 function custCancelPlan(email, name) {
-  if (!confirm(`Cancel ${name}'s subscription? This will remove all upcoming appointments.`)) return;
   openConfirm(
     'Cancel Plan — ' + name,
     'Remove all upcoming appointments and cancel the subscription?',
@@ -1138,7 +1190,7 @@ function custCancelPlan(email, name) {
         if (data.success) {
           allBookings = allBookings.filter(b => String(b.email||'').toLowerCase().trim() !== email);
           renderBookings();
-          renderCustomers();
+          loadCustomers(); // reload from Customers sheet so status/badge reflects cancellation
           showToast('Plan cancelled for ' + name);
         } else {
           alert('Error: ' + (data.error || 'Could not cancel.'));
@@ -1387,8 +1439,8 @@ function cardHTML(b, rowIdx, isToday) {
     actions += `<button class="btn-action btn-invoice" onclick="openOwnerResched(${rowIdx})" style="margin-top:4px;">📅 Reschedule</button>`;
   }
 
-  // Cancel Job — owner only, not available on already-done/paid jobs
-  if (adminRole === 'owner' && !isPaid) {
+  // Cancel Job — owner only; free mows always cancellable, paid jobs only if not yet paid
+  if (adminRole === 'owner' && (isFree || !isPaid)) {
     actions += `<button class="btn-action btn-cancel-job" onclick="triggerCancelJob(${rowIdx})" style="margin-top:4px;">✕ Cancel Job</button>`;
   }
 
@@ -1473,11 +1525,11 @@ function completedCardHTML(b, rowIdx) {
     </div>`;
 }
 
-async function sendReviewRequest(rowIdx) {
+async function sendReviewRequest(rowIdx, skipConfirm = false) {
   const b = allBookings[rowIdx];
   if (!b) return;
   if (!b.email) { alert('No email on file for ' + (b.name||'this customer') + '.'); return; }
-  if (!confirm(`Send a review request email to ${b.name} (${b.email})?`)) return;
+  if (!skipConfirm && !confirm(`Send a review request email to ${b.name} (${b.email})?`)) return;
 
   const btn = document.querySelector(`#compCard_${rowIdx} button`);
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
