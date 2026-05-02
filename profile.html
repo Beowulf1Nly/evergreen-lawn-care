@@ -1541,17 +1541,48 @@ function capitalize(str) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// SESSION STORAGE (localStorage)
+// SESSION STORAGE — localStorage + cookie backup
+// Safari ITP can wipe localStorage after ~7 days of inactivity.
+// We duplicate the token into a long-lived cookie so sessions survive.
 // ═══════════════════════════════════════════════════════════════════════
+const SESSION_COOKIE = 'eg_ps';
+
+function _setCookie(token, expiry) {
+  try {
+    const exp = new Date(expiry).toUTCString();
+    document.cookie = `${SESSION_COOKIE}=${encodeURIComponent(token)}; expires=${exp}; path=/; SameSite=Lax`;
+  } catch(e) {}
+}
+function _getCookieToken() {
+  try {
+    const m = document.cookie.match(/(?:^|;\s*)eg_ps=([^;]*)/);
+    return m ? decodeURIComponent(m[1]) : null;
+  } catch(e) { return null; }
+}
+function _clearCookie() {
+  document.cookie = `${SESSION_COOKIE}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+}
+
 function storeSession(session) {
   localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  if (session.token && session.expiry) _setCookie(session.token, session.expiry);
 }
 function getStoredSession() {
   try {
-    const raw = localStorage.getItem(SESSION_KEY);
+    let raw = localStorage.getItem(SESSION_KEY);
+
+    // Fallback: cookie still present after localStorage was cleared by Safari ITP
+    if (!raw) {
+      const cookieToken = _getCookieToken();
+      if (cookieToken) {
+        // Rebuild minimal session — server will re-validate on next API call
+        raw = JSON.stringify({ token: cookieToken });
+      }
+    }
+
     if (!raw) return null;
     const s = JSON.parse(raw);
-    // Quick local expiry check (server does the real check)
+    // Quick local expiry check — skip if expiry unknown (cookie-only recovery path)
     if (s.expiry && new Date(s.expiry) < new Date()) {
       clearSession();
       return null;
@@ -1561,6 +1592,7 @@ function getStoredSession() {
 }
 function clearSession() {
   localStorage.removeItem(SESSION_KEY);
+  _clearCookie();
 }
 
 // ═══════════════════════════════════════════════════════════════════════
