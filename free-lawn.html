@@ -118,11 +118,6 @@
     display: inline-flex; align-items: baseline; gap: 6px;
     margin-top: 20px;
   }
-  .free-value .was {
-    font-size: 18px; color: rgba(255,255,255,0.4);
-    text-decoration: line-through;
-    font-weight: 500;
-  }
   .free-value .now {
     font-family: 'Playfair Display', serif;
     font-size: 42px; font-weight: 900;
@@ -396,7 +391,6 @@
   <h1>Your First Lawn Service,<br/><span>On Us.</span></h1>
   <p>New to Evergreen? Let us show you what we can do — completely free. No credit card, no commitment.</p>
   <div class="free-value">
-    <span class="was">$45</span>
     <span class="now">FREE</span>
   </div>
 </div>
@@ -441,9 +435,9 @@
       <div class="yard-check-box">
         <label>
           <input type="checkbox" id="largeYard" onchange="handleYardSize()"/>
-          My yard is larger than ½ acre
+          My yard is larger than 1 acre
         </label>
-        <div class="hint">Large properties need a custom quote — check this if you're unsure.</div>
+        <div class="hint">Properties over 1 acre aren't eligible for the free offer — but we'll come out and give you a free quote instead.</div>
       </div>
 
       <!-- STANDARD BOOKING -->
@@ -491,30 +485,37 @@
         <div class="trust-note">No payment required · No commitment · Citrus County, FL only</div>
       </div>
 
-      <!-- LARGE YARD QUOTE -->
+      <!-- LARGE YARD QUOTE (1+ acre — not eligible for free offer) -->
       <div id="quoteSection" style="display:none;">
-        <div style="background:#fff8e1;border:1px solid #f59e0b;border-radius:10px;padding:14px 16px;margin-bottom:18px;font-size:13px;color:#92400e;line-height:1.6;">
-          🌿 No problem! Large properties get a custom quote. Fill in your details and we'll reach out within 24 hours.
+        <div style="background:var(--green-pale);border:1.5px solid rgba(45,106,45,0.2);border-radius:12px;padding:16px 18px;margin-bottom:20px;font-size:13px;color:var(--green-deep);line-height:1.65;">
+          <strong>Properties over 1 acre aren't eligible for the free first mow</strong> — the cost to service larger lots makes it impractical for us to offer this deal. But we'll come out for a <strong>free on-site quote</strong> instead: we walk the property, measure it ourselves, and give you exact pricing on the spot. No commitment needed.
         </div>
         <div class="form-row">
-          <label>Yard Size (approximate)</label>
+          <label>Approximate Yard Size</label>
           <select id="yardSize">
-            <option value="">-- Select a size --</option>
-            <option>½ – 1 acre</option>
+            <option value="">— Select a size —</option>
             <option>1 – 2 acres</option>
             <option>2 – 5 acres</option>
-            <option>5+ acres</option>
+            <option>5 – 10 acres</option>
+            <option>10+ acres</option>
           </select>
         </div>
         <div class="form-row">
           <label>Notes (anything we should know)</label>
-          <textarea id="quoteNotes" placeholder="e.g. Lots of trees, steep slope, needs trimming too..."></textarea>
+          <textarea id="quoteNotes" placeholder="e.g. Lots of trees, steep slope, needs edging too..."></textarea>
+        </div>
+        <div class="price-summary">
+          <div>
+            <div class="label">Free On-Site Quote Visit</div>
+            <div class="sublabel">We come to you — no charge, no obligation</div>
+          </div>
+          <div class="amount">FREE</div>
         </div>
         <button class="btn-submit" id="quoteBtn" onclick="handleQuote()">
           <div class="spinner"></div>
-          <span class="btn-text">Request a Free Quote →</span>
+          <span class="btn-text">Book My Free Quote Visit →</span>
         </button>
-        <div class="trust-note">First-time customers only · One per email</div>
+        <div class="trust-note">No charge · No commitment · We come to you</div>
       </div>
 
     </div>
@@ -855,9 +856,8 @@ async function handleSubmit() {
       if (sheetData.reason === 'email_used' || sheetData.reason === 'address_used') {
         showAlreadyClaimed();
       } else if (sheetData.reason === 'date_too_soon') {
-        alert('Please select a date at least 5 days from today — we need a little time to prepare!');
         document.getElementById('date-error').style.display = 'block';
-        document.getElementById('date-error').textContent = 'Please select a date at least 5 days from today.';
+        document.getElementById('date-error').textContent = 'Please select a date at least 1 day out.';
       } else {
         alert('Something went wrong. Please try again or call us at (352) 462-0627.');
       }
