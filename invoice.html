@@ -1138,7 +1138,10 @@ function renderCustomers() {
     return;
   }
 
-  el.innerHTML = custs.map(c => {
+  // Store filtered custs globally so Schedule modal can look up by index
+  window._custsList = custs;
+
+  el.innerHTML = custs.map((c, custIdx) => {
     const isInactive = /inactive|cancelled/i.test(c.status);
     const isFree     = /free/i.test(c.plan);
     const isSub      = !isFree && /weekly/i.test(c.plan) && !isInactive;
@@ -1180,7 +1183,7 @@ function renderCustomers() {
       </div>
       <div class="cust-actions">
         ${!isInactive && nextRow !== undefined ? `<button class="cust-btn cust-btn-yellow" onclick="openOwnerResched(${nextRow})">📅 Reschedule</button>` : ''}
-        ${!isSub ? `<button class="cust-btn cust-btn-green" onclick="openScheduleModal(${JSON.stringify(c)})">📋 Schedule</button>` : ''}
+        ${!isSub ? `<button class="cust-btn cust-btn-green" onclick="openScheduleModal(${custIdx})">📋 Schedule</button>` : ''}
         ${c.email && !c.reviewSent ? `<button class="cust-btn cust-btn-green" onclick="custSendReviewByEmail('${esc(c.email)}')">⭐ Review Email</button>` : ''}
         ${c.email && c.reviewSent  ? `<button class="cust-btn cust-btn-gray" disabled title="Review sent ${esc(c.reviewSent)}">⭐ Sent</button>` : ''}
         ${c.email && !isInactive && nextRow !== undefined ? `<button class="cust-btn cust-btn-blue" onclick="openInvoiceModal(${nextRow})">📧 Invoice</button>` : ''}
@@ -1193,7 +1196,9 @@ function renderCustomers() {
 
 // ── Schedule Modal ──────────────────────────────────────────────────────
 let _schedCustomer = null;
-function openScheduleModal(c) {
+function openScheduleModal(idx) {
+  const c = (window._custsList || [])[idx];
+  if (!c) return;
   _schedCustomer = c;
   document.getElementById('scheduleModalTitle').textContent = '📋 Start New Plan — ' + (c.name || '');
   document.getElementById('schedPlan').value  = 'Weekly Plan';
