@@ -776,6 +776,38 @@
   </div>
 </div>
 
+<!-- Schedule Modal -->
+<div class="confirm-overlay" id="scheduleOverlay" onclick="if(event.target===this)closeScheduleModal()">
+  <div class="confirm-box" style="max-width:420px;width:94%;">
+    <h4 id="scheduleModalTitle" style="margin:0 0 16px;">📋 Start New Plan</h4>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div>
+        <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Plan</label>
+        <select id="schedPlan" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;">
+          <option value="Weekly Plan">Weekly Plan</option>
+          <option value="Bi-Weekly Plan">Bi-Weekly Plan</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Price per mow ($)</label>
+        <input id="schedPrice" type="number" min="0" step="1" placeholder="e.g. 80" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">First appointment date</label>
+        <input id="schedDate" type="date" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Notes (optional)</label>
+        <input id="schedNotes" type="text" placeholder="e.g. Don't go in backyard" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;">
+      </div>
+    </div>
+    <div class="confirm-actions" style="margin-top:20px;">
+      <button class="btn-confirm-no" onclick="closeScheduleModal()">Cancel</button>
+      <button class="btn-confirm-yes" onclick="submitSchedule()" id="schedSubmitBtn">Schedule</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
 
@@ -955,7 +987,7 @@ function showTab(tab) {
   document.getElementById('pane-' + tab).classList.add('active');
   if (tab === 'stats')     loadStats();
   if (tab === 'route')     initRouteTab();
-  if (tab === 'customers') { allCustomers = []; loadCustomers(); }
+  if (tab === 'customers') { loadCustomers(); }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -963,12 +995,22 @@ function showTab(tab) {
 // ═══════════════════════════════════════════════════════
 async function loadCustomers() {
   const el = document.getElementById('custList');
-  if (el) el.innerHTML = '<div class="empty-state">⏳ Loading customers…</div>';
+
+  // Show cached data immediately so the tab feels instant
+  const cached = sessionStorage.getItem('evg_customers_cache');
+  if (cached) {
+    try { allCustomers = JSON.parse(cached); renderCustomers(); } catch(e) {}
+  } else {
+    if (el) el.innerHTML = '<div class="empty-state">⏳ Loading customers…</div>';
+  }
+
+  // Fetch fresh data in background
   try {
     const res  = await fetch(SCRIPT_URL + '?action=customers_list&' + authParam());
     const data = await res.json();
     if (data.success && Array.isArray(data.customers)) {
       allCustomers = data.customers;
+      sessionStorage.setItem('evg_customers_cache', JSON.stringify(data.customers));
     }
   } catch(err) {
     console.error('loadCustomers error:', err);
@@ -1138,6 +1180,7 @@ function renderCustomers() {
       </div>
       <div class="cust-actions">
         ${!isInactive && nextRow !== undefined ? `<button class="cust-btn cust-btn-yellow" onclick="openOwnerResched(${nextRow})">📅 Reschedule</button>` : ''}
+        ${!isSub ? `<button class="cust-btn cust-btn-green" onclick="openScheduleModal(${JSON.stringify(c)})">📋 Schedule</button>` : ''}
         ${c.email && !c.reviewSent ? `<button class="cust-btn cust-btn-green" onclick="custSendReviewByEmail('${esc(c.email)}')">⭐ Review Email</button>` : ''}
         ${c.email && c.reviewSent  ? `<button class="cust-btn cust-btn-gray" disabled title="Review sent ${esc(c.reviewSent)}">⭐ Sent</button>` : ''}
         ${c.email && !isInactive && nextRow !== undefined ? `<button class="cust-btn cust-btn-blue" onclick="openInvoiceModal(${nextRow})">📧 Invoice</button>` : ''}
@@ -1146,6 +1189,55 @@ function renderCustomers() {
       </div>
     </div>`;
   }).join('');
+}
+
+// ── Schedule Modal ──────────────────────────────────────────────────────
+let _schedCustomer = null;
+function openScheduleModal(c) {
+  _schedCustomer = c;
+  document.getElementById('scheduleModalTitle').textContent = '📋 Start New Plan — ' + (c.name || '');
+  document.getElementById('schedPlan').value  = 'Weekly Plan';
+  document.getElementById('schedPrice').value = '';
+  document.getElementById('schedNotes').value = c.notes || '';
+  // Default date to tomorrow
+  const tom = new Date(); tom.setDate(tom.getDate() + 1);
+  document.getElementById('schedDate').value = tom.toISOString().slice(0,10);
+  document.getElementById('scheduleOverlay').classList.add('open');
+}
+function closeScheduleModal() {
+  document.getElementById('scheduleOverlay').classList.remove('open');
+  _schedCustomer = null;
+}
+async function submitSchedule() {
+  const c = _schedCustomer;
+  if (!c) return;
+  const plan  = document.getElementById('schedPlan').value;
+  const price = document.getElementById('schedPrice').value.trim();
+  const date  = document.getElementById('schedDate').value;
+  const notes = document.getElementById('schedNotes').value.trim();
+  if (!price || !date) { showToast('Enter a price and date.'); return; }
+  const btn = document.getElementById('schedSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Scheduling…';
+  try {
+    const params = new URLSearchParams({
+      action: 'manual_schedule',
+      name: c.name || '', email: c.email || '', phone: c.phone || '',
+      address: c.address || '', zip: c.zip || '',
+      frequency: plan, price, serviceDate: date, notes,
+    });
+    const res  = await fetch(SCRIPT_URL + '?' + authParam() + '&' + params);
+    const data = await res.json();
+    if (data.success) {
+      closeScheduleModal();
+      showToast('Scheduled! ' + plan + ' starting ' + date);
+      sessionStorage.removeItem('evg_customers_cache');
+      loadBookings();
+      loadCustomers();
+    } else {
+      showToast('Error: ' + (data.error || 'Failed'));
+    }
+  } catch(e) { showToast('Network error'); }
+  btn.disabled = false; btn.textContent = 'Schedule';
 }
 
 async function custSendReviewByEmail(email) {
