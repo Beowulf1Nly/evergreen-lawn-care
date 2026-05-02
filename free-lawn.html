@@ -771,7 +771,7 @@ function handleYardSize() {
   document.getElementById('quoteSection').style.display  = isLarge ? 'block' : 'none';
   const btn = document.getElementById('submitBtn');
   btn.querySelector('.btn-text').textContent = isLarge
-    ? 'Get My Free Quote →'
+    ? 'Get My Price →'
     : 'Claim My Free Lawn Service →';
 }
 
@@ -783,13 +783,13 @@ async function handleSubmit() {
   const address = document.getElementById('customerAddress').value.trim();
   const zip     = document.getElementById('customerZip').value.trim();
 
-  // ── Large yard → redirect to main quote flow ──
+  // ── Large yard → redirect to main quote flow (pre-fills + auto-runs lot scan) ──
   if (document.getElementById('largeYard').checked) {
     if (!name || !email || !address) {
       alert('Please fill in your name, email, and address first.');
       return;
     }
-    const p = new URLSearchParams({ service:'mow-blow', largeYard:'1', name, email, phone, address, zip });
+    const p = new URLSearchParams({ quote:'1', name, email, phone, address, zip });
     window.location.href = '/?' + p.toString();
     return;
   }

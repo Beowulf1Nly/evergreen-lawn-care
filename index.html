@@ -2321,33 +2321,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Auto-open modal if ?service= param is in the URL
   const params = new URLSearchParams(window.location.search);
-  const serviceParam  = params.get('service');
-  const prefillLarge  = params.get('largeYard');
-  const prefillName   = params.get('name');
-  const prefillEmail  = params.get('email');
-  const prefillPhone  = params.get('phone');
-  const prefillAddr   = params.get('address');
-  const prefillZip    = params.get('zip');
+  const serviceParam = params.get('service');
 
-  const modalMap = {
-    'mow-blow': ['mow-blow', 'Cut & Clean',    45,  'one-time'],
-    'biweekly': ['biweekly', 'Bi-Weekly Plan', 80,  'recurring'],
-    'weekly':   ['weekly',   'Weekly Plan',    140, 'recurring'],
-  };
+  if (serviceParam) {
+    const modalMap = {
+      'mow-blow': ['mow-blow', 'Cut & Clean',    45,  'one-time'],
+      'biweekly': ['biweekly', 'Bi-Weekly Plan', 80,  'recurring'],
+      'weekly':   ['weekly',   'Weekly Plan',    140, 'recurring'],
+    };
+    if (modalMap[serviceParam]) openModal(...modalMap[serviceParam]);
+  }
 
-  if (serviceParam && modalMap[serviceParam]) {
-    openModal(...modalMap[serviceParam]);
-    // Pre-fill customer info from URL params (large-yard redirect from free-lawn.html)
-    // Must run AFTER openModal (which resets zip and largeYard)
-    if (prefillName)  document.getElementById('customerName').value    = prefillName;
-    if (prefillEmail) document.getElementById('customerEmail').value   = prefillEmail;
-    if (prefillPhone) document.getElementById('customerPhone').value   = prefillPhone;
-    if (prefillAddr)  document.getElementById('customerAddress').value = prefillAddr;
-    if (prefillZip)   { document.getElementById('customerZip').value   = prefillZip; validateZip(); }
-    if (prefillLarge === '1') {
-      document.getElementById('largeYard').checked = true;
-      handleYardSize();
-    }
+  // ── Quote modal pre-fill from free-lawn.html large-yard redirect ──
+  // Triggered by: /?quote=1&name=...&email=...&phone=...&address=...&zip=...
+  if (params.get('quote') === '1') {
+    const pName  = params.get('name')    || '';
+    const pEmail = params.get('email')   || '';
+    const pPhone = params.get('phone')   || '';
+    const pAddr  = params.get('address') || '';
+    const pZip   = params.get('zip')     || '';
+
+    // Open the quote modal first (it clears fields internally)
+    openQuoteModal();
+
+    // Pre-fill quote step 1 fields (must come AFTER openQuoteModal clears them)
+    if (pName)  document.getElementById('q-name').value    = pName;
+    if (pEmail) document.getElementById('q-email').value   = pEmail;
+    if (pPhone) document.getElementById('q-phone').value   = pPhone;
+    if (pAddr)  document.getElementById('q-address').value = pAddr;
+    if (pZip)   document.getElementById('q-zip').value     = pZip;
+
+    // Auto-submit step 1 so the lot scan kicks off immediately
+    if (pAddr && pEmail) quoteStep1Submit();
   }
 });
 
