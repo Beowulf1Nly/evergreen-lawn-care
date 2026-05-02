@@ -783,14 +783,42 @@
     <div style="display:flex;flex-direction:column;gap:12px;">
       <div>
         <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Plan</label>
-        <select id="schedPlan" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;">
+        <select id="schedPlan" onchange="schedAutoFillPrice()" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;">
           <option value="Weekly Plan">Weekly Plan</option>
           <option value="Bi-Weekly Plan">Bi-Weekly Plan</option>
         </select>
       </div>
       <div>
+        <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Yard Size</label>
+        <select id="schedYard" onchange="schedAutoFillPrice()" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;">
+          <option value="">— Select yard size —</option>
+          <option value="small">Small · Up to ¼ acre</option>
+          <option value="medium">Medium · ¼–½ acre</option>
+          <option value="half">½–1 acre</option>
+          <option value="one">1–1.5 acres</option>
+          <option value="one5">1.5–2 acres</option>
+          <option value="two">2–2.5 acres</option>
+          <option value="two5">2.5–3 acres</option>
+          <option value="three">3–3.5 acres</option>
+          <option value="three5">3.5–4 acres</option>
+          <option value="four">4–4.5 acres</option>
+          <option value="four5">4.5–5 acres</option>
+          <option value="five">5–5.5 acres</option>
+          <option value="five5">5.5–6 acres</option>
+          <option value="six">6–6.5 acres</option>
+          <option value="six5">6.5–7 acres</option>
+          <option value="seven">7–7.5 acres</option>
+          <option value="seven5">7.5–8 acres</option>
+          <option value="eight">8–8.5 acres</option>
+          <option value="eight5">8.5–9 acres</option>
+          <option value="nine">9–9.5 acres</option>
+          <option value="nine5">9.5–10 acres</option>
+          <option value="xl">10+ acres · Custom Quote</option>
+        </select>
+      </div>
+      <div>
         <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Price per mow ($)</label>
-        <input id="schedPrice" type="number" min="0" step="1" placeholder="e.g. 80" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;">
+        <input id="schedPrice" type="number" min="0" step="1" placeholder="Auto-filled or enter manually" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;">
       </div>
       <div>
         <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">First appointment date</label>
@@ -1195,6 +1223,42 @@ function renderCustomers() {
 }
 
 // ── Schedule Modal ──────────────────────────────────────────────────────
+const SCHED_PRICING = {
+  small:  { 'Weekly Plan': 40,  'Bi-Weekly Plan': 45  },
+  medium: { 'Weekly Plan': 50,  'Bi-Weekly Plan': 60  },
+  half:   { 'Weekly Plan': 65,  'Bi-Weekly Plan': 75  },
+  one:    { 'Weekly Plan': 78,  'Bi-Weekly Plan': 90  },
+  one5:   { 'Weekly Plan': 95,  'Bi-Weekly Plan': 110 },
+  two:    { 'Weekly Plan': 112, 'Bi-Weekly Plan': 130 },
+  two5:   { 'Weekly Plan': 130, 'Bi-Weekly Plan': 150 },
+  three:  { 'Weekly Plan': 148, 'Bi-Weekly Plan': 170 },
+  three5: { 'Weekly Plan': 165, 'Bi-Weekly Plan': 190 },
+  four:   { 'Weekly Plan': 182, 'Bi-Weekly Plan': 210 },
+  four5:  { 'Weekly Plan': 200, 'Bi-Weekly Plan': 230 },
+  five:   { 'Weekly Plan': 218, 'Bi-Weekly Plan': 250 },
+  five5:  { 'Weekly Plan': 235, 'Bi-Weekly Plan': 270 },
+  six:    { 'Weekly Plan': 252, 'Bi-Weekly Plan': 290 },
+  six5:   { 'Weekly Plan': 270, 'Bi-Weekly Plan': 310 },
+  seven:  { 'Weekly Plan': 288, 'Bi-Weekly Plan': 330 },
+  seven5: { 'Weekly Plan': 305, 'Bi-Weekly Plan': 350 },
+  eight:  { 'Weekly Plan': 322, 'Bi-Weekly Plan': 370 },
+  eight5: { 'Weekly Plan': 340, 'Bi-Weekly Plan': 390 },
+  nine:   { 'Weekly Plan': 358, 'Bi-Weekly Plan': 410 },
+  nine5:  { 'Weekly Plan': 375, 'Bi-Weekly Plan': 430 },
+  xl:     { 'Weekly Plan': '',  'Bi-Weekly Plan': ''  },
+};
+function schedAutoFillPrice() {
+  const yard  = document.getElementById('schedYard').value;
+  const plan  = document.getElementById('schedPlan').value;
+  if (!yard) return;
+  const price = SCHED_PRICING[yard]?.[plan];
+  if (price !== undefined && price !== '') {
+    document.getElementById('schedPrice').value = price;
+  } else {
+    document.getElementById('schedPrice').value = '';
+    document.getElementById('schedPrice').placeholder = 'Custom quote — enter manually';
+  }
+}
 let _schedCustomer = null;
 function openScheduleModal(idx) {
   const c = (window._custsList || [])[idx];
@@ -1202,6 +1266,7 @@ function openScheduleModal(idx) {
   _schedCustomer = c;
   document.getElementById('scheduleModalTitle').textContent = '📋 Start New Plan — ' + (c.name || '');
   document.getElementById('schedPlan').value  = 'Weekly Plan';
+  document.getElementById('schedYard').value  = '';
   document.getElementById('schedPrice').value = '';
   document.getElementById('schedNotes').value = c.notes || '';
   // Default date to tomorrow
