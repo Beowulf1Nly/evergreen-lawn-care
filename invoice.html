@@ -591,14 +591,29 @@
   <div id="pane-customers" class="tab-pane">
     <div class="container" style="padding-top:20px;">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:20px;">
-        <input type="text" id="custSearch" placeholder="Search by name, email, phone…"
+        <input type="text" id="custSearch" placeholder="Search by name, email, phone, address…"
           oninput="renderCustomers()"
-          style="flex:1;min-width:200px;padding:10px 14px;border:1.5px solid #d1d5db;border-radius:10px;font-size:14px;box-sizing:border-box;"/>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);cursor:pointer;white-space:nowrap;">
-          <input type="checkbox" id="showInactive" onchange="renderCustomers()" style="cursor:pointer;">
-          Show inactive
-        </label>
+          style="flex:1;min-width:180px;padding:10px 14px;border:1.5px solid #d1d5db;border-radius:10px;font-size:14px;box-sizing:border-box;"/>
+        <select id="custFilter" onchange="renderCustomers()"
+          style="padding:10px 12px;border:1.5px solid #d1d5db;border-radius:10px;font-size:13px;font-family:inherit;background:#fff;cursor:pointer;outline:none;">
+          <option value="all">All customers</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+          <option value="free">Free Mow</option>
+          <option value="weekly">Weekly</option>
+          <option value="biweekly">Bi-Weekly</option>
+          <option value="onetime">One-Time</option>
+        </select>
+        <select id="custSort" onchange="renderCustomers()"
+          style="padding:10px 12px;border:1.5px solid #d1d5db;border-radius:10px;font-size:13px;font-family:inherit;background:#fff;cursor:pointer;outline:none;">
+          <option value="name-az">Name A–Z</option>
+          <option value="name-za">Name Z–A</option>
+          <option value="recent">Most Recent</option>
+          <option value="plan">Plan Type</option>
+          <option value="status">Status</option>
+        </select>
       </div>
+      <div id="custCount" style="font-size:13px;color:var(--text-muted);margin-bottom:12px;"></div>
       <div id="custList"></div>
     </div>
   </div>
@@ -946,9 +961,8 @@ function showTab(tab) {
 // CUSTOMERS TAB
 // ═══════════════════════════════════════════════════════
 function renderCustomers() {
-  const q            = (document.getElementById('custSearch')?.value || '').toLowerCase().trim();
-  const showInactive = document.getElementById('showInactive')?.checked || false;
-  const el           = document.getElementById('custList');
+  const q  = (document.getElementById('custSearch')?.value || '').toLowerCase().trim();
+  const el = document.getElementById('custList');
   if (!el) return;
   // If bookings haven't loaded yet, show a spinner and bail — loadBookings() will call us again
   if (!allBookings.length && document.getElementById('lastRefresh')?.textContent === 'Loading…') {
@@ -985,11 +999,26 @@ function renderCustomers() {
 
   let custs = [...map.values()];
 
-  // Filter out inactive customers unless checkbox is checked
-  if (!showInactive) {
+  // Filter by custFilter dropdown
+  const filterVal = document.getElementById('custFilter')?.value || 'all';
+  if (filterVal !== 'all') {
     custs = custs.filter(b => {
-      const k = String(b.email || '').toLowerCase().trim() || b.name;
-      return !inactive.get(k);
+      const k         = String(b.email || '').toLowerCase().trim() || b.name;
+      const isInactv  = inactive.get(k) || false;
+      const freq      = (b.frequency || '').toLowerCase();
+      const isFree    = freq.includes('free');
+      const isWeekly  = freq.includes('weekly') && !freq.includes('bi');
+      const isBiweek  = freq.includes('bi');
+      const isOnetime = !isSubscribed(b) && !isFree;
+      switch (filterVal) {
+        case 'active':   return !isInactv;
+        case 'inactive': return isInactv;
+        case 'free':     return isFree;
+        case 'weekly':   return isWeekly && !isInactv;
+        case 'biweekly': return isBiweek && !isInactv;
+        case 'onetime':  return isOnetime && !isInactv;
+        default:         return true;
+      }
     });
   }
 
@@ -1003,8 +1032,31 @@ function renderCustomers() {
     );
   }
 
-  // Sort alphabetically by name
-  custs.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  // Sort
+  const sortVal = document.getElementById('custSort')?.value || 'name-az';
+  custs.sort((a, b) => {
+    switch (sortVal) {
+      case 'name-za':  return (b.name || '').localeCompare(a.name || '');
+      case 'recent': {
+        const da = a.serviceDate || a.serviceDateRaw || '';
+        const db = b.serviceDate || b.serviceDateRaw || '';
+        return db.localeCompare(da);
+      }
+      case 'plan':
+        return (a.frequency || 'zzz').localeCompare(b.frequency || 'zzz');
+      case 'status': {
+        const ka = String(a.email || '').toLowerCase().trim() || a.name;
+        const kb = String(b.email || '').toLowerCase().trim() || b.name;
+        return (inactive.get(ka) ? 1 : 0) - (inactive.get(kb) ? 1 : 0);
+      }
+      default: // name-az
+        return (a.name || '').localeCompare(b.name || '');
+    }
+  });
+
+  // Update count display
+  const countEl = document.getElementById('custCount');
+  if (countEl) countEl.textContent = custs.length + ' customer' + (custs.length !== 1 ? 's' : '');
 
   if (!custs.length) {
     el.innerHTML = '<div class="empty-state" style="padding:40px;">No customers found.</div>';
@@ -1325,6 +1377,13 @@ function cardHTML(b, rowIdx, isToday) {
   // Cancel Job — owner only, not available on already-done/paid jobs
   if (adminRole === 'owner' && !isPaid) {
     actions += `<button class="btn-action btn-cancel-job" onclick="triggerCancelJob(${rowIdx})" style="margin-top:4px;">✕ Cancel Job</button>`;
+  }
+
+  // Cancel Plan (subscription) — owner only
+  if (adminRole === 'owner' && isSubscribed(b) && b.email) {
+    const _email = String(b.email || '').toLowerCase().trim();
+    const _name  = String(b.name  || '');
+    actions += `<button class="btn-action btn-cancel-job" onclick="custCancelPlan('${esc(_email)}','${esc(_name)}')" style="margin-top:4px;background:#7f1d1d;border-color:#7f1d1d;">✕ Cancel Plan</button>`;
   }
 
   // ── Employee view: name, address, date, phone, notes, done status only ──
