@@ -2321,15 +2321,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Auto-open modal if ?service= param is in the URL
   const params = new URLSearchParams(window.location.search);
-  const serviceParam = params.get('service');
-  if (serviceParam && FREQ_DATA[serviceParam === 'mow-blow' ? 'one-time' : serviceParam]) {
-    const map = {
-      'mow-blow': ['mow-blow', 'Cut & Clean',    45,  'one-time'],
-      'biweekly': ['biweekly', 'Bi-Weekly Plan', 80,  'recurring'],
-      'weekly':   ['weekly',   'Weekly Plan',    140, 'recurring'],
-    };
-    const s = map[serviceParam];
-    if (s) openModal(...s);
+  const serviceParam  = params.get('service');
+  const prefillLarge  = params.get('largeYard');
+  const prefillName   = params.get('name');
+  const prefillEmail  = params.get('email');
+  const prefillPhone  = params.get('phone');
+  const prefillAddr   = params.get('address');
+  const prefillZip    = params.get('zip');
+
+  const modalMap = {
+    'mow-blow': ['mow-blow', 'Cut & Clean',    45,  'one-time'],
+    'biweekly': ['biweekly', 'Bi-Weekly Plan', 80,  'recurring'],
+    'weekly':   ['weekly',   'Weekly Plan',    140, 'recurring'],
+  };
+
+  if (serviceParam && modalMap[serviceParam]) {
+    openModal(...modalMap[serviceParam]);
+    // Pre-fill customer info from URL params (large-yard redirect from free-lawn.html)
+    // Must run AFTER openModal (which resets zip and largeYard)
+    if (prefillName)  document.getElementById('customerName').value    = prefillName;
+    if (prefillEmail) document.getElementById('customerEmail').value   = prefillEmail;
+    if (prefillPhone) document.getElementById('customerPhone').value   = prefillPhone;
+    if (prefillAddr)  document.getElementById('customerAddress').value = prefillAddr;
+    if (prefillZip)   { document.getElementById('customerZip').value   = prefillZip; validateZip(); }
+    if (prefillLarge === '1') {
+      document.getElementById('largeYard').checked = true;
+      handleYardSize();
+    }
   }
 });
 
@@ -2871,7 +2889,6 @@ function acreageToTierIdx(acres) {
 }
 
 async function lookupLotSize(address, zip) {
-  console.log('[lot] starting lookup for:', address, zip);
   qState.lotAutoDetected = false;
   qState.lotEstimated    = false;
   qState.detectedAcreage = null;
@@ -2899,11 +2916,8 @@ async function lookupLotSize(address, zip) {
     if (hit) {
       lat = parseFloat(hit.lat);
       lon = parseFloat(hit.lon);
-      console.log('[lot] geocoded to lat/lon:', lat, lon);
-    } else {
-      console.log('[lot] geocode failed — no hit from Nominatim');
     }
-  } catch(eGeo) { console.log('[lot] geocode threw:', eGeo); }
+  } catch(eGeo) {}
 
   // ── Step 2: Florida Statewide Cadastral (ArcGIS Online — CORS enabled) ─
   const FL_CADASTRAL = 'https://services9.arcgis.com/Gh9awoU677aKree0/arcgis/rest/services/Florida_Statewide_Cadastral/FeatureServer/0/query';
@@ -2943,24 +2957,12 @@ async function lookupLotSize(address, zip) {
 
   async function cadastralQuery(params) {
     const qs = Object.entries(params).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
-    console.log('[lot] calling ArcGIS:', FL_CADASTRAL.slice(-30) + '?' + qs.slice(0, 80));
     try {
       const res  = await fetch(FL_CADASTRAL + '?' + qs);
-      console.log('[lot] ArcGIS HTTP status:', res.status, res.statusText);
-      const text = await res.text();
-      console.log('[lot] ArcGIS raw response (first 200):', text.slice(0, 200));
-      const data = JSON.parse(text);
-      console.log('[lot] ArcGIS feature count:', data.features ? data.features.length : 0, '| error:', data.error || 'none');
-      if (data.features && data.features.length > 0) {
-        const best = pickBestParcel(data.features);
-        console.log('[lot] picked parcel — acres:', best ? sqftToAcres(best) : 'null', '| PHY_ADDR1:', best ? (best.PHY_ADDR1 || best.SITE_ADDR || '—') : 'null');
-        return best;
-      }
+      const data = await res.json();
+      if (data.features && data.features.length > 0) return pickBestParcel(data.features);
       return null;
-    } catch(e) {
-      console.log('[lot] ArcGIS fetch/parse THREW:', e.message || e);
-      return null;
-    }
+    } catch(e) { return null; }
   }
 
   if (lat && lon) {
@@ -3010,16 +3012,13 @@ async function lookupLotSize(address, zip) {
       } catch(e) {}
     }
 
-    console.log('[lot] final attrs after Step 2:', attrs ? 'found' : 'null');
     if (attrs) {
       const acres = sqftToAcres(attrs);
-      console.log('[lot] sqftToAcres result:', acres, '| CALC_ACRES:', attrs.CALC_ACRES, '| LND_SQFOOT:', attrs.LND_SQFOOT, '| Shape__Area:', attrs.Shape__Area);
       if (acres > 0) {
         qState.detectedAcreage = Math.round(acres * 100) / 100;
         qState.lotTierIdx      = acreageToTierIdx(acres);
         qState.lotAutoDetected = true;
         qState.lotEstimated    = false;
-        console.log('[lot] SUCCESS — detected', qState.detectedAcreage, 'acres, tier', qState.lotTierIdx);
         return;
       }
     }

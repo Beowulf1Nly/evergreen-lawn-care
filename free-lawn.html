@@ -485,37 +485,11 @@
         <div class="trust-note">No payment required · No commitment · Citrus County, FL only</div>
       </div>
 
-      <!-- LARGE YARD QUOTE (1+ acre — not eligible for free offer) -->
+      <!-- LARGE YARD NOTE (1+ acre — redirects to main quote flow) -->
       <div id="quoteSection" style="display:none;">
-        <div style="background:var(--green-pale);border:1.5px solid rgba(45,106,45,0.2);border-radius:12px;padding:16px 18px;margin-bottom:20px;font-size:13px;color:var(--green-deep);line-height:1.65;">
-          <strong>Properties over 1 acre aren't eligible for the free first mow</strong> — the cost to service larger lots makes it impractical for us to offer this deal. But we'll come out for a <strong>free on-site quote</strong> instead: we walk the property, measure it ourselves, and give you exact pricing on the spot. No commitment needed.
+        <div style="background:var(--green-pale);border:1.5px solid rgba(45,106,45,0.2);border-radius:12px;padding:16px 18px;font-size:13px;color:var(--green-deep);line-height:1.65;">
+          <strong>No problem!</strong> Properties over 1 acre aren't eligible for the free first mow, but we'll come out and give you a <strong>free on-site quote</strong> instead. Click below and we'll take you right to our booking flow with your info already filled in.
         </div>
-        <div class="form-row">
-          <label>Approximate Yard Size</label>
-          <select id="yardSize">
-            <option value="">— Select a size —</option>
-            <option>1 – 2 acres</option>
-            <option>2 – 5 acres</option>
-            <option>5 – 10 acres</option>
-            <option>10+ acres</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <label>Notes (anything we should know)</label>
-          <textarea id="quoteNotes" placeholder="e.g. Lots of trees, steep slope, needs edging too..."></textarea>
-        </div>
-        <div class="price-summary">
-          <div>
-            <div class="label">Free On-Site Quote Visit</div>
-            <div class="sublabel">We come to you — no charge, no obligation</div>
-          </div>
-          <div class="amount">FREE</div>
-        </div>
-        <button class="btn-submit" id="quoteBtn" onclick="handleQuote()">
-          <div class="spinner"></div>
-          <span class="btn-text">Book My Free Quote Visit →</span>
-        </button>
-        <div class="trust-note">No charge · No commitment · We come to you</div>
       </div>
 
     </div>
@@ -795,20 +769,37 @@ function handleYardSize() {
   const isLarge = document.getElementById('largeYard').checked;
   document.getElementById('bookingSection').style.display = isLarge ? 'none' : 'block';
   document.getElementById('quoteSection').style.display  = isLarge ? 'block' : 'none';
+  const btn = document.getElementById('submitBtn');
+  btn.querySelector('.btn-text').textContent = isLarge
+    ? 'Get My Free Quote →'
+    : 'Claim My Free Lawn Service →';
 }
 
 async function handleSubmit() {
+  // ── 0. Collect fields ──
+  const name    = document.getElementById('customerName').value.trim();
+  const email   = document.getElementById('customerEmail').value.trim();
+  const phone   = document.getElementById('customerPhone').value.trim();
+  const address = document.getElementById('customerAddress').value.trim();
+  const zip     = document.getElementById('customerZip').value.trim();
+
+  // ── Large yard → redirect to main quote flow ──
+  if (document.getElementById('largeYard').checked) {
+    if (!name || !email || !address) {
+      alert('Please fill in your name, email, and address first.');
+      return;
+    }
+    const p = new URLSearchParams({ service:'mow-blow', largeYard:'1', name, email, phone, address, zip });
+    window.location.href = '/?' + p.toString();
+    return;
+  }
+
   // ── 1. Cookie check (instant) ──
   if (getCookie(COOKIE_NAME)) {
     showAlreadyClaimed();
     return;
   }
 
-  const name    = document.getElementById('customerName').value.trim();
-  const email   = document.getElementById('customerEmail').value.trim();
-  const phone   = document.getElementById('customerPhone').value.trim();
-  const address = document.getElementById('customerAddress').value.trim();
-  const zip     = document.getElementById('customerZip').value.trim();
   const notes   = document.getElementById('notes').value.trim() || '(none)';
 
   if (!name || !email || !address) {
@@ -881,62 +872,6 @@ async function handleSubmit() {
   );
 }
 
-async function handleQuote() {
-  // Cookie check
-  if (getCookie(COOKIE_NAME)) {
-    showAlreadyClaimed();
-    return;
-  }
-
-  const name    = document.getElementById('customerName').value.trim();
-  const email   = document.getElementById('customerEmail').value.trim();
-  const phone   = document.getElementById('customerPhone').value.trim();
-  const address = document.getElementById('customerAddress').value.trim();
-  const zip     = document.getElementById('customerZip').value.trim();
-  const notes   = document.getElementById('quoteNotes').value.trim() || '(none)';
-
-  if (!name || !email || !address) {
-    alert('Please fill in your name, email, and address.');
-    return;
-  }
-  if (zip.length !== 5 || !VALID_ZIPS.has(zip)) {
-    alert('Please enter a valid Citrus County zip code.');
-    document.getElementById('zip-error').style.display = 'block';
-    return;
-  }
-
-  const btn = document.getElementById('quoteBtn');
-  btn.classList.add('loading');
-  btn.disabled = true;
-
-  // Submit to Apps Script (server validates email uniqueness)
-  try {
-    const params = new URLSearchParams({ action: 'claim', address, name, email, phone, zip, notes });
-    const sheetRes  = await fetch(`${APPS_SCRIPT_URL}?${params}`);
-    const sheetData = await sheetRes.json();
-    if (!sheetData.success) {
-      btn.classList.remove('loading');
-      btn.disabled = false;
-      if (sheetData.reason === 'email_used' || sheetData.reason === 'address_used') {
-        showAlreadyClaimed();
-      } else {
-        alert('Something went wrong. Please try again or call us at (352) 462-0627.');
-      }
-      return;
-    }
-  } catch(err) {
-    console.warn('Sheet check failed, proceeding anyway:', err);
-  }
-
-  // Owner notification handled server-side by Apps Script
-  btn.classList.remove('loading');
-  btn.disabled = false;
-  setCookie(COOKIE_NAME, '1', 730);
-  showSuccess(
-    "Quote Request Received!",
-    "Thanks! We'll review your property details and reach out within 24 hours to discuss your free service."
-  );
-}
 
 function hideHeroAndForm() {
   document.getElementById('heroBanner').style.display = 'none';
