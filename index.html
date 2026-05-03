@@ -3580,7 +3580,7 @@ function renderPlanCards() {
     const bigLot       = qState.lotTierIdx >= 3;
     const showPromo    = !qState.isReturning && !bigLot;
     const planFirstText = showPromo
-      ? '<strong>First cut: as low as $19</strong> — billed after service'
+      ? '<strong>First cut $19</strong> — billed after we mow'
       : (noPrice ? 'Custom quote' : '$' + p.afterPrice + '/mow');
     const notePart = p.note && p.note.split('·')[1] ? p.note.split('·')[1].trim() : 'cancel anytime';
     const planAfterText = noPrice
@@ -3898,6 +3898,28 @@ async function quotePaySubmit() {
     if (document.visibilityState === 'hidden') sendAnalytics();
   });
   window.addEventListener('pagehide', sendAnalytics);
+})();
+</script>
+
+<script>
+/* ── Page-view tracker (feeds Stats dashboard) ── */
+(function(){
+  var TRACK_URL = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
+  var vid = localStorage.getItem('eg_vid');
+  if (!vid) { vid = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('eg_vid', vid); }
+  var ref = document.referrer || '';
+  if (!ref) ref = 'direct';
+  else if (/google/i.test(ref))    ref = 'google';
+  else if (/facebook/i.test(ref))  ref = 'facebook';
+  else if (/instagram/i.test(ref)) ref = 'instagram';
+  function fire(page) {
+    var p = new URLSearchParams({ action:'track_visit', page:page, ref:ref, ua:navigator.userAgent.substring(0,150), vid:vid });
+    fetch(TRACK_URL+'?'+p, { mode:'no-cors', keepalive:true }).catch(function(){});
+  }
+  fire(location.pathname + (location.hash || ''));           // initial load
+  window.addEventListener('hashchange', function(){          // /#services, /#pricing, etc.
+    fire(location.pathname + location.hash);
+  });
 })();
 </script>
 </body>

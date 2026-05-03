@@ -895,5 +895,21 @@ function showAlreadyClaimed() {
   document.getElementById('alreadyClaimedState').style.display = 'block';
 }
 </script>
+
+<script>
+/* ── Page-view tracker (feeds Stats dashboard) ── */
+(function(){
+  var TRACK_URL = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
+  var vid = localStorage.getItem('eg_vid');
+  if (!vid) { vid = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('eg_vid', vid); }
+  var ref = document.referrer || '';
+  if (!ref) ref = 'direct';
+  else if (/google/i.test(ref))    ref = 'google';
+  else if (/facebook/i.test(ref))  ref = 'facebook';
+  else if (/instagram/i.test(ref)) ref = 'instagram';
+  var p = new URLSearchParams({ action:'track_visit', page:location.pathname, ref:ref, ua:navigator.userAgent.substring(0,150), vid:vid });
+  fetch(TRACK_URL+'?'+p, { mode:'no-cors', keepalive:true }).catch(function(){});
+})();
+</script>
 </body>
 </html>
