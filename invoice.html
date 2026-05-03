@@ -1187,10 +1187,12 @@ function renderCustomers() {
     const rows   = rowsByEmail.get(c.email) || [];
     const nextRow = rows.find(i => !isDone(allBookings[i]) && !allBookings[i]?.rowCancelled) ?? rows[rows.length - 1];
 
-    // Pull per-mow price from the next booking row
+    // Pull per-mow price and next date from the next booking row
     const bookingPrice = nextRow !== undefined
       ? parseFloat(String(allBookings[nextRow]?.price || '').replace(/[^0-9.]/g, '')) || null
       : null;
+    const effectiveNextSched = c.nextSched ||
+      (nextRow !== undefined ? (allBookings[nextRow]?.serviceDate || allBookings[nextRow]?.serviceDateRaw || '') : '');
 
     // Status badge
     const badge = isInactive
@@ -1203,8 +1205,8 @@ function renderCustomers() {
       : '';
     const lastDoneLine = c.lastDone
       ? `✓ Last completed: ${displayDate(c.lastDone)}<br>` : '';
-    const nextSchedLine = !isInactive && c.nextSched
-      ? `📅 Next: ${displayDate(c.nextSched)}<br>` : '';
+    const nextSchedLine = !isInactive && effectiveNextSched
+      ? `📅 Next: ${displayDate(effectiveNextSched)}<br>` : '';
     const cardLine = c.cardLast4
       ? `💳 ${cap(c.cardBrand || 'Card')} ••${c.cardLast4}${c.autopay ? ' · autopay on' : ''}<br>` : '';
     const sourceLine = c.source
@@ -1220,7 +1222,7 @@ function renderCustomers() {
           ${c.phone ? `📞 <a href="tel:${esc(c.phone)}" style="color:inherit;">${esc(c.phone)}</a><br>` : ''}
           ${c.address ? `📍 ${esc(c.address)}${c.zip ? ' · ' + esc(c.zip) : ''}<br>` : ''}
           📋 ${esc(c.plan || 'Unknown')}${bookingPrice ? ' · <strong>$' + bookingPrice.toFixed(0) + '/mow</strong>' : ''}<br>
-          ${!isInactive ? '📅 Next: ' + (c.nextSched ? displayDate(c.nextSched) : 'Not scheduled') + '<br>' : ''}
+          ${!isInactive ? '📅 Next: ' + (effectiveNextSched ? displayDate(effectiveNextSched) : 'Not scheduled') + '<br>' : ''}
           ${statsLine}${lastDoneLine}${cardLine}${sourceLine}${addedLine}
         </div>
       </div>
