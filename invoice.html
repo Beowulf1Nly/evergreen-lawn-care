@@ -443,6 +443,7 @@
     <button class="tab-btn" onclick="showTab('route')" data-tab="route">🗺️ Route</button>
     <button class="tab-btn owner-only" onclick="showTab('add')"   data-tab="add">➕ Add Client</button>
     <button class="tab-btn owner-only" onclick="showTab('stats')" data-tab="stats">📊 Stats</button>
+    <button class="tab-btn owner-only" onclick="showTab('analytics')" data-tab="analytics">📈 Analytics</button>
     <button class="tab-btn owner-only" onclick="showTab('customers')" data-tab="customers">👥 Customers</button>
   </div>
 
@@ -622,6 +623,13 @@
   <div id="pane-stats" class="tab-pane">
     <div class="container">
       <div id="statsContent"><div class="empty-state" style="padding:40px;">Loading stats…</div></div>
+    </div>
+  </div>
+
+  <!-- ── ANALYTICS TAB (owner only) ── -->
+  <div id="pane-analytics" class="tab-pane">
+    <div class="container">
+      <div id="analyticsContent"><div class="empty-state" style="padding:40px;">Loading analytics…</div></div>
     </div>
   </div>
 
@@ -1014,6 +1022,7 @@ function showTab(tab) {
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
   document.getElementById('pane-' + tab).classList.add('active');
   if (tab === 'stats')     loadStats();
+  if (tab === 'analytics') loadAnalytics();
   if (tab === 'route')     initRouteTab();
   if (tab === 'customers') { loadCustomers(); }
 }
@@ -2293,6 +2302,89 @@ async function loadStats() {
       </div>`;
   } catch(err) {
     el.innerHTML = `<div class="empty-state" style="padding:40px;">⚠️ Could not load stats: ${esc(err.message)}</div>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// ANALYTICS TAB (owner only)
+// ═══════════════════════════════════════════════════════
+async function loadAnalytics() {
+  const el = document.getElementById('analyticsContent');
+  el.innerHTML = '<div class="empty-state" style="padding:40px;">Loading…</div>';
+  try {
+    const res  = await fetch(SCRIPT_URL + '?action=get_stats&' + authParam());
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed');
+    const a = data.analytics || {};
+
+    // ── Bar chart helper ──────────────────────────────────────────────────
+    function barChart(entries, max) {
+      if (!entries.length) return '<div style="color:var(--text-muted);font-size:14px;padding:8px 0;">No data yet.</div>';
+      return entries.map(([label, count]) => `
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <div style="font-size:13px;min-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);" title="${esc(label)}">${esc(label)}</div>
+          <div style="flex:1;background:#e8f5e9;border-radius:4px;height:14px;overflow:hidden;">
+            <div style="height:100%;background:var(--green-mid);border-radius:4px;width:${Math.round(count/max*100)}%;transition:width .4s;"></div>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:var(--green-deep);min-width:28px;text-align:right;">${count}</div>
+        </div>`).join('');
+    }
+
+    // ── Page views ────────────────────────────────────────────────────────
+    const pages    = Object.entries(a.pageStats || {}).sort((a,b) => b[1]-a[1]).slice(0,15);
+    const maxPages = pages[0]?.[1] || 1;
+
+    // ── Referrers ─────────────────────────────────────────────────────────
+    const refs    = Object.entries(a.refStats || {}).sort((a,b) => b[1]-a[1]).slice(0,10);
+    const maxRefs = refs[0]?.[1] || 1;
+    const refLabels = refs.map(([r, c]) => [r === 'direct' ? '(direct / none)' : r.replace(/^https?:\/\//,'').substring(0,60), c]);
+
+    // ── Recent visits ─────────────────────────────────────────────────────
+    const visits = (a.recentVisits || []).slice(0, 50);
+    const visitsHtml = visits.length
+      ? visits.map(v => `
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;">
+            <span style="font-weight:600;color:var(--green-deep);">${esc(v.page||'/')}</span>
+            <span style="color:var(--text-muted);">${v.ref && v.ref !== 'direct' ? '← ' + esc(v.ref.replace(/^https?:\/\//,'').substring(0,50)) : '(direct)'}</span>
+            <span style="color:var(--text-muted);font-size:12px;margin-left:auto;">${esc(v.ts||'')}</span>
+          </div>`).join('')
+      : '<div style="color:var(--text-muted);font-size:14px;padding:12px 0;">No visits tracked yet.</div>';
+
+    el.innerHTML = `
+      <!-- Stat cards -->
+      <div class="stats-grid" style="margin-bottom:28px;">
+        <div class="stat-card blue">
+          <div class="stat-num">${a.totalVisits ?? '—'}</div>
+          <div class="stat-label">Total page views</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="stat-num">${a.uniqueVisitors ?? '—'}</div>
+          <div class="stat-label">Unique visitors</div>
+        </div>
+      </div>
+
+      <!-- Two-column: pages + sources -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;margin-bottom:24px;">
+        <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;">
+          <div class="section-label" style="margin-bottom:16px;">📄 Views by Page</div>
+          ${barChart(pages, maxPages)}
+        </div>
+        <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;">
+          <div class="section-label" style="margin-bottom:16px;">🔗 Traffic Sources</div>
+          ${barChart(refLabels, maxRefs)}
+        </div>
+      </div>
+
+      <!-- Recent visits -->
+      <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;">
+        <div class="section-label" style="margin-bottom:16px;">
+          🕐 Recent Visitors
+          <span style="font-size:11px;font-weight:500;color:var(--text-muted);text-transform:none;letter-spacing:0;margin-left:4px;">(last 50)</span>
+        </div>
+        ${visitsHtml}
+      </div>`;
+  } catch(err) {
+    el.innerHTML = `<div class="empty-state" style="padding:40px;">⚠️ Could not load analytics: ${esc(err.message)}</div>`;
   }
 }
 
