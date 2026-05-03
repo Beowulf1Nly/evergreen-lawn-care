@@ -1187,6 +1187,11 @@ function renderCustomers() {
     const rows   = rowsByEmail.get(c.email) || [];
     const nextRow = rows.find(i => !isDone(allBookings[i]) && !allBookings[i]?.rowCancelled) ?? rows[rows.length - 1];
 
+    // Pull per-mow price from the next booking row
+    const bookingPrice = nextRow !== undefined
+      ? parseFloat(String(allBookings[nextRow]?.price || '').replace(/[^0-9.]/g, '')) || null
+      : null;
+
     // Status badge
     const badge = isInactive
       ? `<span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:#fee2e2;color:#991b1b;margin-left:6px;">${esc(c.status)}</span>`
@@ -1214,7 +1219,8 @@ function renderCustomers() {
           ${c.email ? `✉️ <a href="mailto:${esc(c.email)}" style="color:inherit;">${esc(c.email)}</a><br>` : ''}
           ${c.phone ? `📞 <a href="tel:${esc(c.phone)}" style="color:inherit;">${esc(c.phone)}</a><br>` : ''}
           ${c.address ? `📍 ${esc(c.address)}${c.zip ? ' · ' + esc(c.zip) : ''}<br>` : ''}
-          📋 ${esc(c.plan || 'Unknown')} · ${isInactive ? 'Cancelled' : (c.nextSched ? 'Next: ' + displayDate(c.nextSched) : 'TBD')}<br>
+          📋 ${esc(c.plan || 'Unknown')}${bookingPrice ? ' · <strong>$' + bookingPrice.toFixed(0) + '/mow</strong>' : ''}<br>
+          ${!isInactive ? '📅 Next: ' + (c.nextSched ? displayDate(c.nextSched) : 'Not scheduled') + '<br>' : ''}
           ${statsLine}${lastDoneLine}${cardLine}${sourceLine}${addedLine}
         </div>
       </div>
