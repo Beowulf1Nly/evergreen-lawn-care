@@ -159,6 +159,56 @@
   .loading-spinner {
     text-align:center; padding:60px; color:var(--text-muted); font-size:15px;
   }
+
+  /* ── Funnel chart ── */
+  .funnel-step {
+    display:flex; align-items:center; gap:14px; margin-bottom:10px;
+  }
+  .funnel-label {
+    font-size:13px; font-weight:600; color:var(--green-deep);
+    min-width:200px;
+  }
+  .funnel-bar-wrap {
+    flex:1; background:#e8f5e9; border-radius:6px; height:28px;
+    overflow:hidden; position:relative;
+  }
+  .funnel-bar-fill {
+    height:100%; border-radius:6px; transition:width .5s;
+    display:flex; align-items:center; padding-left:10px;
+    font-size:12px; font-weight:700; color:#fff;
+    white-space:nowrap;
+  }
+  .funnel-pct {
+    font-size:12px; color:var(--text-muted); min-width:46px; text-align:right;
+  }
+  .funnel-arrow {
+    text-align:center; font-size:16px; color:var(--green-bright);
+    margin: -2px 0 -2px 210px;
+  }
+  .drop-badge {
+    font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px;
+    background:#fee2e2; color:#b91c1c; margin-left:6px;
+  }
+  .drop-badge.ok { background:#dcfce7; color:#166534; }
+
+  /* ── Insight cards ── */
+  .insight-grid {
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+    gap:12px; margin-bottom:24px;
+  }
+  .insight-card {
+    background:#fff; border-radius:12px; padding:16px 18px;
+    box-shadow:0 2px 8px rgba(0,0,0,.05);
+  }
+  .insight-card .i-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); margin-bottom:4px; }
+  .insight-card .i-value { font-size:28px; font-weight:800; color:var(--green-deep); line-height:1; }
+  .insight-card .i-sub   { font-size:12px; color:var(--text-muted); margin-top:4px; }
+
+  /* ── FAQ bar ── */
+  .faq-bar { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+  .faq-bar-label { font-size:13px; min-width:180px; color:var(--text); }
+  .faq-bar-wrap { flex:1; background:#e8f5e9; border-radius:4px; height:12px; overflow:hidden; }
+  .faq-bar-fill { height:100%; background:var(--green-bright); border-radius:4px; transition:width .4s; }
 </style>
 </head>
 <body>
@@ -237,6 +287,38 @@
           <div class="section-title">📄 Views by Page</div>
           <div id="pageStats"><div class="empty-state">No tracking data yet.</div></div>
         </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════
+           FUNNEL ANALYSIS — shows where visitors drop off
+           ═══════════════════════════════════════════════════════ -->
+      <div class="section-block">
+        <div class="section-title">🔍 Quote Funnel — Where Are They Dropping Off?</div>
+        <div id="funnelInsights" class="insight-grid"></div>
+        <div id="funnelChart"><div class="empty-state">No funnel data yet.<br><small>Funnel events will appear here once visitors start using the quote flow.</small></div></div>
+      </div>
+
+      <div class="two-col">
+        <!-- Abandonment detail -->
+        <div class="section-block">
+          <div class="section-title">🚪 Abandonment by Step</div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">When people close the quote modal, which step were they on?</p>
+          <div id="abandonChart"><div class="empty-state">No data yet.</div></div>
+        </div>
+
+        <!-- Engagement signals -->
+        <div class="section-block">
+          <div class="section-title">💡 Engagement Signals</div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">What else are visitors doing on the page?</p>
+          <div id="engagementChart"><div class="empty-state">No data yet.</div></div>
+        </div>
+      </div>
+
+      <!-- FAQ interest -->
+      <div class="section-block">
+        <div class="section-title">❓ FAQ — Which Questions Are People Reading?</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">High interest in a FAQ question may signal a blocker — something stopping people from booking.</p>
+        <div id="faqChart"><div class="empty-state">No FAQ data yet.</div></div>
       </div>
 
       <!-- Referrer sources -->
@@ -394,8 +476,197 @@ function renderStats(data) {
       </div>`).join('');
   }
 
+  // ── FUNNEL ANALYSIS ────────────────────────────────────────────────────
+  renderFunnel(an.pageStats || {});
+
   document.getElementById('loadingState').style.display  = 'none';
   document.getElementById('statsContent').style.display  = 'block';
+}
+
+// ── FUNNEL RENDERING ──────────────────────────────────────────────────────
+function renderFunnel(pageStats) {
+
+  // Pull out /evt/* virtual pageview counts
+  const E = {};
+  Object.entries(pageStats).forEach(([page, count]) => {
+    if (page.startsWith('/evt/')) E[page.replace('/evt/', '')] = count;
+  });
+
+  // ── Funnel steps (in order) ─────────────────────────────────────────────
+  const STEPS = [
+    { key: 'quote_opened',              label: '1 · Quote modal opened' },
+    { key: 'quote_price_viewed',        label: '2 · Saw their price (Step 3)' },
+    { key: 'quote_payment_step_reached',label: '3 · Reached payment entry (Step 4)' },
+    { key: 'payment_attempted',         label: '4 · Clicked "Book Now"' },
+    { key: 'booking_completed',         label: '5 · Booking completed ✅' },
+  ];
+
+  const counts = STEPS.map(s => E[s.key] || 0);
+  const top    = counts[0] || 0;
+
+  // ── Insight cards ────────────────────────────────────────────────────────
+  const opens     = counts[0];
+  const completed = counts[4];
+  const convRate  = opens > 0 ? Math.round((completed / opens) * 100) : 0;
+  const priceDropPct = counts[0] > 0 && counts[1] > 0
+    ? Math.round(((counts[0] - counts[1]) / counts[0]) * 100) : 0;
+  const payDropPct = counts[1] > 0 && counts[2] > 0
+    ? Math.round(((counts[1] - counts[2]) / counts[1]) * 100) : 0;
+  const errors    = E['payment_error'] || 0;
+  const zipBounce = E['zip_out_of_area'] || 0;
+
+  const insights = [
+    { label:'Quote Opens',       value: opens || '—',       sub: 'people started the flow' },
+    { label:'Saw Their Price',   value: counts[1] || '—',   sub: 'reached step 3' },
+    { label:'Bookings',          value: completed || '—',   sub: 'completed checkout' },
+    { label:'Conversion Rate',   value: convRate + '%',     sub: 'opens → bookings' },
+    { label:'Payment Errors',    value: errors || '—',      sub: 'card declined / network' },
+    { label:'Out-of-Area Zips',  value: zipBounce || '—',   sub: 'outside Citrus County' },
+  ];
+
+  document.getElementById('funnelInsights').innerHTML = insights.map(c => `
+    <div class="insight-card">
+      <div class="i-label">${esc(c.label)}</div>
+      <div class="i-value">${esc(String(c.value))}</div>
+      <div class="i-sub">${esc(c.sub)}</div>
+    </div>`).join('');
+
+  // ── Funnel bars ──────────────────────────────────────────────────────────
+  const COLORS = ['#2d6a2d','#3d8c3d','#4caf50','#72c472','#9edd9e'];
+
+  if (top === 0) {
+    document.getElementById('funnelChart').innerHTML =
+      '<div class="empty-state">No funnel data yet.<br><small>Once visitors open the quote modal the funnel will appear here.</small></div>';
+  } else {
+    let html = '';
+    STEPS.forEach((step, i) => {
+      const cnt  = counts[i];
+      const pct  = top > 0 ? Math.round((cnt / top) * 100) : 0;
+      const prev = i > 0 ? counts[i-1] : null;
+      let dropHtml = '';
+      if (prev !== null && prev > 0) {
+        const drop = Math.round(((prev - cnt) / prev) * 100);
+        dropHtml = drop > 0
+          ? `<span class="drop-badge">${drop}% dropped</span>`
+          : `<span class="drop-badge ok">no drop ✓</span>`;
+        html += `<div class="funnel-arrow">↓</div>`;
+      }
+      html += `
+        <div class="funnel-step">
+          <div class="funnel-label">${esc(step.label)}${dropHtml}</div>
+          <div class="funnel-bar-wrap">
+            <div class="funnel-bar-fill" style="width:${pct}%;background:${COLORS[i]}">
+              ${cnt > 0 ? cnt : ''}
+            </div>
+          </div>
+          <div class="funnel-pct">${pct}%</div>
+        </div>`;
+    });
+
+    // Big takeaway
+    let insight = '';
+    if (opens > 0 && counts[1] === 0) {
+      insight = '⚠️ Nobody is reaching Step 3 (price view). The form on Step 1 may be too long or confusing.';
+    } else if (priceDropPct >= 60) {
+      insight = '💸 Most people see their price and leave. They may be finding it too high, or not understanding the $19 intro offer.';
+    } else if (payDropPct >= 60) {
+      insight = '💳 People are seeing the price but not making it to payment entry. The plan selection or date picker may be causing friction.';
+    } else if (errors > 2) {
+      insight = '🚫 Multiple payment errors detected — cards are being declined or there may be a Stripe connectivity issue.';
+    } else if (completed > 0) {
+      insight = '✅ Funnel looks healthy! Keep optimizing your ad targeting to send more qualified traffic.';
+    } else {
+      insight = 'ℹ️ Not enough data yet — funnel will populate as visitors use the quote flow.';
+    }
+
+    html = `<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:14px;color:#166534;line-height:1.6;">${insight}</div>` + html;
+    document.getElementById('funnelChart').innerHTML = html;
+  }
+
+  // ── Abandonment by step ───────────────────────────────────────────────────
+  const ABANDON_STEPS = [
+    { key: 'quote_abandoned_step1',   label: 'Closed on Step 1 (address form)' },
+    { key: 'quote_abandoned_step2',   label: 'Closed on Step 2 (analyzing)' },
+    { key: 'quote_abandoned_step3',   label: 'Closed on Step 3 (saw price)' },
+    { key: 'quote_abandoned_step4',   label: 'Closed on Step 4 (payment)' },
+    { key: 'session_end_in_quote_step1', label: 'Tab closed on Step 1' },
+    { key: 'session_end_in_quote_step3', label: 'Tab closed on Step 3 (price)' },
+    { key: 'session_end_in_quote_step4', label: 'Tab closed on Step 4 (payment)' },
+  ];
+  const abandonData = ABANDON_STEPS
+    .map(s => ({ label: s.label, count: E[s.key] || 0 }))
+    .filter(s => s.count > 0)
+    .sort((a, b) => b.count - a.count);
+
+  const aEl = document.getElementById('abandonChart');
+  if (abandonData.length === 0) {
+    aEl.innerHTML = '<div class="empty-state">No abandonment data yet.</div>';
+  } else {
+    const aMax = abandonData[0].count;
+    aEl.innerHTML = abandonData.map(s => `
+      <div class="bar-row">
+        <div class="bar-label" title="${esc(s.label)}">${esc(s.label)}</div>
+        <div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(s.count/aMax*100)}%;background:#f87171"></div></div>
+        <div class="bar-count">${s.count}</div>
+      </div>`).join('');
+  }
+
+  // ── Engagement signals ────────────────────────────────────────────────────
+  const ENGAGE = [
+    { key:'phone_click',         label:'📞 Phone number clicked' },
+    { key:'google_reviews_click',label:'⭐ Clicked Google Reviews' },
+    { key:'exit_intent_step0',   label:'🖱️ Exit intent (not in quote)' },
+    { key:'exit_intent_step1',   label:'🖱️ Exit intent (on Step 1)' },
+    { key:'exit_intent_step3',   label:'🖱️ Exit intent (saw price)' },
+    { key:'exit_intent_step4',   label:'🖱️ Exit intent (payment step)' },
+    { key:'plan_selected_biweekly', label:'📅 Bi-Weekly plan selected' },
+    { key:'plan_selected_weekly',   label:'⚡ Weekly plan selected' },
+  ];
+  const engData = ENGAGE
+    .map(s => ({ label: s.label, count: E[s.key] || 0 }))
+    .filter(s => s.count > 0)
+    .sort((a, b) => b.count - a.count);
+
+  const engEl = document.getElementById('engagementChart');
+  if (engData.length === 0) {
+    engEl.innerHTML = '<div class="empty-state">No engagement data yet.</div>';
+  } else {
+    const eMax = engData[0].count;
+    engEl.innerHTML = engData.map(s => `
+      <div class="bar-row">
+        <div class="bar-label" title="${esc(s.label)}">${esc(s.label)}</div>
+        <div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(s.count/eMax*100)}%"></div></div>
+        <div class="bar-count">${s.count}</div>
+      </div>`).join('');
+  }
+
+  // ── FAQ interest ──────────────────────────────────────────────────────────
+  const FAQ_MAP = {
+    'faq_why_19':              'Why is first mow only $19?',
+    'faq_after_first_mow':     'What happens after first mow?',
+    'faq_how_price_calculated':'How is my price calculated?',
+    'faq_cancel':              'Can I cancel my plan?',
+    'faq_card_secure':         'Is my card info secure?',
+    'faq_need_to_be_home':     'Do I need to be home?',
+    'faq_service_area':        'Do you serve my area?',
+  };
+  const faqData = Object.entries(FAQ_MAP)
+    .map(([key, label]) => ({ label, count: E[key] || 0 }))
+    .filter(s => s.count > 0)
+    .sort((a, b) => b.count - a.count);
+
+  const faqEl = document.getElementById('faqChart');
+  if (faqData.length === 0) {
+    faqEl.innerHTML = '<div class="empty-state">No FAQ interactions tracked yet.</div>';
+  } else {
+    const fMax = faqData[0].count;
+    faqEl.innerHTML = faqData.map(s => `
+      <div class="faq-bar">
+        <div class="faq-bar-label">${esc(s.label)}</div>
+        <div class="faq-bar-wrap"><div class="faq-bar-fill" style="width:${Math.round(s.count/fMax*100)}%"></div></div>
+        <div class="bar-count" style="font-size:13px;font-weight:700;color:var(--green-deep);min-width:28px;text-align:right;">${s.count}</div>
+      </div>`).join('');
+  }
 }
 
 function esc(str) {
