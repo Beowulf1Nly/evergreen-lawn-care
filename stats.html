@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=AW-18107107722"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'AW-18107107722');
+</script>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Evergreen — Owner Stats</title>
+<meta name="robots" content="noindex, nofollow"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --green-deep:  #1a3a1a;
+    --green-mid:   #2d6a2d;
+    --green-bright:#4caf50;
+    --green-pale:  #e8f5e9;
+    --cream:       #faf9f6;
+    --white:       #ffffff;
+    --text:        #1a1a1a;
+    --text-muted:  #6b7280;
+    --border:      #e2e8f0;
+    --red:         #e53e3e;
+    --gold:        #c9a84c;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'DM Sans',sans-serif; background:var(--cream); color:var(--text); min-height:100vh; }
+
+  /* ── Login ── */
+  #loginScreen {
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh; background:var(--green-deep);
+  }
+  .login-card {
+    background:#fff; border-radius:20px; padding:48px 40px;
+    max-width:400px; width:100%; text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,.25);
+  }
+  .login-card h1 { font-family:'Playfair Display',serif; color:var(--green-deep); font-size:28px; margin-bottom:8px; }
+  .login-card p  { color:var(--text-muted); font-size:14px; margin-bottom:28px; }
+  .login-input {
+    width:100%; padding:14px 18px; border:2px solid var(--border);
+    border-radius:10px; font-family:inherit; font-size:15px;
+    margin-bottom:14px; outline:none; transition:border .2s;
+  }
+  .login-input:focus { border-color:var(--green-mid); }
+  .login-btn {
+    width:100%; padding:14px; background:var(--green-mid);
+    color:#fff; border:none; border-radius:10px; font-family:inherit;
+    font-size:15px; font-weight:600; cursor:pointer; transition:background .2s;
+  }
+  .login-btn:hover { background:var(--green-deep); }
+  .login-error { color:var(--red); font-size:13px; margin-top:10px; display:none; }
+
+  /* ── App ── */
+  #appScreen { display:none; }
+
+  header {
+    background:var(--green-deep); color:#fff; padding:16px 24px;
+    display:flex; align-items:center; justify-content:space-between;
+    position:sticky; top:0; z-index:100;
+  }
+  .header-brand { font-family:'Playfair Display',serif; font-size:20px; }
+  .header-brand span { color:#7ec87e; }
+  .btn-refresh {
+    padding:8px 16px; background:rgba(255,255,255,.12); color:#fff;
+    border:1px solid rgba(255,255,255,.25); border-radius:8px;
+    font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;
+    transition:background .2s;
+  }
+  .btn-refresh:hover { background:rgba(255,255,255,.22); }
+  .btn-logout {
+    padding:8px 14px; background:transparent; color:rgba(255,255,255,.6);
+    border:1px solid rgba(255,255,255,.2); border-radius:8px;
+    font-family:inherit; font-size:13px; cursor:pointer;
+  }
+  .header-right { display:flex; align-items:center; gap:12px; }
+
+  .container { max-width:1100px; margin:0 auto; padding:32px 20px; }
+
+  /* ── Stat Cards ── */
+  .stat-grid {
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+    gap:16px; margin-bottom:36px;
+  }
+  .stat-card {
+    background:#fff; border-radius:16px; padding:24px 20px;
+    box-shadow:0 2px 12px rgba(0,0,0,.06); text-align:center;
+  }
+  .stat-card .stat-label {
+    font-size:12px; font-weight:600; text-transform:uppercase;
+    letter-spacing:.05em; color:var(--text-muted); margin-bottom:8px;
+  }
+  .stat-card .stat-value {
+    font-size:36px; font-weight:800; color:var(--green-deep); line-height:1;
+  }
+  .stat-card .stat-sub {
+    font-size:12px; color:var(--text-muted); margin-top:6px;
+  }
+
+  /* ── Section headers ── */
+  .section-title {
+    font-size:16px; font-weight:700; color:var(--green-deep);
+    margin-bottom:16px; display:flex; align-items:center; gap:8px;
+  }
+  .section-block {
+    background:#fff; border-radius:16px; padding:24px;
+    box-shadow:0 2px 12px rgba(0,0,0,.06); margin-bottom:24px;
+  }
+
+  /* ── Tables ── */
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th {
+    text-align:left; padding:10px 12px; font-size:12px; font-weight:700;
+    text-transform:uppercase; letter-spacing:.05em;
+    color:var(--text-muted); border-bottom:2px solid var(--border);
+  }
+  td { padding:10px 12px; border-bottom:1px solid var(--border); }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:#f8fdf8; }
+
+  /* ── Bar chart ── */
+  .bar-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .bar-label { font-size:13px; min-width:130px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bar-wrap { flex:1; background:#e8f5e9; border-radius:4px; height:14px; overflow:hidden; }
+  .bar-fill { height:100%; background:var(--green-mid); border-radius:4px; transition:width .4s; }
+  .bar-count { font-size:13px; font-weight:700; color:var(--green-deep); min-width:28px; text-align:right; }
+
+  /* ── Empty state ── */
+  .empty-state { text-align:center; color:var(--text-muted); padding:40px 20px; font-size:14px; }
+
+  /* ── Admin badge ── */
+  .admin-badge {
+    display:inline-block; padding:3px 10px; border-radius:20px;
+    font-size:12px; font-weight:700; margin-left:8px;
+  }
+  .badge-owner    { background:#fef3c7; color:#92400e; }
+  .badge-employee { background:#e8f5e9; color:#166534; }
+
+  /* ── Recent visits ── */
+  .visit-row {
+    display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+    padding:10px 0; border-bottom:1px solid var(--border); font-size:13px;
+  }
+  .visit-row:last-child { border-bottom:none; }
+  .visit-page { font-weight:600; color:var(--green-deep); }
+  .visit-ref  { color:var(--text-muted); }
+  .visit-ts   { color:var(--text-muted); font-size:12px; margin-left:auto; }
+
+  /* ── Two-col layout ── */
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  @media(max-width:700px) { .two-col { grid-template-columns:1fr; } }
+
+  .loading-spinner {
+    text-align:center; padding:60px; color:var(--text-muted); font-size:15px;
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-card">
+    <h1>🌿 Evergreen</h1>
+    <p>Owner Stats — enter your password to continue.</p>
+    <input type="password" id="pwInput" class="login-input" placeholder="Owner password"
+           onkeydown="if(event.key==='Enter') login()"/>
+    <button class="login-btn" onclick="login()">View Stats</button>
+    <div class="login-error" id="loginError">Incorrect password.</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="appScreen">
+  <header>
+    <div class="header-brand">🌿 Evergreen <span>Stats</span></div>
+    <div class="header-right">
+      <button class="btn-refresh" onclick="loadStats()">↻ Refresh</button>
+      <button class="btn-logout" onclick="logout()">Sign Out</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div id="loadingState" class="loading-spinner">Loading stats…</div>
+    <div id="statsContent" style="display:none;">
+
+      <!-- Top stat cards -->
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Bookings</div>
+          <div class="stat-value" id="statBookings">—</div>
+          <div class="stat-sub">all time</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Mows Completed</div>
+          <div class="stat-value" id="statDone">—</div>
+          <div class="stat-sub">marked Done</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Unique Customers</div>
+          <div class="stat-value" id="statCustomers">—</div>
+          <div class="stat-sub">distinct emails</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Revenue Collected</div>
+          <div class="stat-value" id="statRevenue">—</div>
+          <div class="stat-sub">from paid mows</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Page Views</div>
+          <div class="stat-value" id="statViews">—</div>
+          <div class="stat-sub">across all pages</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Unique Visitors</div>
+          <div class="stat-value" id="statUnique">—</div>
+          <div class="stat-sub">distinct browsers</div>
+        </div>
+      </div>
+
+      <!-- Admin productivity + Page views side by side -->
+      <div class="two-col">
+
+        <!-- Admin credit board -->
+        <div class="section-block">
+          <div class="section-title">🏆 Mows by Admin</div>
+          <div id="adminStats"><div class="empty-state">No mows recorded yet.</div></div>
+        </div>
+
+        <!-- Page views -->
+        <div class="section-block">
+          <div class="section-title">📄 Views by Page</div>
+          <div id="pageStats"><div class="empty-state">No tracking data yet.</div></div>
+        </div>
+      </div>
+
+      <!-- Referrer sources -->
+      <div class="section-block">
+        <div class="section-title">🔗 Traffic Sources</div>
+        <div id="refStats"><div class="empty-state">No referrer data yet.</div></div>
+      </div>
+
+      <!-- Recent visits -->
+      <div class="section-block">
+        <div class="section-title">🕐 Recent Visitors <small style="font-size:12px;font-weight:400;color:var(--text-muted);">(last 50)</small></div>
+        <div id="recentVisits"><div class="empty-state">No visits tracked yet.</div></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const SCRIPT_URL    = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
+const STATS_PW_KEY  = 'eg_admin_pw';
+let sessionPw = '';
+
+// ── AUTH ─────────────────────────────────────────────────────────────────
+async function login(pw) {
+  pw = pw || document.getElementById('pwInput').value.trim();
+  if (!pw) return;
+  const btn = document.querySelector('.login-btn');
+  btn.disabled = true; btn.textContent = 'Checking…';
+  document.getElementById('loginError').style.display = 'none';
+
+  try {
+    const res  = await fetch(SCRIPT_URL + '?action=get_stats&password=' + encodeURIComponent(pw));
+    const data = await res.json();
+    if (data.success) {
+      sessionPw = pw;
+      localStorage.setItem(STATS_PW_KEY, pw); // persist across page loads
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('appScreen').style.display   = 'block';
+      renderStats(data);
+    } else {
+      localStorage.removeItem(STATS_PW_KEY); // clear saved pw if it's wrong
+      throw new Error(data.error || 'bad password');
+    }
+  } catch(e) {
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('pwInput').value = '';
+    document.getElementById('pwInput').focus();
+  } finally {
+    btn.disabled = false; btn.textContent = 'View Stats';
+  }
+}
+
+function logout() {
+  sessionPw = '';
+  localStorage.removeItem(STATS_PW_KEY);
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('appScreen').style.display   = 'none';
+  document.getElementById('pwInput').value = '';
+  document.getElementById('statsContent').style.display = 'none';
+  document.getElementById('loadingState').style.display = 'block';
+}
+
+document.getElementById('pwInput').addEventListener('keydown', e => { if(e.key==='Enter') login(); });
+
+// ── Auto-login if password was saved ─────────────────────────────────────
+(function() {
+  const saved = localStorage.getItem(STATS_PW_KEY);
+  if (saved) login(saved);
+})();
+
+async function loadStats() {
+  document.getElementById('statsContent').style.display = 'none';
+  document.getElementById('loadingState').style.display = 'block';
+  try {
+    const res  = await fetch(SCRIPT_URL + '?action=get_stats&password=' + encodeURIComponent(sessionPw));
+    const data = await res.json();
+    if (data.success) renderStats(data);
+  } catch(e) { alert('Refresh failed: ' + e.message); }
+}
+
+// ── RENDER ───────────────────────────────────────────────────────────────
+function renderStats(data) {
+  const bk = data.bookings   || {};
+  const an = data.analytics  || {};
+
+  // Stat cards
+  document.getElementById('statBookings').textContent  = bk.total    ?? '—';
+  document.getElementById('statDone').textContent      = bk.done     ?? '—';
+  document.getElementById('statCustomers').textContent = bk.customers ?? '—';
+  document.getElementById('statRevenue').textContent   = bk.estimatedRev ? '$' + Number(bk.estimatedRev).toLocaleString() : '—';
+  document.getElementById('statViews').textContent     = an.totalVisits    ?? '—';
+  document.getElementById('statUnique').textContent    = an.uniqueVisitors ?? '—';
+
+  // Admin credit board
+  const adminEl = document.getElementById('adminStats');
+  const admins  = bk.adminStats || {};
+  const adminEntries = Object.entries(admins).sort((a,b) => b[1]-a[1]);
+  if (adminEntries.length === 0) {
+    adminEl.innerHTML = '<div class="empty-state">No mows recorded yet.<br><small>Admins will appear here once they mark jobs Done after logging in.</small></div>';
+  } else {
+    const max = adminEntries[0][1];
+    adminEl.innerHTML = adminEntries.map(([name, count], i) => `
+      <div class="bar-row">
+        <div class="bar-label">${esc(name)} ${i===0 ? '🥇' : i===1 ? '🥈' : i===2 ? '🥉' : ''}</div>
+        <div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(count/max*100)}%"></div></div>
+        <div class="bar-count">${count}</div>
+      </div>`).join('');
+  }
+
+  // Page views
+  const pageEl = document.getElementById('pageStats');
+  const pages  = Object.entries(an.pageStats || {}).sort((a,b) => b[1]-a[1]).slice(0,10);
+  if (pages.length === 0) {
+    pageEl.innerHTML = '<div class="empty-state">No tracking data yet.<br><small>Add the tracking snippet to your pages to start collecting data.</small></div>';
+  } else {
+    const maxP = pages[0][1];
+    pageEl.innerHTML = pages.map(([page, count]) => `
+      <div class="bar-row">
+        <div class="bar-label" title="${esc(page)}">${esc(page)}</div>
+        <div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(count/maxP*100)}%"></div></div>
+        <div class="bar-count">${count}</div>
+      </div>`).join('');
+  }
+
+  // Referrers
+  const refEl  = document.getElementById('refStats');
+  const refs   = Object.entries(an.refStats || {}).sort((a,b) => b[1]-a[1]).slice(0,10);
+  if (refs.length === 0) {
+    refEl.innerHTML = '<div class="empty-state">No referrer data yet.</div>';
+  } else {
+    const maxR = refs[0][1];
+    refEl.innerHTML = refs.map(([ref, count]) => {
+      const label = ref === 'direct' ? '(direct / none)' : ref.replace(/^https?:\/\//, '').substring(0, 60);
+      return `
+      <div class="bar-row">
+        <div class="bar-label" title="${esc(ref)}">${esc(label)}</div>
+        <div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(count/maxR*100)}%"></div></div>
+        <div class="bar-count">${count}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Recent visits
+  const visEl = document.getElementById('recentVisits');
+  const visits = an.recentVisits || [];
+  if (visits.length === 0) {
+    visEl.innerHTML = '<div class="empty-state">No visits tracked yet.</div>';
+  } else {
+    visEl.innerHTML = visits.map(v => `
+      <div class="visit-row">
+        <span class="visit-page">${esc(v.page || '/')}</span>
+        ${v.ref ? `<span class="visit-ref">← ${esc(v.ref.replace(/^https?:\/\//, '').substring(0, 50))}</span>` : '<span class="visit-ref">(direct)</span>'}
+        <span class="visit-ts">${esc(v.ts || '')}</span>
+      </div>`).join('');
+  }
+
+  document.getElementById('loadingState').style.display  = 'none';
+  document.getElementById('statsContent').style.display  = 'block';
+}
+
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+
+<!-- ── TRACKING SNIPPET ──────────────────────────────────────────────────
+     Paste this <script> block on every page you want to track
+     (index.html, profile.html, etc.) — just before </body>
+<script>
+(function(){
+  var TRACK_URL = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
+  // Anonymous visitor ID — stored in localStorage so repeat visits count as unique
+  var vid = localStorage.getItem('eg_vid');
+  if (!vid) { vid = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('eg_vid', vid); }
+  var ref = document.referrer || '';
+  // Categorize referrer
+  if (!ref) ref = 'direct';
+  else if (/google/i.test(ref))   ref = 'google';
+  else if (/facebook/i.test(ref)) ref = 'facebook';
+  else if (/instagram/i.test(ref)) ref = 'instagram';
+  var params = new URLSearchParams({
+    action: 'track_visit',
+    page:   location.pathname || '/',
+    ref:    ref,
+    ua:     navigator.userAgent.substring(0, 150),
+    vid:    vid,
+  });
+  navigator.sendBeacon ? navigator.sendBeacon(TRACK_URL + '?' + params) : fetch(TRACK_URL + '?' + params, {mode:'no-cors'});
+})();
+</scr' + 'ipt>
+──────────────────────────────────────────────────────────────────────── -->
+
+</body>
+</html>
