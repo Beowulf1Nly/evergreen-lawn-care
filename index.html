@@ -3975,6 +3975,8 @@ async function quotePaySubmit() {
   var TRACK_URL = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
   var vid = localStorage.getItem('eg_vid');
   if (!vid) { vid = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('eg_vid', vid); }
+  // Record session start for duration tracking (reset on every page load)
+  localStorage.setItem('eg_sess_start', Date.now().toString());
   var ref = document.referrer || '';
   if (!ref) ref = 'direct';
   else if (/google/i.test(ref))    ref = 'google';
@@ -4015,6 +4017,17 @@ async function quotePaySubmit() {
   var _qStep = 0;
   // Whether this session already completed a booking
   var _booked = false;
+  var _stepEnterTime = 0;        // timestamp when user entered current step
+  var _exitFiredSession = false; // guard against double-firing on page hide
+
+  // Records how long user spent on a funnel step (fast/medium/slow bucket)
+  function _recordStepTime(fromStep) {
+    if (!_stepEnterTime || !fromStep) return;
+    var secs = Math.floor((Date.now() - _stepEnterTime) / 1000);
+    var bucket = secs < 15 ? 'fast' : secs < 60 ? 'medium' : 'slow';
+    ffire('step' + fromStep + '_dur_' + bucket);
+    _stepEnterTime = 0;
+  }
 
   /* Send an event as a virtual pageview (/evt/<name>) so it lands
      in the existing Google Sheet without any backend changes.
@@ -4051,9 +4064,11 @@ async function quotePaySubmit() {
   var _origClose = window.closeQuoteModal;
   window.closeQuoteModal = function() {
     if (_qStep > 0 && !_booked) {
+      _recordStepTime(_qStep);
       ffire('quote_abandoned_step' + _qStep);
     }
     _qStep = 0;
+    _stepEnterTime = 0;
     return _origClose && _origClose.apply(this, arguments);
   };
 
@@ -4061,7 +4076,9 @@ async function quotePaySubmit() {
      Step 3 = user saw their price. Step 4 = user got to payment entry. */
   var _origShow = window.showQuoteStep;
   window.showQuoteStep = function(step) {
+    _recordStepTime(_qStep);   // record time spent on the previous step
     _qStep = step;
+    _stepEnterTime = Date.now();
     if (step === 3) ffire('quote_price_viewed');
     if (step === 4) ffire('quote_payment_step_reached');
     return _origShow && _origShow.apply(this, arguments);
@@ -4171,7 +4188,18 @@ async function quotePaySubmit() {
   // Fires when the tab closes or navigates away.
   // If they were mid-quote, records which step they were on.
   function _onPageHide() {
+    if (_exitFiredSession) return;
+    _exitFiredSession = true;
+    // Fire session duration bucket
+    var start = parseInt(localStorage.getItem('eg_sess_start') || '0', 10);
+    if (start) {
+      var secs = Math.floor((Date.now() - start) / 1000);
+      var durBucket = secs < 10 ? 'instant' : secs < 30 ? 'quick' : secs < 90 ? 'short' : secs < 300 ? 'medium' : 'long';
+      ffire('session_dur_' + durBucket);
+    }
+    // Record step time + session end if mid-quote
     if (_qStep > 0 && !_booked) {
+      _recordStepTime(_qStep);
       ffire('session_end_in_quote_step' + _qStep);
     }
   }
