@@ -474,6 +474,14 @@
         </select>
       </div>
 
+      <!-- 📋 Visited Quotes — quote visits marked done, awaiting scheduling (owner only) -->
+      <div id="visitedQuotesSection" style="margin-bottom:32px;display:none;">
+        <div class="section-label">
+          📋 Visited Quotes <span class="badge" style="background:#006064;" id="visitedQuotesCount">0</span>
+        </div>
+        <div id="visitedQuotesList"></div>
+      </div>
+
       <!-- ⭐ Completed — done+paid, awaiting review (owner only) -->
       <div id="completedSection" style="margin-bottom:32px;display:none;">
         <div class="section-label">
@@ -556,6 +564,7 @@
               <option value="Bi-Weekly Plan">Bi-Weekly</option>
               <option value="Weekly Plan">Weekly</option>
               <option value="One-time visit">One-Time Visit</option>
+              <option value="Monthly Plan" style="display:none;">Monthly</option>
             </select>
           </div>
           <div class="form-field">
@@ -563,12 +572,9 @@
             <select id="ac-yard">
               <option value="small">Small · Under ¼ acre</option>
               <option value="medium" selected>Medium · ¼–½ acre</option>
-              <option value="half">½–1 acre</option>
-              <option value="one">1–2 acres</option>
-              <option value="two">2–4 acres</option>
-              <option value="four">4–6 acres</option>
-              <option value="six">6–8 acres</option>
-              <option value="xl">8–10 acres</option>
+              <option value="threequarter">½–¾ acre</option>
+              <option value="one">¾–1 acre</option>
+              <option value="custom">Over 1 acre · Custom</option>
             </select>
           </div>
           <div class="form-field">
@@ -578,7 +584,7 @@
           <div class="form-field">
             <label>Payment Method *</label>
             <select id="ac-paymethod">
-              <option value="card">💳 Card (Autopay)</option>
+              <option value="card">💳 Card</option>
               <option value="cash">💵 Cash Only</option>
             </select>
           </div>
@@ -1508,6 +1514,19 @@ function renderBookings() {
     }
   }
 
+  // Visited Quotes section — quote visits marked done, awaiting plan scheduling (owner only)
+  if (adminRole === 'owner') {
+    const vqBkgs = doneBkgs.filter(b => isQuoteVisit(b));
+    const vqSec  = document.getElementById('visitedQuotesSection');
+    if (vqSec) {
+      vqSec.style.display = vqBkgs.length ? 'block' : 'none';
+      document.getElementById('visitedQuotesCount').textContent = vqBkgs.length;
+      document.getElementById('visitedQuotesList').innerHTML = vqBkgs.length
+        ? vqBkgs.map(b => cardHTML(b, allBookings.indexOf(b), false)).join('')
+        : '';
+    }
+  }
+
   // Completed section — done+paid, no review sent yet (owner only)
   if (adminRole === 'owner') {
     const compBkgs = doneBkgs.filter(b => isPaidDone(b) && !b.reviewSent && !isQuoteVisit(b));
@@ -2149,14 +2168,11 @@ async function sendInvoice() {
 // ADD CLIENT (owner only)
 // ═══════════════════════════════════════════════════════
 const YARD_PRICING = {
-  small:  { bw:49,  w:45,  ot:65  },  // under ¼ acre
-  medium: { bw:69,  w:59,  ot:89  },  // ¼–½ acre
-  half:   { bw:89,  w:79,  ot:109 },  // ½–1 acre
-  one:    { bw:109, w:99,  ot:139 },  // 1–2 acres
-  two:    { bw:169, w:149, ot:199 },  // 2–4 acres
-  four:   { bw:259, w:229, ot:279 },  // 4–6 acres
-  six:    { bw:349, w:309, ot:389 },  // 6–8 acres
-  xl:     { bw:429, w:379, ot:499 },  // 8–10 acres (suggested — adjust as needed)
+  small:        { bw:45, w:39 },  // under ¼ acre
+  medium:       { bw:49, w:45 },  // ¼–½ acre
+  threequarter: { bw:65, w:55 },  // ½–¾ acre
+  one:          { bw:79, w:65 },  // ¾–1 acre
+  // 'custom' has no entry — price input is left blank for manual entry
 };
 
 function onAcPlanChange() {
@@ -2170,19 +2186,23 @@ function updateAcPricePreview() {
   const prev = document.getElementById('ac-price-preview');
   const priceInput = document.getElementById('ac-price');
   if (!p) {
-    if (prev) prev.textContent = 'Custom quote required — enter price manually.';
+    // Custom yard size — clear auto-fill, let owner enter manually
+    if (priceInput) priceInput.value = '';
+    if (prev) prev.textContent = 'Custom quote — enter price manually.';
     return;
   }
   let rate, label;
-  if (plan === 'One-time visit') {
-    rate  = p.ot;
-    label = `Suggested one-time rate: $${rate}`;
-  } else if (plan.includes('Weekly') && !plan.includes('Bi')) {
+  if (plan.includes('Weekly') && !plan.includes('Bi')) {
     rate  = p.w;
-    label = `Suggested rate: $${rate}/mow`;
+    label = `Suggested rate: $${rate}/mow (weekly)`;
+  } else if (plan === 'One-time visit') {
+    // No preset one-time rate — leave for manual entry
+    if (priceInput) priceInput.value = '';
+    if (prev) prev.textContent = 'No preset one-time rate — enter price manually.';
+    return;
   } else {
     rate  = p.bw;
-    label = `Suggested rate: $${rate}/mow`;
+    label = `Suggested rate: $${rate}/mow (bi-weekly)`;
   }
   if (priceInput) priceInput.value = rate;
   if (prev) prev.textContent = label;
