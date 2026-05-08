@@ -562,10 +562,10 @@
           </div>
           <div class="settings-value">Verified ✓</div>
         </div>
-        <div class="settings-row" style="display:none;"><!-- autopay hidden — all customers on autopay automatically -->
+        <div class="settings-row" id="autopayRow">
           <div>
             <div class="settings-label">Autopay</div>
-            <div class="settings-sub">Charged automatically each billing period</div>
+            <div class="settings-sub" id="autopaySub">Charge my card automatically after each visit — no invoices</div>
           </div>
           <label class="toggle">
             <input type="checkbox" id="autopayToggle" onchange="handleAutopayToggle(this)"/>
@@ -930,6 +930,12 @@ function renderProfile(data) {
   // Autopay toggle state
   autopayEnabled = !!data.autopayEnabled;
   document.getElementById('autopayToggle').checked = autopayEnabled;
+  const autopaySub = document.getElementById('autopaySub');
+  if (autopaySub) {
+    autopaySub.textContent = autopayEnabled
+      ? '✅ Autopay is on — your card will be charged after each visit'
+      : 'Charge my card automatically after each visit — no invoices';
+  }
 
   // Reminder opt-out toggle (checked = reminders ON = optOut is false)
   const reminderToggle = document.getElementById('reminderOptOutToggle');
@@ -1342,19 +1348,21 @@ async function handleAutopayToggle(checkbox) {
   if (!session) { checkbox.checked = autopayEnabled; return; }
 
   const enable = checkbox.checked;
+  const subEl  = document.getElementById('autopaySub');
 
   // If turning on, make sure a card is saved
   const savedEl = document.getElementById('savedCard');
   const noCard  = !savedEl || savedEl.textContent.trim() === 'No card on file';
   if (enable && noCard) {
     checkbox.checked = false;
-    alert('Please add a card first, then enable autopay.');
+    if (subEl) { subEl.textContent = 'Add a card first, then turn on autopay.'; subEl.style.color = '#e53e3e'; }
     openCardModal();
     return;
   }
 
   // Disable toggle while saving
   checkbox.disabled = true;
+  if (subEl) { subEl.textContent = 'Saving…'; subEl.style.color = ''; }
   try {
     const data = await apiGet({
       action: 'portal_toggle_autopay',
@@ -1363,13 +1371,19 @@ async function handleAutopayToggle(checkbox) {
     });
     if (data.success) {
       autopayEnabled = data.autopayEnabled;
+      if (subEl) {
+        subEl.style.color = '';
+        subEl.textContent = autopayEnabled
+          ? '✅ Autopay is on — your card will be charged after each visit'
+          : 'Charge my card automatically after each visit — no invoices';
+      }
     } else {
       checkbox.checked = !enable; // revert
-      alert(data.error || 'Could not update autopay setting. Please try again.');
+      if (subEl) { subEl.textContent = data.error || 'Could not update. Please try again.'; subEl.style.color = '#e53e3e'; }
     }
   } catch(err) {
     checkbox.checked = !enable;
-    alert('Could not update autopay setting. Please try again.');
+    if (subEl) { subEl.textContent = 'Could not update. Please try again.'; subEl.style.color = '#e53e3e'; }
   } finally {
     checkbox.disabled = false;
   }
