@@ -1448,14 +1448,16 @@ function renderBookings() {
     const cal  = String(b.calendarEvent || '').toLowerCase();
     const pm   = String(b.payMethod || '').toLowerCase();
     const inv  = String(b.invoiced || '').toLowerCase();
-    const free = String(b.frequency||'').toLowerCase().includes('free');
+    const free  = String(b.frequency||'').toLowerCase().includes('free');
+    const quote = String(b.frequency||'').toLowerCase().includes('quote visit');
     // Guard: strings containing "not paid" or "pending" are explicitly NOT paid,
     // even if they also contain keywords like "autopay" (e.g. "Autopay pending").
     const paidPattern = s => {
       if (s.includes('not paid') || s.includes('pending')) return false;
       return s.includes('✅') || s.includes('autopay') || s.includes('auto-pay') || s === 'paid' || s.startsWith('paid');
     };
-    return free || paidPattern(cal) || paidPattern(pm) || paidPattern(inv);
+    // Quote visits are never "needs payment" — treat as settled
+    return free || quote || paidPattern(cal) || paidPattern(pm) || paidPattern(inv);
   }
 
   // Text search helper — applies across all sections
@@ -1559,13 +1561,16 @@ function cardHTML(b, rowIdx, isToday) {
   };
   const isPaid   = _paid(cal) || _paid(pm) || _paid(inv);
   const invoiced = !!b.invoiced && String(b.invoiced).length > 2;
-  const isFree   = String(b.frequency||'').toLowerCase().includes('free');
-  const price    = parseFloat(String(b.price||'').replace(/[^0-9.]/g,'')) || 0;
-  const cardInfo = b.cardLast4 ? ` · ${cap(b.cardBrand||'Card')} ••${b.cardLast4}` : '';
+  const isFree    = String(b.frequency||'').toLowerCase().includes('free');
+  const isQuote   = String(b.frequency||'').toLowerCase().includes('quote visit');
+  const price     = parseFloat(String(b.price||'').replace(/[^0-9.]/g,'')) || 0;
+  const cardInfo  = b.cardLast4 ? ` · ${cap(b.cardBrand||'Card')} ••${b.cardLast4}` : '';
 
   // ── Single clean payment badge ──
   let payBadge = '';
-  if (isFree) {
+  if (isQuote) {
+    payBadge = `<span class="badge-paylater" style="background:#e0f7fa;color:#006064;border-color:#80deea;">📋 Quote Visit</span>`;
+  } else if (isFree) {
     payBadge = `<span class="badge-invoiced">🌿 Free Mow</span>`;
   } else if (isPaid && cash) {
     payBadge = `<span class="badge-invoiced">✅ Cash Paid</span>`;
@@ -1591,11 +1596,13 @@ function cardHTML(b, rowIdx, isToday) {
   let actions = '';
 
   // Mark Done button — employees can only mark today's jobs; owners can mark any upcoming job
+  // Quote visits: "Mark Done" becomes "Mark Quoted" to indicate visit happened
   if (!done && (adminRole === 'owner' || isToday)) {
-    actions += `<button class="btn-action btn-done" onclick="triggerMarkDone(${rowIdx})">✓ Mark Done</button>`;
+    const doneLabel = isQuote ? '✓ Mark Visited' : '✓ Mark Done';
+    actions += `<button class="btn-action btn-done" onclick="triggerMarkDone(${rowIdx})">${doneLabel}</button>`;
   }
 
-  if (adminRole === 'owner' && !isFree && !isPaid) {
+  if (adminRole === 'owner' && !isFree && !isQuote && !isPaid) {
     if (cash) {
       // Cash customer — collect in person, mark paid manually
       if (done) {
@@ -2425,8 +2432,12 @@ function isSubscribed(b) {
 }
 function isDone(b) { return b.done && String(b.done).includes('Done') || String(b.done||'').includes('✓'); }
 function needsAction(b) {
-  if (isDone(b) || b.invoiced || String(b.frequency||'').includes('Free')) return false;
+  const freq = String(b.frequency||'').toLowerCase();
+  if (isDone(b) || b.invoiced || freq.includes('free') || freq.includes('quote visit')) return false;
   return true;
+}
+function isQuoteVisit(b) {
+  return String(b.frequency||'').toLowerCase().includes('quote visit');
 }
 function dateOf(b) {
   const raw = String(b.serviceDateRaw || b.serviceDate || '').trim();
