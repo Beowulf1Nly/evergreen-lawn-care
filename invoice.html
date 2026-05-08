@@ -391,8 +391,21 @@
   .an-kpi-card.blue   { border-top-color:#3b82f6; }
   .an-kpi-card.purple { border-top-color:#8b5cf6; }
   .an-kpi-card.gold   { border-top-color:var(--gold); }
+  .an-kpi-card.red .an-kpi-value,.an-kpi-card.red .an-kpi-val       { color:#b91c1c; }
+  .an-kpi-card.orange .an-kpi-value,.an-kpi-card.orange .an-kpi-val { color:#c2410c; }
+  .an-kpi-card.blue .an-kpi-value,.an-kpi-card.blue .an-kpi-val     { color:#1d4ed8; }
+  .an-kpi-card.purple .an-kpi-value,.an-kpi-card.purple .an-kpi-val { color:#6d28d9; }
+  .an-kpi-card.gold .an-kpi-value,.an-kpi-card.gold .an-kpi-val     { color:#92400e; }
+  /* Accordion */
+  .an-accordion { border:1.5px solid var(--border); border-radius:14px; margin-top:18px; background:#fff; overflow:hidden; }
+  .an-accordion-toggle { display:flex; align-items:center; gap:10px; padding:16px 20px; font-size:14px; font-weight:700; color:var(--green-deep); cursor:pointer; list-style:none; user-select:none; }
+  .an-accordion-toggle::-webkit-details-marker { display:none; }
+  .an-accordion[open] .an-accordion-toggle { border-bottom:1.5px solid var(--border); }
+  .an-accordion-toggle::after { content:"\25BC"; margin-left:auto; font-size:11px; color:var(--text-muted); transition:transform .2s; }
+  .an-accordion[open] .an-accordion-toggle::after { transform:rotate(180deg); }
+  details.an-accordion > *:not(summary) { padding:0 4px; }
   .an-kpi-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); margin-bottom:6px; }
-  .an-kpi-value { font-size:30px; font-weight:800; color:var(--green-deep); line-height:1; }
+  .an-kpi-value, .an-kpi-val { font-size:30px; font-weight:800; color:var(--green-deep); line-height:1; }
   .an-kpi-card.red .an-kpi-value    { color:#b91c1c; }
   .an-kpi-card.orange .an-kpi-value { color:#c2410c; }
   .an-kpi-card.blue .an-kpi-value   { color:#1d4ed8; }
@@ -2474,121 +2487,114 @@ async function loadAnalytics() {
     const bk = data.bookings  || {};
     const an = data.analytics || {};
 
-    // Extract event counts from /evt/ virtual pageviews
     const pageStats = an.pageStats || {};
     const E = {};
     Object.entries(pageStats).forEach(([page, count]) => {
       if (page.startsWith('/evt/')) E[page.replace('/evt/', '')] = count;
     });
 
-    const totalViews = an.totalVisits    || 0;
-    const uniqueVis  = an.uniqueVisitors || 0;
-    const quoteOpens = E['quote_opened'] || 0;
+    const totalViews    = an.totalVisits    || 0;
+    const uniqueVis     = an.uniqueVisitors || 0;
+    const quoteOpens    = E['quote_opened'] || 0;
     const bookCompleted = (E['booking_completed'] || 0) + (E['booking_completed_legacy'] || 0);
-    const convRate   = anPct(bookCompleted, quoteOpens);
-    const revenue    = parseFloat(bk.estimatedRev || 0);
+    const convRate      = anPct(bookCompleted, quoteOpens);
+    const revenue       = parseFloat(bk.estimatedRev || 0);
 
-    // Set up the full dashboard shell
     el.innerHTML = `
-      <div style="padding:4px 0 8px;">
+      <div style="padding:4px 0 16px;">
 
-        <!-- KPI row -->
         <div class="an-kpi-grid" id="an-kpis"></div>
 
-        <!-- Week-over-week -->
         <div class="an-section">
-          <div class="an-title">📈 This Week vs Last Week</div>
-          <div class="an-sub">Last 7 days compared to the 7 days before that.</div>
-          <div id="an-wow"></div>
-        </div>
-
-        <!-- 30-day trend chart -->
-        <div class="an-section">
-          <div class="an-title">📊 30-Day Traffic & Revenue Trend</div>
-          <div class="an-sub">Daily visits (green) and revenue collected (gold) over the last 30 days.</div>
-          <div id="an-trend"></div>
-        </div>
-
-        <!-- Funnel -->
-        <div class="an-section">
-          <div class="an-title">🔍 Quote Funnel — Where Are They Dropping Off?</div>
-          <div class="an-sub">Every visitor from first click to confirmed booking. The biggest % drop is your biggest opportunity.</div>
+          <div class="an-title">&#128269; Quote Funnel &#8212; Where Are They Dropping Off?</div>
+          <div class="an-sub">Every visitor from first click to confirmed booking. Biggest drop = biggest opportunity.</div>
           <div id="an-funnel"></div>
         </div>
 
-        <!-- Session duration + Exit analysis -->
-        <div class="an-two-col">
-          <div class="an-section" style="margin-bottom:0;">
-            <div class="an-title">⏱️ How Long Are People Staying?</div>
-            <div class="an-sub">Session duration breakdown. High instant-bounce = ad or landing page issue.</div>
-            <div id="an-session-dur"></div>
-          </div>
-          <div class="an-section" style="margin-bottom:0;">
-            <div class="an-title">🚪 Where Are People Leaving?</div>
-            <div class="an-sub">All exit signals ranked. Biggest bar = #1 problem to fix.</div>
-            <div id="an-exits"></div>
-          </div>
-        </div>
-        <div style="margin-bottom:18px;"></div>
-
-        <!-- Time per step + New vs Returning -->
-        <div class="an-two-col">
-          <div class="an-section" style="margin-bottom:0;">
-            <div class="an-title">⏳ Time Per Funnel Step</div>
-            <div class="an-sub">How long people spend on each step. Slow = friction.</div>
-            <div id="an-step-dur"></div>
-          </div>
-          <div class="an-section" style="margin-bottom:0;">
-            <div class="an-title">🔁 New vs Returning Visitors</div>
-            <div class="an-sub">Returning visitors = your brand is sticking. New = top of funnel is working.</div>
-            <div id="an-newret"></div>
-          </div>
-        </div>
-        <div style="margin-bottom:18px;"></div>
-
-        <!-- Source quality (full width) -->
         <div class="an-section">
-          <div class="an-title">🎯 Source Quality — Which Traffic Actually Converts?</div>
-          <div class="an-sub">Not all traffic is equal. This shows which sources send visitors who actually get quotes and book.</div>
-          <div id="an-source-quality"></div>
+          <div class="an-title">&#128200; This Week vs Last Week</div>
+          <div class="an-sub">Last 7 days vs the 7 days before that.</div>
+          <div id="an-wow"></div>
         </div>
 
-        <!-- Plan preference + FAQ -->
-        <div class="an-two-col">
-          <div class="an-section" style="margin-bottom:0;">
-            <div class="an-title">📅 Plan Preferences</div>
-            <div class="an-sub">Which plan people choose when they see their price.</div>
-            <div id="an-plans"></div>
-          </div>
-          <div class="an-section" style="margin-bottom:0;">
-            <div class="an-title">❓ FAQ Interactions</div>
-            <div class="an-sub">High interest = a blocker stopping people from booking.</div>
-            <div id="an-faq"></div>
-          </div>
-        </div>
-        <div style="margin-bottom:18px;"></div>
+        <details class="an-accordion" id="an-deep-dive">
+          <summary class="an-accordion-toggle">&#128202; Deep Dive &#8212; click to expand</summary>
 
-        <!-- Out-of-area zips + Hourly heatmap -->
-        <div class="an-two-col">
-          <div class="an-section" style="margin-bottom:0;">
-            <div class="an-title">🚫 Out-of-Area Zip Codes</div>
-            <div class="an-sub">Which specific zips keep bouncing — useful for adjusting ad targeting.</div>
-            <div id="an-ooa-zips"></div>
+          <div class="an-section">
+            <div class="an-title">&#128202; 30-Day Traffic &amp; Revenue Trend</div>
+            <div class="an-sub">Daily visits (green) and revenue (dark green) over the last 30 days.</div>
+            <div id="an-trend"></div>
           </div>
-          <div class="an-section" style="margin-bottom:0;">
-            <div class="an-title">⏰ When Are People Visiting?</div>
-            <div class="an-sub">Hour-of-day traffic pattern. Know when to run ads.</div>
-            <div id="an-hourly"></div>
+
+          <div class="an-two-col">
+            <div class="an-section" style="margin-bottom:0;">
+              <div class="an-title">&#9201; How Long Are People Staying?</div>
+              <div class="an-sub">High instant-bounce = ad or landing page issue.</div>
+              <div id="an-session-dur"></div>
+            </div>
+            <div class="an-section" style="margin-bottom:0;">
+              <div class="an-title">&#128682; Where Are People Leaving?</div>
+              <div class="an-sub">All exit signals ranked. Biggest bar = #1 problem to fix.</div>
+              <div id="an-exits"></div>
+            </div>
           </div>
-        </div>
+          <div style="margin-bottom:18px;"></div>
+
+          <div class="an-two-col">
+            <div class="an-section" style="margin-bottom:0;">
+              <div class="an-title">&#9203; Time Per Funnel Step</div>
+              <div class="an-sub">Slow step = friction. Fix the slowest one first.</div>
+              <div id="an-step-dur"></div>
+            </div>
+            <div class="an-section" style="margin-bottom:0;">
+              <div class="an-title">&#128257; New vs Returning Visitors</div>
+              <div class="an-sub">Returning = brand sticking. New = top-of-funnel working.</div>
+              <div id="an-newret"></div>
+            </div>
+          </div>
+          <div style="margin-bottom:18px;"></div>
+
+          <div class="an-section">
+            <div class="an-title">&#127919; Source Quality &#8212; Which Traffic Actually Converts?</div>
+            <div class="an-sub">Not all traffic is equal. See which sources actually produce bookings.</div>
+            <div id="an-source-quality"></div>
+          </div>
+
+          <div class="an-two-col">
+            <div class="an-section" style="margin-bottom:0;">
+              <div class="an-title">&#128197; Plan Preferences</div>
+              <div class="an-sub">Which plan people pick when they see their price.</div>
+              <div id="an-plans"></div>
+            </div>
+            <div class="an-section" style="margin-bottom:0;">
+              <div class="an-title">&#10067; FAQ Interactions</div>
+              <div class="an-sub">High interest = a question blocking conversion.</div>
+              <div id="an-faq"></div>
+            </div>
+          </div>
+          <div style="margin-bottom:18px;"></div>
+
+          <div class="an-two-col">
+            <div class="an-section" style="margin-bottom:0;">
+              <div class="an-title">&#128683; Out-of-Area Zip Codes</div>
+              <div class="an-sub">Zips that keep bouncing &#8212; useful for ad targeting.</div>
+              <div id="an-ooa-zips"></div>
+            </div>
+            <div class="an-section" style="margin-bottom:0;">
+              <div class="an-title">&#9200; When Are People Visiting?</div>
+              <div class="an-sub">Hour-of-day pattern. Know when to run ads.</div>
+              <div id="an-hourly"></div>
+            </div>
+          </div>
+
+        </details>
 
       </div>`;
 
-    // Now populate each section
     anRenderKpis(E, bk, an, totalViews, uniqueVis, quoteOpens, bookCompleted, convRate, revenue);
+    anRenderFunnel(E, totalViews, uniqueVis);
     anRenderWow(bk.weekOverWeek || {}, an.weekOverWeek || {});
     anRenderTrend(an.dailyVisits || {}, bk.dailyRevenue || {});
-    anRenderFunnel(E, totalViews, uniqueVis);
     anRenderSessionDur(E);
     anRenderExits(E);
     anRenderStepDur(E);
@@ -2601,9 +2607,10 @@ async function loadAnalytics() {
 
   } catch(err) {
     document.getElementById('analyticsContent').innerHTML =
-      `<div class="empty-state" style="padding:40px;">⚠️ Could not load analytics: ${esc(err.message)}</div>`;
+      `<div class="empty-state" style="padding:40px;">&#9888; Could not load analytics: ${esc(err.message)}</div>`;
   }
 }
+
 
 // ── Analytics helpers ──────────────────────────────────────────────────────
 function anPct(a, b) { return b > 0 ? Math.round((a / b) * 100) : 0; }
@@ -2981,8 +2988,8 @@ function anRenderHourly(recentVisits) {
   if (!el) return;
   const counts = new Array(24).fill(0);
   (recentVisits || []).forEach(v => {
-    if (!v.timestamp) return;
-    const h = new Date(v.timestamp).getHours();
+    if (!v.ts && !v.timestamp) return;
+    const h = new Date(v.ts || v.timestamp).getHours();
     if (h >= 0 && h < 24) counts[h]++;
   });
   const max = Math.max(...counts, 1);
