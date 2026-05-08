@@ -3767,6 +3767,11 @@ async function quotePaySubmit() {
   if (contactErrEl) contactErrEl.style.display='none';
   qState.name=name; qState.email=email; qState.phone=phone;
 
+  // Disable button IMMEDIATELY — prevents double-submit if user clicks twice
+  const btn   = document.getElementById('q-pay-btn');
+  const errEl = document.getElementById('q-card-errors');
+  btn.classList.add('loading'); btn.disabled=true; errEl.textContent='';
+
   // Check if returning customer now that we have their email
   try {
     const ctrl = new AbortController();
@@ -3776,10 +3781,6 @@ async function quotePaySubmit() {
     const data = await res.json();
     qState.isReturning = data.success && data.isExisting;
   } catch(e) { qState.isReturning = false; }
-
-  const btn   = document.getElementById('q-pay-btn');
-  const errEl = document.getElementById('q-card-errors');
-  btn.classList.add('loading'); btn.disabled=true; errEl.textContent='';
 
   try {
     const tierKey    = LOT_TIERS[qState.lotTierIdx].key;
