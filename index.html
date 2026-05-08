@@ -1771,7 +1771,7 @@
       <div class="form-row">
         <label>Zip Code</label>
         <input type="text" id="q-zip" placeholder="34450" maxlength="5" inputmode="numeric" pattern="\d{5}" autocomplete="postal-code" style="max-width:140px;"/>
-        <div id="q-zip-error" style="color:#e53e3e;font-size:13px;margin-top:4px;display:none;">We only serve Citrus County, FL. Call <a href="tel:+13524620627">(352) 462-0627</a> if you're outside the area.</div>
+        <div id="q-zip-error" style="color:#e53e3e;font-size:13px;margin-top:4px;display:none;">We don't have that zip on file yet. Call <a href="tel:+13524620627">(352) 462-0627</a> — we may still be able to help!</div>
       </div>
       <div id="q-step1-error" style="color:#e53e3e;font-size:13px;margin-bottom:12px;display:none;"></div>
       <button class="btn-primary" onclick="quoteStep1Submit()" style="width:100%;font-size:16px;padding:16px;border:none;cursor:pointer;">
@@ -1809,13 +1809,11 @@
         <label style="font-size:12px;font-weight:700;color:var(--green-deep);letter-spacing:.05em;text-transform:uppercase;display:block;margin-bottom:6px;">Select Your Lot Size</label>
         <select id="q-lot-select" onchange="onLotSelectChange()" style="width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;background:#fff;outline:none;">
           <option value="" disabled selected>— Select your yard size —</option>
-          <option value="0">Small · Under ¼ acre — from $39</option>
-          <option value="1">Medium · ¼–½ acre — from $49</option>
-          <option value="2">½–1 acre — from $65</option>
-          <option value="3">1–1.5 acres — from $89</option>
-          <option value="4">1.5–2 acres — from $115</option>
-          <option value="5">2–2.5 acres — from $139</option>
-          <option value="6">Over 2.5 acres · Free Custom Quote</option></select>
+          <option value="0">Small · Under ¼ acre — from $39/mow</option>
+          <option value="1">Medium · ¼–½ acre — from $45/mow</option>
+          <option value="2">½–¾ acre — from $55/mow</option>
+          <option value="3">¾–1 acre — from $65/mow</option>
+          <option value="4">Over 1 acre · Free On-Site Quote</option></select>
       </div>
 
       <div id="q-returning-banner" style="display:none;margin-bottom:14px;padding:12px 16px;background:#fff7ed;border:1.5px solid #fde68a;border-radius:10px;font-size:13px;color:#92400e;line-height:1.5;">
@@ -1841,6 +1839,18 @@
           <div class="cal-picked none" id="qCalPicked" aria-live="polite">Select a date above</div>
         </div>
         <div id="q-date-error" style="color:#e53e3e;font-size:13px;margin-top:6px;display:none;">Please select a start date.</div>
+      </div>
+
+      <!-- Preferred time — only shown for free quote visit (XL) flow -->
+      <div id="q-preferred-time-row" class="form-row" style="display:none;margin-top:4px;">
+        <label>Preferred Time of Day</label>
+        <select id="q-preferred-time" onchange="qState.preferredTime=this.value" style="width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;background:#fff;outline:none;">
+          <option value="" disabled selected>— Select a preference —</option>
+          <option value="Morning (8am–12pm)">Morning (8am–12pm)</option>
+          <option value="Afternoon (12pm–4pm)">Afternoon (12pm–4pm)</option>
+          <option value="Late Afternoon (4pm–6pm)">Late Afternoon (4pm–6pm)</option>
+          <option value="Any time works">Any time works</option>
+        </select>
       </div>
 
       <div id="q-step3-error" style="color:#e53e3e;font-size:13px;margin-bottom:12px;display:none;"></div>
@@ -1869,27 +1879,45 @@
       </div>
       <div id="q-contact-error" style="color:#e53e3e;font-size:13px;margin-bottom:12px;display:none;"></div>
 
-      <!-- Not-charged-now notice -->
-      <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:13px 16px;margin-bottom:14px;display:flex;align-items:flex-start;gap:10px;">
-        <div style="font-size:18px;line-height:1;flex-shrink:0;">🛡️</div>
-        <div>
-          <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:3px;">Your card is NOT charged today</div>
-          <div style="font-size:12px;color:#374151;line-height:1.5;">We save your card securely with Stripe so we can bill you <strong>after your first mow</strong>. Nothing is charged until the job is done and you're happy.</div>
+      <!-- Standard payment section (hidden for XL/quote flow) -->
+      <div id="q-payment-section">
+        <!-- Not-charged-now notice -->
+        <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:13px 16px;margin-bottom:14px;display:flex;align-items:flex-start;gap:10px;">
+          <div style="font-size:18px;line-height:1;flex-shrink:0;">🛡️</div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:3px;">Your card is NOT charged today</div>
+            <div style="font-size:12px;color:#374151;line-height:1.5;">We save your card securely with Stripe so we can bill you <strong>after your first mow</strong>. Nothing is charged until the job is done and you're happy.</div>
+          </div>
         </div>
+
+        <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--green-deep);margin-bottom:10px;">Payment Details</div>
+        <div id="q-card-element" style="padding:14px 16px;border:1.5px solid rgba(26,58,26,0.15);border-radius:8px;background:var(--cream);margin-bottom:6px;min-height:46px;"></div>
+        <div id="q-card-errors" style="color:#e53e3e;font-size:13px;min-height:18px;margin-bottom:14px;"></div>
+        <button class="btn-pay" id="q-pay-btn" onclick="quotePaySubmit()">
+          <div class="spinner"></div>
+          <span class="pay-text">🔒 Book Now — $19 Charged After First Mow</span>
+        </button>
+        <div class="stripe-note" style="margin-top:12px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          Secured by Stripe · Card saved now, charged only after your first mow
+        </div>
+        <div style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:8px;" id="q-following-line"></div>
       </div>
 
-      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--green-deep);margin-bottom:10px;">Payment Details</div>
-      <div id="q-card-element" style="padding:14px 16px;border:1.5px solid rgba(26,58,26,0.15);border-radius:8px;background:var(--cream);margin-bottom:6px;min-height:46px;"></div>
-      <div id="q-card-errors" style="color:#e53e3e;font-size:13px;min-height:18px;margin-bottom:14px;"></div>
-      <button class="btn-pay" id="q-pay-btn" onclick="quotePaySubmit()">
-        <div class="spinner"></div>
-        <span class="pay-text">🔒 Book Now — $19 Charged After First Mow</span>
-      </button>
-      <div class="stripe-note" style="margin-top:12px;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-        Secured by Stripe · Card saved now, charged only after your first mow
+      <!-- XL / free quote submit button (shown instead of payment for over-1-acre) -->
+      <div id="q-xl-section" style="display:none;">
+        <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:13px 16px;margin-bottom:16px;display:flex;align-items:flex-start;gap:10px;">
+          <div style="font-size:18px;line-height:1;flex-shrink:0;">🗓️</div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:3px;">Free visit — no card required</div>
+            <div style="font-size:12px;color:#374151;line-height:1.5;">We'll come out on your selected date, measure the property, and give you an exact price on the spot. No obligation.</div>
+          </div>
+        </div>
+        <button class="btn-pay" id="q-xl-book-btn" onclick="submitXLQuoteVisit()" style="background:var(--green-mid);">
+          <div class="spinner"></div>
+          <span class="pay-text">📅 Schedule My Free Quote Visit</span>
+        </button>
       </div>
-      <div style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:8px;" id="q-following-line"></div>
     </div>
 
     <!-- ── SUCCESS ── -->
@@ -2923,57 +2951,23 @@ function initStripeElements() {
   });
 }
 
-// ── Lot tiers — 0.5-acre steps up to 10 acres ──
+// ── Lot tiers ──
 const LOT_TIERS = [
-  { key: 'small',   label: 'Small · Up to ¼ acre',       icon: '🏡' },
-  { key: 'medium',  label: 'Medium · ¼–½ acre',           icon: '🏘️' },
-  { key: 'half',    label: '½–1 acre',                    icon: '🌿' },
-  { key: 'one',     label: '1–1.5 acres',                 icon: '🏠' },
-  { key: 'one5',    label: '1.5–2 acres',                 icon: '🌳' },
-  { key: 'two',     label: '2–2.5 acres',                 icon: '🌲' },
-  { key: 'two5',    label: '2.5–3 acres',                 icon: '🌾' },
-  { key: 'three',   label: '3–3.5 acres',                 icon: '🌾' },
-  { key: 'three5',  label: '3.5–4 acres',                 icon: '🌾' },
-  { key: 'four',    label: '4–4.5 acres',                 icon: '🌾' },
-  { key: 'four5',   label: '4.5–5 acres',                 icon: '🌾' },
-  { key: 'five',    label: '5–5.5 acres',                 icon: '🌾' },
-  { key: 'five5',   label: '5.5–6 acres',                 icon: '🌾' },
-  { key: 'six',     label: '6–6.5 acres',                 icon: '🌾' },
-  { key: 'six5',    label: '6.5–7 acres',                 icon: '🌾' },
-  { key: 'seven',   label: '7–7.5 acres',                 icon: '🌾' },
-  { key: 'seven5',  label: '7.5–8 acres',                 icon: '🌾' },
-  { key: 'eight',   label: '8–8.5 acres',                 icon: '🌾' },
-  { key: 'eight5',  label: '8.5–9 acres',                 icon: '🌾' },
-  { key: 'nine',    label: '9–9.5 acres',                 icon: '🌾' },
-  { key: 'nine5',   label: '9.5–10 acres',                icon: '🌾' },
-  { key: 'xl',      label: '10+ acres · Custom Quote',    icon: '🗺️' },
+  { key: 'small',        label: 'Small · Up to ¼ acre',      icon: '🏡' },  // 0
+  { key: 'medium',       label: 'Medium · ¼–½ acre',          icon: '🏘️' }, // 1
+  { key: 'threequarter', label: '½–¾ acre',                   icon: '🌿' },  // 2
+  { key: 'one',          label: '¾–1 acre',                   icon: '🌳' },  // 3
+  { key: 'xl',           label: 'Over 1 acre · Free Quote',   icon: '🗺️' },  // 4
 ];
 
 // ── Lot size: call Apps Script → county GIS → ZIP fallback → manual
 // Maps acreage to LOT_TIERS index
 function acreageToTierIdx(acres) {
-  if (acres <= 0.25)  return 0;
-  if (acres <= 0.5)   return 1;
-  if (acres <= 1.0)   return 2;
-  if (acres <= 1.5)   return 3;
-  if (acres <= 2.0)   return 4;
-  if (acres <= 2.5)   return 5;
-  if (acres <= 3.0)   return 6;
-  if (acres <= 3.5)   return 7;
-  if (acres <= 4.0)   return 8;
-  if (acres <= 4.5)   return 9;
-  if (acres <= 5.0)   return 10;
-  if (acres <= 5.5)   return 11;
-  if (acres <= 6.0)   return 12;
-  if (acres <= 6.5)   return 13;
-  if (acres <= 7.0)   return 14;
-  if (acres <= 7.5)   return 15;
-  if (acres <= 8.0)   return 16;
-  if (acres <= 8.5)   return 17;
-  if (acres <= 9.0)   return 18;
-  if (acres <= 9.5)   return 19;
-  if (acres <= 10.0)  return 20;
-  return 21;
+  if (acres <= 0.25)  return 0;  // small
+  if (acres <= 0.5)   return 1;  // medium
+  if (acres <= 0.75)  return 2;  // threequarter
+  if (acres <= 1.0)   return 3;  // one
+  return 4;                       // xl — free quote
 }
 
 async function lookupLotSize(address, zip) {
@@ -3128,6 +3122,7 @@ async function lookupLotSize(address, zip) {
   } catch(eScript) {}
 
   // ── Step 4: ZIP fallback ─────────────────────────────────────────────
+  // Tier indices: 0=small(<¼ac) 1=medium(¼-½) 2=threequarter(½-¾) 3=one(¾-1) 4=xl(>1/free quote)
   const ZIP_TIERS = {
     // Citrus County
     '34428':1,'34429':1,
@@ -3189,29 +3184,12 @@ const ZIP_LOT_MAP = {
 // Per-mow pricing after the $19 first service
 // Biweekly = less frequent (costs slightly more/mow). Weekly = more frequent (less/mow).
 const PLAN_PRICING = {
-  small:  { biweekly: 45,  weekly: 39  },  // under ¼ acre
-  medium: { biweekly: 59,  weekly: 49  },  // ¼–½ acre
-  half:   { biweekly: 79,  weekly: 65  },  // ½–1 acre
-  one:    { biweekly: 109, weekly: 89  },  // 1–1.5 acres
-  one5:   { biweekly: 139, weekly: 115 },  // 1.5–2 acres
-  two:    { biweekly: 169, weekly: 139 },  // 2–2.5 acres
-  // 2.5+ acres → custom quote required
-  two5:   { biweekly: null, weekly: null },
-  three:  { biweekly: null, weekly: null },
-  three5: { biweekly: null, weekly: null },
-  four:   { biweekly: null, weekly: null },
-  four5:  { biweekly: null, weekly: null },
-  five:   { biweekly: null, weekly: null },
-  five5:  { biweekly: null, weekly: null },
-  six:    { biweekly: null, weekly: null },
-  six5:   { biweekly: null, weekly: null },
-  seven:  { biweekly: null, weekly: null },
-  seven5: { biweekly: null, weekly: null },
-  eight:  { biweekly: null, weekly: null },
-  eight5: { biweekly: null, weekly: null },
-  nine:   { biweekly: null, weekly: null },
-  nine5:  { biweekly: null, weekly: null },
-  xl:     { biweekly: null, weekly: null },
+  small:        { biweekly: 45,   weekly: 39  },  // under ¼ acre
+  medium:       { biweekly: 49,   weekly: 45  },  // ¼–½ acre
+  threequarter: { biweekly: 65,   weekly: 55  },  // ½–¾ acre
+  one:          { biweekly: 79,   weekly: 65  },  // ¾–1 acre
+  // Over 1 acre → free on-site quote visit
+  xl:           { biweekly: null, weekly: null },
 };
 
 // Flow state
@@ -3223,6 +3201,7 @@ let qState = {
   detectedAcreage: null,
   selectedPlan: 'biweekly',
   startDate: '',
+  preferredTime: '',
   stripeCustomerId: '',
 };
 let _lotLookupPromise = null;
@@ -3445,7 +3424,7 @@ async function quoteStep1Submit() {
     errEl.style.display = 'block'; return;
   }
   if (!VALID_ZIPS.has(zip)) {
-    errEl.textContent = 'We currently only serve Citrus County, FL. Call (352) 462-0627 for more info.';
+    errEl.textContent = "That zip isn't in our service area yet. Call (352) 462-0627 — we may still be able to help!";
     errEl.style.display = 'block'; return;
   }
   errEl.style.display = 'none';
@@ -3530,9 +3509,12 @@ function buildStep3() {
   // Update date label for large lot / XL flow
   const allLabels = document.querySelectorAll('#quoteStep3 .form-row label');
   if (allLabels.length > 0) {
-    const calLabel = allLabels[allLabels.length - 1];
+    const calLabel = allLabels[0];
     calLabel.textContent = isXL ? 'Select a Date for Your Free Quote Visit' : 'Select Your Start Date';
   }
+  // Show preferred time picker only for XL
+  const timeRow = document.getElementById('q-preferred-time-row');
+  if (timeRow) timeRow.style.display = isXL ? 'block' : 'none';
 }
 
 function updateLotDisplay() {
@@ -3574,7 +3556,7 @@ function renderPlanCards() {
         <div style="font-size:22px;margin-bottom:10px;">🗺️</div>
         <div style="font-size:15px;font-weight:700;color:var(--green-deep);margin-bottom:6px;">Free On-Site Quote Visit</div>
         <div style="font-size:13px;color:var(--text-muted);line-height:1.65;">
-          Properties over 2 acres get a custom quote. We'll come out, walk the lot, and give you an exact price — completely free, no commitment required.
+          Properties over 1 acre get a custom quote. We'll come out, walk the lot, and give you an exact price — completely free, no commitment required.
         </div>
         <div style="margin-top:14px;display:flex;flex-direction:column;gap:7px;">
           <div style="font-size:13px;color:var(--green-deep);display:flex;align-items:center;gap:8px;"><span style="color:var(--green-bright);font-weight:700;">✓</span> Free visit, no obligation</div>
@@ -3601,7 +3583,7 @@ function renderPlanCards() {
     const firstPrice = qState.isReturning ? p.afterPrice : 19;
     const afterLabel = noPrice ? 'Custom quote' : (qState.isReturning ? 'regular rate' : '$' + p.afterPrice + '/mow after');
     const isSelected = qState.selectedPlan === p.id;
-    // No $19 promo for lots over 1 acre (tier 3+) — margin is too thin
+    // No $19 promo for lots ¾–1 acre and up (tier 3+) — margin is too thin
     const bigLot       = qState.lotTierIdx >= 3;
     const showPromo    = !qState.isReturning && !bigLot;
     const planFirstText = showPromo
@@ -3655,45 +3637,60 @@ function quoteStep3Submit() {
   }
   errEl.style.display = 'none';
 
-  // ── XL path: no payment needed — submit quote visit request directly ──
-  if (isXL) {
-    submitXLQuoteVisit();
-    return;
-  }
-
   buildOrderSummary();
   showQuoteStep(4);
 }
 
 // ── XL Quote Visit submission (no payment, just schedules a free quote) ──
 async function submitXLQuoteVisit() {
-  const stepsBar = document.getElementById('quoteStepsBar');
-  if (stepsBar) stepsBar.style.display = 'none';
+  // Collect contact info from step 4 fields
+  const name  = (document.getElementById('q-name')?.value  || '').trim();
+  const email = (document.getElementById('q-email')?.value || '').trim();
+  const phone = (document.getElementById('q-phone')?.value || '').trim();
 
-  // Hide step 3 and show success directly
-  const step3 = document.getElementById('quoteStep3');
-  if (step3) step3.style.display = 'none';
+  // Validate required fields
+  const errEl = document.getElementById('q-contact-error');
+  if (!name || !email) {
+    if (errEl) { errEl.textContent = 'Please enter your name and email to continue.'; errEl.style.display = 'block'; }
+    return;
+  }
+  if (errEl) errEl.style.display = 'none';
+
+  // Save into qState
+  qState.name  = name;
+  qState.email = email;
+  qState.phone = phone;
+
+  // Disable button while submitting
+  const btn = document.getElementById('q-xl-book-btn');
+  if (btn) { btn.disabled = true; btn.querySelector('.pay-text').textContent = 'Scheduling…'; }
 
   const dateFmt = new Date(qState.startDate + 'T12:00:00').toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   });
 
-  // Send to Apps Script — action 'xl_quote_visit' (add handler server-side)
+  // Send to Apps Script — action 'xl_quote_visit'
   try {
     const params = new URLSearchParams({
-      action:       'xl_quote_visit',
-      name:         qState.name,
-      email:        qState.email,
-      phone:        qState.phone,
-      address:      qState.address,
-      zip:          qState.zip,
-      quoteDateRaw: qState.startDate,
-      quoteDate:    dateFmt,
+      action:        'xl_quote_visit',
+      name:          qState.name,
+      email:         qState.email,
+      phone:         qState.phone,
+      address:       qState.address,
+      zip:           qState.zip,
+      quoteDateRaw:  qState.startDate,
+      quoteDate:     dateFmt,
+      preferredTime: qState.preferredTime || '',
     });
     fetch(SHEETS_SCRIPT_URL + '?' + params.toString(), { method: 'GET', mode: 'no-cors' }).catch(() => {});
   } catch(e) { /* fire and forget */ }
 
-  // Show success
+  // Hide step 4, show success
+  const step4 = document.getElementById('quoteStep4');
+  if (step4) step4.style.display = 'none';
+  const stepsBar = document.getElementById('quoteStepsBar');
+  if (stepsBar) stepsBar.style.display = 'none';
+
   const successEl = document.getElementById('quoteSuccess');
   const msgEl     = document.getElementById('q-success-msg');
   const dateEl    = document.getElementById('q-success-date');
@@ -3703,11 +3700,29 @@ async function submitXLQuoteVisit() {
 }
 
 function buildOrderSummary() {
-  const tierKey   = LOT_TIERS[qState.lotTierIdx].key;
-  const prices    = PLAN_PRICING[tierKey];
+  const tierKey   = LOT_TIERS[qState.lotTierIdx] ? LOT_TIERS[qState.lotTierIdx].key : 'xl';
+  const prices    = PLAN_PRICING[tierKey] || { biweekly: null, weekly: null };
+  const isXL      = tierKey === 'xl' || (prices.biweekly === null && prices.weekly === null);
   const planId    = qState.selectedPlan;
-  const planNames = {'biweekly':'Bi-Weekly Plan','weekly':'Weekly Plan'};
   const dateFmt   = new Date(qState.startDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+
+  // Show/hide payment vs XL sections
+  const paySection = document.getElementById('q-payment-section');
+  const xlSection  = document.getElementById('q-xl-section');
+  if (paySection) paySection.style.display = isXL ? 'none' : 'block';
+  if (xlSection)  xlSection.style.display  = isXL ? 'block' : 'none';
+
+  if (isXL) {
+    const timePref = qState.preferredTime || 'Not specified';
+    document.getElementById('quoteOrderSummary').innerHTML =
+      '<div class="quote-order-row"><span>Visit Type</span><span style="font-weight:600;color:var(--green-deep)">Free On-Site Quote</span></div>' +
+      '<div class="quote-order-row"><span>Date Requested</span><span style="font-weight:600;color:var(--green-deep)">' + dateFmt + '</span></div>' +
+      '<div class="quote-order-row"><span>Preferred Time</span><span style="font-weight:600;color:var(--green-deep)">' + timePref + '</span></div>' +
+      '<div class="quote-order-total"><span>Cost</span><span class="quote-order-amount" style="font-size:18px;">FREE</span></div>';
+    return;
+  }
+
+  const planNames = {'biweekly':'Bi-Weekly Plan','weekly':'Weekly Plan'};
   const after      = prices[planId];
   const isRet      = qState.isReturning || false;
   const bigLot     = qState.lotTierIdx >= 3;
