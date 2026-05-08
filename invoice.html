@@ -113,6 +113,10 @@
   .btn-disabled { background:#e2e8f0; color:#9ca3af; cursor:not-allowed; }
   .btn-cancel-job { background:#fff; color:var(--red); border:1.5px solid #fca5a5; }
   .btn-cancel-job:hover { background:#fff5f5; border-color:var(--red); }
+  .btn-schedule-plan { background:#1a3a1a; color:#fff; }
+  .btn-schedule-plan:hover { background:#2d5a2d; }
+  .btn-cancel-quote { background:#fff; color:#6b7280; border:1.5px solid #d1d5db; }
+  .btn-cancel-quote:hover { background:#f9fafb; border-color:#9ca3af; }
   .btn-action:disabled { opacity:.55; cursor:not-allowed; }
 
   /* ── Empty / loading ── */
@@ -1596,8 +1600,11 @@ function cardHTML(b, rowIdx, isToday) {
   let actions = '';
 
   // Mark Done button — employees can only mark today's jobs; owners can mark any upcoming job
-  // Quote visits: "Mark Done" becomes "Mark Quoted" to indicate visit happened
-  if (!done && (adminRole === 'owner' || isToday)) {
+  // Quote visits: show "Mark Visited" when pending; after visited show Schedule Plan + Cancel
+  if (isQuote && done && adminRole === 'owner') {
+    actions += `<button class="btn-action btn-schedule-plan" onclick="openSchedulePlan(${rowIdx})">📅 Schedule Plan</button>`;
+    actions += `<button class="btn-action btn-cancel-quote" onclick="triggerCancelJob(${rowIdx})">✗ Remove</button>`;
+  } else if (!done && (adminRole === 'owner' || isToday)) {
     const doneLabel = isQuote ? '✓ Mark Visited' : '✓ Mark Done';
     actions += `<button class="btn-action btn-done" onclick="triggerMarkDone(${rowIdx})">${doneLabel}</button>`;
   }
@@ -1825,15 +1832,46 @@ function confirmYes() {
 }
 
 // ═══════════════════════════════════════════════════════
+// SCHEDULE PLAN (from completed quote visit)
+// ═══════════════════════════════════════════════════════
+function openSchedulePlan(rowIdx) {
+  const b = allBookings[rowIdx];
+  if (!b) return;
+  // Switch to Add Client tab
+  showTab('add');
+  // Pre-fill all fields from the quote visit row
+  const nameEl    = document.getElementById('ac-name');
+  const emailEl   = document.getElementById('ac-email');
+  const phoneEl   = document.getElementById('ac-phone');
+  const addrEl    = document.getElementById('ac-address');
+  const zipEl     = document.getElementById('ac-zip');
+  const notesEl   = document.getElementById('ac-notes');
+  if (nameEl)  nameEl.value  = b.name    || '';
+  if (emailEl) emailEl.value = b.email   || '';
+  if (phoneEl) phoneEl.value = b.phone   || '';
+  if (addrEl)  addrEl.value  = b.address || '';
+  if (zipEl)   zipEl.value   = b.zip     || '';
+  if (notesEl && b.notes) notesEl.value = b.notes;
+  // Trigger price preview update
+  if (typeof onAcPlanChange === 'function') onAcPlanChange();
+  showToast('📋 Quote info pre-filled — pick their plan & yard size, then click Add Client');
+  // Scroll to top of form
+  document.getElementById('pane-add')?.scrollIntoView({ behavior: 'smooth' });
+}
+
+// ═══════════════════════════════════════════════════════
 // MARK DONE
 // ═══════════════════════════════════════════════════════
 function triggerMarkDone(rowIdx) {
   const b = allBookings[rowIdx];
   if (!b) return;
+  const isQuote = String(b.frequency||'').toLowerCase().includes('quote visit');
   document.getElementById('confirmYesBtn').className = 'btn-confirm-yes';
   openConfirm(
-    `Mark "${b.name||'job'}" as done?`,
-    'Are you sure you want to mark this job as completed? This cannot be undone.',
+    isQuote ? `Mark visit for "${b.name||'customer'}" as done?`
+            : `Mark "${b.name||'job'}" as done?`,
+    isQuote ? 'Mark this quote visit as completed. A "Schedule Plan" button will appear so you can set them up with a mowing plan.'
+            : 'Are you sure you want to mark this job as completed? This cannot be undone.',
     () => executeMarkDone(rowIdx)
   );
 }
