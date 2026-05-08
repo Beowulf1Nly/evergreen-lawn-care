@@ -922,6 +922,60 @@
 <script>
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
 
+// ── Core helpers (reconstructed) ─────────────────────────────────────────
+function esc(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function isDone(b) {
+  const d = String(b.done || '');
+  return d.includes('Done') || d.startsWith('✓');
+}
+function isAutoPay(b) {
+  const cal = String(b.calendarEvent || '').toLowerCase();
+  const pm  = String(b.payMethod     || '').toLowerCase();
+  if (cal.includes('not paid') || cal.includes('pending')) return false;
+  if (pm.includes('not paid')  || pm.includes('pending'))  return false;
+  return cal.includes('autopay') || cal.includes('auto-pay') ||
+         pm.includes('autopay')  || pm.includes('auto-pay');
+}
+function isCash(b) {
+  const pm = String(b.payMethod || '').toLowerCase();
+  return pm.includes('cash');
+}
+function isQuoteVisit(b) {
+  return String(b.frequency || '').toLowerCase().includes('quote visit');
+}
+function needsAction(b) {
+  if (isDone(b)) return false;
+  const cal = String(b.calendarEvent || '').toLowerCase();
+  const pm  = String(b.payMethod     || '').toLowerCase();
+  return !cal.includes('✅') && !cal.includes('autopay') && !cal.includes('auto-pay') &&
+         !pm.includes('autopay')  && !pm.includes('auto-pay') && !pm.includes('cash');
+}
+function todayDateStr() {
+  const t = new Date();
+  return t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0');
+}
+function dateOf(b) {
+  const raw = b.serviceDate || b.serviceDateRaw || '';
+  if (!raw) return '';
+  // already ISO YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(raw).trim())) return String(raw).trim();
+  // try parsing
+  const d = new Date(raw);
+  if (isNaN(d)) return String(raw).trim();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function displayDate(raw) {
+  if (!raw) return '';
+  const s = String(raw).trim();
+  if (!s || s === 'Not scheduled') return '';
+  const d = new Date(s.includes('T') ? s : s + 'T12:00');
+  if (isNaN(d)) return s;
+  return d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' });
+}
+// ─────────────────────────────────────────────────────────────────────────
+
 // ─────────── Auth state ───────────
 let adminToken = '';
 let adminName  = '';
