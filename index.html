@@ -1690,7 +1690,7 @@
           <span style="font-size:20px;transition:transform .2s;color:var(--green-mid);">＋</span>
         </summary>
         <div style="padding:0 24px 20px;font-size:14px;color:var(--text-muted);line-height:1.7;border-top:1px solid #f0f4f0;">
-          We currently serve all of Citrus County, FL — including Crystal River, Inverness, Lecanto, Homosassa, Citrus Springs, Floral City, and Beverly Hills. Enter your address in the quote form and we'll confirm right away.
+          We primarily serve Citrus County, FL — Crystal River, Inverness, Hernando, Lecanto, Homosassa, Citrus Springs, Floral City, and Beverly Hills — and also cover surrounding areas including Ocala, Dunnellon, Brooksville, Spring Hill, and parts of Levy and Sumter County. Enter your address and we'll confirm availability instantly.
         </div>
       </details>
 
@@ -2334,14 +2334,36 @@ function updatePriceSummary() {
 // CITRUS COUNTY ZIP CODES
 // ─────────────────────────────────────────────
 const VALID_ZIPS = new Set([
-  '34428','34429',  // Crystal River
-  '34450','34451','34452','34453',  // Inverness
-  '34446','34447','34448',  // Homosassa / Homosassa Springs
-  '34460','34461',  // Lecanto
-  '34433','34434',  // Citrus Springs
-  '34436',  // Floral City
-  '34464','34465',  // Beverly Hills
-  '34431','34432',  // Dunnellon (Citrus/Marion border)
+  // ── Citrus County ──────────────────────────────
+  '34428','34429',                    // Crystal River
+  '34450','34451','34452','34453',    // Inverness
+  '34446','34447','34448',            // Homosassa / Homosassa Springs
+  '34460','34461',                    // Lecanto
+  '34433','34434',                    // Citrus Springs
+  '34436',                            // Floral City
+  '34442',                            // Hernando
+  '34464','34465',                    // Beverly Hills
+  '34449',                            // Inglis
+  '34498',                            // Yankeetown
+  // ── Marion County (Ocala area) ────────────────
+  '34431','34432',                    // Dunnellon
+  '34470','34471','34472','34473',    // Ocala
+  '34474','34475','34476','34479',    // Ocala
+  '34480','34481','34482',            // Ocala
+  '34488','34489','34491',            // Silver Springs area
+  // ── Levy County ───────────────────────────────
+  '32621',                            // Bronson
+  '32626',                            // Chiefland
+  '32668',                            // Morriston
+  '32693',                            // Williston
+  // ── Hernando County ───────────────────────────
+  '34601','34602','34604',            // Brooksville
+  '34606','34607','34608','34609',    // Spring Hill / Weeki Wachee
+  '34613','34614',                    // Brooksville (north)
+  // ── Sumter County ─────────────────────────────
+  '33514',                            // Center Hill
+  '33538',                            // Lake Panasoffkee
+  '33585',                            // Sumterville / Bushnell
 ]);
 
 function validateZip() {
@@ -3107,14 +3129,30 @@ async function lookupLotSize(address, zip) {
 
   // ── Step 4: ZIP fallback ─────────────────────────────────────────────
   const ZIP_TIERS = {
+    // Citrus County
     '34428':1,'34429':1,
     '34450':1,'34451':1,'34452':1,'34453':1,
     '34446':2,'34447':2,'34448':2,
     '34460':1,'34461':2,
     '34433':2,'34434':1,
     '34436':2,
+    '34442':1,
+    '34449':2,'34498':2,
     '34464':1,'34465':1,
-    '34481':2,'34432':2,'34431':2,
+    // Marion County
+    '34431':2,'34432':2,
+    '34470':1,'34471':1,'34472':1,'34473':2,
+    '34474':1,'34475':1,'34476':1,'34479':1,
+    '34480':1,'34481':2,'34482':2,
+    '34488':2,'34489':2,'34491':2,
+    // Levy County
+    '32621':2,'32626':2,'32668':2,'32693':2,
+    // Hernando County
+    '34601':1,'34602':1,'34604':2,
+    '34606':1,'34607':2,'34608':1,'34609':1,
+    '34613':2,'34614':2,
+    // Sumter County
+    '33514':2,'33538':2,'33585':2,
   };
   if (zip && ZIP_TIERS[zip] !== undefined) {
     qState.lotTierIdx      = ZIP_TIERS[zip];
@@ -3136,13 +3174,16 @@ function onLotSelectChange() {
 
 // LEGACY fallback map — no longer used for new bookings (kept for reference)
 const ZIP_LOT_MAP = {
-  '34428':1,'34429':1,                    // Crystal River (mostly medium)
-  '34450':1,'34451':1,'34452':1,'34453':1,// Inverness (medium)
-  '34446':2,'34447':2,'34448':2,          // Homosassa / Homosassa Springs (half acre)
-  '34460':1,'34461':2,                    // Lecanto
-  '34433':2,'34434':1,                    // Citrus Springs
-  '34436':2,                              // Floral City (rural, half acre)
-  '34464':1,'34465':1,                    // Beverly Hills
+  '34428':1,'34429':1,'34450':1,'34451':1,'34452':1,'34453':1,
+  '34446':2,'34447':2,'34448':2,'34460':1,'34461':2,
+  '34433':2,'34434':1,'34436':2,'34442':1,'34449':2,'34498':2,
+  '34464':1,'34465':1,'34431':2,'34432':2,
+  '34470':1,'34471':1,'34472':1,'34473':2,'34474':1,'34475':1,
+  '34476':1,'34479':1,'34480':1,'34481':2,'34482':2,
+  '34488':2,'34489':2,'34491':2,
+  '32621':2,'32626':2,'32668':2,'32693':2,
+  '34601':1,'34602':1,'34604':2,'34606':1,'34607':2,'34608':1,'34609':1,
+  '34613':2,'34614':2,'33514':2,'33538':2,'33585':2,
 };
 
 // Per-mow pricing after the $19 first service
