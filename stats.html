@@ -26,7 +26,10 @@
     --text-muted:  #6b7280;
     --border:      #e2e8f0;
     --red:         #e53e3e;
+    --orange:      #f97316;
     --gold:        #c9a84c;
+    --blue:        #3b82f6;
+    --purple:      #8b5cf6;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:'DM Sans',sans-serif; background:var(--cream); color:var(--text); min-height:100vh; }
@@ -80,30 +83,11 @@
     font-family:inherit; font-size:13px; cursor:pointer;
   }
   .header-right { display:flex; align-items:center; gap:12px; }
+  .header-last-refresh { font-size:12px; color:rgba(255,255,255,.5); }
 
-  .container { max-width:1100px; margin:0 auto; padding:32px 20px; }
+  .container { max-width:1200px; margin:0 auto; padding:32px 20px; }
 
-  /* ── Stat Cards ── */
-  .stat-grid {
-    display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
-    gap:16px; margin-bottom:36px;
-  }
-  .stat-card {
-    background:#fff; border-radius:16px; padding:24px 20px;
-    box-shadow:0 2px 12px rgba(0,0,0,.06); text-align:center;
-  }
-  .stat-card .stat-label {
-    font-size:12px; font-weight:600; text-transform:uppercase;
-    letter-spacing:.05em; color:var(--text-muted); margin-bottom:8px;
-  }
-  .stat-card .stat-value {
-    font-size:36px; font-weight:800; color:var(--green-deep); line-height:1;
-  }
-  .stat-card .stat-sub {
-    font-size:12px; color:var(--text-muted); margin-top:6px;
-  }
-
-  /* ── Section headers ── */
+  /* ── Section title ── */
   .section-title {
     font-size:16px; font-weight:700; color:var(--green-deep);
     margin-bottom:16px; display:flex; align-items:center; gap:8px;
@@ -112,103 +96,163 @@
     background:#fff; border-radius:16px; padding:24px;
     box-shadow:0 2px 12px rgba(0,0,0,.06); margin-bottom:24px;
   }
+  .section-sub { font-size:13px; color:var(--text-muted); margin-bottom:16px; line-height:1.5; }
+
+  /* ── KPI Hero Row ── */
+  .kpi-grid {
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+    gap:16px; margin-bottom:24px;
+  }
+  .kpi-card {
+    background:#fff; border-radius:16px; padding:22px 18px;
+    box-shadow:0 2px 12px rgba(0,0,0,.06); text-align:center;
+    border-top:4px solid var(--green-bright);
+    position:relative; overflow:hidden;
+  }
+  .kpi-card.red    { border-top-color:var(--red); }
+  .kpi-card.orange { border-top-color:var(--orange); }
+  .kpi-card.blue   { border-top-color:var(--blue); }
+  .kpi-card.purple { border-top-color:var(--purple); }
+  .kpi-card.gold   { border-top-color:var(--gold); }
+  .kpi-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); margin-bottom:8px; }
+  .kpi-value { font-size:34px; font-weight:800; color:var(--green-deep); line-height:1; }
+  .kpi-card.red .kpi-value    { color:#b91c1c; }
+  .kpi-card.orange .kpi-value { color:#c2410c; }
+  .kpi-card.blue .kpi-value   { color:#1d4ed8; }
+  .kpi-card.purple .kpi-value { color:#6d28d9; }
+  .kpi-card.gold .kpi-value   { color:#92400e; }
+  .kpi-sub { font-size:12px; color:var(--text-muted); margin-top:6px; line-height:1.4; }
+
+  /* ── Business Health Highlights ── */
+  .health-grid {
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
+    gap:14px; margin-bottom:24px;
+  }
+  .health-card {
+    background:#fff; border-radius:14px; padding:20px;
+    box-shadow:0 2px 10px rgba(0,0,0,.05);
+    display:flex; align-items:center; gap:16px;
+  }
+  .health-icon { font-size:28px; flex-shrink:0; }
+  .health-label { font-size:12px; color:var(--text-muted); font-weight:600; margin-bottom:4px; }
+  .health-value { font-size:22px; font-weight:800; color:var(--green-deep); line-height:1; }
+  .health-sub   { font-size:11px; color:var(--text-muted); margin-top:3px; }
+
+  /* ── Alert banner ── */
+  .alert-banner {
+    border-radius:12px; padding:14px 18px; margin-bottom:20px;
+    font-size:14px; line-height:1.6; display:flex; align-items:flex-start; gap:10px;
+  }
+  .alert-banner.green { background:#f0fdf4; border:1.5px solid #86efac; color:#166534; }
+  .alert-banner.yellow { background:#fffbeb; border:1.5px solid #fcd34d; color:#92400e; }
+  .alert-banner.red    { background:#fef2f2; border:1.5px solid #fca5a5; color:#991b1b; }
+
+  /* ── Two-col layout ── */
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .three-col { display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px; }
+  @media(max-width:800px) { .two-col, .three-col { grid-template-columns:1fr; } }
+
+  /* ── Bar rows ── */
+  .bar-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .bar-label { font-size:13px; min-width:140px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bar-label-wide { font-size:13px; min-width:210px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bar-wrap { flex:1; background:#e8f5e9; border-radius:4px; height:14px; overflow:hidden; }
+  .bar-fill { height:100%; background:var(--green-mid); border-radius:4px; transition:width .5s; }
+  .bar-fill.red    { background:#f87171; }
+  .bar-fill.orange { background:#fb923c; }
+  .bar-fill.blue   { background:#60a5fa; }
+  .bar-fill.gold   { background:#fbbf24; }
+  .bar-count { font-size:13px; font-weight:700; color:var(--green-deep); min-width:38px; text-align:right; }
+  .bar-pct   { font-size:12px; color:var(--text-muted); min-width:36px; text-align:right; }
+
+  /* ── Funnel ── */
+  .funnel-step { display:flex; align-items:center; gap:14px; margin-bottom:10px; }
+  .funnel-label { font-size:13px; font-weight:600; color:var(--green-deep); min-width:220px; }
+  .funnel-bar-wrap { flex:1; background:#e8f5e9; border-radius:6px; height:30px; overflow:hidden; position:relative; }
+  .funnel-bar-fill {
+    height:100%; border-radius:6px; transition:width .5s;
+    display:flex; align-items:center; padding-left:12px;
+    font-size:12px; font-weight:700; color:#fff; white-space:nowrap;
+  }
+  .funnel-pct { font-size:13px; color:var(--text-muted); min-width:46px; text-align:right; font-weight:600; }
+  .funnel-drop { font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; margin-left:6px; }
+  .funnel-drop.bad { background:#fee2e2; color:#b91c1c; }
+  .funnel-drop.ok  { background:#dcfce7; color:#166534; }
+  .funnel-drop.warn{ background:#fef3c7; color:#92400e; }
+  .funnel-arrow { text-align:left; font-size:16px; color:var(--green-bright); margin:-4px 0 -4px 226px; }
+
+  /* ── Heatmap ── */
+  .heatmap-grid { display:flex; gap:4px; flex-wrap:wrap; }
+  .heatmap-cell {
+    width:32px; height:32px; border-radius:5px; background:#e8f5e9;
+    display:flex; align-items:center; justify-content:center;
+    font-size:10px; font-weight:700; color:var(--text-muted);
+    cursor:default; transition:background .2s;
+    position:relative;
+  }
+  .heatmap-cell[title]:hover::after {
+    content:attr(title); position:absolute; bottom:36px; left:50%;
+    transform:translateX(-50%); background:#1a3a1a; color:#fff;
+    font-size:11px; padding:3px 8px; border-radius:6px;
+    white-space:nowrap; pointer-events:none; z-index:10;
+  }
+  .heatmap-label { font-size:11px; color:var(--text-muted); margin-bottom:8px; }
+
+  /* ── Plan donut ── */
+  .plan-split { display:flex; gap:20px; align-items:center; flex-wrap:wrap; }
+  .plan-bar-wrap { flex:1; min-width:200px; }
+  .plan-bar { height:24px; border-radius:8px; overflow:hidden; display:flex; }
+  .plan-bar-seg { height:100%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#fff; }
+  .plan-legend { display:flex; gap:16px; margin-top:8px; flex-wrap:wrap; }
+  .plan-legend-item { display:flex; align-items:center; gap:6px; font-size:13px; }
+  .plan-legend-dot { width:12px; height:12px; border-radius:50%; }
 
   /* ── Tables ── */
   table { width:100%; border-collapse:collapse; font-size:14px; }
-  th {
-    text-align:left; padding:10px 12px; font-size:12px; font-weight:700;
-    text-transform:uppercase; letter-spacing:.05em;
-    color:var(--text-muted); border-bottom:2px solid var(--border);
-  }
+  th { text-align:left; padding:10px 12px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); border-bottom:2px solid var(--border); }
   td { padding:10px 12px; border-bottom:1px solid var(--border); }
   tr:last-child td { border-bottom:none; }
   tr:hover td { background:#f8fdf8; }
+  td.mono { font-family:monospace; font-size:12px; }
 
-  /* ── Bar chart ── */
-  .bar-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
-  .bar-label { font-size:13px; min-width:130px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .bar-wrap { flex:1; background:#e8f5e9; border-radius:4px; height:14px; overflow:hidden; }
-  .bar-fill { height:100%; background:var(--green-mid); border-radius:4px; transition:width .4s; }
-  .bar-count { font-size:13px; font-weight:700; color:var(--green-deep); min-width:28px; text-align:right; }
-
-  /* ── Empty state ── */
-  .empty-state { text-align:center; color:var(--text-muted); padding:40px 20px; font-size:14px; }
-
-  /* ── Admin badge ── */
-  .admin-badge {
-    display:inline-block; padding:3px 10px; border-radius:20px;
-    font-size:12px; font-weight:700; margin-left:8px;
-  }
-  .badge-owner    { background:#fef3c7; color:#92400e; }
-  .badge-employee { background:#e8f5e9; color:#166534; }
+  /* ── Badges ── */
+  .badge { display:inline-block; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+  .badge-green  { background:#dcfce7; color:#166534; }
+  .badge-red    { background:#fee2e2; color:#991b1b; }
+  .badge-orange { background:#ffedd5; color:#c2410c; }
+  .badge-gray   { background:#f3f4f6; color:#4b5563; }
 
   /* ── Recent visits ── */
   .visit-row {
     display:flex; flex-wrap:wrap; gap:8px; align-items:center;
-    padding:10px 0; border-bottom:1px solid var(--border); font-size:13px;
+    padding:8px 0; border-bottom:1px solid var(--border); font-size:13px;
   }
   .visit-row:last-child { border-bottom:none; }
   .visit-page { font-weight:600; color:var(--green-deep); }
-  .visit-ref  { color:var(--text-muted); }
-  .visit-ts   { color:var(--text-muted); font-size:12px; margin-left:auto; }
+  .visit-event { font-weight:600; color:var(--blue); }
+  .visit-ref  { color:var(--text-muted); font-size:12px; }
+  .visit-ts   { color:var(--text-muted); font-size:11px; margin-left:auto; }
 
-  /* ── Two-col layout ── */
-  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
-  @media(max-width:700px) { .two-col { grid-template-columns:1fr; } }
+  /* ── Empty / loading ── */
+  .empty-state { text-align:center; color:var(--text-muted); padding:32px 20px; font-size:14px; }
+  .loading-spinner { text-align:center; padding:60px; color:var(--text-muted); font-size:15px; }
 
-  .loading-spinner {
-    text-align:center; padding:60px; color:var(--text-muted); font-size:15px;
-  }
+  /* ── Tab nav ── */
+  .tab-nav { display:flex; gap:4px; margin-bottom:20px; background:#f3f4f6; border-radius:10px; padding:4px; }
+  .tab-btn { flex:1; padding:8px 12px; border:none; border-radius:7px; background:transparent; font-family:inherit; font-size:13px; font-weight:600; color:var(--text-muted); cursor:pointer; transition:all .2s; }
+  .tab-btn.active { background:#fff; color:var(--green-deep); box-shadow:0 1px 4px rgba(0,0,0,.1); }
 
-  /* ── Funnel chart ── */
-  .funnel-step {
-    display:flex; align-items:center; gap:14px; margin-bottom:10px;
-  }
-  .funnel-label {
-    font-size:13px; font-weight:600; color:var(--green-deep);
-    min-width:200px;
-  }
-  .funnel-bar-wrap {
-    flex:1; background:#e8f5e9; border-radius:6px; height:28px;
-    overflow:hidden; position:relative;
-  }
-  .funnel-bar-fill {
-    height:100%; border-radius:6px; transition:width .5s;
-    display:flex; align-items:center; padding-left:10px;
-    font-size:12px; font-weight:700; color:#fff;
-    white-space:nowrap;
-  }
-  .funnel-pct {
-    font-size:12px; color:var(--text-muted); min-width:46px; text-align:right;
-  }
-  .funnel-arrow {
-    text-align:center; font-size:16px; color:var(--green-bright);
-    margin: -2px 0 -2px 210px;
-  }
-  .drop-badge {
-    font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px;
-    background:#fee2e2; color:#b91c1c; margin-left:6px;
-  }
-  .drop-badge.ok { background:#dcfce7; color:#166534; }
-
-  /* ── Insight cards ── */
-  .insight-grid {
-    display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
-    gap:12px; margin-bottom:24px;
-  }
-  .insight-card {
-    background:#fff; border-radius:12px; padding:16px 18px;
-    box-shadow:0 2px 8px rgba(0,0,0,.05);
-  }
-  .insight-card .i-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); margin-bottom:4px; }
-  .insight-card .i-value { font-size:28px; font-weight:800; color:var(--green-deep); line-height:1; }
-  .insight-card .i-sub   { font-size:12px; color:var(--text-muted); margin-top:4px; }
-
-  /* ── FAQ bar ── */
+  /* ── FAQ bars ── */
   .faq-bar { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
-  .faq-bar-label { font-size:13px; min-width:180px; color:var(--text); }
+  .faq-bar-label { font-size:13px; min-width:200px; color:var(--text); }
   .faq-bar-wrap { flex:1; background:#e8f5e9; border-radius:4px; height:12px; overflow:hidden; }
   .faq-bar-fill { height:100%; background:var(--green-bright); border-radius:4px; transition:width .4s; }
+
+  @media(max-width:600px) {
+    .kpi-grid { grid-template-columns:repeat(2,1fr); }
+    .funnel-label { min-width:140px; font-size:12px; }
+    .bar-label-wide { min-width:140px; }
+  }
 </style>
 </head>
 <body>
@@ -230,6 +274,7 @@
   <header>
     <div class="header-brand">🌿 Evergreen <span>Stats</span></div>
     <div class="header-right">
+      <span class="header-last-refresh" id="lastRefresh"></span>
       <button class="btn-refresh" onclick="loadStats()">↻ Refresh</button>
       <button class="btn-logout" onclick="logout()">Sign Out</button>
     </div>
@@ -239,98 +284,132 @@
     <div id="loadingState" class="loading-spinner">Loading stats…</div>
     <div id="statsContent" style="display:none;">
 
-      <!-- Top stat cards -->
-      <div class="stat-grid">
-        <div class="stat-card">
-          <div class="stat-label">Total Bookings</div>
-          <div class="stat-value" id="statBookings">—</div>
-          <div class="stat-sub">all time</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Mows Completed</div>
-          <div class="stat-value" id="statDone">—</div>
-          <div class="stat-sub">marked Done</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Unique Customers</div>
-          <div class="stat-value" id="statCustomers">—</div>
-          <div class="stat-sub">distinct emails</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Revenue Collected</div>
-          <div class="stat-value" id="statRevenue">—</div>
-          <div class="stat-sub">from paid mows</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Total Page Views</div>
-          <div class="stat-value" id="statViews">—</div>
-          <div class="stat-sub">across all pages</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Unique Visitors</div>
-          <div class="stat-value" id="statUnique">—</div>
-          <div class="stat-sub">distinct browsers</div>
-        </div>
+      <!-- ══════════════════════════════════════════════
+           SECTION 1: KPI TOP LINE
+      ══════════════════════════════════════════════ -->
+      <div class="kpi-grid" id="kpiGrid">
+        <!-- populated by JS -->
       </div>
 
-      <!-- Admin productivity + Page views side by side -->
-      <div class="two-col">
-
-        <!-- Admin credit board -->
-        <div class="section-block">
-          <div class="section-title">🏆 Mows by Admin</div>
-          <div id="adminStats"><div class="empty-state">No mows recorded yet.</div></div>
-        </div>
-
-        <!-- Page views -->
-        <div class="section-block">
-          <div class="section-title">📄 Views by Page</div>
-          <div id="pageStats"><div class="empty-state">No tracking data yet.</div></div>
-        </div>
+      <!-- ══════════════════════════════════════════════
+           SECTION 2: BUSINESS HEALTH HIGHLIGHTS
+      ══════════════════════════════════════════════ -->
+      <div class="section-block">
+        <div class="section-title">💼 Business Health</div>
+        <div class="health-grid" id="healthGrid"><!-- populated by JS --></div>
+        <div id="healthAlert"><!-- populated by JS --></div>
       </div>
 
-      <!-- ═══════════════════════════════════════════════════════
-           FUNNEL ANALYSIS — shows where visitors drop off
-           ═══════════════════════════════════════════════════════ -->
+      <!-- ══════════════════════════════════════════════
+           SECTION 3: QUOTE FUNNEL — PRIMARY FOCUS
+      ══════════════════════════════════════════════ -->
       <div class="section-block">
         <div class="section-title">🔍 Quote Funnel — Where Are They Dropping Off?</div>
-        <div id="funnelInsights" class="insight-grid"></div>
-        <div id="funnelChart"><div class="empty-state">No funnel data yet.<br><small>Funnel events will appear here once visitors start using the quote flow.</small></div></div>
+        <p class="section-sub">Tracks every visitor from first click to confirmed booking. The biggest % drop is your biggest opportunity.</p>
+        <div id="funnelAlert"></div>
+        <div id="funnelChart"><div class="empty-state">No funnel data yet.<br><small>Events appear once visitors start the quote flow.</small></div></div>
       </div>
 
+      <!-- ══════════════════════════════════════════════
+           SECTION 4: PLAN PREFERENCE + TRAFFIC SOURCE
+      ══════════════════════════════════════════════ -->
       <div class="two-col">
-        <!-- Abandonment detail -->
+
+        <!-- Plan preference -->
+        <div class="section-block">
+          <div class="section-title">📅 Plan Preferences</div>
+          <p class="section-sub">Which plan are people choosing when they see their price?</p>
+          <div id="planPrefChart"><div class="empty-state">No plan selections yet.</div></div>
+        </div>
+
+        <!-- Traffic sources -->
+        <div class="section-block">
+          <div class="section-title">🔗 Traffic Sources</div>
+          <p class="section-sub">Where are your visitors coming from?</p>
+          <div id="refStats"><div class="empty-state">No referrer data yet.</div></div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════
+           SECTION 5: ABANDONMENT + ENGAGEMENT
+      ══════════════════════════════════════════════ -->
+      <div class="two-col">
+
         <div class="section-block">
           <div class="section-title">🚪 Abandonment by Step</div>
-          <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">When people close the quote modal, which step were they on?</p>
+          <p class="section-sub">When people close the quote modal — which step were they on?</p>
           <div id="abandonChart"><div class="empty-state">No data yet.</div></div>
         </div>
 
-        <!-- Engagement signals -->
         <div class="section-block">
           <div class="section-title">💡 Engagement Signals</div>
-          <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">What else are visitors doing on the page?</p>
+          <p class="section-sub">Phone clicks, review views, exit intent by step.</p>
           <div id="engagementChart"><div class="empty-state">No data yet.</div></div>
         </div>
       </div>
 
-      <!-- FAQ interest -->
+      <!-- ══════════════════════════════════════════════
+           SECTION 6: TRAFFIC PATTERNS
+      ══════════════════════════════════════════════ -->
       <div class="section-block">
-        <div class="section-title">❓ FAQ — Which Questions Are People Reading?</div>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">High interest in a FAQ question may signal a blocker — something stopping people from booking.</p>
-        <div id="faqChart"><div class="empty-state">No FAQ data yet.</div></div>
+        <div class="section-title">⏰ When Are People Visiting?</div>
+        <p class="section-sub">Hour-of-day traffic pattern from your recent visitors. Useful for knowing when to run ads or reply to inquiries.</p>
+        <div id="hourlyHeatmap"><div class="empty-state">Not enough timestamp data yet.</div></div>
+        <div style="margin-top:20px;" id="dowSection">
+          <div style="font-size:13px;font-weight:700;color:var(--green-deep);margin-bottom:8px;">Day of Week</div>
+          <div id="dowChart"></div>
+        </div>
       </div>
 
-      <!-- Referrer sources -->
-      <div class="section-block">
-        <div class="section-title">🔗 Traffic Sources</div>
-        <div id="refStats"><div class="empty-state">No referrer data yet.</div></div>
+      <!-- ══════════════════════════════════════════════
+           SECTION 7: PAGE VIEWS + ADMIN BOARD
+      ══════════════════════════════════════════════ -->
+      <div class="two-col">
+
+        <div class="section-block">
+          <div class="section-title">🏆 Mows by Admin</div>
+          <p class="section-sub">Who's completing the most jobs?</p>
+          <div id="adminStats"><div class="empty-state">No mows recorded yet.</div></div>
+        </div>
+
+        <div class="section-block">
+          <div class="section-title">📄 Page Views</div>
+          <p class="section-sub">Top pages by visit count (excludes event tracking).</p>
+          <div id="pageStats"><div class="empty-state">No page data yet.</div></div>
+        </div>
+
       </div>
 
-      <!-- Recent visits -->
+      <!-- ══════════════════════════════════════════════
+           SECTION 8: FAQ + OUT-OF-AREA
+      ══════════════════════════════════════════════ -->
+      <div class="two-col">
+
+        <div class="section-block">
+          <div class="section-title">❓ FAQ Interactions</div>
+          <p class="section-sub">High interest in a question usually means it's a blocker stopping people from booking.</p>
+          <div id="faqChart"><div class="empty-state">No FAQ data yet.</div></div>
+        </div>
+
+        <div class="section-block">
+          <div class="section-title">🗺️ Out-of-Area Bounces + Zip Activity</div>
+          <p class="section-sub">People who entered a zip you don't serve, and your most common zips.</p>
+          <div id="areaChart"><div class="empty-state">No zip data yet.</div></div>
+        </div>
+
+      </div>
+
+      <!-- ══════════════════════════════════════════════
+           SECTION 9: RECENT ACTIVITY STREAM
+      ══════════════════════════════════════════════ -->
       <div class="section-block">
-        <div class="section-title">🕐 Recent Visitors <small style="font-size:12px;font-weight:400;color:var(--text-muted);">(last 50)</small></div>
-        <div id="recentVisits"><div class="empty-state">No visits tracked yet.</div></div>
+        <div class="section-title">🕐 Recent Activity Stream <small style="font-size:12px;font-weight:400;color:var(--text-muted);">(last 50 events)</small></div>
+        <div class="tab-nav">
+          <button class="tab-btn active" onclick="filterVisits('all',this)">All</button>
+          <button class="tab-btn" onclick="filterVisits('pages',this)">Page Views</button>
+          <button class="tab-btn" onclick="filterVisits('events',this)">Funnel Events</button>
+        </div>
+        <div id="recentVisits"><div class="empty-state">No activity yet.</div></div>
       </div>
 
     </div>
@@ -338,9 +417,10 @@
 </div>
 
 <script>
-const SCRIPT_URL    = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
-const STATS_PW_KEY  = 'eg_admin_pw';
+const SCRIPT_URL   = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
+const STATS_PW_KEY = 'eg_admin_pw';
 let sessionPw = '';
+let _allVisits = [];
 
 // ── AUTH ─────────────────────────────────────────────────────────────────
 async function login(pw) {
@@ -355,12 +435,12 @@ async function login(pw) {
     const data = await res.json();
     if (data.success) {
       sessionPw = pw;
-      localStorage.setItem(STATS_PW_KEY, pw); // persist across page loads
+      localStorage.setItem(STATS_PW_KEY, pw);
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('appScreen').style.display   = 'block';
       renderStats(data);
     } else {
-      localStorage.removeItem(STATS_PW_KEY); // clear saved pw if it's wrong
+      localStorage.removeItem(STATS_PW_KEY);
       throw new Error(data.error || 'bad password');
     }
   } catch(e) {
@@ -384,7 +464,6 @@ function logout() {
 
 document.getElementById('pwInput').addEventListener('keydown', e => { if(e.key==='Enter') login(); });
 
-// ── Auto-login if password was saved ─────────────────────────────────────
 (function() {
   const saved = localStorage.getItem(STATS_PW_KEY);
   if (saved) login(saved);
@@ -400,247 +479,177 @@ async function loadStats() {
   } catch(e) { alert('Refresh failed: ' + e.message); }
 }
 
+// ── UTILS ────────────────────────────────────────────────────────────────
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function pct(a, b) { return b > 0 ? Math.round((a/b)*100) : 0; }
+function fmt$(n)   { return n != null ? '$' + Number(n).toLocaleString() : '—'; }
+
+function barRow(label, count, max, colorClass, extraRight) {
+  const w = max > 0 ? Math.round((count/max)*100) : 0;
+  return `<div class="bar-row">
+    <div class="bar-label" title="${esc(label)}">${esc(label)}</div>
+    <div class="bar-wrap"><div class="bar-fill ${colorClass||''}" style="width:${w}%"></div></div>
+    <div class="bar-count">${count}</div>
+    ${extraRight || ''}
+  </div>`;
+}
+
+function barRowWide(label, count, max, colorClass) {
+  const w = max > 0 ? Math.round((count/max)*100) : 0;
+  return `<div class="bar-row">
+    <div class="bar-label-wide" title="${esc(label)}">${esc(label)}</div>
+    <div class="bar-wrap"><div class="bar-fill ${colorClass||''}" style="width:${w}%"></div></div>
+    <div class="bar-count">${count}</div>
+  </div>`;
+}
+
 // ── RENDER ───────────────────────────────────────────────────────────────
 function renderStats(data) {
-  const bk = data.bookings   || {};
-  const an = data.analytics  || {};
+  const bk = data.bookings  || {};
+  const an = data.analytics || {};
 
-  // Stat cards
-  document.getElementById('statBookings').textContent  = bk.total    ?? '—';
-  document.getElementById('statDone').textContent      = bk.done     ?? '—';
-  document.getElementById('statCustomers').textContent = bk.customers ?? '—';
-  document.getElementById('statRevenue').textContent   = bk.estimatedRev ? '$' + Number(bk.estimatedRev).toLocaleString() : '—';
-  document.getElementById('statViews').textContent     = an.totalVisits    ?? '—';
-  document.getElementById('statUnique').textContent    = an.uniqueVisitors ?? '—';
+  // Stamp refresh time
+  document.getElementById('lastRefresh').textContent =
+    'Updated ' + new Date().toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'});
 
-  // Admin credit board
-  const adminEl = document.getElementById('adminStats');
-  const admins  = bk.adminStats || {};
-  const adminEntries = Object.entries(admins).sort((a,b) => b[1]-a[1]);
-  if (adminEntries.length === 0) {
-    adminEl.innerHTML = '<div class="empty-state">No mows recorded yet.<br><small>Admins will appear here once they mark jobs Done after logging in.</small></div>';
-  } else {
-    const max = adminEntries[0][1];
-    adminEl.innerHTML = adminEntries.map(([name, count], i) => `
-      <div class="bar-row">
-        <div class="bar-label">${esc(name)} ${i===0 ? '🥇' : i===1 ? '🥈' : i===2 ? '🥉' : ''}</div>
-        <div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(count/max*100)}%"></div></div>
-        <div class="bar-count">${count}</div>
-      </div>`).join('');
+  // Pull event counts from pageStats /evt/* virtual paths
+  const pageStats = an.pageStats || {};
+  const E = {};
+  Object.entries(pageStats).forEach(([page, count]) => {
+    if (page.startsWith('/evt/')) E[page.replace('/evt/','')] = count;
+  });
+
+  // Core numbers
+  const totalViews    = an.totalVisits    || 0;
+  const uniqueVis     = an.uniqueVisitors || 0;
+  const totalBookings = bk.total          || 0;
+  const mowsDone      = bk.done           || 0;
+  const customers     = bk.customers      || 0;
+  const revenue       = bk.estimatedRev   || 0;
+
+  // Derived metrics
+  const quoteOpens    = E['quote_opened']              || 0;
+  const priceViewed   = E['quote_price_viewed']        || 0;
+  const payReached    = E['quote_payment_step_reached']|| 0;
+  const bookCompleted = E['booking_completed']         || 0;
+  const legacyBooked  = E['booking_completed_legacy']  || 0;
+  const totalConverts = bookCompleted + legacyBooked;
+  const convRate      = pct(totalConverts, quoteOpens);
+  const viewToQuote   = pct(quoteOpens, totalViews);
+  const completionRate= pct(mowsDone, totalBookings);
+  const revPerCustomer= customers > 0 ? Math.round(revenue / customers) : 0;
+  const zipBounce     = E['zip_out_of_area'] || 0;
+  const payErrors     = E['payment_error']   || 0;
+  const biweeklyPicked= E['plan_selected_biweekly'] || 0;
+  const weeklyPicked  = E['plan_selected_weekly']   || 0;
+
+  // ── KPI CARDS ───────────────────────────────────────────────────────────
+  const kpiData = [
+    { label:'Total Bookings',       value: totalBookings || '—',       sub:'all time',             color:'' },
+    { label:'Mows Completed',       value: mowsDone || '—',            sub:'marked Done',           color:'' },
+    { label:'Unique Customers',     value: customers || '—',           sub:'distinct emails',       color:'' },
+    { label:'Revenue Collected',    value: revenue ? fmt$(revenue) : '—', sub:'from paid mows',    color:'gold' },
+    { label:'Total Page Views',     value: totalViews || '—',          sub:'all pages',             color:'blue' },
+    { label:'Unique Visitors',      value: uniqueVis || '—',           sub:'distinct browsers',     color:'blue' },
+    { label:'Quote Opens',          value: quoteOpens || '—',          sub:'started quote flow',    color:'purple' },
+    { label:'Conversion Rate',      value: quoteOpens > 0 ? convRate+'%' : '—', sub:'quote → booking', color: convRate>=10 ? '' : convRate>=5 ? 'orange' : quoteOpens > 0 ? 'red' : '' },
+  ];
+  document.getElementById('kpiGrid').innerHTML = kpiData.map(k => `
+    <div class="kpi-card ${esc(k.color)}">
+      <div class="kpi-label">${esc(k.label)}</div>
+      <div class="kpi-value">${esc(String(k.value))}</div>
+      <div class="kpi-sub">${esc(k.sub)}</div>
+    </div>`).join('');
+
+  // ── HEALTH CARDS ────────────────────────────────────────────────────────
+  const healthItems = [
+    { icon:'💰', label:'Est. Revenue / Customer', value: revPerCustomer ? fmt$(revPerCustomer) : '—', sub:'avg lifetime so far' },
+    { icon:'✅', label:'Job Completion Rate',      value: completionRate ? completionRate+'%' : '—', sub:`${mowsDone} of ${totalBookings} mows done` },
+    { icon:'📊', label:'Visitor → Quote Rate',     value: viewToQuote ? viewToQuote+'%' : '—', sub:`${quoteOpens} opens from ${totalViews} views` },
+    { icon:'🚫', label:'Out-of-Area Bounces',      value: zipBounce || '—', sub:'zip codes outside Citrus Co.' },
+    { icon:'💳', label:'Payment Errors',           value: payErrors || '—', sub:'card declined or network fail' },
+    { icon:'📅', label:'Plan Split (Bi-W / Wkly)',  value: (biweeklyPicked || weeklyPicked) ? `${biweeklyPicked} / ${weeklyPicked}` : '—', sub:'plan selections so far' },
+  ];
+  document.getElementById('healthGrid').innerHTML = healthItems.map(h => `
+    <div class="health-card">
+      <div class="health-icon">${h.icon}</div>
+      <div>
+        <div class="health-label">${esc(h.label)}</div>
+        <div class="health-value">${esc(h.value)}</div>
+        <div class="health-sub">${esc(h.sub)}</div>
+      </div>
+    </div>`).join('');
+
+  // ── HEALTH ALERT ─────────────────────────────────────────────────────────
+  let alertHtml = '';
+  if (payErrors > 2) {
+    alertHtml = `<div class="alert-banner red">🚨 <strong>${payErrors} payment errors</strong> — cards are being declined or Stripe is having a connectivity issue. Check your Stripe dashboard.</div>`;
+  } else if (quoteOpens > 10 && convRate < 3) {
+    alertHtml = `<div class="alert-banner yellow">⚠️ Low conversion rate (${convRate}%). You're getting quote opens but most people aren't booking. The funnel below will show you exactly where they're dropping off.</div>`;
+  } else if (zipBounce > 5) {
+    alertHtml = `<div class="alert-banner yellow">📍 <strong>${zipBounce} out-of-area visitors</strong> tried to get a quote but were blocked by zip. You may be attracting traffic from outside Citrus County — consider adjusting your ad targeting.</div>`;
+  } else if (totalConverts > 0) {
+    alertHtml = `<div class="alert-banner green">✅ Funnel is producing bookings. Keep optimizing ad targeting and checkout experience to increase volume.</div>`;
   }
+  document.getElementById('healthAlert').innerHTML = alertHtml;
 
-  // Page views
-  const pageEl = document.getElementById('pageStats');
-  const pages  = Object.entries(an.pageStats || {}).sort((a,b) => b[1]-a[1]).slice(0,10);
-  if (pages.length === 0) {
-    pageEl.innerHTML = '<div class="empty-state">No tracking data yet.<br><small>Add the tracking snippet to your pages to start collecting data.</small></div>';
-  } else {
-    const maxP = pages[0][1];
-    pageEl.innerHTML = pages.map(([page, count]) => `
-      <div class="bar-row">
-        <div class="bar-label" title="${esc(page)}">${esc(page)}</div>
-        <div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(count/maxP*100)}%"></div></div>
-        <div class="bar-count">${count}</div>
-      </div>`).join('');
-  }
+  // ── FUNNEL ──────────────────────────────────────────────────────────────
+  renderFunnel(E, totalViews, uniqueVis);
 
-  // Referrers
-  const refEl  = document.getElementById('refStats');
-  const refs   = Object.entries(an.refStats || {}).sort((a,b) => b[1]-a[1]).slice(0,10);
+  // ── PLAN PREFERENCE ──────────────────────────────────────────────────────
+  renderPlanPref(biweeklyPicked, weeklyPicked);
+
+  // ── TRAFFIC SOURCES ──────────────────────────────────────────────────────
+  const refEl = document.getElementById('refStats');
+  const refs  = Object.entries(an.refStats || {}).sort((a,b)=>b[1]-a[1]).slice(0,8);
   if (refs.length === 0) {
     refEl.innerHTML = '<div class="empty-state">No referrer data yet.</div>';
   } else {
     const maxR = refs[0][1];
+    const total = refs.reduce((s,[,c])=>s+c,0);
     refEl.innerHTML = refs.map(([ref, count]) => {
-      const label = ref === 'direct' ? '(direct / none)' : ref.replace(/^https?:\/\//, '').substring(0, 60);
-      return `
-      <div class="bar-row">
-        <div class="bar-label" title="${esc(ref)}">${esc(label)}</div>
-        <div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(count/maxR*100)}%"></div></div>
-        <div class="bar-count">${count}</div>
-      </div>`;
+      const label = ref === 'direct' ? '(direct / none)' : ref.replace(/^https?:\/\//,'').substring(0,50);
+      return barRow(label, count, maxR, '', `<div class="bar-pct">${pct(count,total)}%</div>`);
     }).join('');
   }
 
-  // Recent visits
-  const visEl = document.getElementById('recentVisits');
-  const visits = an.recentVisits || [];
-  if (visits.length === 0) {
-    visEl.innerHTML = '<div class="empty-state">No visits tracked yet.</div>';
+  // ── ABANDONMENT ──────────────────────────────────────────────────────────
+  renderAbandonment(E);
+
+  // ── ENGAGEMENT SIGNALS ────────────────────────────────────────────────────
+  renderEngagement(E);
+
+  // ── HOURLY HEATMAP ────────────────────────────────────────────────────────
+  renderHourly(an.recentVisits || []);
+
+  // ── ADMIN BOARD ──────────────────────────────────────────────────────────
+  const adminEl = document.getElementById('adminStats');
+  const admins  = Object.entries(bk.adminStats || {}).sort((a,b)=>b[1]-a[1]);
+  if (admins.length === 0) {
+    adminEl.innerHTML = '<div class="empty-state">No mows recorded yet.</div>';
   } else {
-    visEl.innerHTML = visits.map(v => `
-      <div class="visit-row">
-        <span class="visit-page">${esc(v.page || '/')}</span>
-        ${v.ref ? `<span class="visit-ref">← ${esc(v.ref.replace(/^https?:\/\//, '').substring(0, 50))}</span>` : '<span class="visit-ref">(direct)</span>'}
-        <span class="visit-ts">${esc(v.ts || '')}</span>
-      </div>`).join('');
+    const maxA = admins[0][1];
+    adminEl.innerHTML = admins.map(([name, count], i) => {
+      const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+      return barRow(name + ' ' + medal, count, maxA, '');
+    }).join('');
   }
 
-  // ── FUNNEL ANALYSIS ────────────────────────────────────────────────────
-  renderFunnel(an.pageStats || {});
-
-  document.getElementById('loadingState').style.display  = 'none';
-  document.getElementById('statsContent').style.display  = 'block';
-}
-
-// ── FUNNEL RENDERING ──────────────────────────────────────────────────────
-function renderFunnel(pageStats) {
-
-  // Pull out /evt/* virtual pageview counts
-  const E = {};
-  Object.entries(pageStats).forEach(([page, count]) => {
-    if (page.startsWith('/evt/')) E[page.replace('/evt/', '')] = count;
-  });
-
-  // ── Funnel steps (in order) ─────────────────────────────────────────────
-  const STEPS = [
-    { key: 'quote_opened',              label: '1 · Quote modal opened' },
-    { key: 'quote_price_viewed',        label: '2 · Saw their price (Step 3)' },
-    { key: 'quote_payment_step_reached',label: '3 · Reached payment entry (Step 4)' },
-    { key: 'payment_attempted',         label: '4 · Clicked "Book Now"' },
-    { key: 'booking_completed',         label: '5 · Booking completed ✅' },
-  ];
-
-  const counts = STEPS.map(s => E[s.key] || 0);
-  const top    = counts[0] || 0;
-
-  // ── Insight cards ────────────────────────────────────────────────────────
-  const opens     = counts[0];
-  const completed = counts[4];
-  const convRate  = opens > 0 ? Math.round((completed / opens) * 100) : 0;
-  const priceDropPct = counts[0] > 0 && counts[1] > 0
-    ? Math.round(((counts[0] - counts[1]) / counts[0]) * 100) : 0;
-  const payDropPct = counts[1] > 0 && counts[2] > 0
-    ? Math.round(((counts[1] - counts[2]) / counts[1]) * 100) : 0;
-  const errors    = E['payment_error'] || 0;
-  const zipBounce = E['zip_out_of_area'] || 0;
-
-  const insights = [
-    { label:'Quote Opens',       value: opens || '—',       sub: 'people started the flow' },
-    { label:'Saw Their Price',   value: counts[1] || '—',   sub: 'reached step 3' },
-    { label:'Bookings',          value: completed || '—',   sub: 'completed checkout' },
-    { label:'Conversion Rate',   value: convRate + '%',     sub: 'opens → bookings' },
-    { label:'Payment Errors',    value: errors || '—',      sub: 'card declined / network' },
-    { label:'Out-of-Area Zips',  value: zipBounce || '—',   sub: 'outside Citrus County' },
-  ];
-
-  document.getElementById('funnelInsights').innerHTML = insights.map(c => `
-    <div class="insight-card">
-      <div class="i-label">${esc(c.label)}</div>
-      <div class="i-value">${esc(String(c.value))}</div>
-      <div class="i-sub">${esc(c.sub)}</div>
-    </div>`).join('');
-
-  // ── Funnel bars ──────────────────────────────────────────────────────────
-  const COLORS = ['#2d6a2d','#3d8c3d','#4caf50','#72c472','#9edd9e'];
-
-  if (top === 0) {
-    document.getElementById('funnelChart').innerHTML =
-      '<div class="empty-state">No funnel data yet.<br><small>Once visitors open the quote modal the funnel will appear here.</small></div>';
+  // ── PAGE VIEWS (real pages only) ──────────────────────────────────────────
+  const pageEl = document.getElementById('pageStats');
+  const pages  = Object.entries(pageStats)
+    .filter(([p]) => !p.startsWith('/evt/'))
+    .sort((a,b) => b[1]-a[1]).slice(0,10);
+  if (pages.length === 0) {
+    pageEl.innerHTML = '<div class="empty-state">No page data yet.</div>';
   } else {
-    let html = '';
-    STEPS.forEach((step, i) => {
-      const cnt  = counts[i];
-      const pct  = top > 0 ? Math.round((cnt / top) * 100) : 0;
-      const prev = i > 0 ? counts[i-1] : null;
-      let dropHtml = '';
-      if (prev !== null && prev > 0) {
-        const drop = Math.round(((prev - cnt) / prev) * 100);
-        dropHtml = drop > 0
-          ? `<span class="drop-badge">${drop}% dropped</span>`
-          : `<span class="drop-badge ok">no drop ✓</span>`;
-        html += `<div class="funnel-arrow">↓</div>`;
-      }
-      html += `
-        <div class="funnel-step">
-          <div class="funnel-label">${esc(step.label)}${dropHtml}</div>
-          <div class="funnel-bar-wrap">
-            <div class="funnel-bar-fill" style="width:${pct}%;background:${COLORS[i]}">
-              ${cnt > 0 ? cnt : ''}
-            </div>
-          </div>
-          <div class="funnel-pct">${pct}%</div>
-        </div>`;
-    });
-
-    // Big takeaway
-    let insight = '';
-    if (opens > 0 && counts[1] === 0) {
-      insight = '⚠️ Nobody is reaching Step 3 (price view). The form on Step 1 may be too long or confusing.';
-    } else if (priceDropPct >= 60) {
-      insight = '💸 Most people see their price and leave. They may be finding it too high, or not understanding the $19 intro offer.';
-    } else if (payDropPct >= 60) {
-      insight = '💳 People are seeing the price but not making it to payment entry. The plan selection or date picker may be causing friction.';
-    } else if (errors > 2) {
-      insight = '🚫 Multiple payment errors detected — cards are being declined or there may be a Stripe connectivity issue.';
-    } else if (completed > 0) {
-      insight = '✅ Funnel looks healthy! Keep optimizing your ad targeting to send more qualified traffic.';
-    } else {
-      insight = 'ℹ️ Not enough data yet — funnel will populate as visitors use the quote flow.';
-    }
-
-    html = `<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:14px;color:#166534;line-height:1.6;">${insight}</div>` + html;
-    document.getElementById('funnelChart').innerHTML = html;
+    const maxP = pages[0][1];
+    pageEl.innerHTML = pages.map(([page, count]) => barRow(page, count, maxP, '')).join('');
   }
 
-  // ── Abandonment by step ───────────────────────────────────────────────────
-  const ABANDON_STEPS = [
-    { key: 'quote_abandoned_step1',   label: 'Closed on Step 1 (address form)' },
-    { key: 'quote_abandoned_step2',   label: 'Closed on Step 2 (analyzing)' },
-    { key: 'quote_abandoned_step3',   label: 'Closed on Step 3 (saw price)' },
-    { key: 'quote_abandoned_step4',   label: 'Closed on Step 4 (payment)' },
-    { key: 'session_end_in_quote_step1', label: 'Tab closed on Step 1' },
-    { key: 'session_end_in_quote_step3', label: 'Tab closed on Step 3 (price)' },
-    { key: 'session_end_in_quote_step4', label: 'Tab closed on Step 4 (payment)' },
-  ];
-  const abandonData = ABANDON_STEPS
-    .map(s => ({ label: s.label, count: E[s.key] || 0 }))
-    .filter(s => s.count > 0)
-    .sort((a, b) => b.count - a.count);
-
-  const aEl = document.getElementById('abandonChart');
-  if (abandonData.length === 0) {
-    aEl.innerHTML = '<div class="empty-state">No abandonment data yet.</div>';
-  } else {
-    const aMax = abandonData[0].count;
-    aEl.innerHTML = abandonData.map(s => `
-      <div class="bar-row">
-        <div class="bar-label" title="${esc(s.label)}">${esc(s.label)}</div>
-        <div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(s.count/aMax*100)}%;background:#f87171"></div></div>
-        <div class="bar-count">${s.count}</div>
-      </div>`).join('');
-  }
-
-  // ── Engagement signals ────────────────────────────────────────────────────
-  const ENGAGE = [
-    { key:'phone_click',         label:'📞 Phone number clicked' },
-    { key:'google_reviews_click',label:'⭐ Clicked Google Reviews' },
-    { key:'exit_intent_step0',   label:'🖱️ Exit intent (not in quote)' },
-    { key:'exit_intent_step1',   label:'🖱️ Exit intent (on Step 1)' },
-    { key:'exit_intent_step3',   label:'🖱️ Exit intent (saw price)' },
-    { key:'exit_intent_step4',   label:'🖱️ Exit intent (payment step)' },
-    { key:'plan_selected_biweekly', label:'📅 Bi-Weekly plan selected' },
-    { key:'plan_selected_weekly',   label:'⚡ Weekly plan selected' },
-  ];
-  const engData = ENGAGE
-    .map(s => ({ label: s.label, count: E[s.key] || 0 }))
-    .filter(s => s.count > 0)
-    .sort((a, b) => b.count - a.count);
-
-  const engEl = document.getElementById('engagementChart');
-  if (engData.length === 0) {
-    engEl.innerHTML = '<div class="empty-state">No engagement data yet.</div>';
-  } else {
-    const eMax = engData[0].count;
-    engEl.innerHTML = engData.map(s => `
-      <div class="bar-row">
-        <div class="bar-label" title="${esc(s.label)}">${esc(s.label)}</div>
-        <div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(s.count/eMax*100)}%"></div></div>
-        <div class="bar-count">${s.count}</div>
-      </div>`).join('');
-  }
-
-  // ── FAQ interest ──────────────────────────────────────────────────────────
+  // ── FAQ ──────────────────────────────────────────────────────────────────
   const FAQ_MAP = {
     'faq_why_19':              'Why is first mow only $19?',
     'faq_after_first_mow':     'What happens after first mow?',
@@ -650,55 +659,355 @@ function renderFunnel(pageStats) {
     'faq_need_to_be_home':     'Do I need to be home?',
     'faq_service_area':        'Do you serve my area?',
   };
+  const faqEl   = document.getElementById('faqChart');
   const faqData = Object.entries(FAQ_MAP)
-    .map(([key, label]) => ({ label, count: E[key] || 0 }))
+    .map(([key,label]) => ({label, count: E[key]||0}))
     .filter(s => s.count > 0)
-    .sort((a, b) => b.count - a.count);
-
-  const faqEl = document.getElementById('faqChart');
+    .sort((a,b) => b.count-a.count);
   if (faqData.length === 0) {
-    faqEl.innerHTML = '<div class="empty-state">No FAQ interactions tracked yet.</div>';
+    faqEl.innerHTML = '<div class="empty-state">No FAQ interactions yet.</div>';
   } else {
     const fMax = faqData[0].count;
     faqEl.innerHTML = faqData.map(s => `
       <div class="faq-bar">
         <div class="faq-bar-label">${esc(s.label)}</div>
-        <div class="faq-bar-wrap"><div class="faq-bar-fill" style="width:${Math.round(s.count/fMax*100)}%"></div></div>
+        <div class="faq-bar-wrap"><div class="faq-bar-fill" style="width:${pct(s.count,fMax)}%"></div></div>
         <div class="bar-count" style="font-size:13px;font-weight:700;color:var(--green-deep);min-width:28px;text-align:right;">${s.count}</div>
       </div>`).join('');
   }
+
+  // ── OUT-OF-AREA + ZIP ────────────────────────────────────────────────────
+  const areaEl = document.getElementById('areaChart');
+  const zipEvents = Object.entries(E)
+    .filter(([k]) => k.startsWith('zip_') || k === 'zip_out_of_area')
+    .sort((a,b) => b[1]-a[1]);
+  const outOfArea = E['zip_out_of_area'] || 0;
+  let areaHtml = '';
+  if (outOfArea > 0) {
+    areaHtml += `<div class="alert-banner ${outOfArea>5?'yellow':'green'}" style="margin-bottom:14px;font-size:13px;">
+      🚫 <strong>${outOfArea} rejected zips</strong> — these visitors saw the out-of-area message and couldn't book.</div>`;
+  }
+  // Show zip data from pageStats if there's any zip-specific tracking
+  const zipPageStats = Object.entries(pageStats)
+    .filter(([p]) => p.match(/\/evt\/zip_/) )
+    .sort((a,b) => b[1]-a[1]).slice(0, 6);
+  if (zipPageStats.length === 0 && outOfArea === 0) {
+    areaEl.innerHTML = '<div class="empty-state">No zip or out-of-area data yet.</div>';
+  } else {
+    if (outOfArea > 0) {
+      areaHtml += barRowWide('Out-of-area bounces', outOfArea, Math.max(outOfArea,1), 'red');
+    }
+    areaEl.innerHTML = areaHtml || '<div class="empty-state">No out-of-area bounces yet — all zips are in Citrus County. ✅</div>';
+  }
+
+  // ── RECENT VISITS ────────────────────────────────────────────────────────
+  _allVisits = an.recentVisits || [];
+  filterVisits('all', document.querySelector('.tab-btn.active'));
+
+  document.getElementById('loadingState').style.display  = 'none';
+  document.getElementById('statsContent').style.display  = 'block';
 }
 
-function esc(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// ── FUNNEL ───────────────────────────────────────────────────────────────
+function renderFunnel(E, totalViews, uniqueVis) {
+  const STEPS = [
+    { key: null,                          label: '0 · Unique Visitors',            color:'#4b5563' },
+    { key: 'quote_opened',                label: '1 · Quote modal opened',         color:'#2d6a2d' },
+    { key: 'quote_price_viewed',          label: '2 · Saw their price (Step 3)',   color:'#3d8c3d' },
+    { key: 'quote_payment_step_reached',  label: '3 · Reached payment (Step 4)',   color:'#4caf50' },
+    { key: 'payment_attempted',           label: '4 · Clicked "Book Now"',         color:'#72c472' },
+    { key: 'booking_completed',           label: '5 · Booking confirmed ✅',        color:'#9edd9e' },
+  ];
+
+  const counts = STEPS.map((s,i) => {
+    if (i===0) return uniqueVis;
+    return E[s.key] || 0;
+  });
+  const top = counts[0] || 0;
+
+  if (top === 0) {
+    document.getElementById('funnelChart').innerHTML =
+      '<div class="empty-state">No funnel data yet. Funnel populates once visitors arrive.</div>';
+    return;
+  }
+
+  // Find biggest drop
+  let biggestDropIdx = -1;
+  let biggestDrop = 0;
+  for (let i = 1; i < counts.length; i++) {
+    const prev = counts[i-1];
+    const drop = prev > 0 ? pct(prev - counts[i], prev) : 0;
+    if (drop > biggestDrop) { biggestDrop = drop; biggestDropIdx = i; }
+  }
+
+  let html = '';
+  STEPS.forEach((step, i) => {
+    const cnt  = counts[i];
+    const w    = top > 0 ? Math.round((cnt/top)*100) : 0;
+    let dropHtml = '';
+
+    if (i > 0) {
+      const prev = counts[i-1];
+      if (prev > 0) {
+        const drop = pct(prev - cnt, prev);
+        const cls  = drop === 0 ? 'ok' : drop < 20 ? 'ok' : drop < 50 ? 'warn' : 'bad';
+        const arrow = i === biggestDropIdx
+          ? '<span style="color:#ef4444;font-weight:700;font-size:18px;">⬇️ BIGGEST LEAK</span>'
+          : '↓';
+        html += `<div class="funnel-arrow" style="margin-left:230px;">${arrow}</div>`;
+        dropHtml = drop > 0
+          ? `<span class="funnel-drop ${cls}">-${drop}%</span>`
+          : `<span class="funnel-drop ok">no drop ✓</span>`;
+      }
+    }
+
+    html += `<div class="funnel-step">
+      <div class="funnel-label">${esc(step.label)}${dropHtml}</div>
+      <div class="funnel-bar-wrap">
+        <div class="funnel-bar-fill" style="width:${w}%;background:${step.color}">
+          ${cnt > 0 ? cnt.toLocaleString() : ''}
+        </div>
+      </div>
+      <div class="funnel-pct">${w}%</div>
+    </div>`;
+  });
+
+  // Takeaway
+  const opens     = counts[1];
+  const completed = counts[5];
+  const convRate  = pct(completed, opens);
+  let insight = '';
+  if (opens === 0) {
+    insight = '⏳ No quote opens yet — the funnel will appear here once people start the quote flow.';
+  } else if (counts[2] === 0) {
+    insight = '🛑 Nobody is making it past the address form (Step 1→2). The form may be too confusing or the button isn\'t clear. Try simplifying or moving the CTA higher.';
+  } else if (biggestDropIdx === 2 && biggestDrop >= 50) {
+    insight = `💸 ${biggestDrop}% of people who see their price immediately leave. They may find the price too high, or the plan options confusing. Consider A/B testing a discount or simplifying plan selection.`;
+  } else if (biggestDropIdx === 3 && biggestDrop >= 40) {
+    insight = `📅 ${biggestDrop}% drop off between seeing price and entering payment. The date picker or payment card entry may be causing friction. Try moving the card entry later or making the date picker simpler.`;
+  } else if (counts[4] > 0 && completed < counts[4]) {
+    insight = `💳 People are hitting "Book Now" but not completing. Check for payment errors below — Stripe may be having issues.`;
+  } else if (completed > 0) {
+    insight = `✅ Funnel looks healthy with ${convRate}% conversion (quote opens → bookings). Keep driving quality traffic.`;
+  }
+
+  html = `<div class="alert-banner ${completed>0?'green':'yellow'}" style="margin-bottom:20px;">${insight}</div>` + html;
+  document.getElementById('funnelChart').innerHTML = html;
+  document.getElementById('funnelAlert').innerHTML = '';
+}
+
+// ── PLAN PREFERENCE ───────────────────────────────────────────────────────
+function renderPlanPref(biweekly, weekly) {
+  const el = document.getElementById('planPrefChart');
+  const total = biweekly + weekly;
+  if (total === 0) {
+    el.innerHTML = '<div class="empty-state">No plan selections tracked yet.<br><small>People select plans when they reach Step 3 of the quote.</small></div>';
+    return;
+  }
+  const bwPct = pct(biweekly, total);
+  const wPct  = pct(weekly, total);
+  el.innerHTML = `
+    <div class="plan-split">
+      <div class="plan-bar-wrap">
+        <div class="plan-bar">
+          <div class="plan-bar-seg" style="width:${bwPct}%;background:#2d6a2d;" title="Bi-Weekly">${bwPct>12?bwPct+'%':''}</div>
+          <div class="plan-bar-seg" style="width:${wPct}%;background:#4caf50;" title="Weekly">${wPct>12?wPct+'%':''}</div>
+        </div>
+        <div class="plan-legend">
+          <div class="plan-legend-item"><div class="plan-legend-dot" style="background:#2d6a2d;"></div>Bi-Weekly — ${biweekly} (${bwPct}%)</div>
+          <div class="plan-legend-item"><div class="plan-legend-dot" style="background:#4caf50;"></div>Weekly — ${weekly} (${wPct}%)</div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:16px;font-size:13px;color:var(--text-muted);line-height:1.6;">
+      ${biweekly > weekly
+        ? `📅 Most people prefer <strong>Bi-Weekly</strong> service. This is common — it's the sweet spot of price vs. frequency.`
+        : weekly > biweekly
+          ? `⚡ Most people prefer <strong>Weekly</strong> service. Consider promoting it more prominently.`
+          : `Even split between plans.`}
+    </div>`;
+}
+
+// ── ABANDONMENT ───────────────────────────────────────────────────────────
+function renderAbandonment(E) {
+  const ABANDON = [
+    { key: 'quote_abandoned_step1',      label: 'Closed on Step 1 (address)' },
+    { key: 'quote_abandoned_step2',      label: 'Closed on Step 2 (analyzing)' },
+    { key: 'quote_abandoned_step3',      label: 'Closed on Step 3 (saw price)' },
+    { key: 'quote_abandoned_step4',      label: 'Closed on Step 4 (payment)' },
+    { key: 'session_end_in_quote_step1', label: 'Tab closed — Step 1' },
+    { key: 'session_end_in_quote_step3', label: 'Tab closed — Step 3' },
+    { key: 'session_end_in_quote_step4', label: 'Tab closed — Step 4' },
+  ];
+  const data = ABANDON.map(s => ({label:s.label, count:E[s.key]||0}))
+    .filter(s=>s.count>0).sort((a,b)=>b.count-a.count);
+  const el = document.getElementById('abandonChart');
+  if (data.length === 0) {
+    el.innerHTML = '<div class="empty-state">No abandonment data yet.</div>';
+  } else {
+    const max = data[0].count;
+    el.innerHTML = data.map(s => barRowWide(s.label, s.count, max, 'red')).join('');
+  }
+}
+
+// ── ENGAGEMENT SIGNALS ────────────────────────────────────────────────────
+function renderEngagement(E) {
+  const ENGAGE = [
+    { key:'phone_click',            label:'📞 Phone number clicked' },
+    { key:'google_reviews_click',   label:'⭐ Clicked Google Reviews' },
+    { key:'exit_intent_step0',      label:'🖱️ Exit intent (not in quote)' },
+    { key:'exit_intent_step1',      label:'🖱️ Exit intent (Step 1)' },
+    { key:'exit_intent_step3',      label:'🖱️ Exit intent (saw price)' },
+    { key:'exit_intent_step4',      label:'🖱️ Exit intent (payment)' },
+    { key:'plan_selected_biweekly', label:'📅 Bi-Weekly plan selected' },
+    { key:'plan_selected_weekly',   label:'⚡ Weekly plan selected' },
+    { key:'payment_attempted',      label:'💳 Clicked "Book Now"' },
+    { key:'payment_error',          label:'🚫 Payment error' },
+    { key:'legacy_booking_attempted', label:'📋 Legacy booking attempt' },
+    { key:'zip_out_of_area',        label:'🚫 Out-of-area zip rejected' },
+  ];
+  const data = ENGAGE.map(s=>({label:s.label,count:E[s.key]||0}))
+    .filter(s=>s.count>0).sort((a,b)=>b.count-a.count);
+  const el = document.getElementById('engagementChart');
+  if (data.length === 0) {
+    el.innerHTML = '<div class="empty-state">No engagement data yet.</div>';
+  } else {
+    const max = data[0].count;
+    el.innerHTML = data.map(s => {
+      const isRed = s.label.includes('🚫') || s.label.includes('error');
+      return barRowWide(s.label, s.count, max, isRed?'red':'');
+    }).join('');
+  }
+}
+
+// ── HOURLY HEATMAP ────────────────────────────────────────────────────────
+function renderHourly(visits) {
+  const hours = new Array(24).fill(0);
+  const days  = new Array(7).fill(0);
+  const DAY_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  visits.forEach(v => {
+    if (!v.ts) return;
+    // ts is a string like "5/7/2026, 3:14 PM" or "2026-05-07T15:14:00Z"
+    try {
+      const d = new Date(v.ts);
+      if (isNaN(d)) return;
+      hours[d.getHours()]++;
+      days[d.getDay()]++;
+    } catch(e) {}
+  });
+
+  const totalH = hours.reduce((a,b)=>a+b,0);
+  const maxH   = Math.max(...hours, 1);
+  const totalD = days.reduce((a,b)=>a+b,0);
+  const maxD   = Math.max(...days, 1);
+
+  const heatEl = document.getElementById('hourlyHeatmap');
+  if (totalH === 0) {
+    heatEl.innerHTML = '<div class="empty-state">Not enough timestamp data to show hourly pattern.</div>';
+    document.getElementById('dowSection').style.display = 'none';
+    return;
+  }
+
+  // Color intensity based on share of traffic
+  function heatColor(count, max) {
+    if (count === 0) return '#e8f5e9';
+    const p = count / max;
+    if (p < 0.25) return '#c8e6c9';
+    if (p < 0.5)  return '#81c784';
+    if (p < 0.75) return '#4caf50';
+    return '#2d6a2d';
+  }
+  function textColor(count, max) {
+    return count/max >= 0.5 ? '#fff' : 'var(--text-muted)';
+  }
+
+  const HOUR_LABELS = [
+    '12a','1a','2a','3a','4a','5a','6a','7a','8a','9a','10a','11a',
+    '12p','1p','2p','3p','4p','5p','6p','7p','8p','9p','10p','11p'
+  ];
+
+  heatEl.innerHTML = `
+    <div class="heatmap-label">Hours in local time — darker = more traffic</div>
+    <div class="heatmap-grid">
+      ${hours.map((cnt,h) => `
+        <div class="heatmap-cell"
+             style="background:${heatColor(cnt,maxH)};color:${textColor(cnt,maxH)};"
+             title="${HOUR_LABELS[h]}: ${cnt} visit${cnt!==1?'s':''}">
+          ${HOUR_LABELS[h]}
+        </div>`).join('')}
+    </div>`;
+
+  // Day of week
+  const dowEl = document.getElementById('dowChart');
+  dowEl.innerHTML = days.map((cnt,d) => {
+    const w = pct(cnt, maxD);
+    return `<div class="bar-row">
+      <div class="bar-label" style="min-width:60px;">${esc(DAY_LABELS[d])}</div>
+      <div class="bar-wrap"><div class="bar-fill" style="width:${w}%;background:${cnt===maxD?'#2d6a2d':'#4caf50'}"></div></div>
+      <div class="bar-count">${cnt}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── VISIT FILTER / RECENT ACTIVITY ────────────────────────────────────────
+function filterVisits(mode, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  const visEl = document.getElementById('recentVisits');
+  let visits = _allVisits;
+  if (mode === 'pages')  visits = visits.filter(v => !String(v.page||'').startsWith('/evt/'));
+  if (mode === 'events') visits = visits.filter(v =>  String(v.page||'').startsWith('/evt/'));
+  if (visits.length === 0) {
+    visEl.innerHTML = '<div class="empty-state">No activity in this view.</div>';
+    return;
+  }
+
+  const EVENT_ICONS = {
+    quote_opened:'🟢', quote_price_viewed:'💵', quote_payment_step_reached:'💳',
+    booking_completed:'✅', payment_attempted:'🔒', payment_error:'🚫',
+    zip_out_of_area:'🚫', phone_click:'📞', google_reviews_click:'⭐',
+    plan_selected_biweekly:'📅', plan_selected_weekly:'⚡',
+    quote_abandoned_step1:'🚪', quote_abandoned_step3:'🚪', quote_abandoned_step4:'🚪',
+    exit_intent_step0:'🖱️', exit_intent_step1:'🖱️', exit_intent_step3:'🖱️',
+  };
+
+  visEl.innerHTML = visits.map(v => {
+    const isEvt  = String(v.page||'').startsWith('/evt/');
+    const evtKey = isEvt ? v.page.replace('/evt/','') : null;
+    const icon   = evtKey ? (EVENT_ICONS[evtKey] || '📌') : '📄';
+    const pageClass = isEvt ? 'visit-event' : 'visit-page';
+    const label  = isEvt ? (evtKey.replace(/_/g,' ')) : (v.page || '/');
+    const refStr = v.ref && v.ref !== 'direct'
+      ? `<span class="visit-ref">← ${esc(v.ref.substring(0,40))}</span>`
+      : '';
+    return `<div class="visit-row">
+      <span style="font-size:14px;">${icon}</span>
+      <span class="${pageClass}">${esc(label)}</span>
+      ${refStr}
+      <span class="visit-ts">${esc(v.ts||'')}</span>
+    </div>`;
+  }).join('');
 }
 </script>
 
 <!-- ── TRACKING SNIPPET ──────────────────────────────────────────────────
-     Paste this <script> block on every page you want to track
-     (index.html, profile.html, etc.) — just before </body>
+     Paste this block on every page before </body> to track visits.
 <script>
 (function(){
   var TRACK_URL = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
-  // Anonymous visitor ID — stored in localStorage so repeat visits count as unique
   var vid = localStorage.getItem('eg_vid');
-  if (!vid) { vid = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('eg_vid', vid); }
-  var ref = document.referrer || '';
-  // Categorize referrer
-  if (!ref) ref = 'direct';
-  else if (/google/i.test(ref))   ref = 'google';
-  else if (/facebook/i.test(ref)) ref = 'facebook';
-  else if (/instagram/i.test(ref)) ref = 'instagram';
-  var params = new URLSearchParams({
-    action: 'track_visit',
-    page:   location.pathname || '/',
-    ref:    ref,
-    ua:     navigator.userAgent.substring(0, 150),
-    vid:    vid,
-  });
-  navigator.sendBeacon ? navigator.sendBeacon(TRACK_URL + '?' + params) : fetch(TRACK_URL + '?' + params, {mode:'no-cors'});
+  if (!vid) { vid = Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem('eg_vid',vid); }
+  var ref = document.referrer||'';
+  if (!ref) ref='direct';
+  else if(/google/i.test(ref))    ref='google';
+  else if(/facebook/i.test(ref))  ref='facebook';
+  else if(/instagram/i.test(ref)) ref='instagram';
+  var params = new URLSearchParams({action:'track_visit',page:location.pathname||'/',ref:ref,ua:navigator.userAgent.substring(0,150),vid:vid});
+  navigator.sendBeacon?navigator.sendBeacon(TRACK_URL+'?'+params):fetch(TRACK_URL+'?'+params,{mode:'no-cors'});
 })();
-</scr' + 'ipt>
+</scr'+'ipt>
 ──────────────────────────────────────────────────────────────────────── -->
 
 </body>
