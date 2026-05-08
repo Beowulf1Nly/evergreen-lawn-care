@@ -120,8 +120,16 @@
 }
 </script>
 
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-<script src="https://js.stripe.com/v3/"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<!-- Non-blocking font load — eliminates render-blocking so first paint is instant -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'"/>
+<noscript><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/></noscript>
+<!-- Stripe.js removed — this site uses hosted Stripe payment links (buy.stripe.com),
+     not Stripe Elements. Loading stripe.js here was a 300 KB synchronous block for nothing. -->
+<!-- DNS prefetch for the Google Apps Script backend -->
+<link rel="dns-prefetch" href="https://script.google.com"/>
+<link rel="preconnect" href="https://script.google.com"/>
 <link rel="icon" type="image/x-icon" href="favicon.ico"/>
 <link rel="icon" type="image/png" href="favicon.png"/>
 <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
@@ -1499,7 +1507,7 @@
   <!-- RIGHT: light panel with logo -->
   <div class="hero-right">
     <div class="hero-image">
-      <img src="Images/evergreen-logo-transparent.png" alt="Evergreen Lawn Care"/>
+      <img src="Images/evergreen-logo-transparent.png" alt="Evergreen Lawn Care" loading="eager" fetchpriority="high"/>
     </div>
   </div>
 
@@ -2663,7 +2671,10 @@ let carouselData = { images: [], reviews: [] };
 // Fetch from data.json — edit that file to update photos and reviews
 async function loadData() {
   try {
-    const res = await fetch('data.json?v=' + Date.now());
+    // Use a daily cache-bust (YYYYMMDD) so the browser caches for the rest of the day
+    // instead of re-downloading on every single page load.
+    const bust = new Date().toISOString().slice(0,10).replace(/-/g,'');
+    const res = await fetch('data.json?v=' + bust);
     carouselData = await res.json();
   } catch(e) {
     console.error('Could not load data.json:', e);
@@ -2683,9 +2694,9 @@ function initCarousel() {
   const dotsContainer = document.getElementById('carouselDots');
 
   // Populate slides
-  track.innerHTML = carouselData.images.map(img => `
+  track.innerHTML = carouselData.images.map((img, i) => `
     <div class="carousel-slide">
-      <img src="${img}" alt="Gallery" />
+      <img src="${img}" alt="Gallery" loading="${i === 0 ? 'eager' : 'lazy'}" decoding="async"/>
     </div>
   `).join('');
 
@@ -2933,9 +2944,26 @@ const STRIPE_PUB_KEY = 'pk_live_51TLrat4J18msjfgfYqm9zvDa2pkr5ZPv6s10bl5UwMIYnAq
 let stripeInstance = null;
 let stripeCardEl   = null;
 let stripeCardMounted = false;
+let _stripeJsLoading = null; // Promise guard — prevents duplicate script loads
 
-function initStripeElements() {
+// Load Stripe.js on demand (first time modal opens) — keeps it off the critical path.
+// Returns a Promise that resolves once window.Stripe is ready.
+function loadStripeJs() {
+  if (window.Stripe) return Promise.resolve();
+  if (_stripeJsLoading) return _stripeJsLoading;
+  _stripeJsLoading = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://js.stripe.com/v3/';
+    s.onload  = resolve;
+    s.onerror = () => reject(new Error('Could not load Stripe. Please check your connection.'));
+    document.head.appendChild(s);
+  });
+  return _stripeJsLoading;
+}
+
+async function initStripeElements() {
   if (stripeInstance) return;
+  await loadStripeJs();
   stripeInstance = Stripe(STRIPE_PUB_KEY);
   const elements = stripeInstance.elements();
   stripeCardEl = elements.create('card', {
@@ -3361,7 +3389,8 @@ function openQuoteModal(preselectedPlan) {
   showQuoteStep(1);
   document.getElementById('quoteModalOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
-  initStripeElements();
+  // Load Stripe.js in the background now that modal is open (async — card isn't shown until step 4)
+  initStripeElements().catch(err => console.warn('Stripe init error:', err));
 }
 
 function openQuoteModalPlan(plan) { openQuoteModal(plan); }
@@ -3396,16 +3425,23 @@ function showQuoteStep(step) {
   });
   const target = document.getElementById('quoteStep'+step) || document.getElementById('quoteSuccess');
   if (target) target.style.display = 'block';
-  // Mount Stripe card on step 4
-  if (step===4 && !stripeCardMounted && stripeCardEl) {
-    setTimeout(() => {
-      stripeCardEl.mount('#q-card-element');
-      stripeCardEl.on('change', ev => {
-        const errEl=document.getElementById('q-card-errors');
-        if(errEl) errEl.textContent = ev.error ? ev.error.message : '';
-      });
-      stripeCardMounted = true;
-    }, 120);
+  // Mount Stripe card on step 4 — ensure Stripe.js is loaded first (it's lazy-loaded)
+  if (step===4 && !stripeCardMounted) {
+    initStripeElements().then(() => {
+      if (stripeCardEl && !stripeCardMounted) {
+        setTimeout(() => {
+          stripeCardEl.mount('#q-card-element');
+          stripeCardEl.on('change', ev => {
+            const errEl=document.getElementById('q-card-errors');
+            if(errEl) errEl.textContent = ev.error ? ev.error.message : '';
+          });
+          stripeCardMounted = true;
+        }, 120);
+      }
+    }).catch(err => {
+      const errEl=document.getElementById('q-card-errors');
+      if(errEl) errEl.textContent = 'Could not load payment form. Please refresh and try again.';
+    });
   }
 }
 

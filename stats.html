@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=AW-18107107722"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'AW-18107107722');
+</script>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Evergreen — Owner Stats</title>
+<meta name="robots" content="noindex, nofollow"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@300;400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'"/>
+<noscript><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/></noscript>
+<style>
+  :root {
+    --green-deep:  #1a3a1a;
+    --green-mid:   #2d6a2d;
+    --green-bright:#4caf50;
+    --green-pale:  #e8f5e9;
+    --cream:       #faf9f6;
+    --white:       #ffffff;
+    --text:        #1a1a1a;
+    --text-muted:  #6b7280;
+    --border:      #e2e8f0;
+    --red:         #e53e3e;
+    --orange:      #f97316;
+    --gold:        #c9a84c;
+    --blue:        #3b82f6;
+    --purple:      #8b5cf6;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'DM Sans',sans-serif; background:var(--cream); color:var(--text); min-height:100vh; }
+
+  /* ── Login ── */
+  #loginScreen {
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh; background:var(--green-deep);
+  }
+  .login-card {
+    background:#fff; border-radius:20px; padding:48px 40px;
+    max-width:400px; width:100%; text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,.25);
+  }
+  .login-card h1 { font-family:'Playfair Display',serif; color:var(--green-deep); font-size:28px; margin-bottom:8px; }
+  .login-card p  { color:var(--text-muted); font-size:14px; margin-bottom:28px; }
+  .login-input {
+    width:100%; padding:14px 18px; border:2px solid var(--border);
+    border-radius:10px; font-family:inherit; font-size:15px;
+    margin-bottom:14px; outline:none; transition:border .2s;
+  }
+  .login-input:focus { border-color:var(--green-mid); }
+  .login-btn {
+    width:100%; padding:14px; background:var(--green-mid);
+    color:#fff; border:none; border-radius:10px; font-family:inherit;
+    font-size:15px; font-weight:600; cursor:pointer; transition:background .2s;
+  }
+  .login-btn:hover { background:var(--green-deep); }
+  .login-error { color:var(--red); font-size:13px; margin-top:10px; display:none; }
+
+  /* ── App ── */
+  #appScreen { display:none; }
+
+  header {
+    background:var(--green-deep); color:#fff; padding:16px 24px;
+    display:flex; align-items:center; justify-content:space-between;
+    position:sticky; top:0; z-index:100;
+  }
+  .header-brand { font-family:'Playfair Display',serif; font-size:20px; }
+  .header-brand span { color:#7ec87e; }
+  .btn-refresh {
+    padding:8px 16px; background:rgba(255,255,255,.12); color:#fff;
+    border:1px solid rgba(255,255,255,.25); border-radius:8px;
+    font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;
+    transition:background .2s;
+  }
+  .btn-refresh:hover { background:rgba(255,255,255,.22); }
+  .btn-logout {
+    padding:8px 14px; background:transparent; color:rgba(255,255,255,.6);
+    border:1px solid rgba(255,255,255,.2); border-radius:8px;
+    font-family:inherit; font-size:13px; cursor:pointer;
+  }
+  .header-right { display:flex; align-items:center; gap:12px; }
+  .header-last-refresh { font-size:12px; color:rgba(255,255,255,.5); }
+
+  .container { max-width:1200px; margin:0 auto; padding:32px 20px; }
+
+  /* ── Section title ── */
+  .section-title {
+    font-size:16px; font-weight:700; color:var(--green-deep);
+    margin-bottom:16px; display:flex; align-items:center; gap:8px;
+  }
+  .section-block {
+    background:#fff; border-radius:16px; padding:24px;
+    box-shadow:0 2px 12px rgba(0,0,0,.06); margin-bottom:24px;
+  }
+  .section-sub { font-size:13px; color:var(--text-muted); margin-bottom:16px; line-height:1.5; }
+
+  /* ── KPI Hero Row ── */
+  .kpi-grid {
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+    gap:16px; margin-bottom:24px;
+  }
+  .kpi-card {
+    background:#fff; border-radius:16px; padding:22px 18px;
+    box-shadow:0 2px 12px rgba(0,0,0,.06); text-align:center;
+    border-top:4px solid var(--green-bright);
+    position:relative; overflow:hidden;
+  }
+  .kpi-card.red    { border-top-color:var(--red); }
+  .kpi-card.orange { border-top-color:var(--orange); }
+  .kpi-card.blue   { border-top-color:var(--blue); }
+  .kpi-card.purple { border-top-color:var(--purple); }
+  .kpi-card.gold   { border-top-color:var(--gold); }
+  .kpi-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); margin-bottom:8px; }
+  .kpi-value { font-size:34px; font-weight:800; color:var(--green-deep); line-height:1; }
+  .kpi-card.red .kpi-value    { color:#b91c1c; }
+  .kpi-card.orange .kpi-value { color:#c2410c; }
+  .kpi-card.blue .kpi-value   { color:#1d4ed8; }
+  .kpi-card.purple .kpi-value { color:#6d28d9; }
+  .kpi-card.gold .kpi-value   { color:#92400e; }
+  .kpi-sub { font-size:12px; color:var(--text-muted); margin-top:6px; line-height:1.4; }
+
+  /* ── Business Health Highlights ── */
+  .health-grid {
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
+    gap:14px; margin-bottom:24px;
+  }
+  .health-card {
+    background:#fff; border-radius:14px; padding:20px;
+    box-shadow:0 2px 10px rgba(0,0,0,.05);
+    display:flex; align-items:center; gap:16px;
+  }
+  .health-icon { font-size:28px; flex-shrink:0; }
+  .health-label { font-size:12px; color:var(--text-muted); font-weight:600; margin-bottom:4px; }
+  .health-value { font-size:22px; font-weight:800; color:var(--green-deep); line-height:1; }
+  .health-sub   { font-size:11px; color:var(--text-muted); margin-top:3px; }
+
+  /* ── Alert banner ── */
+  .alert-banner {
+    border-radius:12px; padding:14px 18px; margin-bottom:20px;
+    font-size:14px; line-height:1.6; display:flex; align-items:flex-start; gap:10px;
+  }
+  .alert-banner.green { background:#f0fdf4; border:1.5px solid #86efac; color:#166534; }
+  .alert-banner.yellow { background:#fffbeb; border:1.5px solid #fcd34d; color:#92400e; }
+  .alert-banner.red    { background:#fef2f2; border:1.5px solid #fca5a5; color:#991b1b; }
+
+  /* ── Two-col layout ── */
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .three-col { display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px; }
+  @media(max-width:800px) { .two-col, .three-col { grid-template-columns:1fr; } }
+
+  /* ── Bar rows ── */
+  .bar-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .bar-label { font-size:13px; min-width:140px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bar-label-wide { font-size:13px; min-width:210px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bar-wrap { flex:1; background:#e8f5e9; border-radius:4px; height:14px; overflow:hidden; }
+  .bar-fill { height:100%; background:var(--green-mid); border-radius:4px; transition:width .5s; }
+  .bar-fill.red    { background:#f87171; }
+  .bar-fill.orange { background:#fb923c; }
+  .bar-fill.blue   { background:#60a5fa; }
+  .bar-fill.gold   { background:#fbbf24; }
+  .bar-count { font-size:13px; font-weight:700; color:var(--green-deep); min-width:38px; text-align:right; }
+  .bar-pct   { font-size:12px; color:var(--text-muted); min-width:36px; text-align:right; }
+
+  /* ── Funnel ── */
+  .funnel-step { display:flex; align-items:center; gap:14px; margin-bottom:10px; }
+  .funnel-label { font-size:13px; font-weight:600; color:var(--green-deep); min-width:220px; }
+  .funnel-bar-wrap { flex:1; background:#e8f5e9; border-radius:6px; height:30px; overflow:hidden; position:relative; }
+  .funnel-bar-fill {
+    height:100%; border-radius:6px; transition:width .5s;
+    display:flex; align-items:center; padding-left:12px;
+    font-size:12px; font-weight:700; color:#fff; white-space:nowrap;
+  }
+  .funnel-pct { font-size:13px; color:var(--text-muted); min-width:46px; text-align:right; font-weight:600; }
+  .funnel-drop { font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; margin-left:6px; }
+  .funnel-drop.bad { background:#fee2e2; color:#b91c1c; }
+  .funnel-drop.ok  { background:#dcfce7; color:#166534; }
+  .funnel-drop.warn{ background:#fef3c7; color:#92400e; }
+  .funnel-arrow { text-align:left; font-size:16px; color:var(--green-bright); margin:-4px 0 -4px 226px; }
+
+  /* ── Heatmap ── */
+  .heatmap-grid { display:flex; gap:4px; flex-wrap:wrap; }
+  .heatmap-cell {
+    width:32px; height:32px; border-radius:5px; background:#e8f5e9;
+    display:flex; align-items:center; justify-content:center;
+    font-size:10px; font-weight:700; color:var(--text-muted);
+    cursor:default; transition:background .2s;
+    position:relative;
+  }
+  .heatmap-cell[title]:hover::after {
+    content:attr(title); position:absolute; bottom:36px; left:50%;
+    transform:translateX(-50%); background:#1a3a1a; color:#fff;
+    font-size:11px; padding:3px 8px; border-radius:6px;
+    white-space:nowrap; pointer-events:none; z-index:10;
+  }
+  .heatmap-label { font-size:11px; color:var(--text-muted); margin-bottom:8px; }
+
+  /* ── Plan donut ── */
+  .plan-split { display:flex; gap:20px; align-items:center; flex-wrap:wrap; }
+  .plan-bar-wrap { flex:1; min-width:200px; }
+  .plan-bar { height:24px; border-radius:8px; overflow:hidden; display:flex; }
+  .plan-bar-seg { height:100%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#fff; }
+  .plan-legend { display:flex; gap:16px; margin-top:8px; flex-wrap:wrap; }
+  .plan-legend-item { display:flex; align-items:center; gap:6px; font-size:13px; }
+  .plan-legend-dot { width:12px; height:12px; border-radius:50%; }
+
+  /* ── Tables ── */
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th { text-align:left; padding:10px 12px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); border-bottom:2px solid var(--border); }
+  td { padding:10px 12px; border-bottom:1px solid var(--border); }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:#f8fdf8; }
+  td.mono { font-family:monospace; font-size:12px; }
+
+  /* ── Badges ── */
+  .badge { display:inline-block; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+  .badge-green  { background:#dcfce7; color:#166534; }
+  .badge-red    { background:#fee2e2; color:#991b1b; }
+  .badge-orange { background:#ffedd5; color:#c2410c; }
+  .badge-gray   { background:#f3f4f6; color:#4b5563; }
+
+  /* ── Recent visits ── */
+  .visit-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .visit-row:last-child { border-bottom:none; }
+  .visit-page  { font-weight:600; color:var(--green-deep); }
+  .visit-event { font-weight:600; color:var(--blue); }
+  .visit-ref   { color:var(--text-muted); font-size:12px; }
+  .visit-ts    { color:var(--text-muted); font-size:11px; margin-left:auto; }
+
+  /* ── Empty / loading ── */
+  .empty-state { text-align:center; color:var(--text-muted); padding:32px 20px; font-size:14px; }
+  .loading-spinner { text-align:center; padding:60px; color:var(--text-muted); font-size:15px; }
+
+  /* ── Tab nav ── */
+  .tab-nav { display:flex; gap:4px; margin-bottom:20px; background:#f3f4f6; border-radius:10px; padding:4px; }
+  .tab-btn { flex:1; padding:8px 12px; border:none; border-radius:7px; background:transparent; font-family:inherit; font-size:13px; font-weight:600; color:var(--text-muted); cursor:pointer; transition:all .2s; }
+  .tab-btn.active { background:#fff; color:var(--green-deep); box-shadow:0 1px 4px rgba(0,0,0,.1); }
+
+  /* ── FAQ bars ── */
+  .faq-bar { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+  .faq-bar-label { font-size:13px; min-width:200px; color:var(--text); }
+  .faq-bar-wrap { flex:1; background:#e8f5e9; border-radius:4px; height:12px; overflow:hidden; }
+  .faq-bar-fill { height:100%; background:var(--green-bright); border-radius:4px; transition:width .4s; }
+
+  @media(max-width:600px) {
+    .kpi-grid { grid-template-columns:repeat(2,1fr); }
+    .funnel-label { min-width:140px; font-size:12px; }
+    .bar-label-wide { min-width:140px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-card">
+    <h1>🌿 Evergreen</h1>
+    <p>Owner Stats — enter your password to continue.</p>
+    <input type="password" id="pwInput" class="login-input" placeholder="Owner password"
+           onkeydown="if(event.key==='Enter') login()"/>
+    <button class="login-btn" onclick="login()">View Stats</button>
+    <div class="login-error" id="loginError">Incorrect password.</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="appScreen">
+  <header>
+    <div class="header-brand">🌿 Evergreen <span>Stats</span></div>
+    <div class="header-right">
+      <span class="header-last-refresh" id="lastRefresh"></span>
+      <button class="btn-refresh" onclick="loadStats()">↻ Refresh</button>
+      <button class="btn-logout" onclick="logout()">Sign Out</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div id="loadingState" class="loading-spinner">Loading stats…</div>
+    <div id="statsContent" style="display:none;">
+
+      <!-- ══════════════════════════════════════════════
+           SECTION 1: KPI TOP LINE
+      ══════════════════════════════════════════════ -->
+      <div class="kpi-grid" id="kpiGrid">
+        <!-- populated by JS -->
+      </div>
+
+      <!-- ══════════════════════════════════════════════
+           SECTION 2: BUSINESS HEALTH HIGHLIGHTS
+      ══════════════════════════════════════════════ -->
+      <div class="section-block">
+        <div class="section-title">💼 Business Health</div>
+        <div class="health-grid" id="healthGrid"><!-- populated by JS --></div>
+        <div id="healthAlert"><!-- populated by JS --></div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════
+           SECTION 3: QUOTE FUNNEL — PRIMARY FOCUS
+      ══════════════════════════════════════════════ -->
+      <div class="section-block">
+        <div class="section-title">🔍 Quote Funnel — Where Are They Dropping Off?</div>
+        <p class="section-sub">Tracks every visitor from first click to confirmed booking. The biggest % drop is your biggest opportunity.</p>
+        <div id="funnelAlert"></div>
+        <div id="funnelChart"><div class="empty-state">No funnel data yet.<br><small>Events appear once visitors start the quote flow.</small></div></div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════
+           SECTION 4: PLAN PREFERENCE + TRAFFIC SOURCE
+      ══════════════════════════════════════════════ -->
+      <div class="two-col">
+
+        <!-- Plan preference -->
+        <div class="section-block">
+          <div class="section-title">📅 Plan Preferences</div>
+          <p class="section-sub">Which plan are people choosing when they see their price?</p>
+          <div id="planPrefChart"><div class="empty-state">No plan selections yet.</div></div>
+        </div>
+
+        <!-- Traffic sources -->
+        <div class="section-block">
+          <div class="section-title">🔗 Traffic Sources</div>
+          <p class="section-sub">Where are your visitors coming from?</p>
+          <div id="refStats"><div class="empty-state">No referrer data yet.</div></div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════
+           SECTION 5: ABANDONMENT + ENGAGEMENT
+      ══════════════════════════════════════════════ -->
+      <div class="two-col">
+
+        <div class="section-block">
+          <div class="section-title">🚪 Abandonment by Step</div>
+          <p class="section-sub">When people close the quote modal — which step were they on?</p>
+          <div id="abandonChart"><div class="empty-state">No data yet.</div></div>
+        </div>
+
+        <div class="section-block">
+          <div class="section-title">💡 Engagement Signals</div>
+          <p class="section-sub">Phone clicks, review views, exit intent by step.</p>
+          <div id="engagementChart"><div class="empty-state">No data yet.</div></div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════
+           SECTION 6: TRAFFIC PATTERNS
+      ══════════════════════════════════════════════ -->
+      <div class="section-block">
+        <div class="section-title">⏰ When Are People Visiting?</div>
+        <p class="section-sub">Hour-of-day traffic pattern from your recent visitors. Useful for knowing when to run ads or reply to inquiries.</p>
+        <div id="hourlyHeatmap"><div class="empty-state">Not enough timestamp data yet.</div></div>
+        <div style="margin-top:20px;" id="dowSection">
+          <div style="font-size:13px;font-weight:700;color:var(--green-deep);margin-bottom:8px;">Day of Week</div>
+          <div id="dowChart"></div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════
+           SECTION 7: PAGE VIEWS + ADMIN BOARD
+      ══════════════════════════════════════════════ -->
+      <div class="two-col">
+
+        <div class="section-block">
+          <div class="section-title">🏆 Mows by Admin</div>
+          <p class="section-sub">Who's completing the most jobs?</p>
+          <div id="adminStats"><div class="empty-state">No mows recorded yet.</div></div>
+        </div>
+
+        <div class="section-block">
+          <div class="section-title">📄 Page Views</div>
+          <p class="section-sub">Top pages by visit count (excludes event tracking).</p>
+          <div id="pageStats"><div class="empty-state">No page data yet.</div></div>
+        </div>
+
+      </div>
+
+      <!-- ══════════════════════════════════════════════
+           SECTION 8: FAQ + OUT-OF-AREA
+      ══════════════════════════════════════════════ -->
+      <div class="two-col">
+
+        <div class="section-block">
+          <div class="section-title">❓ FAQ Interactions</div>
+          <p class="section-sub">High interest in a question usually means it's a blocker stopping people from booking.</p>
+          <div id="faqChart"><div class="empty-state">No FAQ data yet.</div></div>
+        </div>
+
+        <div class="section-block">
+          <div class="section-title">🗺️ Out-of-Area Bounces + Zip Activity</div>
+          <p class="section-sub">People who entered a zip you don't serve, and your most common zips.</p>
+          <div id="areaChart"><div class="empty-state">No zip data yet.</div></div>
+        </div>
+
+      </div>
+
+      <!-- ══════════════════════════════════════════════
+           SECTION 9: RECENT ACTIVITY STREAM
+      ══════════════════════════════════════════════ -->
+      <div class="section-block">
+        <div class="section-title">🕐 Recent Activity Stream <small style="font-size:12px;font-weight:400;color:var(--text-muted);">(last 50 events)</small></div>
+        <div class="tab-nav">
+          <button class="tab-btn active" onclick="filterVisits('all',this)">All</button>
+          <button class="tab-btn" onclick="filterVisits('pages',this)">Page Views</button>
+          <button class="tab-btn" onclick="filterVisits('events',this)">Funnel Events</button>
+        </div>
+        <div id="recentVisits"><div class="empty-state">No activity yet.</div></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const SCRIPT_URL   = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
+const STATS_PW_KEY = 'eg_admin_pw';
+let sessionPw = '';
+
+// ── AUTH ─────────────────────────────────────────────────────────────────
+async function login(pw) {
+  pw = pw || document.getElementById('pwInput').value.trim();
+  if (!pw) return;
+  const btn = document.querySelector('.login-btn');
+  btn.disabled = true; btn.textContent = 'Checking…';
+  document.getElementById('loginError').style.display = 'none';
+
+  try {
+    const res  = await fetch(SCRIPT_URL + '?action=get_stats&password=' + encodeURIComponent(pw));
+    const data = await res.json();
+    if (data.success) {
+      sessionPw = pw;
+      localStorage.setItem(STATS_PW_KEY, pw);
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('appScreen').style.display   = 'block';
+      renderStats(data);
+    } else {
+      localStorage.removeItem(STATS_PW_KEY);
+      throw new Error(data.error || 'bad password');
+    }
+  } catch(e) {
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('pwInput').value = '';
+    document.getElementById('pwInput').focus();
+  } finally {
+    btn.disabled = false; btn.textContent = 'View Stats';
+  }
+}
+
+function logout() {
+  sessionPw = '';
+  localStorage.removeItem(STATS_PW_KEY);
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('appScreen').style.display   = 'none';
+  document.getElementById('pwInput').value = '';
+  document.getElementById('statsContent').style.display = 'none';
+  document.getElementById('loadingState').style.display = 'block';
+}
+
+document.getElementById('pwInput').addEventListener('keydown', e => { if(e.key==='Enter') login(); });
+
+(function() {
+  const saved = localStorage.getItem(STATS_PW_KEY);
+  if (saved) login(saved);
+})();
+
+async function loadStats() {
+  document.getElementById('statsContent').style.display = 'none';
+  document.getElementById('loadingState').style.display = 'block';
+  try {
+    const res  = await fetch(SCRIPT_URL + '?action=get_stats&password=' + encodeURIComponent(sessionPw));
+    const data = await res.json();
+    if (data.success) {
+      renderStats(data);
+    } else {
+      document.getElementById('loadingState').innerHTML =
+        '<p style="color:#e53e3e;padding:20px;">⚠️ Failed to load stats: ' + esc(data.error || 'Unknown error') + '</p>';
+    }
+  } catch(e) {
+    document.getElementById('loadingState').innerHTML =
+      '<p style="color:#e53e3e;padding:20px;">⚠️ Could not reach server: ' + esc(e.message) + ' — <button onclick="loadStats()" style="margin-left:8px;">Retry</button></p>';
+  }
+}
+
+// ── UTILS ────────────────────────────────────────────────────────────────
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function pct(a, b) { return b > 0 ? Math.round((a/b)*100) : 0; }
+function fmt$(n)   { return n != null ? '$' + Number(n).toLocaleString() : '—'; }
+
+function barRow(label, count, max, colorClass, extraRight) {
+  const w = max > 0 ? Math.round((count/max)*100) : 0;
+  return `<div class="bar-row">
+    <div class="bar-label" title="${esc(label)}">${esc(label)}</div>
+    <div class="bar-wrap"><div class="bar-fill ${colorClass||''}" style="width:${w}%"></div></div>
+    <div class="bar-count">${count}</div>
+    ${extraRight || ''}
+  </div>`;
+}
+
+function barRowWide(label, count, max, colorClass) {
+  const w = max > 0 ? Math.round((count/max)*100) : 0;
+  return `<div class="bar-row">
+    <div class="bar-label-wide" title="${esc(label)}">${esc(label)}</div>
+    <div class="bar-wrap"><div class="bar-fill ${colorClass||''}" style="width:${w}%"></div></div>
+    <div class="bar-count">${count}</div>
+  </div>`;
+}
+
+// ── RENDER ───────────────────────────────────────────────────────────────
+function renderStats(data) {
+  const bk = data.bookings  || {};
+  const an = data.analytics || {};
+
+  // Stamp refresh time
+  document.getElementById('lastRefresh').textContent =
+    'Updated ' + new Date().toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'});
+
+  // Pull event counts from pageStats /evt/* virtual paths
+  const pageStats = an.pageStats || {};
+  const E = {};
+  Object.entries(pageStats).forEach(([page, count]) => {
+    if (page.startsWith('/evt/')) E[page.replace('/evt/','')] = count;
+  });
+
+  // Core numbers
+  const totalViews    = an.totalVisits    || 0;
+  const uniqueVis     = an.uniqueVisitors || 0;
+  const totalBookings = bk.total          || 0;
+  const mowsDone      = bk.done           || 0;
+  const customers     = bk.customers      || 0;
+  const revenue       = bk.estimatedRev   || 0;
+
+  // Derived metrics
+  const quoteOpens    = E['quote_opened']              || 0;
+  const priceViewed   = E['quote_price_viewed']        || 0;
+  const payReached    = E['quote_payment_step_reached']|| 0;
+  const bookCompleted = E['booking_completed']         || 0;
+  const legacyBooked  = E['booking_completed_legacy']  || 0;
+  const totalConverts = bookCompleted + legacyBooked;
+  const convRate      = pct(totalConverts, quoteOpens);
+  const viewToQuote   = pct(quoteOpens, totalViews);
+  const completionRate= pct(mowsDone, totalBookings);
+  const revPerCustomer= customers > 0 ? Math.round(revenue / customers) : 0;
+  const zipBounce     = E['zip_out_of_area'] || 0;
+  const payErrors     = E['payment_error']   || 0;
+  const biweeklyPicked= E['plan_selected_biweekly'] || 0;
+  const weeklyPicked  = E['plan_selected_weekly']   || 0;
+
+  // ── KPI CARDS ───────────────────────────────────────────────────────────
+  const kpiData = [
+    { label:'Total Bookings',       value: totalBookings || '—',       sub:'all time',             color:'' },
+    { label:'Mows Completed',       value: mowsDone || '—',            sub:'marked Done',           color:'' },
+    { label:'Unique Customers',     value: customers || '—',           sub:'distinct emails',       color:'' },
+    { label:'Revenue Collected',    value: revenue ? fmt$(revenue) : '—', sub:'from paid mows',    color:'gold' },
+    { label:'Total Page Views',     value: totalViews || '—',          sub:'all pages',             color:'blue' },
+    { label:'Unique Visitors',      value: uniqueVis || '—',           sub:'distinct browsers',     color:'blue' },
+    { label:'Quote Opens',          value: quoteOpens || '—',          sub:'started quote flow',    color:'purple' },
+    { label:'Conversion Rate',      value: quoteOpens > 0 ? convRate+'%' : '—', sub:'quote → booking', color: convRate>=10 ? '' : convRate>=5 ? 'orange' : quoteOpens > 0 ? 'red' : '' },
+  ];
+  document.getElementById('kpiGrid').innerHTML = kpiData.map(k => `
+    <div class="kpi-card ${esc(k.color)}">
+      <div class="kpi-label">${esc(k.label)}</div>
+      <div class="kpi-value">${esc(String(k.value))}</div>
+      <div class="kpi-sub">${esc(k.sub)}</div>
+    </div>`).join('');
+
+  // ── HEALTH CARDS ────────────────────────────────────────────────────────
+  const healthItems = [
+    { icon:'💰', label:'Est. Revenue / Customer', value: revPerCustomer ? fmt$(revPerCustomer) : '—', sub:'avg lifetime so far' },
+    { icon:'✅', label:'Job Completion Rate',      value: completionRate ? completionRate+'%' : '—', sub:`${mowsDone} of ${totalBookings} mows done` },
+    { icon:'📊', label:'Visitor → Quote Rate',     value: viewToQuote ? viewToQuote+'%' : '—', sub:`${quoteOpens} opens from ${totalViews} views` },
+    { icon:'🚫', label:'Out-of-Area Bounces',      value: zipBounce || '—', sub:'zip codes outside Citrus Co.' },
+    { icon:'💳', label:'Payment Errors',           value: payErrors || '—', sub:'card declined or network fail' },
+    { icon:'📅', label:'Plan Split (Bi-W / Wkly)',  value: (biweeklyPicked || weeklyPicked) ? `${biweeklyPicked} / ${weeklyPicked}` : '—', sub:'plan selections so far' },
+  ];
+  document.getElementById('healthGrid').innerHTML = healthItems.map(h => `
+    <div class="health-card">
+      <div class="health-icon">${h.icon}</div>
+      <div>
+        <div class="health-label">${esc(h.label)}</div>
+        <div class="health-value">${esc(h.value)}</div>
+        <div class="health-sub">${esc(h.sub)}</div>
+      </div>
+    </div>`).join('');
+
+  // ── HEALTH ALERT ─────────────────────────────────────────────────────────
+  let alertHtml = '';
+  if (payErrors > 2) {
+    alertHtml = `<div class="alert-banner red">🚨 <strong>${payErrors} payment errors</strong> — cards are being declined or Stripe is having a connectivity issue. Check your Stripe dashboard.</div>`;
+  } else if (quoteOpens > 10 && convRate < 3) {
+    alertHtml = `<div class="alert-banner yellow">⚠️ Low conversion rate (${convRate}%). You're getting quote opens but most people aren't booking. The funnel below will show you exactly where they're dropping off.</div>`;
+  } else if (zipBounce > 5) {
+    alertHtml = `<div class="alert-banner yellow">📍 <strong>${zipBounce} out-of-area visitors</strong> tried to get a quote but were blocked by zip. You may be attracting traffic from outside Citrus County — consider adjusting your ad targeting.</div>`;
+  } else if (totalConverts > 0) {
+    alertHtml = `<div class="alert-banner green">✅ Funnel is producing bookings. Keep optimizing ad targeting and checkout experience to increase volume.</div>`;
+  }
+  document.getElementById('healthAlert').innerHTML = alertHtml;
+
+  // ── FUNNEL ──────────────────────────────────────────────────────────────
+  renderFunnel(E, totalViews, uniqueVis);
+
+  // ── PLAN PREFERENCE ──────────────────────────────────────────────────────
+  renderPlanPref(biweeklyPicked, weeklyPicked);
+
+  // ── TRAFFIC SOURCES ──────────────────────────────────────────────────────
+  const refEl = document.getElementById('refStats');
+  const refs  = Object.entries(an.refStats || {}).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  if (refs.length === 0) {
+    refEl.innerHTML = '<div class="empty-state">No referrer data yet.</div>';
+  } else {
+    const maxR = refs[0][1];
+    const total = refs.reduce((s,[,c])=>s+c,0);
+    refEl.innerHTML = refs.map(([ref, count]) => {
+      const label = ref === 'direct' ? '(direct / none)' : ref.replace(/^https?:\/\//,'').substring(0,50);
+      return barRow(label, count, maxR, '', `<div class="bar-pct">${pct(count,total)}%</div>`);
+    }).join('');
+  }
+
+  // ── ABANDONMENT ──────────────────────────────────────────────────────────
+  renderAbandonment(E);
+
+  // ── ENGAGEMENT SIGNALS ────────────────────────────────────────────────────
+  renderEngagement(E);
+
+  // ── HOURLY HEATMAP ────────────────────────────────────────────────────────
+  renderHourly(an.recentVisits || []);
+
+  // ── ADMIN BOARD ──────────────────────────────────────────────────────────
+  const adminEl = document.getElementById('adminStats');
+  const admins  = Object.entries(bk.adminStats || {}).sort((a,b)=>b[1]-a[1]);
+  if (admins.length === 0) {
+    adminEl.innerHTML = '<div class="empty-state">No mows recorded yet.</div>';
+  } else {
+    const maxA = admins[0][1];
+    adminEl.innerHTML = admins.map(([name, count], i) => {
+      const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+      return barRow(name + ' ' + medal, count, maxA, '');
+    }).join('');
+  }
+
+  // ── PAGE VIEWS (real pages only) ──────────────────────────────────────────
+  const pageEl = document.getElementById('pageStats');
+  const pages  = Object.entries(pageStats)
+    .filter(([p]) => !p.startsWith('/evt/'))
+    .sort((a,b) => b[1]-a[1]).slice(0,10);
+  if (pages.length === 0) {
+    pageEl.innerHTML = '<div class="empty-state">No page data yet.</div>';
+  } else {
+    const maxP = pages[0][1];
+    pageEl.innerHTML = pages.map(([page, count]) => barRow(page, count, maxP, '')).join('');
+  }
+
+  // ── FAQ ──────────────────────────────────────────────────────────────────
+  const FAQ_MAP = {
+    'faq_why_19':              'Why is first mow only $19?',
+    'faq_after_first_mow':     'What happens after first mow?',
+    'faq_how_price_calculated':'How is my price calculated?',
+    'faq_cancel':              'Can I cancel my plan?',
+    'faq_card_secure':         'Is my card info secure?',
+    'faq_need_to_be_home':     'Do I need to be home?',
+    'faq_service_area':        'Do you serve my area?',
+  };
+  const faqEl   = document.getElementById('faqChart');
+  const faqData = Object.entries(FAQ_MAP)
+    .map(([key,label]) => ({label, count: E[key]||0}))
+    .filter(s => s.count > 0)
+    .sort((a,b) => b.count-a.count);
+  if (faqData.length === 0) {
+    faqEl.innerHTML = '<div class="empty-state">No FAQ interactions yet.</div>';
+  } else {
+    const fMax = faqData[0].count;
+    faqEl.innerHTML = faqData.map(s => `
+      <div class="faq-bar">
+        <div class="faq-bar-label">${esc(s.label)}</div>
+        <div class="faq-bar-wrap"><div class="faq-bar-fill" style="width:${pct(s.count,fMax)}%"></div></div>
+        <div class="bar-count" style="font-size:13px;font-weight:700;color:var(--green-deep);min-width:28px;text-align:right;">${s.count}</div>
+      </div>`).join('');
+  }
+
+  // ── OUT-OF-AREA + ZIP ────────────────────────────────────────────────────
+  const areaEl = document.getElementById('areaChart');
+  const zipEvents = Object.entries(E)
+    .filter(([k]) => k.startsWith('zip_') || k === 'zip_out_of_area')
+    .sort((a,b) => b[1]-a[1]);
+  const outOfArea = E['zip_out_of_area'] || 0;
+  let areaHtml = '';
+  if (outOfArea > 0) {
+    areaHtml += `<div class="alert-banner ${outOfArea>5?'yellow':'green'}" style="margin-bottom:14px;font-size:13px;">
+      🚫 <strong>${outOfArea} rejected zips</strong> — these visitors saw the out-of-area message and couldn't book.</div>`;
+  }
+  // Show zip data from pageStats if there's any zip-specific tracking
+  const zipPageStats = Object.entries(pageStats)
+    .filter(([p]) => p.match(/\/evt\/zip_/) )
+    .sort((a,b) => b[1]-a[1]).slice(0, 6);
+  if (zipPageStats.length === 0 && outOfArea === 0) {
+    areaEl.innerHTML = '<div class="empty-state">No zip or out-of-area data yet.</div>';
+  } else {
+    if (outOfArea > 0) {
+      areaHtml += barRowWide('Out-of-area bounces', outOfArea, Math.max(outOfArea,1), 'red');
+    }
+    areaEl.innerHTML = areaHtml || '<div class="empty-state">No out-of-area bounces yet — all zips are in Citrus County. ✅</div>';
+  }
+
+  // ── RECENT VISITS ────────────────────────────────────────────────────────
+  _allVisits = an.recentVisits || [];
+  filterVisits('all', document.querySelector('.tab-btn.active'));
+
+  document.getElementById('loadingState').style.display  = 'none';
+  document.getElementById('statsContent').style.display  = 'block';
+}
+
+// ── FUNNEL ───────────────────────────────────────────────────────────────
+function renderFunnel(E, totalViews, uniqueVis) {
+  const STEPS = [
+    { key: null,                          label: '0 · Unique Visitors',            color:'#4b5563' },
+    { key: 'quote_opened',                label: '1 · Quote modal opened',         color:'#2d6a2d' },
+    { key: 'quote_price_viewed',          label: '2 · Saw their price (Step 3)',   color:'#3d8c3d' },
+    { key: 'quote_payment_step_reached',  label: '3 · Reached payment (Step 4)',   color:'#4caf50' },
+    { key: 'payment_attempted',           label: '4 · Clicked "Book Now"',         color:'#72c472' },
+    { key: 'booking_completed',           label: '5 · Booking confirmed ✅',        color:'#9edd9e' },
+  ];
+
+  const counts = STEPS.map((s,i) => {
+    if (i===0) return uniqueVis;
+    return E[s.key] || 0;
+  });
+  const top = counts[0] || 0;
+
+  if (top === 0) {
+    document.getElementById('funnelChart').innerHTML =
+      '<div class="empty-state">No funnel data yet. Funnel populates once visitors arrive.</div>';
+    return;
+  }
+
+  // Find biggest drop
+  let biggestDropIdx = -1;
+  let biggestDrop = 0;
+  for (let i = 1; i < counts.length; i++) {
+    const prev = counts[i-1];
+    const drop = prev > 0 ? pct(prev - counts[i], prev) : 0;
+    if (drop > biggestDrop) { biggestDrop = drop; biggestDropIdx = i; }
+  }
+
+  let html = '';
+  STEPS.forEach((step, i) => {
+    const cnt  = counts[i];
+    const w    = top > 0 ? Math.round((cnt/top)*100) : 0;
+    let dropHtml = '';
+
+    if (i > 0) {
+      const prev = counts[i-1];
+      if (prev > 0) {
+        const drop = pct(prev - cnt, prev);
+        const cls  = drop === 0 ? 'ok' : drop < 20 ? 'ok' : drop < 50 ? 'warn' : 'bad';
+        const arrow = i === biggestDropIdx
+          ? '<span style="color:#ef4444;font-weight:700;font-size:18px;">⬇️ BIGGEST LEAK</span>'
+          : '↓';
+        html += `<div class="funnel-arrow" style="margin-left:230px;">${arrow}</div>`;
+        dropHtml = drop > 0
+          ? `<span class="funnel-drop ${cls}">-${drop}%</span>`
+          : `<span class="funnel-drop ok">no drop ✓</span>`;
+      }
+    }
+
+    html += `<div class="funnel-step">
+      <div class="funnel-label">${esc(step.label)}${dropHtml}</div>
+      <div class="funnel-bar-wrap">
+        <div class="funnel-bar-fill" style="width:${w}%;background:${step.color}">
+          ${cnt > 0 ? cnt.toLocaleString() : ''}
+        </div>
+      </div>
+      <div class="funnel-pct">${w}%</div>
+    </div>`;
+  });
+
+  // Takeaway
+  const opens     = counts[1];
+  const completed = counts[5];
+  const convRate  = pct(completed, opens);
+  let insight = '';
+  if (opens === 0) {
+    insight = '⏳ No quote opens yet — the funnel will appear here once people start the quote flow.';
+  } else if (counts[2] === 0) {
+    insight = '🛑 Nobody is making it past the address form (Step 1→2). The form may be too confusing or the button isn\'t clear. Try simplifying or moving the CTA higher.';
+  } else if (biggestDropIdx === 2 && biggestDrop >= 50) {
+    insight = `💸 ${biggestDrop}% of people who see their price immediately leave. They may find the price too high, or the plan options confusing. Consider A/B testing a discount or simplifying plan selection.`;
+  } else if (biggestDropIdx === 3 && biggestDrop >= 40) {
+    insight = `📅 ${biggestDrop}% drop off between seeing price and entering payment. The date picker or payment card entry may be causing friction. Try moving the card entry later or making the date picker simpler.`;
+  } else if (counts[4] > 0 && completed < counts[4]) {
+    insight = `💳 People are hitting "Book Now" but not completing. Check for payment errors below — Stripe may be having issues.`;
+  } else if (completed > 0) {
+    insight = `✅ Funnel looks healthy with ${convRate}% conversion (quote opens → bookings). Keep driving quality traffic.`;
+  }
+
+  html = `<div class="alert-banner ${completed>0?'green':'yellow'}" style="margin-bottom:20px;">${insight}</div>` + html;
+  document.getElementById('funnelChart').innerHTML = html;
+  document.getElementById('funnelAlert').innerHTML = '';
+}
+
+// ── PLAN PREFERENCE ───────────────────────────────────────────────────────
+function renderPlanPref(biweekly, weekly) {
+  const el = document.getElementById('planPrefChart');
+  const total = biweekly + weekly;
+  if (total === 0) {
+    el.innerHTML = '<div class="empty-state">No plan selections tracked yet.<br><small>People select plans when they reach Step 3 of the quote.</small></div>';
+    return;
+  }
+  const bwPct = pct(biweekly, total);
+  const wPct  = pct(weekly, total);
+  el.innerHTML = `
+    <div class="plan-split">
+      <div class="plan-bar-wrap">
+        <div class="plan-bar">
+          <div class="plan-bar-seg" style="width:${bwPct}%;background:#2d6a2d;" title="Bi-Weekly">${bwPct>12?bwPct+'%':''}</div>
+          <div class="plan-bar-seg" style="width:${wPct}%;background:#4caf50;" title="Weekly">${wPct>12?wPct+'%':''}</div>
+        </div>
+        <div class="plan-legend">
+          <div class="plan-legend-item"><div class="plan-legend-dot" style="background:#2d6a2d;"></div>Bi-Weekly — ${biweekly} (${bwPct}%)</div>
+          <div class="plan-legend-item"><div class="plan-legend-dot" style="background:#4caf50;"></div>Weekly — ${weekly} (${wPct}%)</div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:16px;font-size:13px;color:var(--text-muted);line-height:1.6;">
+      ${biweekly > weekly
+        ? `📅 Most people prefer <strong>Bi-Weekly</strong> service. This is common — it's the sweet spot of price vs. frequency.`
+        : weekly > biweekly
+          ? `⚡ Most people prefer <strong>Weekly</strong> service. Consider promoting it more prominently.`
+          : `Even split between plans.`}
+    </div>`;
+}
+
+// ── ABANDONMENT ───────────────────────────────────────────────────────────
+function renderAbandonment(E) {
+  const ABANDON = [
+    { key: 'quote_abandoned_step1',      label: 'Closed on Step 1 (address)' },
+    { key: 'quote_abandoned_step2',      label: 'Closed on Step 2 (analyzing)' },
+    { key: 'quote_abandoned_step3',      label: 'Closed on Step 3 (saw price)' },
+    { key: 'quote_abandoned_step4',      label: 'Closed on Step 4 (payment)' },
+    { key: 'session_end_in_quote_step1', label: 'Tab closed — Step 1' },
+    { key: 'session_end_in_quote_step3', label: 'Tab closed — Step 3' },
+    { key: 'session_end_in_quote_step4', label: 'Tab closed — Step 4' },
+  ];
+  const data = ABANDON.map(s => ({label:s.label, count:E[s.key]||0}))
+    .filter(s=>s.count>0).sort((a,b)=>b.count-a.count);
+  const el = document.getElementById('abandonChart');
+  if (data.length === 0) {
+    el.innerHTML = '<div class="empty-state">No abandonment data yet.</div>';
+  } else {
+    const max = data[0].count;
+    el.innerHTML = data.map(s => barRowWide(s.label, s.count, max, 'red')).join('');
+  }
+}
+
+// ── ENGAGEMENT SIGNALS ────────────────────────────────────────────────────
+function renderEngagement(E) {
+  const ENGAGE = [
+    { key:'phone_click',            label:'📞 Phone number clicked' },
+    { key:'google_reviews_click',   label:'⭐ Clicked Google Reviews' },
+    { key:'exit_intent_step0',      label:'🖱️ Exit intent (not in quote)' },
+    { key:'exit_intent_step1',      label:'🖱️ Exit intent (Step 1)' },
+    { key:'exit_intent_step3',      label:'🖱️ Exit intent (saw price)' },
+    { key:'exit_intent_step4',      label:'🖱️ Exit intent (payment)' },
+    { key:'plan_selected_biweekly', label:'📅 Bi-Weekly plan selected' },
+    { key:'plan_selected_weekly',   label:'⚡ Weekly plan selected' },
+    { key:'payment_attempted',      label:'💳 Clicked "Book Now"' },
+    { key:'payment_error',          label:'🚫 Payment error' },
+    { key:'legacy_booking_attempted', label:'📋 Legacy booking attempt' },
+    { key:'zip_out_of_area',        label:'🚫 Out-of-area zip rejected' },
+  ];
+  const data = ENGAGE.map(s=>({label:s.label,count:E[s.key]||0}))
+    .filter(s=>s.count>0).sort((a,b)=>b.count-a.count);
+  const el = document.getElementById('engagementChart');
+  if (data.length === 0) {
+    el.innerHTML = '<div class="empty-state">No engagement data yet.</div>';
+  } else {
+    const max = data[0].count;
+    el.innerHTML = data.map(s => {
+      const isRed = s.label.includes('🚫') || s.label.includes('error');
+      return barRowWide(s.label, s.count, max, isRed?'red':'');
+    }).join('');
+  }
+}
+
+// ── HOURLY HEATMAP ────────────────────────────────────────────────────────
+function renderHourly(visits) {
+  const hours = new Array(24).fill(0);
+  const days  = new Array(7).fill(0);
+  const DAY_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  visits.forEach(v => {
+    if (!v.ts) return;
+    // ts is a string like "5/7/2026, 3:14 PM" or "2026-05-07T15:14:00Z"
+    try {
+      const d = new Date(v.ts);
+      if (isNaN(d)) return;
+      hours[d.getHours()]++;
+      days[d.getDay()]++;
+    } catch(e) {}
+  });
+
+  const totalH = hours.reduce((a,b)=>a+b,0);
+  const maxH   = Math.max(...hours, 1);
+  const totalD = days.reduce((a,b)=>a+b,0);
+  const maxD   = Math.max(...days, 1);
+
+  const heatEl = document.getElementById('hourlyHeatmap');
+  if (totalH === 0) {
+    heatEl.innerHTML = '<div class="empty-state">Not enough timestamp data to show hourly pattern.</div>';
+    document.getElementById('dowSection').style.display = 'none';
+    return;
+  }
+
+  // Color intensity based on share of traffic
+  function heatColor(count, max) {
+    if (count === 0) return '#e8f5e9';
+    const p = count / max;
+    if (p < 0.25) return '#c8e6c9';
+    if (p < 0.5)  return '#81c784';
+    if (p < 0.75) return '#4caf50';
+    return '#2d6a2d';
+  }
+  function textColor(count, max) {
+    return count/max >= 0.5 ? '#fff' : 'var(--text-muted)';
+  }
+
+  const HOUR_LABELS = [
+    '12a','1a','2a','3a','4a','5a','6a','7a','8a','9a','10a','11a',
+    '12p','1p','2p','3p','4p','5p','6p','7p','8p','9p','10p','11p'
+  ];
+
+  heatEl.innerHTML = `
+    <div class="heatmap-label">Hours in local time — darker = more traffic</div>
+    <div class="heatmap-grid">
+      ${hours.map((cnt,h) => `
+        <div class="heatmap-cell"
+             style="background:${heatColor(cnt,maxH)};color:${textColor(cnt,maxH)};"
+             title="${HOUR_LABELS[h]}: ${cnt} visit${cnt!==1?'s':''}">
+          ${HOUR_LABELS[h]}
+        </div>`).join('')}
+    </div>`;
+
+  // Day of week
+  const dowEl = document.getElementById('dowChart');
+  dowEl.innerHTML = days.map((cnt,d) => {
+    const w = pct(cnt, maxD);
+    return `<div class="bar-row">
+      <div class="bar-label" style="min-width:60px;">${esc(DAY_LABELS[d])}</div>
+      <div class="bar-wrap"><div class="bar-fill" style="width:${w}%;background:${cnt===maxD?'#2d6a2d':'#4caf50'}"></div></div>
+      <div class="bar-count">${cnt}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── VISIT FILTER / RECENT ACTIVITY ────────────────────────────────────────
+let _allVisits = [];
+function filterVisits(mode, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const visEl = document.getElementById('recentVisits');
+  let visits = _allVisits;
+  if (mode === 'pages')  visits = visits.filter(v => !String(v.page||'').startsWith('/evt/'));
+  if (mode === 'events') visits = visits.filter(v =>  String(v.page||'').startsWith('/evt/'));
+  if (!visits.length) { visEl.innerHTML = '<div class="empty-state">No activity in this view.</div>'; return; }
+  const EVENT_ICONS = {
+    quote_opened:'🟢', quote_price_viewed:'💵', quote_payment_step_reached:'💳',
+    booking_completed:'✅', payment_attempted:'🔒', payment_error:'🚫',
+    zip_out_of_area:'🚫', phone_click:'📞', google_reviews_click:'⭐',
+    plan_selected_biweekly:'📅', plan_selected_weekly:'⚡',
+    quote_abandoned_step1:'🚪', quote_abandoned_step3:'🚪', quote_abandoned_step4:'🚪',
+    exit_intent_step0:'🖱️', exit_intent_step1:'🖱️', exit_intent_step3:'🖱️',
+  };
+  visEl.innerHTML = visits.map(v => {
+    const isEvt = String(v.page||'').startsWith('/evt/');
+    const evtKey = isEvt ? v.page.replace('/evt/','') : null;
+    const icon = evtKey ? (EVENT_ICONS[evtKey] || '📌') : '📄';
+    const label = isEvt ? evtKey.replace(/_/g,' ') : (v.page || '/');
+    const refStr = v.ref && v.ref !== 'direct' ? `<span class="visit-ref">← ${esc(v.ref.substring(0,40))}</span>` : '';
+    return `<div class="visit-row"><span style="font-size:14px;">${icon}</span><span class="${isEvt?'visit-event':'visit-page'}">${esc(label)}</span>${refStr}<span class="visit-ts">${esc(v.ts||'')}</span></div>`;
+  }).join('');
+}
+
+</script>
+
+<!-- ── TRACKING SNIPPET ──────────────────────────────────────────────────
+     Paste this block on every page before </body> to track visits.
+<script>
+(function(){
+  var TRACK_URL = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
+  var vid = localStorage.getItem('eg_vid');
+  if (!vid) { vid = Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem('eg_vid',vid); }
+  var ref = document.referrer||'';
+  if (!ref) ref='direct';
+  else if(/google/i.test(ref))    ref='google';
+  else if(/facebook/i.test(ref))  ref='facebook';
+  else if(/instagram/i.test(ref)) ref='instagram';
+  var params = new URLSearchParams({action:'track_visit',page:location.pathname||'/',ref:ref,ua:navigator.userAgent.substring(0,150),vid:vid});
+  navigator.sendBeacon?navigator.sendBeacon(TRACK_URL+'?'+params):fetch(TRACK_URL+'?'+params,{mode:'no-cors'});
+})();
+</scr'+'ipt>
+──────────────────────────────────────────────────────────────────────── -->
+
+</body>
+</html>

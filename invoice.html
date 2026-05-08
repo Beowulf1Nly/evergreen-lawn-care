@@ -15,7 +15,12 @@
 <meta name="robots" content="noindex, nofollow"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<!-- Non-blocking font load — page renders immediately in system font, swaps when ready -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@300;400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'"/>
+<noscript><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/></noscript>
+<!-- DNS prefetch for backend API -->
+<link rel="dns-prefetch" href="https://script.google.com"/>
+<link rel="preconnect" href="https://script.google.com"/>
 <style>
   :root {
     --green-deep: #1a3a1a; --green-mid: #2d6a2d; --green-bright:#4caf50;
@@ -927,6 +932,8 @@ function esc(str) {
   return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 function isDone(b) {
+  // rowCompleted = job was archived to the "Completed Jobs" sheet (done + paid)
+  if (b.rowCompleted) return true;
   const d = String(b.done || '');
   return d.includes('Done') || d.startsWith('✓');
 }
@@ -1193,9 +1200,12 @@ function renderCustomers() {
   const el = document.getElementById('custList');
   if (!el) return;
 
-  // Build a lookup: email → array of allBookings indices (for action buttons)
+  // Build a lookup: email → array of allBookings indices (for action buttons).
+  // Exclude rowCompleted (archived) rows — they live in the "Completed Jobs" sheet
+  // and have negative _rowIndex values; action buttons must only target active rows.
   const rowsByEmail = new Map();
   for (let i = 0; i < allBookings.length; i++) {
+    if (allBookings[i].rowCompleted) continue; // skip archived
     const em = String(allBookings[i].email || '').toLowerCase().trim();
     if (!em) continue;
     if (!rowsByEmail.has(em)) rowsByEmail.set(em, []);
@@ -1229,8 +1239,10 @@ function renderCustomers() {
     }));
   } else {
     // Fallback: deduplicate allBookings (used before Customers sheet is populated)
+    // Only use active (non-archived) rows so action buttons get correct row indices
     const map = new Map();
     for (const b of allBookings) {
+      if (b.rowCompleted) continue; // archived rows excluded from customer cards
       const em = String(b.email || '').toLowerCase().trim() || b.name;
       if (!em) continue;
       const ex = map.get(em);
@@ -1589,8 +1601,9 @@ function renderBookings() {
            (b.email||'').toLowerCase().includes(q);
   }
 
-  // Cancelled bookings are passed from the backend (for Customers tab) — exclude from Jobs view
-  let allFiltered = allBookings.filter(b => !b.rowCancelled).filter(matchesSearch);
+  // Cancelled + archived-completed bookings excluded from Jobs view
+  // rowCompleted = job is in the "Completed Jobs" archive sheet (done+paid) — only shown in Stats tab
+  let allFiltered = allBookings.filter(b => !b.rowCancelled && !b.rowCompleted).filter(matchesSearch);
 
   // Apply status filter
   if      (f === 'needs-action')     allFiltered = allFiltered.filter(b => needsAction(b));
@@ -2436,31 +2449,44 @@ async function loadStats() {
     // handleGetStats returns data.bookings + data.analytics — map to the shape this UI expects
     const b = data.bookings || {};
     const a = data.analytics || {};
-    // Convert adminStats object { "Hunter": 5 } → array [{ name, jobs }]
-    const staffActivity = Object.entries(b.adminStats || {})
+
+    // Build staffActivity from allBookings locally (includes rowCompleted archived jobs
+    // now that handleGetBookings appends them). Falls back to backend adminStats if empty.
+    const localAdminStats = {};
+    (allBookings || []).filter(bk => isDone(bk)).forEach(bk => {
+      const mb = String(bk.markedBy || bk.marked_by || '').trim() || 'Unknown';
+      localAdminStats[mb] = (localAdminStats[mb] || 0) + 1;
+    });
+    const staffActivityLocal = Object.entries(localAdminStats)
       .map(([name, jobs]) => ({ name, jobs }))
       .sort((x, y) => y.jobs - x.jobs);
-    // Calculate all stats directly from loaded bookings (backend values unreliable)
-    const localRevenue   = (allBookings || [])
-      .filter(bk => isDone(bk))
-      .reduce((sum, bk) => sum + (parseFloat(String(bk.price||'').replace(/[^0-9.]/g,''))||0), 0);
-    const localDone      = (allBookings || []).filter(bk => isDone(bk)).length;
-    const localPending   = (allBookings || []).filter(bk => {
-      if (!isDone(bk)) return false;
-      const raw = String(bk.calendarEvent || bk.payMethod || '');
+    // Fall back to server-side adminStats if local is empty (e.g. allBookings not yet loaded)
+    const staffActivity = staffActivityLocal.length
+      ? staffActivityLocal
+      : Object.entries(b.adminStats || {}).map(([name, jobs]) => ({ name, jobs })).sort((x, y) => y.jobs - x.jobs);
+
+    // Calculate all stats from allBookings (now includes rowCompleted archived rows).
+    // If allBookings is not yet loaded (race: user clicked Stats tab very fast),
+    // fall back to backend's authoritative values.
+    const allBks        = allBookings || [];
+    const doneBks       = allBks.filter(bk => isDone(bk));
+    const localRevenue  = doneBks.reduce((sum, bk) => sum + (parseFloat(String(bk.price||'').replace(/[^0-9.]/g,''))||0), 0);
+    const localDone     = doneBks.length || (b.done || 0); // fallback to backend count
+    const localPending  = allBks.filter(bk => {
+      if (!isDone(bk) || bk.rowCompleted) return false; // archived = already handled
+      const raw  = String(bk.calendarEvent || bk.payMethod || '');
       const free = String(bk.frequency||'').toLowerCase().includes('free');
       return !free && !raw.includes('✅') && !raw.toLowerCase().includes('autopay') && !raw.toLowerCase().includes('auto-pay');
     }).length;
     const s = {
-      revenue30:       localRevenue,
+      revenue30:       localRevenue || parseFloat(b.estimatedRev || 0),
       jobsDone30:      localDone,
       activeCustomers: b.customers   || 0,
       needsInvoice:    localPending,
       staffActivity,
     };
-    // Build detailed mow log from allBookings (already loaded)
-    const mowLog = (allBookings || [])
-      .filter(bk => isDone(bk))
+    // Build detailed mow log from allBookings (includes archived completed jobs)
+    const mowLog = doneBks
       .map(bk => ({
         date:    bk.doneDate || String(bk.done||'').replace(/^✓ Done —?\s*/i,'').trim() || displayDate(bk.serviceDate) || '—',
         name:    bk.name    || '—',
