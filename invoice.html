@@ -1510,7 +1510,7 @@ function renderBookings() {
 
   // Completed section — done+paid, no review sent yet (owner only)
   if (adminRole === 'owner') {
-    const compBkgs = doneBkgs.filter(b => isPaidDone(b) && !b.reviewSent);
+    const compBkgs = doneBkgs.filter(b => isPaidDone(b) && !b.reviewSent && !isQuoteVisit(b));
     const compSec  = document.getElementById('completedSection');
     if (compSec) {
       compSec.style.display = compBkgs.length ? 'block' : 'none';
@@ -1635,13 +1635,14 @@ function cardHTML(b, rowIdx, isToday) {
     }
   }
 
-  // Reschedule — owner only, undone jobs only
-  if (adminRole === 'owner' && !done) {
+  // Reschedule — owner only, undone non-quote jobs only
+  if (adminRole === 'owner' && !done && !isQuote) {
     actions += `<button class="btn-action btn-invoice" onclick="openOwnerResched(${rowIdx})" style="margin-top:4px;">📅 Reschedule</button>`;
   }
 
   // Cancel Job — owner only; free mows always cancellable, paid jobs only if not yet paid
-  if (adminRole === 'owner' && (isFree || !isPaid)) {
+  // Quote visits use the dedicated "✗ Remove" button instead
+  if (adminRole === 'owner' && !isQuote && (isFree || !isPaid)) {
     actions += `<button class="btn-action btn-cancel-job" onclick="triggerCancelJob(${rowIdx})" style="margin-top:4px;">✕ Cancel Job</button>`;
   }
 
