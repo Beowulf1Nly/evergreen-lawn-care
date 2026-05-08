@@ -1312,7 +1312,7 @@ async function submitSchedule() {
   const price = document.getElementById('schedPrice').value.trim();
   const date  = document.getElementById('schedDate').value;
   const notes = document.getElementById('schedNotes').value.trim();
-  const firstMowPromo = !!(document.getElementById('sched-promo')?.checked) && (plan === 'Weekly Plan' || plan === 'Bi-Weekly Plan');
+  const firstMowPromo = !!(document.getElementById('sched-promo')?.checked);
   if (!price || !date) { showToast('Enter a price and date.'); return; }
   const btn = document.getElementById('schedSubmitBtn');
   btn.disabled = true; btn.textContent = 'Scheduling…';
@@ -2173,15 +2173,8 @@ function onAcPlanChange() {
   updateAcPricePreview();
   // Show promo checkbox only for recurring plans
   const plan = document.getElementById('ac-plan')?.value || '';
-  const isRecurring = plan === 'Weekly Plan' || plan === 'Bi-Weekly Plan';
   const promoRow = document.getElementById('ac-promo-row');
-  if (promoRow) promoRow.style.display = isRecurring ? '' : 'none';
-  if (!isRecurring) {
-    const cb = document.getElementById('ac-promo');
-    if (cb) cb.checked = false;
-    const note = document.getElementById('ac-promo-note');
-    if (note) note.style.display = 'none';
-  }
+  if (promoRow) promoRow.style.display = '';
 }
 
 function onAcPromoChange() {
@@ -2198,15 +2191,13 @@ function onAcPromoChange() {
 }
 
 function onSchedPromoChange() {
-  const plan     = document.getElementById('schedPlan')?.value || '';
-  const isRecurring = plan === 'Weekly Plan' || plan === 'Bi-Weekly Plan';
   const promoRow = document.getElementById('sched-promo-row');
-  if (promoRow) promoRow.style.display = isRecurring ? '' : 'none';
+  if (promoRow) promoRow.style.display = '';
   const checked  = document.getElementById('sched-promo')?.checked;
   const price    = document.getElementById('schedPrice')?.value;
   const noteEl   = document.getElementById('sched-promo-note');
   if (!noteEl) return;
-  if (isRecurring && checked && price) {
+  if (checked && price) {
     noteEl.textContent = `First mow: $19 — then $${parseFloat(price).toFixed(0)}/mow after`;
     noteEl.style.display = 'block';
   } else {
@@ -2255,7 +2246,7 @@ async function addClient() {
   const price      = document.getElementById('ac-price').value;
   const notes      = document.getElementById('ac-notes').value.trim() || '(none)';
   const paymethod  = document.getElementById('ac-paymethod').value; // 'card' or 'cash'
-  const firstMowPromo = !!(document.getElementById('ac-promo')?.checked) && (plan === 'Weekly Plan' || plan === 'Bi-Weekly Plan');
+  const firstMowPromo = !!(document.getElementById('ac-promo')?.checked);
   const errEl   = document.getElementById('ac-error');
   const okEl    = document.getElementById('ac-success');
   errEl.style.display = 'none';
