@@ -222,6 +222,14 @@
   .badge-orange { background:#ffedd5; color:#c2410c; }
   .badge-gray   { background:#f3f4f6; color:#4b5563; }
 
+  /* ── Recent visits ── */
+  .visit-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .visit-row:last-child { border-bottom:none; }
+  .visit-page  { font-weight:600; color:var(--green-deep); }
+  .visit-event { font-weight:600; color:var(--blue); }
+  .visit-ref   { color:var(--text-muted); font-size:12px; }
+  .visit-ts    { color:var(--text-muted); font-size:11px; margin-left:auto; }
+
   /* ── Empty / loading ── */
   .empty-state { text-align:center; color:var(--text-muted); padding:32px 20px; font-size:14px; }
   .loading-spinner { text-align:center; padding:60px; color:var(--text-muted); font-size:15px; }
@@ -389,28 +397,16 @@
       </div>
 
       <!-- ══════════════════════════════════════════════
-           SECTION 9: SESSION DURATION
+           SECTION 9: RECENT ACTIVITY STREAM
       ══════════════════════════════════════════════ -->
       <div class="section-block">
-        <div class="section-title">⏱️ How Long Are People Staying?</div>
-        <p class="section-sub">Session duration breakdown. Lots of instant bounces = ad quality or landing page issue. Longer sessions = people are actually engaged.</p>
-        <div id="sessionDurChart"><div class="empty-state">No duration data yet. Fires when visitors leave the page.</div></div>
-      </div>
-
-      <!-- ══════════════════════════════════════════════
-           SECTION 10: TIME PER STEP + EXIT ANALYSIS
-      ══════════════════════════════════════════════ -->
-      <div class="two-col">
-        <div class="section-block">
-          <div class="section-title">⏳ Time Per Funnel Step</div>
-          <p class="section-sub">How long people spend on each step before advancing or leaving. Slow = friction. Fast = smooth or skimming.</p>
-          <div id="stepDurChart"><div class="empty-state">No step timing data yet.</div></div>
+        <div class="section-title">🕐 Recent Activity Stream <small style="font-size:12px;font-weight:400;color:var(--text-muted);">(last 50 events)</small></div>
+        <div class="tab-nav">
+          <button class="tab-btn active" onclick="filterVisits('all',this)">All</button>
+          <button class="tab-btn" onclick="filterVisits('pages',this)">Page Views</button>
+          <button class="tab-btn" onclick="filterVisits('events',this)">Funnel Events</button>
         </div>
-        <div class="section-block">
-          <div class="section-title">🚪 Where Are People Leaving?</div>
-          <p class="section-sub">All exit signals combined — instant bounces, abandoned steps, out-of-area rejections. Biggest bar = your #1 problem to fix.</p>
-          <div id="exitAnalysisChart"><div class="empty-state">No exit data yet.</div></div>
-        </div>
+        <div id="recentVisits"><div class="empty-state">No activity yet.</div></div>
       </div>
 
     </div>
@@ -700,10 +696,9 @@ function renderStats(data) {
     areaEl.innerHTML = areaHtml || '<div class="empty-state">No out-of-area bounces yet — all zips are in Citrus County. ✅</div>';
   }
 
-  // ── NEW CONVERSION SECTIONS ────────────────────────────────────────────────
-  renderSessionDuration(E);
-  renderStepDuration(E);
-  renderExitAnalysis(E);
+  // ── RECENT VISITS ────────────────────────────────────────────────────────
+  _allVisits = an.recentVisits || [];
+  filterVisits('all', document.querySelector('.tab-btn.active'));
 
   document.getElementById('loadingState').style.display  = 'none';
   document.getElementById('statsContent').style.display  = 'block';
@@ -951,113 +946,34 @@ function renderHourly(visits) {
   }).join('');
 }
 
-// ── SESSION DURATION ──────────────────────────────────────────────────────
-function fmtDur(secs) {
-  if (secs < 60) return secs + 's';
-  const m = Math.floor(secs / 60), s = secs % 60;
-  return m + 'm' + (s > 0 ? ' ' + s + 's' : '');
+// ── VISIT FILTER / RECENT ACTIVITY ────────────────────────────────────────
+let _allVisits = [];
+function filterVisits(mode, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const visEl = document.getElementById('recentVisits');
+  let visits = _allVisits;
+  if (mode === 'pages')  visits = visits.filter(v => !String(v.page||'').startsWith('/evt/'));
+  if (mode === 'events') visits = visits.filter(v =>  String(v.page||'').startsWith('/evt/'));
+  if (!visits.length) { visEl.innerHTML = '<div class="empty-state">No activity in this view.</div>'; return; }
+  const EVENT_ICONS = {
+    quote_opened:'🟢', quote_price_viewed:'💵', quote_payment_step_reached:'💳',
+    booking_completed:'✅', payment_attempted:'🔒', payment_error:'🚫',
+    zip_out_of_area:'🚫', phone_click:'📞', google_reviews_click:'⭐',
+    plan_selected_biweekly:'📅', plan_selected_weekly:'⚡',
+    quote_abandoned_step1:'🚪', quote_abandoned_step3:'🚪', quote_abandoned_step4:'🚪',
+    exit_intent_step0:'🖱️', exit_intent_step1:'🖱️', exit_intent_step3:'🖱️',
+  };
+  visEl.innerHTML = visits.map(v => {
+    const isEvt = String(v.page||'').startsWith('/evt/');
+    const evtKey = isEvt ? v.page.replace('/evt/','') : null;
+    const icon = evtKey ? (EVENT_ICONS[evtKey] || '📌') : '📄';
+    const label = isEvt ? evtKey.replace(/_/g,' ') : (v.page || '/');
+    const refStr = v.ref && v.ref !== 'direct' ? `<span class="visit-ref">← ${esc(v.ref.substring(0,40))}</span>` : '';
+    return `<div class="visit-row"><span style="font-size:14px;">${icon}</span><span class="${isEvt?'visit-event':'visit-page'}">${esc(label)}</span>${refStr}<span class="visit-ts">${esc(v.ts||'')}</span></div>`;
+  }).join('');
 }
 
-function renderSessionDuration(E) {
-  const BUCKETS = [
-    { key:'session_dur_instant', label:'< 10s — Instant bounce',    color:'red',    mid:5   },
-    { key:'session_dur_quick',   label:'10–30s — Quick look',       color:'orange', mid:20  },
-    { key:'session_dur_short',   label:'30s–1.5min — Short visit',  color:'',       mid:60  },
-    { key:'session_dur_medium',  label:'1.5–5min — Engaged',        color:'',       mid:195 },
-    { key:'session_dur_long',    label:'5min+ — Highly engaged',    color:'',       mid:420 },
-  ];
-  const data  = BUCKETS.map(b => ({ ...b, count: E[b.key] || 0 }));
-  const total = data.reduce((s, b) => s + b.count, 0);
-  const el    = document.getElementById('sessionDurChart');
-  if (total === 0) {
-    el.innerHTML = '<div class="empty-state">No session duration data yet.<br><small>Fires when visitors leave the page.</small></div>';
-    return;
-  }
-  const max        = Math.max(...data.map(b => b.count), 1);
-  const avgSecs    = Math.round(data.reduce((s, b) => s + b.count * b.mid, 0) / total);
-  const bounceRate = pct(data[0].count, total);
-  let html = `<div style="display:flex;gap:32px;flex-wrap:wrap;margin-bottom:20px;align-items:flex-end;">
-    <div><div class="kpi-label">Est. Avg Session</div><div class="kpi-value" style="font-size:28px;">${fmtDur(avgSecs)}</div></div>
-    <div><div class="kpi-label">Bounce Rate</div><div class="kpi-value" style="font-size:28px;color:${bounceRate > 60 ? '#b91c1c' : bounceRate > 40 ? '#c2410c' : 'var(--green-deep)'};">${bounceRate}%</div></div>
-    <div><div class="kpi-label">Sessions Tracked</div><div class="kpi-value" style="font-size:28px;">${total.toLocaleString()}</div></div>
-  </div>`;
-  html += data.map(b => barRowWide(b.label, b.count, max, b.color)).join('');
-  el.innerHTML = html;
-}
-
-// ── TIME PER FUNNEL STEP ───────────────────────────────────────────────────
-function renderStepDuration(E) {
-  const STEPS = [
-    { num:1, label:'Step 1 · Address form' },
-    { num:3, label:'Step 3 · Saw their price' },
-    { num:4, label:'Step 4 · Payment entry' },
-  ];
-  let html   = '';
-  let hasAny = false;
-  STEPS.forEach(step => {
-    const fast   = E['step' + step.num + '_dur_fast']   || 0;
-    const medium = E['step' + step.num + '_dur_medium'] || 0;
-    const slow   = E['step' + step.num + '_dur_slow']   || 0;
-    const total  = fast + medium + slow;
-    if (total === 0) return;
-    hasAny = true;
-    const fp = pct(fast, total), mp = pct(medium, total), sp = pct(slow, total);
-    let insight = '';
-    if (total >= 5) {
-      if (sp > 50)     insight = '⚠️ Most people stall here — friction or confusion.';
-      else if (fp > 70) insight = '✅ People move through quickly.';
-      else              insight = '📊 Mixed pacing.';
-    }
-    html += `<div style="margin-bottom:20px;">
-      <div style="font-size:13px;font-weight:700;color:var(--green-deep);margin-bottom:6px;">${esc(step.label)} <span style="font-weight:400;color:var(--text-muted);">${total} tracked</span></div>
-      <div style="display:flex;border-radius:6px;overflow:hidden;height:22px;margin-bottom:5px;">
-        <div style="width:${fp}%;background:#4caf50;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;">${fp > 12 ? fp + '%' : ''}</div>
-        <div style="width:${mp}%;background:#f97316;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;">${mp > 12 ? mp + '%' : ''}</div>
-        <div style="width:${sp}%;background:#e53e3e;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;">${sp > 12 ? sp + '%' : ''}</div>
-      </div>
-      <div style="display:flex;gap:14px;font-size:12px;color:var(--text-muted);flex-wrap:wrap;">
-        <span><span style="color:#4caf50;font-weight:700;">■</span> Fast &lt;15s: ${fast}</span>
-        <span><span style="color:#f97316;font-weight:700;">■</span> Medium 15–60s: ${medium}</span>
-        <span><span style="color:#e53e3e;font-weight:700;">■</span> Slow 60s+: ${slow}</span>
-      </div>
-      ${insight ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${insight}</div>` : ''}
-    </div>`;
-  });
-  const el = document.getElementById('stepDurChart');
-  el.innerHTML = hasAny ? html : '<div class="empty-state">No step timing data yet.<br><small>Appears once visitors use the quote flow.</small></div>';
-}
-
-// ── EXIT ANALYSIS ──────────────────────────────────────────────────────────
-function renderExitAnalysis(E) {
-  const exits = [
-    { label:'🏃 Instant bounce (< 10s)',     count: E['session_dur_instant'] || 0,                                                                color:'red',    tip:'Never engaged — check ad targeting or landing page.' },
-    { label:'🖱️ Left before entering quote', count: E['exit_intent_step0']   || 0,                                                                color:'orange', tip:'Visited the site but never opened the quote flow.' },
-    { label:'🚫 Out-of-area zip rejection',  count: E['zip_out_of_area']     || 0,                                                                color:'red',    tip:'Wanted service but outside your coverage area.' },
-    { label:'📝 Quit on Step 1 (address)',   count: (E['quote_abandoned_step1'] || 0) + (E['session_end_in_quote_step1'] || 0),                   color:'orange', tip:'Started quote but left at the address form.' },
-    { label:'💸 Quit after seeing price',    count: (E['quote_abandoned_step3'] || 0) + (E['session_end_in_quote_step3'] || 0),                   color:'orange', tip:'Saw the price and left — price shock or plan confusion.' },
-    { label:'💳 Quit at payment step',       count: (E['quote_abandoned_step4'] || 0) + (E['session_end_in_quote_step4'] || 0),                   color:'red',    tip:'Got to payment but didn\'t complete — card friction or trust issue.' },
-  ].filter(e => e.count > 0).sort((a, b) => b.count - a.count);
-
-  const el = document.getElementById('exitAnalysisChart');
-  if (exits.length === 0) {
-    el.innerHTML = '<div class="empty-state">No exit data yet.</div>';
-    return;
-  }
-  const max   = exits[0].count;
-  const total = exits.reduce((s, e) => s + e.count, 0);
-  const top   = exits[0];
-  let html = `<div class="alert-banner yellow" style="margin-bottom:14px;font-size:13px;">🎯 <strong>Biggest exit point:</strong> ${esc(top.label)}<br>${esc(top.tip)}</div>`;
-  exits.forEach(e => {
-    const w = max > 0 ? Math.round((e.count / max) * 100) : 0;
-    html += `<div class="bar-row" title="${esc(e.tip)}">
-      <div class="bar-label-wide">${esc(e.label)}</div>
-      <div class="bar-wrap"><div class="bar-fill ${e.color || ''}" style="width:${w}%"></div></div>
-      <div class="bar-count">${e.count}</div>
-      <div class="bar-pct">${pct(e.count, total)}%</div>
-    </div>`;
-  });
-  el.innerHTML = html;
-}
 </script>
 
 <!-- ── TRACKING SNIPPET ──────────────────────────────────────────────────
