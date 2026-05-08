@@ -383,6 +383,52 @@
   .stat-card.gold  { border-left:4px solid var(--gold); }
   .stat-card.blue  { border-left:4px solid #3b82f6; }
 
+  /* ── Analytics dashboard ── */
+  .an-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-bottom:24px; }
+  .an-kpi-card { background:#fff; border-radius:14px; padding:20px 16px; text-align:center; border-top:4px solid var(--green-bright); box-shadow:0 2px 10px rgba(0,0,0,.05); }
+  .an-kpi-card.red    { border-top-color:#e53e3e; }
+  .an-kpi-card.orange { border-top-color:#f97316; }
+  .an-kpi-card.blue   { border-top-color:#3b82f6; }
+  .an-kpi-card.purple { border-top-color:#8b5cf6; }
+  .an-kpi-card.gold   { border-top-color:var(--gold); }
+  .an-kpi-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); margin-bottom:6px; }
+  .an-kpi-value { font-size:30px; font-weight:800; color:var(--green-deep); line-height:1; }
+  .an-kpi-card.red .an-kpi-value    { color:#b91c1c; }
+  .an-kpi-card.orange .an-kpi-value { color:#c2410c; }
+  .an-kpi-card.blue .an-kpi-value   { color:#1d4ed8; }
+  .an-kpi-card.purple .an-kpi-value { color:#6d28d9; }
+  .an-kpi-card.gold .an-kpi-value   { color:#92400e; }
+  .an-kpi-sub { font-size:11px; color:var(--text-muted); margin-top:4px; }
+  .an-section { background:#fff; border:1.5px solid var(--border); border-radius:14px; padding:20px 24px; margin-bottom:18px; }
+  .an-title { font-size:14px; font-weight:700; color:var(--green-deep); margin-bottom:4px; }
+  .an-sub { font-size:13px; color:var(--text-muted); margin-bottom:14px; line-height:1.5; }
+  .an-two-col { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:18px; }
+  @media(max-width:700px) { .an-two-col { grid-template-columns:1fr; } }
+  .an-bar { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .an-bar-lbl { font-size:13px; min-width:190px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .an-bar-lbl-sm { font-size:13px; min-width:130px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .an-bar-track { flex:1; background:#e8f5e9; border-radius:4px; height:13px; overflow:hidden; }
+  .an-bar-fill { height:100%; background:var(--green-mid); border-radius:4px; transition:width .4s; }
+  .an-bar-fill.red    { background:#f87171; }
+  .an-bar-fill.orange { background:#fb923c; }
+  .an-bar-n { font-size:13px; font-weight:700; color:var(--green-deep); min-width:30px; text-align:right; }
+  .an-bar-pct { font-size:12px; color:var(--text-muted); min-width:34px; text-align:right; }
+  .an-funnel-step { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .an-funnel-lbl { font-size:13px; font-weight:600; color:var(--green-deep); min-width:210px; }
+  .an-funnel-track { flex:1; background:#e8f5e9; border-radius:6px; height:28px; overflow:hidden; }
+  .an-funnel-fill { height:100%; border-radius:6px; display:flex; align-items:center; padding-left:10px; font-size:12px; font-weight:700; color:#fff; white-space:nowrap; transition:width .5s; }
+  .an-funnel-pct { font-size:13px; color:var(--text-muted); min-width:40px; text-align:right; font-weight:600; }
+  .an-drop { font-size:11px; font-weight:700; padding:2px 7px; border-radius:20px; margin-left:4px; }
+  .an-drop.bad  { background:#fee2e2; color:#b91c1c; }
+  .an-drop.ok   { background:#dcfce7; color:#166534; }
+  .an-drop.warn { background:#fef3c7; color:#92400e; }
+  .an-alert { border-radius:10px; padding:12px 16px; margin-bottom:14px; font-size:13px; line-height:1.6; }
+  .an-alert.green  { background:#f0fdf4; border:1.5px solid #86efac; color:#166534; }
+  .an-alert.yellow { background:#fffbeb; border:1.5px solid #fcd34d; color:#92400e; }
+  .an-alert.red    { background:#fef2f2; border:1.5px solid #fca5a5; color:#991b1b; }
+  .an-heat { display:flex; gap:3px; flex-wrap:wrap; }
+  .an-heat-cell { width:30px; height:30px; border-radius:5px; background:#e8f5e9; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:var(--text-muted); cursor:default; }
+
   /* ── Mow log table ── */
   .mow-log-table { width:100%; border-collapse:collapse; font-size:13px; }
   .mow-log-table th { text-align:left; padding:10px 12px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); border-bottom:2px solid var(--border); background:#f8faf8; }
@@ -2420,82 +2466,386 @@ async function loadStats() {
 // ═══════════════════════════════════════════════════════
 async function loadAnalytics() {
   const el = document.getElementById('analyticsContent');
-  el.innerHTML = '<div class="empty-state" style="padding:40px;">Loading…</div>';
+  el.innerHTML = '<div class="empty-state" style="padding:40px;">Loading analytics…</div>';
   try {
     const res  = await fetch(SCRIPT_URL + '?action=get_stats&' + authParam());
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'Failed');
-    const a = data.analytics || {};
+    const bk = data.bookings  || {};
+    const an = data.analytics || {};
 
-    // ── Bar chart helper ──────────────────────────────────────────────────
-    function barChart(entries, max) {
-      if (!entries.length) return '<div style="color:var(--text-muted);font-size:14px;padding:8px 0;">No data yet.</div>';
-      return entries.map(([label, count]) => `
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-          <div style="font-size:13px;min-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);" title="${esc(label)}">${esc(label)}</div>
-          <div style="flex:1;background:#e8f5e9;border-radius:4px;height:14px;overflow:hidden;">
-            <div style="height:100%;background:var(--green-mid);border-radius:4px;width:${Math.round(count/max*100)}%;transition:width .4s;"></div>
-          </div>
-          <div style="font-size:13px;font-weight:700;color:var(--green-deep);min-width:28px;text-align:right;">${count}</div>
-        </div>`).join('');
-    }
+    // Extract event counts from /evt/ virtual pageviews
+    const pageStats = an.pageStats || {};
+    const E = {};
+    Object.entries(pageStats).forEach(([page, count]) => {
+      if (page.startsWith('/evt/')) E[page.replace('/evt/', '')] = count;
+    });
 
-    // ── Page views ────────────────────────────────────────────────────────
-    const pages    = Object.entries(a.pageStats || {}).sort((a,b) => b[1]-a[1]).slice(0,15);
-    const maxPages = pages[0]?.[1] || 1;
+    const totalViews = an.totalVisits    || 0;
+    const uniqueVis  = an.uniqueVisitors || 0;
+    const quoteOpens = E['quote_opened'] || 0;
+    const bookCompleted = (E['booking_completed'] || 0) + (E['booking_completed_legacy'] || 0);
+    const convRate   = anPct(bookCompleted, quoteOpens);
+    const revenue    = parseFloat(bk.estimatedRev || 0);
 
-    // ── Referrers ─────────────────────────────────────────────────────────
-    const refs    = Object.entries(a.refStats || {}).sort((a,b) => b[1]-a[1]).slice(0,10);
-    const maxRefs = refs[0]?.[1] || 1;
-    const refLabels = refs.map(([r, c]) => [r === 'direct' ? '(direct / none)' : r.replace(/^https?:\/\//,'').substring(0,60), c]);
-
-    // ── Recent visits ─────────────────────────────────────────────────────
-    const visits = (a.recentVisits || []).slice(0, 50);
-    const visitsHtml = visits.length
-      ? visits.map(v => `
-          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;">
-            <span style="font-weight:600;color:var(--green-deep);">${esc(v.page||'/')}</span>
-            <span style="color:var(--text-muted);">${v.ref && v.ref !== 'direct' ? '← ' + esc(v.ref.replace(/^https?:\/\//,'').substring(0,50)) : '(direct)'}</span>
-            <span style="color:var(--text-muted);font-size:12px;margin-left:auto;">${esc(v.ts||'')}</span>
-          </div>`).join('')
-      : '<div style="color:var(--text-muted);font-size:14px;padding:12px 0;">No visits tracked yet.</div>';
-
+    // Set up the full dashboard shell
     el.innerHTML = `
-      <!-- Stat cards -->
-      <div class="stats-grid" style="margin-bottom:28px;">
-        <div class="stat-card blue">
-          <div class="stat-num">${a.totalVisits ?? '—'}</div>
-          <div class="stat-label">Total page views</div>
-        </div>
-        <div class="stat-card blue">
-          <div class="stat-num">${a.uniqueVisitors ?? '—'}</div>
-          <div class="stat-label">Unique visitors</div>
-        </div>
-      </div>
+      <div style="padding:4px 0 8px;">
 
-      <!-- Two-column: pages + sources -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;margin-bottom:24px;">
-        <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;">
-          <div class="section-label" style="margin-bottom:16px;">📄 Views by Page</div>
-          ${barChart(pages, maxPages)}
-        </div>
-        <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;">
-          <div class="section-label" style="margin-bottom:16px;">🔗 Traffic Sources</div>
-          ${barChart(refLabels, maxRefs)}
-        </div>
-      </div>
+        <!-- KPI row -->
+        <div class="an-kpi-grid" id="an-kpis"></div>
 
-      <!-- Recent visits -->
-      <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;">
-        <div class="section-label" style="margin-bottom:16px;">
-          🕐 Recent Visitors
-          <span style="font-size:11px;font-weight:500;color:var(--text-muted);text-transform:none;letter-spacing:0;margin-left:4px;">(last 50)</span>
+        <!-- Funnel -->
+        <div class="an-section">
+          <div class="an-title">🔍 Quote Funnel — Where Are They Dropping Off?</div>
+          <div class="an-sub">Every visitor from first click to confirmed booking. The biggest % drop is your biggest opportunity.</div>
+          <div id="an-funnel"></div>
         </div>
-        ${visitsHtml}
+
+        <!-- Session duration + Exit analysis -->
+        <div class="an-two-col">
+          <div class="an-section" style="margin-bottom:0;">
+            <div class="an-title">⏱️ How Long Are People Staying?</div>
+            <div class="an-sub">Session duration breakdown. High instant-bounce = ad or landing page issue.</div>
+            <div id="an-session-dur"></div>
+          </div>
+          <div class="an-section" style="margin-bottom:0;">
+            <div class="an-title">🚪 Where Are People Leaving?</div>
+            <div class="an-sub">All exit signals ranked. Biggest bar = #1 problem to fix.</div>
+            <div id="an-exits"></div>
+          </div>
+        </div>
+        <div style="margin-bottom:18px;"></div>
+
+        <!-- Time per step + Plan preference -->
+        <div class="an-two-col">
+          <div class="an-section" style="margin-bottom:0;">
+            <div class="an-title">⏳ Time Per Funnel Step</div>
+            <div class="an-sub">How long people spend on each step. Slow = friction.</div>
+            <div id="an-step-dur"></div>
+          </div>
+          <div class="an-section" style="margin-bottom:0;">
+            <div class="an-title">📅 Plan Preferences</div>
+            <div class="an-sub">Which plan are people choosing when they see their price?</div>
+            <div id="an-plans"></div>
+          </div>
+        </div>
+        <div style="margin-bottom:18px;"></div>
+
+        <!-- Traffic sources + FAQ -->
+        <div class="an-two-col">
+          <div class="an-section" style="margin-bottom:0;">
+            <div class="an-title">🔗 Traffic Sources</div>
+            <div class="an-sub">Where are visitors coming from?</div>
+            <div id="an-refs"></div>
+          </div>
+          <div class="an-section" style="margin-bottom:0;">
+            <div class="an-title">❓ FAQ Interactions</div>
+            <div class="an-sub">High interest = a blocker stopping people from booking.</div>
+            <div id="an-faq"></div>
+          </div>
+        </div>
+        <div style="margin-bottom:18px;"></div>
+
+        <!-- Hourly heatmap -->
+        <div class="an-section">
+          <div class="an-title">⏰ When Are People Visiting?</div>
+          <div class="an-sub">Hour-of-day traffic pattern. Useful for knowing when to run ads.</div>
+          <div id="an-hourly"></div>
+        </div>
+
       </div>`;
+
+    // Now populate each section
+    anRenderKpis(E, bk, an, totalViews, uniqueVis, quoteOpens, bookCompleted, convRate, revenue);
+    anRenderFunnel(E, totalViews, uniqueVis);
+    anRenderSessionDur(E);
+    anRenderExits(E);
+    anRenderStepDur(E);
+    anRenderPlans(E['plan_selected_biweekly'] || 0, E['plan_selected_weekly'] || 0);
+    anRenderRefs(an.refStats || {});
+    anRenderFaq(E);
+    anRenderHourly(an.recentVisits || []);
+
   } catch(err) {
-    el.innerHTML = `<div class="empty-state" style="padding:40px;">⚠️ Could not load analytics: ${esc(err.message)}</div>`;
+    document.getElementById('analyticsContent').innerHTML =
+      `<div class="empty-state" style="padding:40px;">⚠️ Could not load analytics: ${esc(err.message)}</div>`;
   }
+}
+
+// ── Analytics helpers ──────────────────────────────────────────────────────
+function anPct(a, b) { return b > 0 ? Math.round((a / b) * 100) : 0; }
+function anFmtDur(s) {
+  if (s < 60) return s + 's';
+  return Math.floor(s / 60) + 'm' + (s % 60 > 0 ? ' ' + (s % 60) + 's' : '');
+}
+function anBarRow(label, count, max, color, extra) {
+  const w = max > 0 ? Math.round((count / max) * 100) : 0;
+  return `<div class="an-bar">
+    <div class="an-bar-lbl" title="${esc(label)}">${esc(label)}</div>
+    <div class="an-bar-track"><div class="an-bar-fill ${color || ''}" style="width:${w}%"></div></div>
+    <div class="an-bar-n">${count}</div>${extra || ''}
+  </div>`;
+}
+function anEmpty(msg) {
+  return `<div style="color:var(--text-muted);font-size:13px;padding:10px 0;">${msg || 'No data yet.'}</div>`;
+}
+
+function anRenderKpis(E, bk, an, totalViews, uniqueVis, quoteOpens, bookCompleted, convRate, revenue) {
+  const payErrors  = E['payment_error'] || 0;
+  const zipBounce  = E['zip_out_of_area'] || 0;
+  const customers  = bk.customers || 0;
+  const mowsDone   = bk.done || 0;
+  const cards = [
+    { label:'Unique Visitors',   value: uniqueVis  || '—', sub:'distinct browsers',      color:'' },
+    { label:'Quote Opens',       value: quoteOpens || '—', sub:'started quote flow',      color:'purple' },
+    { label:'Conversion Rate',   value: quoteOpens > 0 ? convRate + '%' : '—', sub:'quote → booking', color: convRate >= 10 ? '' : convRate >= 5 ? 'orange' : quoteOpens > 0 ? 'red' : '' },
+    { label:'Revenue Collected', value: revenue ? '$' + Number(revenue).toLocaleString() : '—', sub:'from paid mows', color:'gold' },
+    { label:'Active Customers',  value: customers || '—', sub:'unique emails',            color:'' },
+    { label:'Mows Completed',    value: mowsDone  || '—', sub:'marked done',              color:'' },
+    { label:'Payment Errors',    value: payErrors || '—', sub:'card declined / network',  color: payErrors > 0 ? 'red' : '' },
+    { label:'Out-of-Area Zips',  value: zipBounce || '—', sub:'rejected at zip step',     color: zipBounce > 5 ? 'orange' : '' },
+  ];
+  document.getElementById('an-kpis').innerHTML = cards.map(c => `
+    <div class="an-kpi-card ${esc(c.color)}">
+      <div class="an-kpi-label">${esc(c.label)}</div>
+      <div class="an-kpi-value">${esc(String(c.value))}</div>
+      <div class="an-kpi-sub">${esc(c.sub)}</div>
+    </div>`).join('');
+}
+
+function anRenderFunnel(E, totalViews, uniqueVis) {
+  const el = document.getElementById('an-funnel');
+  const STEPS = [
+    { key: null,                          label:'0 · Unique Visitors',           color:'#4b5563' },
+    { key:'quote_opened',                 label:'1 · Quote modal opened',        color:'#2d6a2d' },
+    { key:'quote_price_viewed',           label:'2 · Saw their price (Step 3)',  color:'#3d8c3d' },
+    { key:'quote_payment_step_reached',   label:'3 · Reached payment (Step 4)', color:'#4caf50' },
+    { key:'payment_attempted',            label:'4 · Clicked "Book Now"',        color:'#72c472' },
+    { key:'booking_completed',            label:'5 · Booking confirmed ✅',       color:'#9edd9e' },
+  ];
+  const counts = STEPS.map((s, i) => i === 0 ? uniqueVis : (E[s.key] || 0));
+  const top = counts[0] || 0;
+  if (top === 0) { el.innerHTML = anEmpty('No funnel data yet — populates once visitors arrive.'); return; }
+
+  // Find biggest drop
+  let biggestDropIdx = -1, biggestDrop = 0;
+  for (let i = 1; i < counts.length; i++) {
+    const drop = counts[i - 1] > 0 ? anPct(counts[i - 1] - counts[i], counts[i - 1]) : 0;
+    if (drop > biggestDrop) { biggestDrop = drop; biggestDropIdx = i; }
+  }
+
+  let html = '';
+  STEPS.forEach((step, i) => {
+    const cnt = counts[i];
+    const w   = top > 0 ? Math.round((cnt / top) * 100) : 0;
+    if (i > 0) {
+      const prev = counts[i - 1];
+      const drop = prev > 0 ? anPct(prev - cnt, prev) : 0;
+      const cls  = drop === 0 ? 'ok' : drop < 20 ? 'ok' : drop < 50 ? 'warn' : 'bad';
+      const arrow = i === biggestDropIdx
+        ? '<span style="color:#ef4444;font-weight:700;">⬇️ BIGGEST LEAK</span>' : '↓';
+      html += `<div style="text-align:left;font-size:14px;color:var(--green-bright);margin:-2px 0 -2px 218px;">${arrow}</div>`;
+      const dropBadge = drop > 0
+        ? `<span class="an-drop ${cls}">-${drop}%</span>`
+        : `<span class="an-drop ok">no drop ✓</span>`;
+      html += `<div class="an-funnel-step">
+        <div class="an-funnel-lbl">${esc(step.label)}${dropBadge}</div>
+        <div class="an-funnel-track"><div class="an-funnel-fill" style="width:${w}%;background:${step.color}">${cnt > 0 ? cnt.toLocaleString() : ''}</div></div>
+        <div class="an-funnel-pct">${w}%</div>
+      </div>`;
+    } else {
+      html += `<div class="an-funnel-step">
+        <div class="an-funnel-lbl">${esc(step.label)}</div>
+        <div class="an-funnel-track"><div class="an-funnel-fill" style="width:${w}%;background:${step.color}">${cnt > 0 ? cnt.toLocaleString() : ''}</div></div>
+        <div class="an-funnel-pct">${w}%</div>
+      </div>`;
+    }
+  });
+
+  // Insight
+  const opens = counts[1], completed = counts[5];
+  const cr = anPct(completed, opens);
+  let insight = '';
+  if (opens === 0) insight = '⏳ No quote opens yet.';
+  else if (counts[2] === 0) insight = '🛑 Nobody is making it past the address form. The button or form may be confusing.';
+  else if (biggestDropIdx === 2 && biggestDrop >= 50) insight = `💸 ${biggestDrop}% of people who see their price immediately leave. Consider A/B testing pricing or simplifying plan selection.`;
+  else if (biggestDropIdx === 3 && biggestDrop >= 40) insight = `📅 ${biggestDrop}% drop between seeing price and entering payment. The date picker or card entry may be causing friction.`;
+  else if (counts[4] > 0 && completed < counts[4]) insight = `💳 People hit "Book Now" but aren't completing. Check for payment errors.`;
+  else if (completed > 0) insight = `✅ Funnel is healthy — ${cr}% conversion (quote opens → bookings).`;
+
+  el.innerHTML = `<div class="an-alert ${completed > 0 ? 'green' : 'yellow'}" style="margin-bottom:16px;">${insight}</div>` + html;
+}
+
+function anRenderSessionDur(E) {
+  const el = document.getElementById('an-session-dur');
+  const BUCKETS = [
+    { key:'session_dur_instant', label:'< 10s — Instant bounce',   color:'red',    mid:5   },
+    { key:'session_dur_quick',   label:'10–30s — Quick look',      color:'orange', mid:20  },
+    { key:'session_dur_short',   label:'30s–1.5min — Short visit', color:'',       mid:60  },
+    { key:'session_dur_medium',  label:'1.5–5min — Engaged',       color:'',       mid:195 },
+    { key:'session_dur_long',    label:'5min+ — Highly engaged',   color:'',       mid:420 },
+  ];
+  const data  = BUCKETS.map(b => ({ ...b, count: E[b.key] || 0 }));
+  const total = data.reduce((s, b) => s + b.count, 0);
+  if (total === 0) { el.innerHTML = anEmpty('No data yet — fires when visitors leave the page.'); return; }
+  const max        = Math.max(...data.map(b => b.count), 1);
+  const avgSecs    = Math.round(data.reduce((s, b) => s + b.count * b.mid, 0) / total);
+  const bounceRate = anPct(data[0].count, total);
+  let html = `<div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:14px;">
+    <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:3px;">Avg Session</div><div style="font-size:26px;font-weight:800;color:var(--green-deep);">${anFmtDur(avgSecs)}</div></div>
+    <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:3px;">Bounce Rate</div><div style="font-size:26px;font-weight:800;color:${bounceRate > 60 ? '#b91c1c' : bounceRate > 40 ? '#c2410c' : 'var(--green-deep)'};">${bounceRate}%</div></div>
+  </div>`;
+  html += data.map(b => anBarRow(b.label, b.count, max, b.color)).join('');
+  el.innerHTML = html;
+}
+
+function anRenderExits(E) {
+  const el = document.getElementById('an-exits');
+  const exits = [
+    { label:'🏃 Instant bounce (< 10s)',     count: E['session_dur_instant'] || 0,                                                              color:'red',    tip:'Never engaged.' },
+    { label:'🖱️ Left before entering quote', count: E['exit_intent_step0']   || 0,                                                              color:'orange', tip:'Visited but didn\'t start quote.' },
+    { label:'🚫 Out-of-area zip',            count: E['zip_out_of_area']     || 0,                                                              color:'red',    tip:'Outside your coverage area.' },
+    { label:'📝 Quit Step 1 (address)',      count: (E['quote_abandoned_step1'] || 0) + (E['session_end_in_quote_step1'] || 0),                  color:'orange', tip:'Left at address form.' },
+    { label:'💸 Quit after seeing price',    count: (E['quote_abandoned_step3'] || 0) + (E['session_end_in_quote_step3'] || 0),                  color:'orange', tip:'Price shock or plan confusion.' },
+    { label:'💳 Quit at payment',            count: (E['quote_abandoned_step4'] || 0) + (E['session_end_in_quote_step4'] || 0),                  color:'red',    tip:'Card friction or trust issue.' },
+  ].filter(e => e.count > 0).sort((a, b) => b.count - a.count);
+  if (exits.length === 0) { el.innerHTML = anEmpty('No exit data yet.'); return; }
+  const max = exits[0].count, total = exits.reduce((s, e) => s + e.count, 0);
+  const top = exits[0];
+  let html = `<div class="an-alert yellow" style="margin-bottom:12px;">🎯 <strong>Biggest exit:</strong> ${esc(top.label)} — ${esc(top.tip)}</div>`;
+  exits.forEach(e => {
+    const w = max > 0 ? Math.round((e.count / max) * 100) : 0;
+    html += `<div class="an-bar" title="${esc(e.tip)}">
+      <div class="an-bar-lbl">${esc(e.label)}</div>
+      <div class="an-bar-track"><div class="an-bar-fill ${e.color || ''}" style="width:${w}%"></div></div>
+      <div class="an-bar-n">${e.count}</div>
+      <div class="an-bar-pct">${anPct(e.count, total)}%</div>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function anRenderStepDur(E) {
+  const el = document.getElementById('an-step-dur');
+  const STEPS = [
+    { num:1, label:'Step 1 · Address form' },
+    { num:3, label:'Step 3 · Saw price' },
+    { num:4, label:'Step 4 · Payment' },
+  ];
+  let html = '', hasAny = false;
+  STEPS.forEach(s => {
+    const fast = E['step' + s.num + '_dur_fast'] || 0;
+    const med  = E['step' + s.num + '_dur_medium'] || 0;
+    const slow = E['step' + s.num + '_dur_slow'] || 0;
+    const tot  = fast + med + slow;
+    if (!tot) return;
+    hasAny = true;
+    const fp = anPct(fast, tot), mp = anPct(med, tot), sp = anPct(slow, tot);
+    const insight = tot >= 5 ? (sp > 50 ? '⚠️ Most stall here — friction.' : fp > 70 ? '✅ Moving quickly.' : '📊 Mixed pacing.') : '';
+    html += `<div style="margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:700;color:var(--green-deep);margin-bottom:5px;">${esc(s.label)} <span style="font-weight:400;color:var(--text-muted);">${tot} tracked</span></div>
+      <div style="display:flex;border-radius:6px;overflow:hidden;height:20px;margin-bottom:4px;">
+        <div style="width:${fp}%;background:#4caf50;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;">${fp > 12 ? fp + '%' : ''}</div>
+        <div style="width:${mp}%;background:#f97316;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;">${mp > 12 ? mp + '%' : ''}</div>
+        <div style="width:${sp}%;background:#e53e3e;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;">${sp > 12 ? sp + '%' : ''}</div>
+      </div>
+      <div style="display:flex;gap:12px;font-size:12px;color:var(--text-muted);flex-wrap:wrap;">
+        <span><span style="color:#4caf50;font-weight:700;">■</span> Fast &lt;15s: ${fast}</span>
+        <span><span style="color:#f97316;font-weight:700;">■</span> Med 15–60s: ${med}</span>
+        <span><span style="color:#e53e3e;font-weight:700;">■</span> Slow 60s+: ${slow}</span>
+      </div>
+      ${insight ? `<div style="font-size:12px;color:var(--text-muted);margin-top:3px;">${insight}</div>` : ''}
+    </div>`;
+  });
+  el.innerHTML = hasAny ? html : anEmpty('Appears once visitors use the quote flow.');
+}
+
+function anRenderPlans(biweekly, weekly) {
+  const el = document.getElementById('an-plans');
+  const total = biweekly + weekly;
+  if (!total) { el.innerHTML = anEmpty('No plan selections yet.'); return; }
+  const bwp = anPct(biweekly, total), wp = anPct(weekly, total);
+  el.innerHTML = `
+    <div style="display:flex;border-radius:8px;overflow:hidden;height:26px;margin-bottom:8px;">
+      <div style="width:${bwp}%;background:#2d6a2d;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;">${bwp > 10 ? bwp + '%' : ''}</div>
+      <div style="width:${wp}%;background:#4caf50;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;">${wp > 10 ? wp + '%' : ''}</div>
+    </div>
+    <div style="display:flex;gap:16px;font-size:13px;flex-wrap:wrap;">
+      <span><span style="color:#2d6a2d;font-weight:700;">■</span> Bi-Weekly: ${biweekly} (${bwp}%)</span>
+      <span><span style="color:#4caf50;font-weight:700;">■</span> Weekly: ${weekly} (${wp}%)</span>
+    </div>
+    <div style="font-size:13px;color:var(--text-muted);margin-top:10px;">
+      ${biweekly > weekly ? '📅 Most people prefer Bi-Weekly — sweet spot of price vs. frequency.' : weekly > biweekly ? '⚡ Most people prefer Weekly service.' : 'Even split between plans.'}
+    </div>`;
+}
+
+function anRenderRefs(refStats) {
+  const el = document.getElementById('an-refs');
+  const refs = Object.entries(refStats).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  if (!refs.length) { el.innerHTML = anEmpty('No referrer data yet.'); return; }
+  const max = refs[0][1], total = refs.reduce((s, [, c]) => s + c, 0);
+  el.innerHTML = refs.map(([ref, count]) => {
+    const label = ref === 'direct' ? '(direct / none)' : ref.replace(/^https?:\/\//, '').substring(0, 50);
+    return anBarRow(label, count, max, '', `<div class="an-bar-pct">${anPct(count, total)}%</div>`);
+  }).join('');
+}
+
+function anRenderFaq(E) {
+  const el = document.getElementById('an-faq');
+  const FAQ_MAP = {
+    'faq_why_19':               'Why is first mow only $19?',
+    'faq_after_first_mow':      'What happens after first mow?',
+    'faq_how_price_calculated': 'How is price calculated?',
+    'faq_cancel':               'Can I cancel my plan?',
+    'faq_card_secure':          'Is my card info secure?',
+    'faq_need_to_be_home':      'Do I need to be home?',
+    'faq_service_area':         'Do you serve my area?',
+  };
+  const data = Object.entries(FAQ_MAP)
+    .map(([k, label]) => ({ label, count: E[k] || 0 }))
+    .filter(d => d.count > 0)
+    .sort((a, b) => b.count - a.count);
+  if (!data.length) { el.innerHTML = anEmpty('No FAQ interactions yet.'); return; }
+  const max = data[0].count;
+  el.innerHTML = data.map(d => anBarRow(d.label, d.count, max, '')).join('');
+}
+
+function anRenderHourly(visits) {
+  const el = document.getElementById('an-hourly');
+  const hours = new Array(24).fill(0);
+  const DAY_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const days  = new Array(7).fill(0);
+  visits.forEach(v => {
+    if (!v.ts) return;
+    try { const d = new Date(v.ts); if (!isNaN(d)) { hours[d.getHours()]++; days[d.getDay()]++; } } catch(e) {}
+  });
+  const totalH = hours.reduce((a, b) => a + b, 0);
+  if (!totalH) { el.innerHTML = anEmpty('Not enough data yet.'); return; }
+  const maxH = Math.max(...hours, 1), maxD = Math.max(...days, 1);
+  const HOUR_LABELS = ['12a','1a','2a','3a','4a','5a','6a','7a','8a','9a','10a','11a','12p','1p','2p','3p','4p','5p','6p','7p','8p','9p','10p','11p'];
+  function heatColor(cnt, max) {
+    const p = cnt / max;
+    if (!cnt) return '#e8f5e9';
+    if (p < 0.25) return '#c8e6c9';
+    if (p < 0.5)  return '#81c784';
+    if (p < 0.75) return '#4caf50';
+    return '#2d6a2d';
+  }
+  el.innerHTML = `
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Darker = more traffic</div>
+    <div class="an-heat" style="margin-bottom:20px;">
+      ${hours.map((cnt, h) => `<div class="an-heat-cell" title="${HOUR_LABELS[h]}: ${cnt}" style="background:${heatColor(cnt,maxH)};color:${cnt/maxH>=0.5?'#fff':'var(--text-muted)'};">${HOUR_LABELS[h]}</div>`).join('')}
+    </div>
+    <div style="font-size:13px;font-weight:700;color:var(--green-deep);margin-bottom:8px;">Day of Week</div>
+    ${days.map((cnt, d) => {
+      const w = anPct(cnt, maxD);
+      return `<div class="an-bar" style="margin-bottom:6px;">
+        <div class="an-bar-lbl-sm">${esc(DAY_LABELS[d])}</div>
+        <div class="an-bar-track"><div class="an-bar-fill" style="width:${w}%;background:${cnt===maxD?'#2d6a2d':'#4caf50'}"></div></div>
+        <div class="an-bar-n">${cnt}</div>
+      </div>`;
+    }).join('')}`;
 }
 
 // ═══════════════════════════════════════════════════════
