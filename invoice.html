@@ -2495,6 +2495,20 @@ async function loadAnalytics() {
         <!-- KPI row -->
         <div class="an-kpi-grid" id="an-kpis"></div>
 
+        <!-- Week-over-week -->
+        <div class="an-section">
+          <div class="an-title">📈 This Week vs Last Week</div>
+          <div class="an-sub">Last 7 days compared to the 7 days before that.</div>
+          <div id="an-wow"></div>
+        </div>
+
+        <!-- 30-day trend chart -->
+        <div class="an-section">
+          <div class="an-title">📊 30-Day Traffic & Revenue Trend</div>
+          <div class="an-sub">Daily visits (green) and revenue collected (gold) over the last 30 days.</div>
+          <div id="an-trend"></div>
+        </div>
+
         <!-- Funnel -->
         <div class="an-section">
           <div class="an-title">🔍 Quote Funnel — Where Are They Dropping Off?</div>
@@ -2517,7 +2531,7 @@ async function loadAnalytics() {
         </div>
         <div style="margin-bottom:18px;"></div>
 
-        <!-- Time per step + Plan preference -->
+        <!-- Time per step + New vs Returning -->
         <div class="an-two-col">
           <div class="an-section" style="margin-bottom:0;">
             <div class="an-title">⏳ Time Per Funnel Step</div>
@@ -2525,19 +2539,26 @@ async function loadAnalytics() {
             <div id="an-step-dur"></div>
           </div>
           <div class="an-section" style="margin-bottom:0;">
-            <div class="an-title">📅 Plan Preferences</div>
-            <div class="an-sub">Which plan are people choosing when they see their price?</div>
-            <div id="an-plans"></div>
+            <div class="an-title">🔁 New vs Returning Visitors</div>
+            <div class="an-sub">Returning visitors = your brand is sticking. New = top of funnel is working.</div>
+            <div id="an-newret"></div>
           </div>
         </div>
         <div style="margin-bottom:18px;"></div>
 
-        <!-- Traffic sources + FAQ -->
+        <!-- Source quality (full width) -->
+        <div class="an-section">
+          <div class="an-title">🎯 Source Quality — Which Traffic Actually Converts?</div>
+          <div class="an-sub">Not all traffic is equal. This shows which sources send visitors who actually get quotes and book.</div>
+          <div id="an-source-quality"></div>
+        </div>
+
+        <!-- Plan preference + FAQ -->
         <div class="an-two-col">
           <div class="an-section" style="margin-bottom:0;">
-            <div class="an-title">🔗 Traffic Sources</div>
-            <div class="an-sub">Where are visitors coming from?</div>
-            <div id="an-refs"></div>
+            <div class="an-title">📅 Plan Preferences</div>
+            <div class="an-sub">Which plan people choose when they see their price.</div>
+            <div id="an-plans"></div>
           </div>
           <div class="an-section" style="margin-bottom:0;">
             <div class="an-title">❓ FAQ Interactions</div>
@@ -2547,24 +2568,35 @@ async function loadAnalytics() {
         </div>
         <div style="margin-bottom:18px;"></div>
 
-        <!-- Hourly heatmap -->
-        <div class="an-section">
-          <div class="an-title">⏰ When Are People Visiting?</div>
-          <div class="an-sub">Hour-of-day traffic pattern. Useful for knowing when to run ads.</div>
-          <div id="an-hourly"></div>
+        <!-- Out-of-area zips + Hourly heatmap -->
+        <div class="an-two-col">
+          <div class="an-section" style="margin-bottom:0;">
+            <div class="an-title">🚫 Out-of-Area Zip Codes</div>
+            <div class="an-sub">Which specific zips keep bouncing — useful for adjusting ad targeting.</div>
+            <div id="an-ooa-zips"></div>
+          </div>
+          <div class="an-section" style="margin-bottom:0;">
+            <div class="an-title">⏰ When Are People Visiting?</div>
+            <div class="an-sub">Hour-of-day traffic pattern. Know when to run ads.</div>
+            <div id="an-hourly"></div>
+          </div>
         </div>
 
       </div>`;
 
     // Now populate each section
     anRenderKpis(E, bk, an, totalViews, uniqueVis, quoteOpens, bookCompleted, convRate, revenue);
+    anRenderWow(bk.weekOverWeek || {}, an.weekOverWeek || {});
+    anRenderTrend(an.dailyVisits || {}, bk.dailyRevenue || {});
     anRenderFunnel(E, totalViews, uniqueVis);
     anRenderSessionDur(E);
     anRenderExits(E);
     anRenderStepDur(E);
+    anRenderNewVsReturning(an.newVisitors || 0, an.returningVisitors || 0);
+    anRenderSourceQuality(an.sourceQuality || {});
     anRenderPlans(E['plan_selected_biweekly'] || 0, E['plan_selected_weekly'] || 0);
-    anRenderRefs(an.refStats || {});
     anRenderFaq(E);
+    anRenderOoaZips(E);
     anRenderHourly(an.recentVisits || []);
 
   } catch(err) {
@@ -2782,643 +2814,197 @@ function anRenderPlans(biweekly, weekly) {
 
 function anRenderRefs(refStats) {
   const el = document.getElementById('an-refs');
+  if (!el) return;
   const refs = Object.entries(refStats).sort((a, b) => b[1] - a[1]).slice(0, 8);
   if (!refs.length) { el.innerHTML = anEmpty('No referrer data yet.'); return; }
   const max = refs[0][1], total = refs.reduce((s, [, c]) => s + c, 0);
-  el.innerHTML = refs.map(([ref, count]) => {
-    const label = ref === 'direct' ? '(direct / none)' : ref.replace(/^https?:\/\//, '').substring(0, 50);
-    return anBarRow(label, count, max, '', `<div class="an-bar-pct">${anPct(count, total)}%</div>`);
+  el.innerHTML = refs.map(([ref, cnt]) => anBarRow(ref || '(direct)', cnt, max, '#2d6a2d', `${anPct(cnt, total)}%`)).join('');
+}
+
+function anRenderWow(bkWow, anWow) {
+  const el = document.getElementById('an-wow');
+  if (!el) return;
+  const tw = anWow.thisWeekVisits || 0, lw = anWow.lastWeekVisits || 0;
+  const tq = anWow.thisWeekQuotes || 0, lq = anWow.lastWeekQuotes || 0;
+  const tb = bkWow.thisWeekBookings || 0, lb = bkWow.lastWeekBookings || 0;
+  const tr = bkWow.thisWeekRev || 0, lr = bkWow.lastWeekRev || 0;
+  function arrow(cur, prev) {
+    if (prev === 0 && cur === 0) return '<span style="color:#888;">—</span>';
+    const pct = prev === 0 ? 100 : Math.round(((cur - prev) / prev) * 100);
+    const up = cur >= prev;
+    return `<span style="color:${up ? '#2d6a2d' : '#c0392b'};font-weight:700;">${up ? '▲' : '▼'} ${Math.abs(pct)}%</span>`;
+  }
+  function card(label, cur, prev, fmt) {
+    const f = fmt || (v => v);
+    return `<div class="an-kpi-card" style="min-width:0;">
+      <div class="an-kpi-val">${f(cur)}</div>
+      <div class="an-kpi-label">${label}</div>
+      <div style="font-size:12px;margin-top:4px;">vs ${f(prev)} last wk &nbsp;${arrow(cur, prev)}</div>
+    </div>`;
+  }
+  el.innerHTML = `<div class="an-kpi-grid" style="grid-template-columns:repeat(4,1fr);">
+    ${card('Visits', tw, lw)}
+    ${card('Quotes Opened', tq, lq)}
+    ${card('Bookings', tb, lb)}
+    ${card('Revenue', tr, lr, v => '$' + v.toFixed(0))}
+  </div>`;
+}
+
+function anRenderTrend(dailyVisits, dailyRevenue) {
+  const el = document.getElementById('an-trend');
+  if (!el) return;
+  // Build last 30 days array
+  const days = [];
+  const now = new Date();
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(now - i * 864e5);
+    const iso = d.toISOString().slice(0, 10);
+    const label = (i === 0) ? 'Today' : (i === 1 ? 'Yest' : (d.getMonth()+1)+'/'+d.getDate());
+    days.push({ iso, label, visits: dailyVisits[iso] || 0, rev: (dailyRevenue && dailyRevenue[iso]) || 0 });
+  }
+  const maxV = Math.max(...days.map(d => d.visits), 1);
+  const maxR = Math.max(...days.map(d => d.rev), 1);
+  const barW = `calc((100% - ${29 * 4}px) / 30)`;
+
+  const visitBars = days.map(d => {
+    const h = Math.round((d.visits / maxV) * 80);
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;width:${barW};flex:1;">
+      <div style="font-size:9px;color:var(--text-muted);white-space:nowrap;overflow:hidden;">${d.visits > 0 ? d.visits : ''}</div>
+      <div title="${d.label}: ${d.visits} visits" style="width:100%;height:${h}px;min-height:2px;background:#4caf50;border-radius:3px 3px 0 0;"></div>
+      <div style="font-size:9px;color:var(--text-muted);transform:rotate(-45deg);transform-origin:top left;margin-top:4px;white-space:nowrap;">${d.label}</div>
+    </div>`;
   }).join('');
+
+  const revBars = days.map(d => {
+    const h = Math.round((d.rev / maxR) * 80);
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;width:${barW};flex:1;">
+      <div style="font-size:9px;color:var(--text-muted);white-space:nowrap;overflow:hidden;">${d.rev > 0 ? '$'+d.rev.toFixed(0) : ''}</div>
+      <div title="${d.label}: $${d.rev.toFixed(0)} revenue" style="width:100%;height:${h}px;min-height:2px;background:#2d6a2d;border-radius:3px 3px 0 0;"></div>
+      <div style="font-size:9px;color:var(--text-muted);transform:rotate(-45deg);transform-origin:top left;margin-top:4px;white-space:nowrap;">${d.label}</div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="margin-bottom:20px;">
+      <div style="font-size:12px;font-weight:600;color:#4caf50;margin-bottom:6px;">🟢 Daily Visitors (last 30 days)</div>
+      <div style="display:flex;align-items:flex-end;gap:4px;height:110px;padding-bottom:24px;">${visitBars}</div>
+    </div>
+    <div>
+      <div style="font-size:12px;font-weight:600;color:#2d6a2d;margin-bottom:6px;">💰 Daily Revenue (last 30 days)</div>
+      <div style="display:flex;align-items:flex-end;gap:4px;height:110px;padding-bottom:24px;">${revBars}</div>
+    </div>`;
+}
+
+function anRenderNewVsReturning(newV, retV) {
+  const el = document.getElementById('an-newret');
+  if (!el) return;
+  const total = newV + retV;
+  if (!total) { el.innerHTML = anEmpty('Not enough visitor data yet.'); return; }
+  const np = anPct(newV, total), rp = anPct(retV, total);
+  el.innerHTML = `
+    <div style="display:flex;border-radius:8px;overflow:hidden;height:26px;margin-bottom:10px;">
+      <div style="width:${np}%;background:#4caf50;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;">${np > 10 ? np+'%' : ''}</div>
+      <div style="width:${rp}%;background:#1a3a1a;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;">${rp > 10 ? rp+'%' : ''}</div>
+    </div>
+    <div style="display:flex;gap:16px;font-size:13px;flex-wrap:wrap;">
+      <span><span style="color:#4caf50;font-weight:700;">■</span> New: ${newV} (${np}%)</span>
+      <span><span style="color:#1a3a1a;font-weight:700;">■</span> Returning: ${retV} (${rp}%)</span>
+    </div>
+    <div style="font-size:13px;color:var(--text-muted);margin-top:10px;">
+      ${rp >= 30 ? '🔁 Solid return rate — people are coming back to reconsider.' : rp >= 15 ? '📌 Some returning visitors — normal for a service business.' : '🆕 Mostly new visitors — typical early-stage growth.'}
+    </div>`;
+}
+
+function anRenderSourceQuality(sourceQuality) {
+  const el = document.getElementById('an-source-quality');
+  if (!el) return;
+  const sources = Object.entries(sourceQuality).sort((a, b) => b[1].visits - a[1].visits).slice(0, 10);
+  if (!sources.length) { el.innerHTML = anEmpty('No source data yet — needs more traffic.'); return; }
+  const rows = sources.map(([src, d]) => {
+    const convRate = anPct(d.bookings || 0, d.visits || 1);
+    const quoteRate = anPct(d.quoteOpens || 0, d.visits || 1);
+    const srcLabel = src === '' ? '(direct)' : src.replace(/^https?:\/\/(www\.)?/, '').split('/')[0];
+    return `<tr>
+      <td style="padding:6px 8px;font-size:13px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${src}">${srcLabel}</td>
+      <td style="padding:6px 8px;text-align:center;font-size:13px;">${d.visits || 0}</td>
+      <td style="padding:6px 8px;text-align:center;font-size:13px;">${d.uniqueVisitors || 0}</td>
+      <td style="padding:6px 8px;text-align:center;font-size:13px;">${d.quoteOpens || 0} <span style="color:var(--text-muted);font-size:11px;">(${quoteRate}%)</span></td>
+      <td style="padding:6px 8px;text-align:center;font-size:13px;">${d.bookings || 0} <span style="color:${convRate >= 5 ? '#2d6a2d' : convRate >= 2 ? '#888' : '#c0392b'};font-size:11px;">(${convRate}%)</span></td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead>
+        <tr style="border-bottom:2px solid var(--border);">
+          <th style="padding:6px 8px;text-align:left;font-size:11px;color:var(--text-muted);font-weight:600;">SOURCE</th>
+          <th style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text-muted);font-weight:600;">VISITS</th>
+          <th style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text-muted);font-weight:600;">UNIQ</th>
+          <th style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text-muted);font-weight:600;">QUOTES</th>
+          <th style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text-muted);font-weight:600;">BOOKINGS</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
 }
 
 function anRenderFaq(E) {
   const el = document.getElementById('an-faq');
-  const FAQ_MAP = {
-    'faq_why_19':               'Why is first mow only $19?',
-    'faq_after_first_mow':      'What happens after first mow?',
-    'faq_how_price_calculated': 'How is price calculated?',
-    'faq_cancel':               'Can I cancel my plan?',
-    'faq_card_secure':          'Is my card info secure?',
-    'faq_need_to_be_home':      'Do I need to be home?',
-    'faq_service_area':         'Do you serve my area?',
-  };
-  const data = Object.entries(FAQ_MAP)
-    .map(([k, label]) => ({ label, count: E[k] || 0 }))
-    .filter(d => d.count > 0)
-    .sort((a, b) => b.count - a.count);
-  if (!data.length) { el.innerHTML = anEmpty('No FAQ interactions yet.'); return; }
-  const max = data[0].count;
-  el.innerHTML = data.map(d => anBarRow(d.label, d.count, max, '')).join('');
-}
-
-function anRenderHourly(visits) {
-  const el = document.getElementById('an-hourly');
-  const hours = new Array(24).fill(0);
-  const DAY_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const days  = new Array(7).fill(0);
-  visits.forEach(v => {
-    if (!v.ts) return;
-    try { const d = new Date(v.ts); if (!isNaN(d)) { hours[d.getHours()]++; days[d.getDay()]++; } } catch(e) {}
-  });
-  const totalH = hours.reduce((a, b) => a + b, 0);
-  if (!totalH) { el.innerHTML = anEmpty('Not enough data yet.'); return; }
-  const maxH = Math.max(...hours, 1), maxD = Math.max(...days, 1);
-  const HOUR_LABELS = ['12a','1a','2a','3a','4a','5a','6a','7a','8a','9a','10a','11a','12p','1p','2p','3p','4p','5p','6p','7p','8p','9p','10p','11p'];
-  function heatColor(cnt, max) {
-    const p = cnt / max;
-    if (!cnt) return '#e8f5e9';
-    if (p < 0.25) return '#c8e6c9';
-    if (p < 0.5)  return '#81c784';
-    if (p < 0.75) return '#4caf50';
-    return '#2d6a2d';
-  }
-  el.innerHTML = `
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Darker = more traffic</div>
-    <div class="an-heat" style="margin-bottom:20px;">
-      ${hours.map((cnt, h) => `<div class="an-heat-cell" title="${HOUR_LABELS[h]}: ${cnt}" style="background:${heatColor(cnt,maxH)};color:${cnt/maxH>=0.5?'#fff':'var(--text-muted)'};">${HOUR_LABELS[h]}</div>`).join('')}
-    </div>
-    <div style="font-size:13px;font-weight:700;color:var(--green-deep);margin-bottom:8px;">Day of Week</div>
-    ${days.map((cnt, d) => {
-      const w = anPct(cnt, maxD);
-      return `<div class="an-bar" style="margin-bottom:6px;">
-        <div class="an-bar-lbl-sm">${esc(DAY_LABELS[d])}</div>
-        <div class="an-bar-track"><div class="an-bar-fill" style="width:${w}%;background:${cnt===maxD?'#2d6a2d':'#4caf50'}"></div></div>
-        <div class="an-bar-n">${cnt}</div>
-      </div>`;
-    }).join('')}`;
-}
-
-// ═══════════════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════════════
-function isCash(b) {
-  return String(b.payMethod||'').toLowerCase().includes('cash');
-}
-function isAutoPay(b) {
-  const pm  = (b.payMethod||'').toLowerCase();
-  const cal = (b.calendarEvent||'').toLowerCase();
-  if (pm.includes('not paid') || pm.includes('pending')) return false;
-  return pm.includes('auto') || pm.includes('stripe') || cal.includes('✅') || cal.includes('auto-pay');
-}
-function isSubscribed(b) {
-  const freq = (b.frequency||'').toLowerCase();
-  // Match any weekly/bi-weekly subscription — covers "Weekly", "Weekly Plan", "Bi-Weekly", etc.
-  // Exclude free mow and one-time jobs.
-  if (freq.includes('free') || freq.includes('one-time') || freq.includes('onetime')) return false;
-  return freq.includes('weekly') || freq.includes('subscription') || freq.includes('plan');
-}
-function isDone(b) { return b.done && String(b.done).includes('Done') || String(b.done||'').includes('✓'); }
-function needsAction(b) {
-  const freq = String(b.frequency||'').toLowerCase();
-  if (isDone(b) || b.invoiced || freq.includes('free') || freq.includes('quote visit')) return false;
-  return true;
-}
-function isQuoteVisit(b) {
-  return String(b.frequency||'').toLowerCase().includes('quote visit');
-}
-function dateOf(b) {
-  const raw = String(b.serviceDateRaw || b.serviceDate || '').trim();
-  if (!raw) return '';
-  const fmt = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
-  try {
-    const normalized = raw.replace(/T.*$/, '');
-    const a1 = new Date(normalized + ' 12:00:00');
-    if (!isNaN(a1.getTime())) return fmt(a1);
-    const stripped = raw.replace(/^(sun|mon|tue|wed|thu|fri|sat)[a-z]*,?\s*/i, '');
-    const a2 = new Date(stripped + ' 12:00:00');
-    if (!isNaN(a2.getTime())) return fmt(a2);
-  } catch(e) {}
-  return '';
-}
-function todayDateStr() {
-  const d = new Date();
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-}
-function displayDate(raw) {
-  if (!raw) return '';
-  try {
-    // Try parsing directly first (handles full JS date strings from Sheets)
-    let d = new Date(raw);
-    if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
-    // Fallback: strip ISO time portion and re-parse
-    const s = String(raw).replace(/T.*$/, '');
-    d = new Date(s + ' 12:00:00');
-    if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
-  } catch(e) {}
-  return String(raw);
-}
-function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
-
-// saveSession defined above near loadSavedSession
-
-let _searchTimer = null;
-function debouncedRender() {
-  clearTimeout(_searchTimer);
-  _searchTimer = setTimeout(renderBookings, 180);
-}
-
-let _toastTimer = null;
-function showToast(msg, duration=3000) {
-  const el = document.getElementById('toast');
   if (!el) return;
-  el.textContent = msg;
-  el.classList.add('show');
-  clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => el.classList.remove('show'), duration);
+  const keys = Object.keys(E).filter(k => k.startsWith('faq_open_'));
+  if (!keys.length) { el.innerHTML = anEmpty('No FAQ interactions yet.'); return; }
+  const items = keys.map(k => [k.replace('faq_open_', '').replace(/_/g, ' '), E[k]])
+    .sort((a, b) => b[1] - a[1]);
+  const max = items[0][1];
+  el.innerHTML = items.map(([q, c]) => anBarRow(q, c, max, '#4caf50', `${c}x`)).join('');
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// ROUTE TAB
-// ═══════════════════════════════════════════════════════════════════════
-
-// Full service time estimates (minutes) — includes mowing + weed whacking + blowing
-// Small example: ~15min mow + 12min weed whack + 5min blow = 32, rounded to 35
-const MOW_MINS = {
-  small:35, medium:50, half:70, one:95, two:140, four:185, six:240, xl:285
-};
-// Extra minutes per stop for trailer unload/load, equipment swap, gas check
-const EQUIP_BUFFER_MINS = 8;
-
-function estimateMowMinutes(job) {
-  const notes = (job.notes || '').toLowerCase();
-  const m = notes.match(/yard:\s*([a-z0-9_]+)/i);
-  if (m) {
-    const k = m[1].toLowerCase();
-    if (MOW_MINS[k] !== undefined) return MOW_MINS[k];
-  }
-  const price = parseFloat(String(job.price||'').replace(/[^0-9.]/g,'')) || 0;
-  if (price <=  25) return MOW_MINS.small;
-  if (price <=  50) return MOW_MINS.medium;
-  if (price <=  85) return MOW_MINS.half;
-  if (price <= 115) return MOW_MINS.one;
-  if (price <= 165) return MOW_MINS.two;
-  if (price <= 240) return MOW_MINS.four;
-  if (price <= 320) return MOW_MINS.six;
-  return MOW_MINS.xl;
+function anRenderOoaZips(E) {
+  const el = document.getElementById('an-ooa-zips');
+  if (!el) return;
+  const zipEntries = Object.entries(E)
+    .filter(([k]) => k.startsWith('zip_ooA_'))
+    .map(([k, v]) => [k.replace('zip_ooA_', ''), v])
+    .sort((a, b) => b[1] - a[1]);
+  if (!zipEntries.length) { el.innerHTML = anEmpty('No out-of-area attempts yet.'); return; }
+  const max = zipEntries[0][1];
+  const total = zipEntries.reduce((s, [, c]) => s + c, 0);
+  el.innerHTML = `<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">
+    ${total} total out-of-area attempts · ${zipEntries.length} unique zip${zipEntries.length !== 1 ? 's' : ''}
+    ${zipEntries.length >= 3 ? ` — <strong>consider expanding to top zips</strong>` : ''}
+  </div>` +
+  zipEntries.map(([zip, cnt]) => anBarRow(zip, cnt, max, '#e67e22', `${cnt}x`)).join('');
 }
 
-function mowLabel(mins) {
-  const h = Math.floor(mins/60), m = mins%60;
-  if (h === 0) return '~'+m+' min mow';
-  if (m === 0) return '~'+h+'h mow';
-  return '~'+h+'h '+m+'m mow';
-}
-function fmtMins(mins) {
-  const h = Math.floor(mins/60), m = mins%60;
-  if (h === 0) return m+'m';
-  if (m === 0) return h+'h';
-  return h+'h '+m+'m';
-}
-function fmtTime(date) {
-  return date.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
-}
-function metersToMiles(m) { return (m/1609.34).toFixed(1); }
-
-async function geocodeForRoute(addr) {
-  try {
-    const r = await fetch(
-      'https://nominatim.openstreetmap.org/search?q='
-        + encodeURIComponent(addr + ', FL, US')
-        + '&format=json&limit=1&countrycodes=us',
-      { headers:{ 'Accept':'application/json' } }
-    );
-    const d = await r.json();
-    if (d && d.length) return { lat:parseFloat(d[0].lat), lon:parseFloat(d[0].lon) };
-  } catch(e) {}
-  return null;
-}
-
-function nearestNeighbour(jobs, startIdx) {
-  const remaining = jobs.map((_,i)=>i).filter(i=>i!==startIdx);
-  const order = [startIdx];
-  let cur = startIdx;
-  while (remaining.length) {
-    let best=-1, bestDist=Infinity;
-    remaining.forEach(i => {
-      const dx=jobs[i].lon-jobs[cur].lon, dy=jobs[i].lat-jobs[cur].lat;
-      const d=dx*dx+dy*dy;
-      if (d<bestDist){bestDist=d;best=i;}
-    });
-    order.push(best);
-    remaining.splice(remaining.indexOf(best),1);
-    cur=best;
-  }
-  return order;
-}
-
-async function optimiseOSRM(points) {
-  const coords = points.map(p=>p.lon+','+p.lat).join(';');
-  const src    = points[0] && points[0]._isStart ? 'first' : 'any';
-  const url    = 'https://router.project-osrm.org/trip/v1/driving/'+coords
-               + '?roundtrip=false&source='+src+'&destination=any&annotations=duration,distance';
-  try {
-    const r    = await fetch(url);
-    const data = await r.json();
-    if (data.code !== 'Ok' || !data.trips || !data.trips.length) return null;
-    const trip        = data.trips[0];
-    const inputIndexed = data.waypoints.map((w,i)=>({...w,_inputIndex:i}));
-    const orderedWpts  = [...inputIndexed].sort((a,b)=>a.waypoint_index-b.waypoint_index);
-    const orderedJobs  = orderedWpts.map(w=>points[w._inputIndex]);
-    const legs = trip.legs.map(l=>({
-      driveMins:  Math.round(l.duration/60),
-      distMeters: Math.round(l.distance),
-    }));
-    return { orderedJobs, legs, totalDist:trip.distance };
-  } catch(e) { return null; }
-}
-
-/* ── Notes popup ── */
-function showNotesPopup(name, notes) {
-  document.getElementById('notesPopupTitle').textContent = '📝 Notes — ' + name;
-  document.getElementById('notesPopupBody').textContent  = notes;
-  document.getElementById('notesOverlay').style.display  = 'flex';
-}
-function closeNotesPopup() {
-  document.getElementById('notesOverlay').style.display = 'none';
-}
-/* Safe notes lookup — avoids putting raw strings in onclick attributes */
-function showRouteNotes(rowIdx) {
-  const cached = window._stopNotes && window._stopNotes[rowIdx];
-  if (cached) { showNotesPopup(cached.name, cached.notes); return; }
-  // Fallback: look up directly from allBookings
-  const b = allBookings[rowIdx];
-  if (b) showNotesPopup(b.name || '—', b.notes || '');
-}
-
-/* ── Route: Mark Done inline ── */
-async function routeMarkDone(rowIdx, btnEl) {
-  const b = allBookings[rowIdx];
-  if (!b) return;
-  const title = `Mark "${b.name||'job'}" as done?`;
-  const msg   = 'Are you sure you want to mark this job as completed? This cannot be undone.';
-  document.getElementById('confirmYesBtn').className = 'btn-confirm-yes';
-  openConfirm(title, msg, async () => {
-    if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Marking…'; }
-    await executeMarkDone(rowIdx);
-    // After marking done, re-render the route timeline with updated job states
-    // Find the stop card and update it visually without a full rebuild
-    if (btnEl) {
-      btnEl.textContent = '✓ Done';
-      btnEl.disabled = true;
-      // Grey out the number badge
-      const card = btnEl.closest('.route-stop');
-      if (card) {
-        const badge = card.querySelector('.route-stop-badge');
-        if (badge) badge.classList.add('done-badge');
-        card.querySelector('.route-stop-card')?.classList.remove('active-stop');
-      }
-    }
+function anRenderHourly(recentVisits) {
+  const el = document.getElementById('an-hourly');
+  if (!el) return;
+  const counts = new Array(24).fill(0);
+  (recentVisits || []).forEach(v => {
+    if (!v.timestamp) return;
+    const h = new Date(v.timestamp).getHours();
+    if (h >= 0 && h < 24) counts[h]++;
   });
-}
-
-/* ── Address autocomplete (Nominatim, Citrus County FL biased) ── */
-let _addrTimer = null;
-let _addrFocusIdx = -1;
-
-function routeAddrInput(inp) {
-  const val = inp.value.trim();
-  clearTimeout(_addrTimer);
-  _addrFocusIdx = -1;
-  if (val.length < 3) { closeAddrSuggestions(); return; }
-  const box = document.getElementById('addrSuggestions');
-  box.innerHTML = '<div class="addr-suggestion-loading">Searching…</div>';
-  box.style.display = 'block';
-  _addrTimer = setTimeout(() => fetchAddrSuggestions(val), 380);
-}
-
-async function fetchAddrSuggestions(q) {
-  const box = document.getElementById('addrSuggestions');
-  try {
-    // bias toward Citrus County FL with viewbox + countrycodes
-    const params = new URLSearchParams({
-      q: q + ', Citrus County, FL',
-      format: 'json',
-      addressdetails: '1',
-      limit: '6',
-      countrycodes: 'us',
-      viewbox: '-82.8,28.7,-82.1,29.1',
-      bounded: '0'
-    });
-    const res = await fetch('https://nominatim.openstreetmap.org/search?' + params, {
-      headers: { 'Accept-Language': 'en', 'User-Agent': 'EvergreenLawnCare/1.0' }
-    });
-    const data = await res.json();
-    if (!data || !data.length) {
-      box.innerHTML = '<div class="addr-suggestion-loading">No results found</div>';
-      box.style.display = 'block';
-      return;
-    }
-    _addrFocusIdx = -1;
-    box.innerHTML = data.map((item, i) => {
-      // Build a clean short label: street + city + state
-      const a = item.address || {};
-      const street = [a.house_number, a.road].filter(Boolean).join(' ');
-      const city   = a.city || a.town || a.village || a.county || '';
-      const state  = a.state_code || a.state || '';
-      const label  = [street, city, state].filter(Boolean).join(', ') || item.display_name;
-      return `<div class="addr-suggestion-item" data-idx="${i}" data-label="${label.replace(/"/g,'&quot;')}"
-                onmousedown="selectAddrSuggestion(this)">${label}</div>`;
-    }).join('');
-    box.style.display = 'block';
-  } catch(e) {
-    box.innerHTML = '<div class="addr-suggestion-loading">Search unavailable</div>';
-    box.style.display = 'block';
-  }
-}
-
-function selectAddrSuggestion(el) {
-  const label = el.getAttribute('data-label');
-  document.getElementById('routeStartAddr').value = label;
-  closeAddrSuggestions();
-}
-
-function closeAddrSuggestions() {
-  const box = document.getElementById('addrSuggestions');
-  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
-  _addrFocusIdx = -1;
-}
-
-function routeAddrKeydown(e) {
-  const box = document.getElementById('addrSuggestions');
-  if (!box || box.style.display === 'none') return;
-  const items = box.querySelectorAll('.addr-suggestion-item');
-  if (!items.length) return;
-  if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    _addrFocusIdx = Math.min(_addrFocusIdx + 1, items.length - 1);
-    items.forEach((el,i) => el.classList.toggle('focused', i === _addrFocusIdx));
-    items[_addrFocusIdx]?.scrollIntoView({ block:'nearest' });
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    _addrFocusIdx = Math.max(_addrFocusIdx - 1, 0);
-    items.forEach((el,i) => el.classList.toggle('focused', i === _addrFocusIdx));
-    items[_addrFocusIdx]?.scrollIntoView({ block:'nearest' });
-  } else if (e.key === 'Enter') {
-    if (_addrFocusIdx >= 0 && items[_addrFocusIdx]) {
-      e.preventDefault();
-      selectAddrSuggestion(items[_addrFocusIdx]);
-    }
-  } else if (e.key === 'Escape') {
-    closeAddrSuggestions();
-  }
-}
-
-function initRouteTab() {
-  const todayJobs = (allBookings||[]).filter(b=>dateOf(b)===todayDateStr() && !isDone(b));
-  const sub = document.getElementById('routeCpSub');
-  if (!sub) return;
-  const d = new Date();
-  const dateLabel = d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
-  sub.textContent = dateLabel+' · '+todayJobs.length+' job'+(todayJobs.length!==1?'s':'')+' remaining';
-  const btn = document.getElementById('routeOptBtn');
-  const tl = document.getElementById('routeTimeline');
-  if (!todayJobs.length) {
-    if (btn) btn.disabled = true;
-    if (tl) tl.innerHTML = '<div class="empty-state" style="padding:60px 20px;"><div style="font-size:48px;margin-bottom:12px;">🎉</div><div style="font-size:17px;font-weight:700;color:var(--green-deep);">No jobs today!</div><div style="font-size:13px;color:var(--text-muted);margin-top:6px;">Enjoy the day off.</div></div>';
-  } else {
-    if (btn) btn.disabled = false;
-    // If the timeline currently shows the "No jobs" empty-state, replace it with a ready prompt
-    // so the user knows data has loaded and they can now optimize
-    if (tl && tl.innerHTML.includes('No jobs today')) {
-      tl.innerHTML = '<div class="empty-state" style="padding:40px 20px;">'
-        + '<div style="font-size:36px;margin-bottom:12px;">📋</div>'
-        + '<div style="font-size:15px;font-weight:700;color:var(--green-deep);margin-bottom:6px;">'
-        + todayJobs.length+' job'+(todayJobs.length!==1?'s':'')+' ready</div>'
-        + '<div style="font-size:13px;color:var(--text-muted);">Hit ⚡ Optimize Route to build your schedule.</div>'
-        + '</div>';
-    }
-  }
-}
-
-async function buildRoute() {
-  const btn      = document.getElementById('routeOptBtn');
-  const errEl    = document.getElementById('routeError');
-  const timeline = document.getElementById('routeTimeline');
-  const statsBar = document.getElementById('routeStatsBar');
-  errEl.style.display = 'none';
-
-  const timeVal  = document.getElementById('routeStartTime').value || '08:00';
-  const [hh, mm] = timeVal.split(':').map(Number);
-  const startDate = new Date();
-  startDate.setHours(hh, mm, 0, 0);
-
-  const todayStr  = todayDateStr();
-  const todayJobs = (allBookings||[]).filter(b=>dateOf(b)===todayStr && !isDone(b));
-  if (!todayJobs.length) {
-    errEl.textContent='No incomplete jobs scheduled for today.'; errEl.style.display='block'; return;
-  }
-
-  btn.disabled = true;
-  btn.textContent = '⏳ Optimizing…';
-  timeline.innerHTML = '<div class="route-loading"><div class="route-loading-icon">⚙️</div><div style="font-size:15px;font-weight:600;color:var(--green-deep);margin-bottom:6px;">Building your route…</div><div style="font-size:13px;color:var(--text-muted);">Geocoding addresses & calculating optimal order</div></div>';
-  statsBar.style.display = 'none';
-
-  const startAddrRaw = (document.getElementById('routeStartAddr').value||'').trim();
-
-  // Geocode all jobs with stagger to avoid rate-limit
-  const geocoded = [];
-  for (let i=0; i<todayJobs.length; i++) {
-    const b   = todayJobs[i];
-    const addr = [b.address, b.zip].filter(Boolean).join(', ');
-    const geo  = await geocodeForRoute(addr);
-    geocoded.push({...b, lat:geo?geo.lat:null, lon:geo?geo.lon:null, _jobIdx:i, _origIdx:allBookings.indexOf(b)});
-    if (i < todayJobs.length-1) await new Promise(r=>setTimeout(r,350));
-  }
-
-  const withGeo    = geocoded.filter(b=>b.lat!==null);
-  const withoutGeo = geocoded.filter(b=>b.lat===null);
-
-  let orderedJobs=[], legs=[], totalDistM=0;
-  window._routeStartLeg = null;
-
-  if (withGeo.length === 0) {
-    orderedJobs = geocoded;
-    legs = [];
-  } else if (withGeo.length === 1 && startAddrRaw) {
-    // Single stop — still calculate drive time from start address
-    const sg = await geocodeForRoute(startAddrRaw);
-    if (sg) {
-      const points = [{lat:sg.lat,lon:sg.lon,_isStart:true,name:'Start',address:startAddrRaw}, withGeo[0]];
-      const osrm = await optimiseOSRM(points);
-      if (osrm && osrm.legs.length) {
-        window._routeStartLeg = osrm.legs[0];
-        totalDistM = osrm.totalDist;
-      }
-    }
-    orderedJobs = geocoded;
-    legs = [];
-  } else {
-    let points = [...withGeo];
-    if (startAddrRaw) {
-      const sg = await geocodeForRoute(startAddrRaw);
-      if (sg) points = [{lat:sg.lat,lon:sg.lon,_isStart:true,name:'Start',address:startAddrRaw},...points];
-    }
-
-    const osrm = await optimiseOSRM(points);
-    if (osrm) {
-      const raw = osrm.orderedJobs;
-      if (startAddrRaw && raw.length && raw[0]._isStart) {
-        window._routeStartLeg = osrm.legs[0]||null;
-        orderedJobs = raw.slice(1);
-        legs = osrm.legs.slice(1);
-      } else {
-        orderedJobs = raw;
-        legs = osrm.legs;
-      }
-      totalDistM = osrm.totalDist;
-    } else {
-      // JS nearest-neighbour fallback
-      const nnOrder = nearestNeighbour(withGeo,0);
-      orderedJobs = nnOrder.map(i=>withGeo[i]);
-      legs = orderedJobs.slice(0,-1).map(()=>({driveMins:5,distMeters:0}));
-    }
-    withoutGeo.forEach(b=>{orderedJobs.push(b);legs.push({driveMins:0,distMeters:0});});
-  }
-
-  // Build schedule
-  let cursor=new Date(startDate), totalMowM=0, totalDriveM=0;
-  if (window._routeStartLeg) {
-    cursor = new Date(cursor.getTime()+window._routeStartLeg.driveMins*60000);
-    totalDriveM += window._routeStartLeg.driveMins;
-  }
-
-  const stops = orderedJobs.map((job,i)=>{
-    const arriveTime  = new Date(cursor);
-    const mowM        = estimateMowMinutes(job);          // service time (mow + ww + blow)
-    const totalStopM  = mowM + EQUIP_BUFFER_MINS;         // + unload/load trailer, gas check
-    const departTime  = new Date(cursor.getTime() + totalStopM * 60000);
-    totalMowM += totalStopM;
-    const leg = legs[i]||{driveMins:0,distMeters:0};
-    if (i < orderedJobs.length-1) {
-      cursor = new Date(departTime.getTime()+leg.driveMins*60000);
-      totalDriveM += leg.driveMins;
-    }
-    return {job, arriveTime, mowM, departTime, driveToNext:leg.driveMins, distToNext:leg.distMeters};
+  const max = Math.max(...counts, 1);
+  const labels = counts.map((c, h) => {
+    const ampm = h < 12 ? 'a' : 'p';
+    const lbl = h === 0 ? '12a' : h === 12 ? '12p' : (h % 12) + ampm;
+    return { lbl, c };
   });
-
-  const doneTime = stops.length ? stops[stops.length-1].departTime : startDate;
-
-  // Stats bar
-  statsBar.style.display = 'flex';
-  document.getElementById('rStatJobs').textContent  = stops.length;
-  document.getElementById('rStatMow').textContent   = fmtMins(totalMowM);
-  document.getElementById('rStatDrive').textContent = fmtMins(totalDriveM);
-  document.getElementById('rStatDist').textContent  = totalDistM>0 ? metersToMiles(totalDistM)+' mi' : '—';
-  document.getElementById('rStatDone').textContent  = fmtTime(doneTime);
-
-  timeline.innerHTML = renderRouteTimeline(stops, startAddrRaw, startDate);
-  btn.disabled = false;
-  btn.textContent = '🔄 Recalculate';
-}
-
-function renderRouteTimeline(stops, startAddr, startTime) {
-  let html = '';
-  // Cache for notes lookup — avoids putting raw strings inside onclick attributes
-  window._stopNotes = {};
-
-  html += '<div style="margin-bottom:0;">'
-        + '<div class="route-start-chip">🚗 '
-        + (startAddr ? 'Starting from: '+esc(startAddr) : 'Starting at '+fmtTime(startTime))
-        + '</div></div>';
-
-  stops.forEach((s,i)=>{
-    const job = s.job;
-
-    // Recover the correct allBookings index via _origIdx (set during geocoding).
-    // Falls back to indexOf only if _origIdx is missing (e.g. jobs added without geocoding).
-    const rowIdx = (job._origIdx !== undefined && job._origIdx >= 0)
-      ? job._origIdx
-      : allBookings.indexOf(job);
-
-    const mapsAddr = encodeURIComponent((job.address||'')+(job.zip?', '+job.zip:'')+', FL');
-    const mapsUrl  = 'https://www.google.com/maps/dir/?api=1&destination='+mapsAddr;
-
-    const driveFromPrev = i===0
-      ? (window._routeStartLeg ? window._routeStartLeg.driveMins : null)
-      : (stops[i-1].driveToNext||null);
-    const distFromPrev  = i===0
-      ? (window._routeStartLeg ? window._routeStartLeg.distMeters : 0)
-      : (stops[i-1].distToNext||0);
-
-    html += '<div class="route-connector">'
-          +   '<div class="route-connector-line"></div>'
-          +   '<div class="route-connector-info">'
-          +     (driveFromPrev!==null
-                  ? '<div class="route-drive-chip">🚗 '+fmtMins(driveFromPrev)+' drive'+(distFromPrev>0?' · '+metersToMiles(distFromPrev)+' mi':'')+'</div>'
-                  : '<div class="route-drive-chip">📍 First stop</div>')
-          +   '</div>'
-          + '</div>';
-
-    const planBadge  = (job.frequency && !job.frequency.toLowerCase().includes('one-time'))
-      ? '<span class="route-stop-pill">'+esc(job.frequency)+'</span>' : '';
-    const price = parseFloat(String(job.price||'').replace(/[^0-9.]/g,''))||0;
-    const priceBadge = price
-      ? '<span class="route-stop-pill" style="background:#f0fdf4;color:#166534;">$'+price.toFixed(0)+'</span>' : '';
-    const doneBadge  = isDone(job)
-      ? '<span class="route-stop-pill" style="background:#fff8e1;color:#92400e;">✓ Done</span>' : '';
-
-    // Store notes in a cache keyed by rowIdx — avoids string-escaping issues in onclick
-    let notesBadge = '';
-    if (job.notes && job.notes !== '(none)') {
-      window._stopNotes[rowIdx] = { name: job.name || '—', notes: job.notes };
-      notesBadge = '<button class="route-notes-btn" onclick="showRouteNotes('+rowIdx+')">'
-        + '<span class="route-stop-pill" style="background:#eff6ff;color:#1e40af;cursor:pointer;">💬 Has notes</span>'
-        + '</button>';
-    }
-
-    const alreadyDone = isDone(job);
-    const markDoneBtn = (adminRole === 'owner' || dateOf(job) === todayDateStr())
-      ? '<button class="route-done-btn" '
-        + (alreadyDone ? 'disabled' : 'onclick="routeMarkDone('+rowIdx+',this)"')
-        + '>'
-        + (alreadyDone ? '✓ Done' : '✓ Mark Done')
-        + '</button>'
-      : '';
-
-    const callBtn = job.phone
-      ? '<a class="route-call-btn" href="tel:'+esc(job.phone)+'">📞 Call</a>'
-      : '';
-
-    html += '<div class="route-stop">'
-          +   '<div class="route-stop-badge'+(alreadyDone?' done-badge':'')+'">'+( i+1)+'</div>'
-          +   '<div class="route-stop-card'+(alreadyDone?'':' active-stop')+'">'
-          +     '<div class="route-stop-header">'
-          +       '<div>'
-          +         '<div class="route-stop-time">Arrive '+fmtTime(s.arriveTime)+'</div>'
-          +         '<div class="route-stop-name">'+esc(job.name||'—')+'</div>'
-          +       '</div>'
-          +       '<div style="display:flex;flex-direction:column;align-items:stretch;gap:6px;min-width:120px;">'
-          +         '<a class="route-nav-btn" href="'+mapsUrl+'" target="_blank" rel="noopener">🧭 Navigate</a>'
-          +         callBtn
-          +         markDoneBtn
-          +       '</div>'
-          +     '</div>'
-          +     '<div class="route-stop-addr">📍 '+esc(job.address||'—')+(job.zip?' · '+esc(job.zip):'')+'</div>'
-          +     '<div class="route-stop-meta">'+planBadge+'<span class="route-stop-pill time-pill">⏱️ '+mowLabel(s.mowM)+'</span>'+priceBadge+doneBadge+notesBadge+(isCash(job)?'<span class="route-stop-pill" style="background:#fef9c3;color:#854d0e;font-weight:700;">💵 Collect Cash</span>':'')+'</div>'
-          +     '<div class="route-stop-footer">'
-          +       '<span>Depart <strong>'+fmtTime(s.departTime)+'</strong></span>'
-          +     '</div>'
-          +   '</div>'
-          + '</div>';
-  });
-
-  if (stops.length) {
-    const last = stops[stops.length-1];
-    html += '<div class="route-connector"><div class="route-connector-line" style="min-height:36px;"></div></div>'
-          + '<div class="route-finish">'
-          +   '<div class="route-finish-badge">🏁</div>'
-          +   '<div class="route-finish-card">'
-          +     '<div class="route-finish-label">Estimated finish</div>'
-          +     '<div class="route-finish-time">'+fmtTime(last.departTime)+'</div>'
-          +   '</div>'
-          + '</div>';
-  }
-
-  return html;
+  const cells = labels.map(({ lbl, c }) => {
+    const intensity = Math.round((c / max) * 9);
+    const bg = intensity === 0 ? 'var(--surface2)' :
+      `rgba(45,106,45,${0.1 + intensity * 0.1})`;
+    return `<div class="an-heat-cell" style="background:${bg};" title="${lbl}: ${c} visits">
+      <div style="font-size:9px;color:var(--text-muted);">${lbl}</div>
+      <div style="font-size:11px;font-weight:${c > 0 ? 700 : 400};color:${c > 0 ? 'var(--text)' : 'var(--text-muted)'};">${c || ''}</div>
+    </div>`;
+  }).join('');
+  el.innerHTML = `<div class="an-heat">${cells}</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:8px;">
+      Peak hour: ${labels.reduce((a, b) => b.c > a.c ? b : a, labels[0]).lbl}
+      · Based on last ${recentVisits.length} visits
+    </div>`;
 }
 
 </script>
