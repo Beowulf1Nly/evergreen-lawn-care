@@ -1385,12 +1385,13 @@
     /* ── SECTIONS mobile ── */
     .services { padding: 60px 20px; }
     .how { padding: 60px 20px; }
-    .trust { padding: 60px 20px; }
+    .trust { padding: 60px 20px !important; }
     .steps::before { display: none; }
     .steps { gap: 32px; }
     .testimonials { grid-template-columns: 1fr; }
-    #services > div { gap: 14px !important; }
-    #services > div > div { min-width: 160px !important; padding: 22px 16px !important; }
+    #services { padding: 60px 20px !important; }
+    #services > div > div:last-child { grid-template-columns: 1fr !important; gap: 14px !important; }
+    #services > div > div:last-child > div { padding: 24px 20px !important; }
 
     /* ── FAQ mobile ── */
     #faq { padding: 60px 16px; }
@@ -3838,6 +3839,16 @@ async function quotePaySubmit() {
     fetch(SHEETS_SCRIPT_URL+'?'+completeParams.toString(), { method:'GET', mode:'no-cors' }).catch(()=>{});
 
     btn.classList.remove('loading'); btn.disabled=false;
+
+    // ── Fire Google Ads conversion (booking confirmed) ──────────────
+    if (typeof gtag === 'function') {
+      gtag('event', 'conversion', {
+        send_to:        'AW-18107107722/s6saCNGGwKccEIqTkrpD',
+        value:          afterPrice,
+        currency:       'USD',
+        transaction_id: qState.email + '_' + qState.startDate,
+      });
+    }
 
     document.getElementById('q-success-date').textContent =
       new Date(qState.startDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
