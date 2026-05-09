@@ -230,27 +230,54 @@
   }
   .hero-left {
     position: relative; z-index: 2;
-    flex: 0 0 52%;
+    flex: 0 0 42%;
     display: flex; flex-direction: column; justify-content: center;
-    padding: 140px 72px 80px 80px;
-    background: linear-gradient(140deg, #0f2a15 0%, #1a3a1a 60%, #1e4422 100%);
+    padding: 120px 56px 60px 60px;
+    background: linear-gradient(155deg, #071510 0%, #0d2410 25%, #1a3a1a 55%, #1f3f20 80%, #162e18 100%);
     overflow: hidden;
   }
-  /* Subtle texture on dark side */
+  /* Subtle dot grid texture */
   .hero-left::before {
     content: '';
     position: absolute; inset: 0;
-    background-image: radial-gradient(circle, rgba(76,175,80,.05) 1px, transparent 1px);
-    background-size: 32px 32px;
+    background-image: radial-gradient(circle, rgba(76,175,80,.06) 1px, transparent 1px);
+    background-size: 28px 28px;
     pointer-events: none;
+    animation: gridDrift 20s linear infinite;
   }
-  /* Bottom-left glow */
+  @keyframes gridDrift {
+    0%   { background-position: 0 0; }
+    100% { background-position: 28px 28px; }
+  }
+  /* Bottom-left ambient glow — floats slowly */
   .hero-left::after {
     content: '';
-    position: absolute; bottom: -10%; left: -10%;
-    width: 400px; height: 400px;
+    position: absolute; bottom: -15%; left: -15%;
+    width: 500px; height: 500px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(76,175,80,0.1) 0%, transparent 65%);
+    background: radial-gradient(circle, rgba(76,175,80,0.13) 0%, transparent 65%);
+    pointer-events: none;
+    animation: orbDrift 12s ease-in-out infinite;
+  }
+  @keyframes orbDrift {
+    0%,100% { transform: translate(0, 0) scale(1); }
+    33%     { transform: translate(30px, -25px) scale(1.08); }
+    66%     { transform: translate(-15px, -40px) scale(0.95); }
+  }
+  /* Top-right accent glow */
+  .hero-glow-tr {
+    position: absolute; top: -20%; right: -20%;
+    width: 420px; height: 420px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(76,175,80,0.09) 0%, transparent 65%);
+    pointer-events: none;
+    animation: orbDrift 16s 4s ease-in-out infinite reverse;
+  }
+  /* Diagonal accent line */
+  .hero-accent-line {
+    position: absolute; top: 0; right: 56px;
+    width: 1px; height: 100%;
+    background: linear-gradient(to bottom, transparent, rgba(76,175,80,0.12) 30%, rgba(76,175,80,0.08) 70%, transparent);
     pointer-events: none;
   }
   /* Right light panel */
@@ -264,22 +291,10 @@
   .hero-right::before {
     content: '';
     position: absolute; inset: 0;
-    background: radial-gradient(ellipse at 55% 50%, rgba(200,230,201,0.35) 0%, transparent 70%);
+    background: linear-gradient(to right, rgba(26,58,26,0.18) 0%, transparent 40%);
+    z-index: 3;
   }
   .hero-ring { display: none; }
-  .hero-image {
-    position: relative; z-index: 2;
-    display: flex; align-items: center; justify-content: center;
-    animation: fadeIn .9s .3s ease both;
-  }
-  .hero-image img {
-    width: 520px; max-width: 88%;
-    filter:
-      drop-shadow(0 0 1.5px rgba(15,45,15,0.85))
-      drop-shadow(0 0 4px rgba(15,45,15,0.5))
-      drop-shadow(0 6px 18px rgba(15,45,15,0.18))
-      drop-shadow(0 20px 50px rgba(15,45,15,0.12));
-  }
 
   /* Floating trust cards */
   .hero-float-card {
@@ -1112,6 +1127,17 @@
   }
   .reveal-right.visible { opacity:1; transform:translateX(0); }
 
+  /* ── ANIMATE-UP (used in reviews / CTA / FAQ) ── */
+  .animate-up {
+    opacity: 0;
+    transform: translateY(32px);
+    transition: opacity .65s cubic-bezier(.16,1,.3,1), transform .65s cubic-bezier(.16,1,.3,1);
+  }
+  .animate-up.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
   /* ── HERO PARTICLES ── */
   #heroParticles {
     position: absolute; inset: 0;
@@ -1456,10 +1482,10 @@
     </div>
     <div class="nav-right">
       <ul class="nav-links">
-        <li><a href="#services">Pricing</a></li>
-        <li><a href="#how">How It Works</a></li>
-        <li><a href="#trust">Why Us</a></li>
-        <li><a href="#faq">FAQ</a></li>
+        <li><a href="javascript:void(0)" onclick="openQuoteModal()">Pricing</a></li>
+        <li><a href="#services">Services</a></li>
+        <li><a href="#trust">Reviews</a></li>
+        <li><a href="/faq.html">FAQ</a></li>
       </ul>
       <a href="javascript:void(0)" onclick="openQuoteModal()" class="nav-cta" style="font-size:14px;font-weight:600;text-decoration:none;padding:10px 22px;border-radius:6px;">Get a Quote</a>
       <a href="/profile" class="nav-account"><span class="nav-account-icon">&#128100;</span> My Account</a>
@@ -1474,238 +1500,153 @@
 
   <!-- LEFT: dark green content panel -->
   <div class="hero-left">
+    <div class="hero-glow-tr"></div>
+    <div class="hero-accent-line"></div>
     <div class="hero-content">
       <div class="hero-badge">Serving Citrus County, FL</div>
-      <h1>Fast, Reliable<br/><em>Lawn Care</em></h1>
-      <p>We show up on time. Every time. Professional mowing and blowing in Citrus County with next-day availability. Book online or call — we make it easy.</p>
+      <h1>Professional Lawn Care<br/><em>First Cut $19</em></h1>
+      <p>Citrus County's local lawn crew. Get an instant price in 2 minutes — no phone calls, no contracts, cancel anytime.</p>
       <div class="hero-btns">
         <button onclick="openQuoteModal()" class="btn-primary" style="border:none;cursor:pointer;">Get a Free Quote — First Cut from $19</button>
         <a href="tel:+13524620627" class="btn-secondary">📞 Call Us</a>
       </div>
-      <div class="hero-spot-line" style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;font-weight:500;color:rgba(255,255,255,0.45);">
-        <span style="font-size:15px;">⚡</span> Spots fill fast — lock yours in today
+      <div style="border-top:1px solid rgba(255,255,255,0.12);padding-top:22px;margin-top:36px;">
+        <!-- Service pills -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+          <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.09);border:1px solid rgba(255,255,255,0.14);border-radius:50px;padding:7px 14px;font-size:13px;font-weight:600;color:rgba(255,255,255,0.9);">🌿 Mow</span>
+          <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.09);border:1px solid rgba(255,255,255,0.14);border-radius:50px;padding:7px 14px;font-size:13px;font-weight:600;color:rgba(255,255,255,0.9);">✂️ Trim &amp; Edge</span>
+          <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.09);border:1px solid rgba(255,255,255,0.14);border-radius:50px;padding:7px 14px;font-size:13px;font-weight:600;color:rgba(255,255,255,0.9);">💨 Clear</span>
+        </div>
+        <!-- Trust signals — different, quieter style -->
+        <div style="display:flex;gap:18px;flex-wrap:wrap;">
+          <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;color:rgba(255,255,255,0.45);letter-spacing:.01em;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="#f5a623"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            5-Star Rated on Google
+          </span>
+          <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;color:rgba(255,255,255,0.45);letter-spacing:.01em;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Next Day Available
+          </span>
+        </div>
       </div>
-      <div class="hero-stats">
-        <div>
-          <div class="stat-num">5.0★</div>
-          <div class="stat-label">Rated 5-Star Service</div>
-        </div>
-        <!-- TEMPORARILY HIDDEN: 200+ Happy Customers stat
-        <div>
-          <div class="stat-num">200+</div>
-          <div class="stat-label">Happy Customers</div>
-        </div>
-        -->
-        <div>
-          <div class="stat-num">Next Day</div>
-          <div class="stat-label">Often Available</div>
-        </div>
-      </div>
     </div>
   </div>
 
-  <!-- RIGHT: light panel with logo -->
-  <div class="hero-right">
-    <div class="hero-image">
-      <img src="Images/evergreen-logo-transparent.png" alt="Evergreen Lawn Care" loading="eager" fetchpriority="high"/>
-    </div>
-  </div>
+  <!-- RIGHT: lawn photo via CSS background for crisp render -->
+  <div class="hero-right" style="background-image:url('Photos/image1.png');background-size:cover;background-position:center 70%;"></div>
 
-</section>
-
-<!-- QUOTE CTA STRIP (replaces service cards) -->
-<section id="services" style="background:var(--white);padding:80px 60px;text-align:center;">
-  <div class="section-label reveal">How It Works</div>
-  <h2 class="section-title reveal" style="transition-delay:.05s">First Cut as Low as $19</h2>
-  <p class="section-sub reveal" style="transition-delay:.1s">Enter your address and we'll calculate your price in seconds — based on your actual yard size. No surprises, no phone tag.</p>
-
-  <div class="reveal" style="transition-delay:.15s;display:flex;flex-wrap:wrap;justify-content:center;gap:24px;max-width:860px;margin:0 auto 40px;">
-    <div style="flex:1;min-width:220px;max-width:260px;background:var(--green-pale);border-radius:16px;padding:28px 24px;text-align:left;">
-      <div style="font-size:28px;margin-bottom:12px;">📍</div>
-      <div style="font-weight:700;font-size:15px;color:var(--green-deep);margin-bottom:6px;">Auto-calculated price</div>
-      <div style="font-size:13px;color:var(--text-muted);line-height:1.6;">We estimate your yard size and give you a quote instantly.</div>
-    </div>
-    <div style="flex:1;min-width:220px;max-width:260px;background:var(--green-pale);border-radius:16px;padding:28px 24px;text-align:left;">
-      <div style="font-size:28px;margin-bottom:12px;">📅</div>
-      <div style="font-weight:700;font-size:15px;color:var(--green-deep);margin-bottom:6px;">Pick your plan & date</div>
-      <div style="font-size:13px;color:var(--text-muted);line-height:1.6;">Choose bi-weekly or weekly. Pick a start date that works for you.</div>
-    </div>
-    <div style="flex:1;min-width:220px;max-width:260px;background:var(--green-pale);border-radius:16px;padding:28px 24px;text-align:left;">
-      <div style="font-size:28px;margin-bottom:12px;">💳</div>
-      <div style="font-weight:700;font-size:15px;color:var(--green-deep);margin-bottom:6px;">First cut as low as $19</div>
-      <div style="font-size:13px;color:var(--text-muted);line-height:1.6;">Your card is charged after each visit. No contracts, cancel anytime.</div>
-    </div>
-  </div>
-
-  <button onclick="openQuoteModal()" class="btn-primary reveal" style="border:none;cursor:pointer;font-size:17px;padding:18px 48px;transition-delay:.2s;">
-    Get My Free Quote →
-  </button>
-  <div class="reveal" style="transition-delay:.25s;font-size:13px;color:var(--text-muted);margin-top:12px;">✅ Takes under 2 minutes · First cut as low as $19 · Cancel anytime</div>
 </section>
 
 
 
-
-<!-- HOW IT WORKS -->
-<section class="how" id="how">
-  <div class="section-label reveal">Process</div>
-  <h2 class="section-title reveal" style="transition-delay:.05s">Get a Quote in 2 Minutes</h2>
-  <p class="section-sub reveal" style="transition-delay:.1s">Enter your address and we handle the rest — instant pricing and easy scheduling.</p>
-
-  <div class="steps">
-    <div class="step reveal" style="transition-delay:.05s">
-      <div class="step-num">1</div>
-      <h3>Enter Your Address</h3>
-      <p>We analyze your address and estimate your yard size automatically — no guessing, no back-and-forth.</p>
-    </div>
-    <div class="step reveal" style="transition-delay:.15s">
-      <div class="step-num">2</div>
-      <h3>See Your Prices</h3>
-      <p>We show you bi-weekly and weekly plan pricing for your yard. Pick the plan that fits and choose your start date.</p>
-    </div>
-    <div class="step reveal" style="transition-delay:.25s">
-      <div class="step-num">3</div>
-      <h3>Save Card &amp; Book</h3>
-      <p>Your first cut starts as low as $19 — billed after we complete the job. Save your card securely via Stripe for automatic billing going forward.</p>
-    </div>
-    <div class="step reveal" style="transition-delay:.35s">
-      <div class="step-num">4</div>
-      <h3>We Show Up &amp; Mow</h3>
-      <p>We arrive on your scheduled date, mow and blow, and leave your lawn spotless. Your card is charged automatically after each mow.</p>
-    </div>
-  </div>
-</section>
-
-<section class="trust" id="trust">
-  <div class="section-label reveal">Why Choose Us</div>
-  <h2 class="section-title reveal" style="transition-delay:.05s">Trusted by Citrus County</h2>
-  <p class="section-sub reveal" style="transition-delay:.1s">See our work and read what our neighbors say about us.</p>
-
-  <!-- CAROUSEL SECTION -->
-  <div class="carousel-container">
-    <div class="carousel-track" id="carouselTrack">
-      <!-- Slides will be populated by JavaScript -->
-    </div>
-    <button class="carousel-arrow prev" onclick="prevSlide()" aria-label="Previous slide">‹</button>
-    <button class="carousel-arrow next" onclick="nextSlide()" aria-label="Next slide">›</button>
-    <div class="carousel-controls" id="carouselDots">
-      <!-- Dots will be populated by JavaScript -->
-    </div>
-  </div>
-
-  <!-- TESTIMONIALS SECTION -->
-  <h3 style="font-family:'Playfair Display',serif; font-size:28px; font-weight:700; text-align:center; color:var(--green-deep); margin-bottom:12px;">What Our Neighbors Say</h3>
-
-  <div class="testimonials" id="testimonialsContainer">
-    <!-- Testimonials will be loaded from data.json via JavaScript -->
-  </div>
-
-  <!-- Google Reviews Link -->
-  <div style="text-align:center; margin-top:40px;">
-    <a href="https://share.google/lmabQbNBMYFlVi3h1" target="_blank" rel="noopener noreferrer"
-       style="display:inline-flex; align-items:center; gap:10px;
-              background:#fff; border:1.5px solid rgba(26,58,26,0.15);
-              border-radius:50px; padding:12px 28px;
-              font-size:15px; font-weight:600; color:var(--green-deep);
-              text-decoration:none; box-shadow:0 2px 12px rgba(0,0,0,0.07);
-              transition:box-shadow .2s, transform .15s;"
-       onmouseover="this.style.boxShadow='0 6px 24px rgba(0,0,0,0.12)';this.style.transform='translateY(-2px)'"
-       onmouseout="this.style.boxShadow='0 2px 12px rgba(0,0,0,0.07)';this.style.transform='translateY(0)'">
-      <svg width="20" height="20" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-        <path fill="#4285F4" d="M44.5 20H24v8.5h11.7C34.2 33.9 29.6 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 6 1.1 8.1 3l6.4-6.4C34.9 4.6 29.7 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/>
-        <path fill="#34A853" d="M6.3 14.7l7 5.1C15.1 16 19.3 13 24 13c3.1 0 6 1.1 8.1 3l6.4-6.4C34.9 4.6 29.7 2 24 2c-7.6 0-14.2 4.8-17.7 12.7z"/>
-        <path fill="#FBBC05" d="M24 46c5.6 0 10.3-1.8 13.8-5l-6.4-5.2C29.5 37.5 26.9 38 24 38c-5.5 0-10.2-3.3-12.1-8.1l-7 5.4C8 41.2 15.4 46 24 46z"/>
-        <path fill="#EA4335" d="M44.5 20H24v8.5h11.7c-.9 2.8-2.9 5.2-5.5 6.8l6.4 5.2C40.7 37.1 44.5 31 44.5 24c0-1.3-.2-2.7-.5-4z"/>
-      </svg>
-      See Our Reviews on Google
-      <span style="color:var(--gold);">★★★★★</span>
-    </a>
-  </div>
-
-</section>
-
-<!-- FAQ SECTION -->
-<section style="background:var(--cream);padding:80px 20px;" id="faq">
-  <div style="max-width:760px;margin:0 auto;">
+<!-- WHAT'S INCLUDED -->
+<section id="services" style="background:var(--cream);padding:96px 48px;">
+  <div style="max-width:1180px;margin:0 auto;">
     <div style="text-align:center;margin-bottom:48px;">
-      <h2 style="font-family:'Playfair Display',serif;font-size:clamp(28px,4vw,40px);color:var(--green-deep);margin-bottom:12px;">Frequently Asked Questions</h2>
-      <p style="color:var(--text-muted);font-size:15px;">Everything you need to know about pricing, billing, and how it works.</p>
+      <p class="animate-up" style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--green-mid);margin-bottom:12px;">Every Visit — No Exceptions</p>
+      <h2 class="animate-up" style="font-family:'Playfair Display',serif;font-size:clamp(28px,3.5vw,44px);color:var(--green-deep);line-height:1.15;margin:0;animation-delay:.05s;">We Mow. We Trim. We Clear.</h2>
     </div>
-
-    <!-- FAQ items -->
-    <div style="display:flex;flex-direction:column;gap:16px;">
-
-      <details style="background:#fff;border:1.5px solid #e8f0e8;border-radius:14px;padding:0;overflow:hidden;">
-        <summary style="cursor:pointer;padding:20px 24px;font-weight:600;font-size:15px;color:var(--green-deep);list-style:none;display:flex;justify-content:space-between;align-items:center;user-select:none;">
-          Why is the first mow only $19?
-          <span style="font-size:20px;transition:transform .2s;color:var(--green-mid);">＋</span>
-        </summary>
-        <div style="padding:0 24px 20px;font-size:14px;color:var(--text-muted);line-height:1.7;border-top:1px solid #f0f4f0;">
-          It's our way of letting you try us risk-free. We're confident you'll love the results — so we make it easy to say yes. After your first visit, you're billed your regular plan rate automatically.
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
+      <div class="reveal" style="background:#fff;border:1px solid #e4ede4;border-radius:16px;padding:32px 24px;text-align:center;transition:transform .2s,box-shadow .2s,border-color .2s;" onmouseover="this.style.transform='translateY(-5px)';this.style.boxShadow='0 16px 40px rgba(26,58,26,0.09)';this.style.borderColor='#b2d4b2'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='none';this.style.borderColor='#e4ede4'">
+        <div style="width:60px;height:60px;border-radius:14px;background:#edf7ed;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2d6a2d" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V12M12 12C12 7 7 4 2 6c5 0 8 3 10 6zm0 0c0-5 5-8 10-6-5 0-8 3-10 6"/></svg>
         </div>
-      </details>
-
-      <details style="background:#fff;border:1.5px solid #e8f0e8;border-radius:14px;padding:0;overflow:hidden;">
-        <summary style="cursor:pointer;padding:20px 24px;font-weight:600;font-size:15px;color:var(--green-deep);list-style:none;display:flex;justify-content:space-between;align-items:center;user-select:none;">
-          What happens after my first mow?
-          <span style="font-size:20px;transition:transform .2s;color:var(--green-mid);">＋</span>
-        </summary>
-        <div style="padding:0 24px 20px;font-size:14px;color:var(--text-muted);line-height:1.7;border-top:1px solid #f0f4f0;">
-          Your card is automatically charged after each mow — <strong>bi-weekly</strong> customers are charged per visit at their bi-weekly rate, and <strong>weekly</strong> customers are charged per visit at their weekly rate.
+        <div style="font-size:15px;font-weight:700;color:var(--green-deep);margin-bottom:8px;">Mow</div>
+        <div style="font-size:13px;color:var(--text-muted);line-height:1.75;">Full cut at the right height for Florida grass. Clean lines, even every time.</div>
+      </div>
+      <div class="reveal" style="background:#fff;border:1px solid #e4ede4;border-radius:16px;padding:32px 24px;text-align:center;transition:transform .2s,box-shadow .2s,border-color .2s;transition-delay:.07s;" onmouseover="this.style.transform='translateY(-5px)';this.style.boxShadow='0 16px 40px rgba(26,58,26,0.09)';this.style.borderColor='#b2d4b2'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='none';this.style.borderColor='#e4ede4'">
+        <div style="width:60px;height:60px;border-radius:14px;background:#f0f4ee;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1a3a1a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="4" y2="4"/></svg>
         </div>
-      </details>
-
-      <details style="background:#fff;border:1.5px solid #e8f0e8;border-radius:14px;padding:0;overflow:hidden;">
-        <summary style="cursor:pointer;padding:20px 24px;font-weight:600;font-size:15px;color:var(--green-deep);list-style:none;display:flex;justify-content:space-between;align-items:center;user-select:none;">
-          How is my price calculated?
-          <span style="font-size:20px;transition:transform .2s;color:var(--green-mid);">＋</span>
-        </summary>
-        <div style="padding:0 24px 20px;font-size:14px;color:var(--text-muted);line-height:1.7;border-top:1px solid #f0f4f0;">
-          We estimate your yard size from your address and show you a price instantly — just a fair, transparent quote in seconds. If the price doesn't look right, give us a call at <a href="tel:+13524620627" style="color:var(--green-mid);font-weight:600;">(352) 462-0627</a> and we'll sort it out.
+        <div style="font-size:15px;font-weight:700;color:var(--green-deep);margin-bottom:8px;">Trim &amp; Edge</div>
+        <div style="font-size:13px;color:var(--text-muted);line-height:1.75;">Weed eating along fences, beds, driveways, and sidewalks. The details that matter.</div>
+      </div>
+      <div class="reveal" style="background:#fff;border:1px solid #e4ede4;border-radius:16px;padding:32px 24px;text-align:center;transition:transform .2s,box-shadow .2s,border-color .2s;transition-delay:.14s;" onmouseover="this.style.transform='translateY(-5px)';this.style.boxShadow='0 16px 40px rgba(26,58,26,0.09)';this.style.borderColor='#b2d4b2'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='none';this.style.borderColor='#e4ede4'">
+        <div style="width:60px;height:60px;border-radius:14px;background:#f4f8f4;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4a7a4a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.59 4.59A2 2 0 1111 8H2m10.59 11.41A2 2 0 1014 16H2m15.73-8.27A2.5 2.5 0 1119.5 12H2"/></svg>
         </div>
-      </details>
-
-      <details style="background:#fff;border:1.5px solid #e8f0e8;border-radius:14px;padding:0;overflow:hidden;">
-        <summary style="cursor:pointer;padding:20px 24px;font-weight:600;font-size:15px;color:var(--green-deep);list-style:none;display:flex;justify-content:space-between;align-items:center;user-select:none;">
-          Can I cancel my plan?
-          <span style="font-size:20px;transition:transform .2s;color:var(--green-mid);">＋</span>
-        </summary>
-        <div style="padding:0 24px 20px;font-size:14px;color:var(--text-muted);line-height:1.7;border-top:1px solid #f0f4f0;">
-          Absolutely — no contracts, no cancellation fees. You can cancel directly from your <a href="/profile" style="color:var(--green-mid);font-weight:600;">customer profile</a>, or just text or call us at <a href="tel:+13524620627" style="color:var(--green-mid);font-weight:600;">(352) 462-0627</a> anytime and we'll handle it right away.
-        </div>
-      </details>
-
-      <details style="background:#fff;border:1.5px solid #e8f0e8;border-radius:14px;padding:0;overflow:hidden;">
-        <summary style="cursor:pointer;padding:20px 24px;font-weight:600;font-size:15px;color:var(--green-deep);list-style:none;display:flex;justify-content:space-between;align-items:center;user-select:none;">
-          Is my card information secure?
-          <span style="font-size:20px;transition:transform .2s;color:var(--green-mid);">＋</span>
-        </summary>
-        <div style="padding:0 24px 20px;font-size:14px;color:var(--text-muted);line-height:1.7;border-top:1px solid #f0f4f0;">
-          100%. All payments are processed through <strong>Stripe</strong>, which is PCI Level 1 certified — the highest standard in payment security. We never see or store your card number.
-        </div>
-      </details>
-
-      <details style="background:#fff;border:1.5px solid #e8f0e8;border-radius:14px;padding:0;overflow:hidden;">
-        <summary style="cursor:pointer;padding:20px 24px;font-weight:600;font-size:15px;color:var(--green-deep);list-style:none;display:flex;justify-content:space-between;align-items:center;user-select:none;">
-          Do I need to be home?
-          <span style="font-size:20px;transition:transform .2s;color:var(--green-mid);">＋</span>
-        </summary>
-        <div style="padding:0 24px 20px;font-size:14px;color:var(--text-muted);line-height:1.7;border-top:1px solid #f0f4f0;">
-          Nope! You don't need to be home for us to mow. Just make sure we have access to your yard — if there's a gate, leave it unlocked or drop the code in your booking notes. We'll take care of the rest.
-        </div>
-      </details>
-
-      <details style="background:#fff;border:1.5px solid #e8f0e8;border-radius:14px;padding:0;overflow:hidden;">
-        <summary style="cursor:pointer;padding:20px 24px;font-weight:600;font-size:15px;color:var(--green-deep);list-style:none;display:flex;justify-content:space-between;align-items:center;user-select:none;">
-          Do you serve my area?
-          <span style="font-size:20px;transition:transform .2s;color:var(--green-mid);">＋</span>
-        </summary>
-        <div style="padding:0 24px 20px;font-size:14px;color:var(--text-muted);line-height:1.7;border-top:1px solid #f0f4f0;">
-          We primarily serve Citrus County, FL — Crystal River, Inverness, Hernando, Lecanto, Homosassa, Citrus Springs, Floral City, and Beverly Hills — and also cover surrounding areas including Ocala, Dunnellon, Brooksville, Spring Hill, and parts of Levy and Sumter County. Enter your address and we'll confirm availability instantly.
-        </div>
-      </details>
-
+        <div style="font-size:15px;font-weight:700;color:var(--green-deep);margin-bottom:8px;">Clear &amp; Clean</div>
+        <div style="font-size:13px;color:var(--text-muted);line-height:1.75;">Every clipping cleared from your driveway, walkways, and porch. We leave it spotless.</div>
+      </div>
     </div>
+    <p style="text-align:center;font-size:13px;color:var(--text-muted);margin-top:20px;">All three on every visit — no add-ons, no surprises.</p>
+  </div>
+</section>
+
+<!-- DIVIDER -->
+<div style="display:flex;align-items:center;gap:0;max-width:1180px;margin:0 auto;padding:0 48px;">
+  <div style="flex:1;height:1px;background:linear-gradient(to right,transparent,rgba(45,106,45,0.18));"></div>
+  <div style="display:flex;align-items:center;gap:6px;margin:0 20px;flex-shrink:0;">
+    <div style="width:4px;height:4px;border-radius:50%;background:rgba(45,106,45,0.2);"></div>
+    <div style="width:6px;height:6px;border-radius:50%;background:rgba(45,106,45,0.35);"></div>
+    <div style="width:4px;height:4px;border-radius:50%;background:rgba(45,106,45,0.2);"></div>
+  </div>
+  <div style="flex:1;height:1px;background:linear-gradient(to left,transparent,rgba(45,106,45,0.18));"></div>
+</div>
+
+<!-- REVIEWS -->
+<section class="trust" id="trust" style="background:var(--cream);padding:96px 48px;">
+  <div style="max-width:1200px;margin:0 auto;text-align:center;">
+    <p class="animate-up" style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--green-mid);margin-bottom:12px;">Reviews</p>
+    <h2 class="animate-up" style="font-family:'Playfair Display',serif;font-size:clamp(28px,3.5vw,44px);color:var(--green-deep);margin-bottom:10px;line-height:1.15;animation-delay:.05s;">What Our Customers Are Saying</h2>
+    <p class="animate-up" style="font-size:15px;color:var(--text-muted);margin-bottom:44px;animation-delay:.1s;">Real reviews from real Citrus County homeowners.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:36px;text-align:left;">
+      <div class="animate-up" style="animation-delay:.12s;background:#fff;border:1px solid #e4ede4;border-radius:16px;padding:26px;position:relative;overflow:hidden;transition:transform .25s,box-shadow .25s;" onmouseover="this.style.transform='translateY(-5px)';this.style.boxShadow='0 16px 40px rgba(26,58,26,0.09)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='none'">
+        <div style="position:absolute;top:14px;right:18px;font-size:48px;font-family:'Playfair Display',serif;color:rgba(45,106,45,.06);line-height:1;user-select:none;">"</div>
+        <div style="color:#f5a623;font-size:12px;letter-spacing:1px;margin-bottom:12px;">★★★★★</div>
+        <p style="font-size:14px;color:#374151;line-height:1.75;margin:0 0 20px;">"Showed up on time and left the yard looking incredible. Booked online in 2 minutes — no phone calls, no hassle. Best $19 I've ever spent."</p>
+        <div style="display:flex;align-items:center;gap:10px;padding-top:14px;border-top:1px solid #eef2ee;">
+          <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#4caf50,#2d6a2d);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;">S</div>
+          <div><div style="font-size:13px;font-weight:700;color:var(--green-deep);">Sarah M.</div><div style="font-size:12px;color:var(--text-muted);">Inverness, FL</div></div>
+        </div>
+      </div>
+      <div class="animate-up" style="animation-delay:.17s;background:#fff;border:1px solid #e4ede4;border-radius:16px;padding:26px;position:relative;overflow:hidden;transition:transform .25s,box-shadow .25s;" onmouseover="this.style.transform='translateY(-5px)';this.style.boxShadow='0 16px 40px rgba(26,58,26,0.09)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='none'">
+        <div style="position:absolute;top:14px;right:18px;font-size:48px;font-family:'Playfair Display',serif;color:rgba(45,106,45,.06);line-height:1;user-select:none;">"</div>
+        <div style="color:#f5a623;font-size:12px;letter-spacing:1px;margin-bottom:12px;">★★★★★</div>
+        <p style="font-size:14px;color:#374151;line-height:1.75;margin:0 0 20px;">"Reliable, professional, yard looks great every week. They trim everything tight and blow off the whole driveway — in and out fast."</p>
+        <div style="display:flex;align-items:center;gap:10px;padding-top:14px;border-top:1px solid #eef2ee;">
+          <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#4caf50,#2d6a2d);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;">J</div>
+          <div><div style="font-size:13px;font-weight:700;color:var(--green-deep);">James R.</div><div style="font-size:12px;color:var(--text-muted);">Crystal River, FL</div></div>
+        </div>
+      </div>
+      <div class="animate-up" style="animation-delay:.22s;background:#fff;border:1px solid #e4ede4;border-radius:16px;padding:26px;position:relative;overflow:hidden;transition:transform .25s,box-shadow .25s;" onmouseover="this.style.transform='translateY(-5px)';this.style.boxShadow='0 16px 40px rgba(26,58,26,0.09)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='none'">
+        <div style="position:absolute;top:14px;right:18px;font-size:48px;font-family:'Playfair Display',serif;color:rgba(45,106,45,.06);line-height:1;user-select:none;">"</div>
+        <div style="color:#f5a623;font-size:12px;letter-spacing:1px;margin-bottom:12px;">★★★★★</div>
+        <p style="font-size:14px;color:#374151;line-height:1.75;margin:0 0 20px;">"Best lawn service we've had in Citrus County. No contracts, cancel anytime — but I'm not going anywhere. Fair price, great work."</p>
+        <div style="display:flex;align-items:center;gap:10px;padding-top:14px;border-top:1px solid #eef2ee;">
+          <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#4caf50,#2d6a2d);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;">L</div>
+          <div><div style="font-size:13px;font-weight:700;color:var(--green-deep);">Linda K.</div><div style="font-size:12px;color:var(--text-muted);">Lecanto, FL</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="animate-up" style="animation-delay:.27s;">
+      <a href="https://share.google/lmabQbNBMYFlVi3h1" target="_blank" rel="noopener noreferrer"
+         style="display:inline-flex;align-items:center;gap:10px;background:#fff;border:1.5px solid #d4e4d4;border-radius:50px;padding:11px 20px;font-size:13px;font-weight:600;color:var(--green-deep);text-decoration:none;transition:border-color .2s,box-shadow .2s,transform .2s;"
+         onmouseover="this.style.borderColor='#4caf50';this.style.boxShadow='0 4px 16px rgba(76,175,80,.15)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='#d4e4d4';this.style.boxShadow='none';this.style.transform='translateY(0)'">
+        <svg width="14" height="14" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path fill="#4285F4" d="M44.5 20H24v8.5h11.7C34.2 33.9 29.6 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 6 1.1 8.1 3l6.4-6.4C34.9 4.6 29.7 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/><path fill="#34A853" d="M6.3 14.7l7 5.1C15.1 16 19.3 13 24 13c3.1 0 6 1.1 8.1 3l6.4-6.4C34.9 4.6 29.7 2 24 2c-7.6 0-14.2 4.8-17.7 12.7z"/><path fill="#FBBC05" d="M24 46c5.6 0 10.3-1.8 13.8-5l-6.4-5.2C29.5 37.5 26.9 38 24 38c-5.5 0-10.2-3.3-12.1-8.1l-7 5.4C8 41.2 15.4 46 24 46z"/><path fill="#EA4335" d="M44.5 20H24v8.5h11.7c-.9 2.8-2.9 5.2-5.5 6.8l6.4 5.2C40.7 37.1 44.5 31 44.5 24c0-1.3-.2-2.7-.5-4z"/></svg>
+        <span style="color:#f5a623;">★★★★★</span>
+        <span style="color:var(--text-muted);font-weight:400;">5.0 · See all reviews on Google</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- DIVIDER -->
+<div style="display:flex;align-items:center;gap:0;max-width:1180px;margin:0 auto;padding:0 48px;">
+  <div style="flex:1;height:1px;background:linear-gradient(to right,transparent,rgba(45,106,45,0.18));"></div>
+  <div style="display:flex;align-items:center;gap:6px;margin:0 20px;flex-shrink:0;">
+    <div style="width:4px;height:4px;border-radius:50%;background:rgba(45,106,45,0.2);"></div>
+    <div style="width:6px;height:6px;border-radius:50%;background:rgba(45,106,45,0.35);"></div>
+    <div style="width:4px;height:4px;border-radius:50%;background:rgba(45,106,45,0.2);"></div>
+  </div>
+  <div style="flex:1;height:1px;background:linear-gradient(to left,transparent,rgba(45,106,45,0.18));"></div>
+</div>
+
+<!-- CLOSING CTA -->
+<section style="background:var(--cream);padding:64px 48px;text-align:center;">
+  <div class="animate-up" style="display:inline-flex;flex-direction:column;align-items:center;gap:14px;">
+    <button onclick="openQuoteModal()" style="background:var(--green-mid);color:#fff;border:none;cursor:pointer;padding:17px 48px;border-radius:10px;font-size:16px;font-weight:700;font-family:inherit;box-shadow:0 6px 24px rgba(45,106,45,.22);transition:background .2s,transform .15s,box-shadow .2s;" onmouseover="this.style.background='var(--green-deep)';this.style.transform='translateY(-2px)';this.style.boxShadow='0 12px 36px rgba(45,106,45,.28)'" onmouseout="this.style.background='var(--green-mid)';this.style.transform='translateY(0)';this.style.boxShadow='0 6px 24px rgba(45,106,45,.22)'">Get My Free Quote — First Cut from $19 →</button>
+    <span style="font-size:13px;color:var(--text-muted);">No contracts · Cancel anytime · Or call <a href="tel:+13524620627" style="color:var(--green-mid);font-weight:600;">(352) 462-0627</a></span>
   </div>
 </section>
 
@@ -1736,6 +1677,7 @@
   justify-content:center;
 ">↑</button>
 
+
 <!-- FOOTER -->
 <footer>
   <div>
@@ -1743,9 +1685,10 @@
     <div class="footer-tagline">We mow. You relax.</div>
   </div>
   <ul class="footer-links">
-    <li><a href="#services">Pricing</a></li>
-    <li><a href="#how">How It Works</a></li>
-    <li><a href="#services" onclick="openQuoteModal()">Book Now</a></li>
+    <li><a href="javascript:void(0)" onclick="openQuoteModal()">Pricing</a></li>
+    <li><a href="javascript:void(0)" onclick="openQuoteModal()">Book Now</a></li>
+    <li><a href="#trust">Reviews</a></li>
+    <li><a href="/faq.html">FAQ</a></li>
     <li><a href="refund-policy.html">Refund Policy</a></li>
     <li><a href="privacy-policy.html">Privacy Policy</a></li>
     <li><a href="terms-of-service.html">Terms of Service</a></li>
@@ -2862,14 +2805,21 @@ function initParticles() {
 
 // ── INTERSECTION OBSERVER SCROLL REVEALS ─────
 function initScrollReveals() {
-  const els = document.querySelectorAll('.reveal, .reveal-left, .reveal-right');
+  const els = document.querySelectorAll('.reveal, .reveal-left, .reveal-right, .animate-up');
   if (!els.length) return;
 
   const io = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
-        entry.target.classList.add('visible');
-        io.unobserve(entry.target); // fire once
+        const el = entry.target;
+        const delay = el.style.animationDelay;
+        if (delay) {
+          const ms = parseFloat(delay) * 1000;
+          setTimeout(() => el.classList.add('visible'), ms);
+        } else {
+          el.classList.add('visible');
+        }
+        io.unobserve(el);
       }
     });
   }, { threshold: 0.05, rootMargin: '0px 0px 80px 0px' });
@@ -3876,6 +3826,7 @@ async function quotePaySubmit() {
       serviceDateRaw:   qState.startDate,
       serviceDate:      dateFmt,
       yardSize:         tierKey,
+      ref:              document.referrer ? (function(){ try { return new URL(document.referrer).hostname; } catch(e){ return document.referrer; } })() : 'direct',
       notes:            isReturning
         ? 'Returning customer. Per-mow rate: ' + afterPrice
         : 'First service $19 promo. Following: ' + afterPrice,
