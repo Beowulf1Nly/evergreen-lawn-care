@@ -3516,7 +3516,11 @@ function updateLotDisplay() {
   if (labelEl) labelEl.textContent = tier ? tier.label : '—';
   if (iconEl)  iconEl.textContent  = tier ? tier.icon : '🏡';
 
-  if (qState.lotAutoDetected && !qState.lotEstimated) {
+  if (!_lotLookupDone) {
+    // Lookup still in flight — show a neutral state, never flash an error
+    if (sublabel) sublabel.textContent = 'Detecting your yard size…';
+    if (manual) manual.style.display = 'none';
+  } else if (qState.lotAutoDetected && !qState.lotEstimated) {
     // Exact county record — auto-selected, no dropdown needed
     if (sublabel) sublabel.textContent = '~ ' + qState.detectedAcreage + ' acres (estimated)';
     if (manual) manual.style.display = 'none';
