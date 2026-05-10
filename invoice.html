@@ -996,7 +996,8 @@ let adminRole  = 'employee'; // 'owner' or 'employee'
 // ─────────── Data state ───────────
 let allBookings  = [];
 let allCustomers = []; // rich customer records from Customers sheet
-let activeRowIdx = null;
+let activeRowIdx    = null;
+let _invoiceCustomer = null; // set when invoicing from a customer card with no booking row
 let currentTipPct = 0;
 let currentTipFixed = 0;
 let confirmCallback = null;
@@ -1200,16 +1201,23 @@ function renderCustomers() {
   const el = document.getElementById('custList');
   if (!el) return;
 
-  // Build a lookup: email → array of allBookings indices (for action buttons).
-  // Exclude rowCompleted (archived) rows — they live in the "Completed Jobs" sheet
-  // and have negative _rowIndex values; action buttons must only target active rows.
+  // Build two lookups for action buttons (excludes archived/completed rows):
+  //   rowsByEmail: email → indices  (fallback / single-property)
+  //   rowsByProp:  email|address → indices  (multi-property customers)
   const rowsByEmail = new Map();
+  const rowsByProp  = new Map();
   for (let i = 0; i < allBookings.length; i++) {
     if (allBookings[i].rowCompleted) continue; // skip archived
-    const em = String(allBookings[i].email || '').toLowerCase().trim();
+    const em   = String(allBookings[i].email   || '').toLowerCase().trim();
+    const addr = String(allBookings[i].address || '').toLowerCase().trim();
     if (!em) continue;
     if (!rowsByEmail.has(em)) rowsByEmail.set(em, []);
     rowsByEmail.get(em).push(i);
+    if (addr) {
+      const pk = em + '|' + addr;
+      if (!rowsByProp.has(pk)) rowsByProp.set(pk, []);
+      rowsByProp.get(pk).push(i);
+    }
   }
 
   // Use rich Customers sheet data if loaded; otherwise fall back to deduplicating allBookings
@@ -1328,8 +1336,10 @@ function renderCustomers() {
     const isFree     = /free/i.test(c.plan);
     const isSub      = !isFree && /weekly/i.test(c.plan) && !isInactive;
 
-    // Find booking row indices for action buttons
-    const rows   = rowsByEmail.get(c.email) || [];
+    // Find booking row indices for action buttons.
+    // Use composite email|address key first (multi-property), fall back to email-only.
+    const _propKey = c.address ? (c.email + '|' + c.address.toLowerCase().trim()) : null;
+    const rows = (_propKey && rowsByProp.has(_propKey) ? rowsByProp.get(_propKey) : rowsByEmail.get(c.email)) || [];
     const nextRow = rows.find(i => !isDone(allBookings[i]) && !allBookings[i]?.rowCancelled) ?? rows[rows.length - 1];
 
     // Pull per-mow price and next date from the next booking row
@@ -1376,7 +1386,7 @@ function renderCustomers() {
         ${!isSub ? `<button class="cust-btn cust-btn-green" onclick="openScheduleModal(${custIdx})">📋 Schedule</button>` : ''}
         ${c.email && !c.reviewSent ? `<button class="cust-btn cust-btn-green" onclick="custSendReviewByEmail('${esc(c.email)}')">⭐ Review Email</button>` : ''}
         ${c.email && c.reviewSent  ? `<button class="cust-btn cust-btn-gray" disabled title="Review sent ${esc(c.reviewSent)}">⭐ Sent</button>` : ''}
-        ${c.email && !isInactive && nextRow !== undefined ? `<button class="cust-btn cust-btn-blue" onclick="openInvoiceModal(${nextRow})">📧 Invoice</button>` : ''}
+        ${c.email && !isInactive ? `<button class="cust-btn cust-btn-blue" onclick="${nextRow !== undefined ? `openInvoiceModal(${nextRow})` : `openCustomerInvoiceModal(${custIdx})`}">📧 Invoice</button>` : ''}
         ${isSub ? `<button class="cust-btn cust-btn-red" onclick="custCancelPlan('${esc(c.email)}','${esc(c.name)}')">✕ Cancel Plan</button>` : ''}
         ${c.phone ? `<button class="cust-btn cust-btn-gray" onclick="window.location='tel:${esc(c.phone)}'">📞 Call</button>` : ''}
       </div>
@@ -2202,7 +2212,54 @@ function openInvoiceModal(rowIdx) {
 function closeInvoiceModal() {
   document.getElementById('invoiceModal').classList.remove('open');
   document.body.style.overflow = '';
-  activeRowIdx = null;
+  activeRowIdx     = null;
+  _invoiceCustomer = null;
+}
+
+// Opens the invoice modal from a customer card — no booking row required.
+// Used for advance/manual invoices that aren't tied to a specific scheduled job.
+function openCustomerInvoiceModal(custIdx) {
+  const c = (window._custsList || [])[custIdx];
+  if (!c) return;
+  _invoiceCustomer = c;
+  activeRowIdx     = null;
+  currentTipPct    = 0;
+  currentTipFixed  = 0;
+  activeTipMode    = 0;
+
+  // Try to pre-fill price from the customer's next active booking row
+  const _propKey2 = c.address ? (c.email + '|' + c.address.toLowerCase().trim()) : null;
+  const _rows2    = (_propKey2 && typeof rowsByProp !== 'undefined' && rowsByProp.has(_propKey2))
+    ? rowsByProp.get(_propKey2)
+    : (rowsByEmail.get(c.email) || []);
+  const _nextRow2 = _rows2.find(i => !isDone(allBookings[i]) && !allBookings[i]?.rowCancelled);
+  const prefillPrice = _nextRow2 !== undefined
+    ? (parseFloat(String(allBookings[_nextRow2]?.price || '').replace(/[^0-9.]/g, '')) || 0)
+    : 0;
+
+  document.getElementById('invoiceAmount').value   = prefillPrice || '';
+  document.getElementById('invoiceDays').value     = 7;
+  document.getElementById('invoiceNote').value     = '';
+  document.getElementById('invoiceError').style.display   = 'none';
+  document.getElementById('invoiceSuccess').style.display = 'none';
+  document.getElementById('sendBtn').disabled      = false;
+  document.getElementById('sendBtnText').textContent = '📧 Send Invoice';
+  document.getElementById('tipCustomAmt').style.display = 'none';
+  document.getElementById('tipCustomAmt').value    = '';
+  document.getElementById('tipPreview').textContent = '';
+  document.getElementById('invoiceAmountSummary').style.display = 'none';
+  document.querySelectorAll('.tip-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.tip-btn[data-tip="0"]').classList.add('active');
+
+  document.getElementById('invoiceDetail').innerHTML =
+    `<strong>${esc(c.name)}</strong><br>
+     ✉️ ${esc(c.email || '(no email)')} · 📍 ${esc(c.address || '—')}<br>
+     Plan: ${esc(c.plan || '—')} · <em style="color:var(--text-muted);">Manual / advance invoice</em>`;
+
+  document.getElementById('invoiceModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  updateInvoicePreview();
+  setTimeout(() => document.getElementById('invoiceAmount').focus(), 100);
 }
 
 function setTip(val) {
@@ -2234,8 +2291,20 @@ function updateInvoicePreview() {
 }
 
 async function sendInvoice() {
-  const b = allBookings[activeRowIdx];
-  if (!b) return;
+  // Support two modes:
+  //   1. Booking-row mode: activeRowIdx is set → pull data from allBookings[activeRowIdx]
+  //   2. Customer mode:    activeRowIdx is null + _invoiceCustomer is set → advance/manual invoice
+  const b = activeRowIdx !== null ? allBookings[activeRowIdx] : null;
+  const c = _invoiceCustomer;
+  if (!b && !c) return;
+
+  const invoiceEmail   = b ? b.email   : c.email;
+  const invoiceName    = b ? (b.name    || '') : (c.name    || '');
+  const invoiceAddr    = b ? (b.address || '') : (c.address || '');
+  const invoiceService = b ? (b.service || b.frequency || 'Lawn Service') : (c.plan || 'Lawn Service');
+  const invoiceDate    = b ? (b.serviceDate || b.serviceDateRaw || '') : '';
+  const invoiceRowIdx  = b ? (activeRowIdx + 2) : 0; // 0 = no booking row (advance invoice)
+
   const base = parseFloat(document.getElementById('invoiceAmount').value);
   const days = parseInt(document.getElementById('invoiceDays').value) || 7;
   const note = document.getElementById('invoiceNote').value.trim();
@@ -2244,7 +2313,7 @@ async function sendInvoice() {
   errEl.style.display = 'none';
   okEl.style.display  = 'none';
 
-  if (!b.email) { errEl.textContent='No email on file.'; errEl.style.display='block'; return; }
+  if (!invoiceEmail) { errEl.textContent='No email on file.'; errEl.style.display='block'; return; }
   if (!base || base <= 0) { errEl.textContent='Enter a valid amount.'; errEl.style.display='block'; return; }
 
   let tip = 0;
@@ -2256,15 +2325,19 @@ async function sendInvoice() {
   btn.disabled = true;
   document.getElementById('sendBtnText').textContent = 'Sending…';
 
+  const descParts = [invoiceService];
+  if (invoiceDate) descParts.push(invoiceDate);
+  if (invoiceAddr) descParts.push(invoiceAddr);
+
   const params = new URLSearchParams({
     action:       'send_invoice',
-    email:        b.email,
-    name:         b.name || '',
+    email:        invoiceEmail,
+    name:         invoiceName,
     amount:       total,
-    description:  (b.service||b.frequency||'Lawn Service') + ' — ' + (b.serviceDate||b.serviceDateRaw||'') + ' — ' + (b.address||''),
+    description:  descParts.join(' — '),
     daysUntilDue: days,
     note:         note || '',
-    rowIndex:     activeRowIdx + 2,
+    rowIndex:     invoiceRowIdx,
     adminToken:   adminToken,
     tipAmount:    tip,
   });
@@ -2275,7 +2348,9 @@ async function sendInvoice() {
     if (data.success) {
       okEl.style.display = 'block';
       document.getElementById('sendBtnText').textContent = '✅ Sent!';
-      allBookings[activeRowIdx].invoiced = 'Invoiced — ' + new Date().toLocaleDateString();
+      if (b && activeRowIdx !== null) {
+        allBookings[activeRowIdx].invoiced = 'Invoiced — ' + new Date().toLocaleDateString();
+      }
       setTimeout(() => { closeInvoiceModal(); renderBookings(); }, 2000);
     } else {
       throw new Error(data.error || 'Invoice failed');
