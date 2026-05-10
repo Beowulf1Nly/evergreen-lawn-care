@@ -47,22 +47,45 @@
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:'DM Sans',sans-serif; background:var(--cream); color:var(--text); min-height:100vh; }
 
-  /* ── Loading overlay ── */
+  /* ── Loading overlay — thin top progress bar only ── */
   #loadingOverlay {
-    position:fixed; inset:0; background:var(--green-deep);
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    position:fixed; top:0; left:0; right:0; height:3px;
+    background:var(--green-bright);
     z-index:999;
+    animation:progressPulse 1.4s ease-in-out infinite;
   }
-  .loading-logo { font-family:'Playfair Display',serif; font-size:26px; color:#fff; margin-bottom:20px; }
-  .loading-logo span { color:#7ec87e; }
-  .spinner {
-    width:36px; height:36px;
-    border:3px solid rgba(255,255,255,.2);
-    border-top-color:#7ec87e;
-    border-radius:50%;
-    animation:spin .8s linear infinite;
+  @keyframes progressPulse {
+    0%   { opacity:1; }
+    50%  { opacity:.5; }
+    100% { opacity:1; }
   }
-  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* ── Skeleton shimmer ── */
+  .skel {
+    background:linear-gradient(90deg, #e8ede8 25%, #d4ddd4 50%, #e8ede8 75%);
+    background-size:200% 100%;
+    animation:shimmer 1.4s infinite;
+    border-radius:8px;
+  }
+  @keyframes shimmer {
+    0%   { background-position:200% 0; }
+    100% { background-position:-200% 0; }
+  }
+  #skeletonProfile { display:none; padding:24px 20px; max-width:680px; margin:0 auto; }
+  #skeletonProfile.visible { display:block; }
+  .skel-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:32px; }
+  .skel-greeting { flex:1; }
+  .skel-h { height:28px; width:55%; margin-bottom:10px; }
+  .skel-sub { height:16px; width:38%; }
+  .skel-btn { height:36px; width:90px; border-radius:8px; }
+  .skel-card { background:#fff; border-radius:16px; padding:24px; margin-bottom:16px; box-shadow:0 2px 12px rgba(0,0,0,.06); }
+  .skel-row { display:flex; gap:12px; align-items:center; margin-bottom:12px; }
+  .skel-circle { width:48px; height:48px; border-radius:50%; flex-shrink:0; }
+  .skel-line-lg { height:18px; flex:1; }
+  .skel-line-sm { height:14px; width:60%; }
+  .skel-line-xs { height:12px; width:40%; }
+  .skel-bar { height:14px; margin-bottom:10px; }
+  .skel-bar:last-child { width:70%; }
 
   /* ── Screens ── */
   .screen { display:none !important; min-height:100vh; }
@@ -429,10 +452,41 @@
 </head>
 <body>
 
-<!-- Loading overlay (shown while checking session) -->
-<div id="loadingOverlay">
-  <div class="loading-logo">🌿 <span>Evergreen</span></div>
-  <div class="spinner"></div>
+<!-- Thin progress bar (shown while checking session / fetching data) -->
+<div id="loadingOverlay"></div>
+
+<!-- Skeleton profile — shown immediately while API loads (no-cache path) -->
+<div id="skeletonProfile">
+  <!-- skeleton header -->
+  <div class="skel-header">
+    <div class="skel-greeting">
+      <div class="skel skel-h"></div>
+      <div class="skel skel-sub"></div>
+    </div>
+    <div class="skel skel-btn"></div>
+  </div>
+  <!-- skeleton cards -->
+  <div class="skel-card">
+    <div class="skel-row">
+      <div class="skel skel-circle"></div>
+      <div style="flex:1">
+        <div class="skel skel-line-lg" style="margin-bottom:8px"></div>
+        <div class="skel skel-line-sm"></div>
+      </div>
+    </div>
+    <div class="skel skel-bar"></div>
+    <div class="skel skel-bar"></div>
+    <div class="skel skel-bar"></div>
+  </div>
+  <div class="skel-card">
+    <div class="skel skel-bar"></div>
+    <div class="skel skel-bar"></div>
+    <div class="skel skel-bar"></div>
+  </div>
+  <div class="skel-card">
+    <div class="skel skel-bar"></div>
+    <div class="skel skel-bar"></div>
+  </div>
 </div>
 
 <!-- ═══════════════════════════════════════════
@@ -846,7 +900,7 @@ async function verifySession(sessionToken) {
 // PROFILE — load and render (used on page reload with existing session)
 // ═══════════════════════════════════════════════════════════════════════
 const PROFILE_CACHE_KEY = 'eg_profile_cache';
-const PROFILE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const PROFILE_CACHE_TTL = 30 * 60 * 1000; // 30 minutes — always serve cache instantly
 
 function getCachedProfile() {
   try {
@@ -866,20 +920,31 @@ function clearProfileCache() {
   try { localStorage.removeItem(PROFILE_CACHE_KEY); } catch(e) {}
 }
 
+function showSkeleton() {
+  const s = document.getElementById('skeletonProfile');
+  if (s) s.classList.add('visible');
+}
+function hideSkeleton() {
+  const s = document.getElementById('skeletonProfile');
+  if (s) s.classList.remove('visible');
+}
+
 async function loadProfile(sessionToken) {
   // Show cached data instantly so the page feels immediate
   const cached = getCachedProfile();
   if (cached) {
     renderProfile(cached);
     showProfile();
-    // Then refresh silently in the background
+    // Refresh silently in the background — user sees content immediately
     refreshProfileInBackground(sessionToken);
     return;
   }
 
-  // No cache — fetch and wait (first visit or cache expired)
+  // No cache — show skeleton so page doesn't look broken while API warms up
+  showSkeleton();
   try {
     const data = await apiGet({ action: 'portal_get_profile', sessionToken });
+    hideSkeleton();
     if (!data.success) {
       clearSession();
       clearProfileCache();
@@ -891,6 +956,7 @@ async function loadProfile(sessionToken) {
     renderProfile(data);
     showProfile();
   } catch(err) {
+    hideSkeleton();
     hideLoading();
     showLogin();
     showLoginError('Error loading profile: ' + (err.message || err));
@@ -1051,6 +1117,16 @@ function renderBillingCard(bookings) {
   const mowRate    = _ongoingRaw;
   const mowRateStr = '$' + mowRate.toFixed(0);
 
+  // Multi-property: count unique addresses so billing copy reflects the full charge per visit
+  const _uniqueAddrs = [...new Set(subBookings.map(b => String(b.address||'').toLowerCase().trim()).filter(Boolean))];
+  const propCount    = _uniqueAddrs.length || 1;
+  const totalPerVisit = mowRate * propCount;
+  const totalStr      = '$' + totalPerVisit.toFixed(0);
+  const isMultiProp   = propCount > 1;
+  // Labels that change based on single vs multi-property
+  const perPropLabel  = isMultiProp ? `${mowRateStr}/property` : mowRateStr;
+  const totalLabel    = isMultiProp ? `${propCount} properties × ${mowRateStr} = ${totalStr}/visit` : `${mowRateStr}/visit`;
+
   // Promo: if their very next mow is priced lower than the ongoing rate, note it
   const _nextPrice = nextAppt ? parseFloat(String(nextAppt.price||'').replace(/[^0-9.]/g,'')) : 0;
   const promoNote  = (_nextPrice > 0 && _nextPrice < mowRate)
@@ -1137,7 +1213,7 @@ function renderBillingCard(bookings) {
       <div class="billing-plan-row">
         <div>
           <div class="billing-plan-name">📅 Weekly Plan</div>
-          <div class="billing-plan-sub">${mowRateStr}/mow — ${isCashCustomer ? '💵 cash, collected after each visit' : 'charged after each visit'}</div>
+          <div class="billing-plan-sub">${perPropLabel}/mow — ${isCashCustomer ? '💵 cash, collected after each visit' : 'charged after each visit'}</div>
         </div>
       </div>
       <hr class="billing-divider">
@@ -1147,15 +1223,15 @@ function renderBillingCard(bookings) {
       </div>
       <div class="billing-info-row">
         <span class="billing-info-label">Per-mow rate</span>
-        <span class="billing-info-value">${mowRateStr}/visit — ${isCashCustomer ? '💵 paid in cash' : 'charged after each mow'}</span>
+        <span class="billing-info-value">${totalLabel} — ${isCashCustomer ? '💵 paid in cash' : 'charged after each mow'}</span>
       </div>
       ${chargeInfo ? `<div class="billing-info-row"><span class="billing-info-label">This month</span>${chargeInfo}</div>` : ''}
       <div class="mow-dots">${dotsHtml}</div>
       ${alertBox}
       <div style="margin-top:12px;padding:10px 14px;background:${isCashCustomer ? '#fef9c3' : '#f0fdf4'};border-radius:10px;font-size:12px;color:${isCashCustomer ? '#854d0e' : '#166534'};line-height:1.6;">
         ${isCashCustomer
-          ? `💵 Cash customer — we'll collect ${mowRateStr} after each weekly visit. <a href="#" onclick="openCardModal();return false;" style="color:#854d0e;font-weight:700;">Add a card →</a> to switch to autopay.`
-          : `💡 Your card is automatically charged ${mowRateStr} after each weekly mow. No invoices, no reminders.`}
+          ? `💵 Cash customer — we'll collect ${isMultiProp ? totalStr + ' (' + propCount + ' properties)' : mowRateStr} after each weekly visit. <a href="#" onclick="openCardModal();return false;" style="color:#854d0e;font-weight:700;">Add a card →</a> to switch to autopay.`
+          : `💡 Your card is automatically charged ${isMultiProp ? totalStr + ' (' + propCount + ' properties × ' + mowRateStr + ')' : mowRateStr} after each weekly mow. No invoices, no reminders.`}
       </div>${promoNote}`;
 
   } else {
@@ -1219,7 +1295,7 @@ function renderBillingCard(bookings) {
       <div class="billing-plan-row">
         <div>
           <div class="billing-plan-name">📅 Bi-Weekly Plan</div>
-          <div class="billing-plan-sub">${mowRateStr}/mow — ${isCashCustomer ? '💵 cash, collected after each visit' : 'charged after each visit'}</div>
+          <div class="billing-plan-sub">${perPropLabel}/mow — ${isCashCustomer ? '💵 cash, collected after each visit' : 'charged after each visit'}</div>
         </div>
       </div>
       <hr class="billing-divider">
@@ -1229,15 +1305,15 @@ function renderBillingCard(bookings) {
       </div>
       <div class="billing-info-row">
         <span class="billing-info-label">Per-mow rate</span>
-        <span class="billing-info-value">${mowRateStr}/visit — ${isCashCustomer ? '💵 paid in cash' : 'charged after each mow'}</span>
+        <span class="billing-info-value">${totalLabel} — ${isCashCustomer ? '💵 paid in cash' : 'charged after each mow'}</span>
       </div>
       ${chargeInfo ? `<div class="billing-info-row"><span class="billing-info-label">This month</span>${chargeInfo}</div>` : ''}
       <div class="mow-dots">${dotsHtml}</div>
       ${alertBox}
       <div style="margin-top:12px;padding:10px 14px;background:${isCashCustomer ? '#fef9c3' : '#f0fdf4'};border-radius:10px;font-size:12px;color:${isCashCustomer ? '#854d0e' : '#166534'};line-height:1.6;">
         ${isCashCustomer
-          ? `💵 Cash customer — we'll collect ${mowRateStr} after each bi-weekly visit. <a href="#" onclick="openCardModal();return false;" style="color:#854d0e;font-weight:700;">Add a card →</a> to switch to autopay.`
-          : `💡 Your card is automatically charged ${mowRateStr} after each bi-weekly mow. No invoices, no reminders.`}
+          ? `💵 Cash customer — we'll collect ${isMultiProp ? totalStr + ' (' + propCount + ' properties)' : mowRateStr} after each bi-weekly visit. <a href="#" onclick="openCardModal();return false;" style="color:#854d0e;font-weight:700;">Add a card →</a> to switch to autopay.`
+          : `💡 Your card is automatically charged ${isMultiProp ? totalStr + ' (' + propCount + ' properties × ' + mowRateStr + ')' : mowRateStr} after each bi-weekly mow. No invoices, no reminders.`}
       </div>`;
   }
 
@@ -1430,6 +1506,28 @@ let stripe, cardElement;
 let stripeJsLoaded = false;
 let cardMounted = false;
 
+// ── Pre-cached SetupIntent ─────────────────────────────────────────────────
+// Created in the background as soon as we know the user has no card.
+// saveCard() will use this instead of making a round-trip to Apps Script,
+// cutting the "Add Card" flow from ~10s down to ~3s.
+let _cachedSetupIntent = null;      // { clientSecret, sessionToken }
+let _setupIntentPending = false;    // prevent duplicate requests
+
+async function preCreateSetupIntent(sessionToken) {
+  if (_cachedSetupIntent || _setupIntentPending) return;
+  _setupIntentPending = true;
+  try {
+    const data = await apiGet({ action: 'portal_create_setup_intent', sessionToken });
+    if (data.success && data.clientSecret) {
+      _cachedSetupIntent = { clientSecret: data.clientSecret, sessionToken };
+    }
+  } catch(e) {
+    // Silent — saveCard() will fall back to creating one on demand
+  } finally {
+    _setupIntentPending = false;
+  }
+}
+
 // Load Stripe.js on demand (only when user clicks Add Card — no impact on page load)
 function loadStripeJS(callback) {
   if (window.Stripe) { callback(); return; }
@@ -1457,21 +1555,22 @@ function initStripe() {
   });
 }
 
-// Pre-mount the Stripe iframe in the background (card-element container is in the DOM
-// but inside the hidden modal). Called as soon as we know the user has no card.
-// By the time they click "Add Card", the iframe is fully loaded and Link autofill works.
+// Pre-mount the Stripe iframe AND pre-create the SetupIntent in the background.
+// Called as soon as we know the user has no card saved.
+// By the time they click "Add Card", both the iframe and the server secret are ready.
 function premountCardElement() {
+  const session = getStoredSession();
   loadStripeJS(() => {
     initStripe();
     if (!cardMounted) {
-      // The modal is hidden (display:none via .modal-overlay), but the #card-element
-      // container is in the DOM. Stripe can mount into it regardless of visibility.
       cardElement.mount('#card-element');
       cardMounted = true;
       cardElement.on('change', evt => {
         document.getElementById('card-errors').textContent = evt.error ? evt.error.message : '';
       });
     }
+    // Pre-create the SetupIntent after Stripe iframe is warm (non-blocking)
+    if (session) preCreateSetupIntent(session.token);
   });
 }
 
@@ -1512,12 +1611,19 @@ async function saveCard() {
   document.getElementById('card-errors').textContent = '';
 
   try {
-    // Step 1: create a SetupIntent on the backend
-    const siData = await apiGet({ action: 'portal_create_setup_intent', sessionToken: session.token });
-    if (!siData.success) throw new Error(siData.error || 'Could not initialize card setup');
+    // Step 1: use pre-cached SetupIntent (created in background on load) or create one now
+    let clientSecret;
+    if (_cachedSetupIntent && _cachedSetupIntent.sessionToken === session.token) {
+      clientSecret = _cachedSetupIntent.clientSecret;
+      _cachedSetupIntent = null; // consume it — SetupIntents are single-use
+    } else {
+      const siData = await apiGet({ action: 'portal_create_setup_intent', sessionToken: session.token });
+      if (!siData.success) throw new Error(siData.error || 'Could not initialize card setup');
+      clientSecret = siData.clientSecret;
+    }
 
     // Step 2: confirm card with Stripe.js (no server round-trip for card data)
-    const result = await stripe.confirmCardSetup(siData.clientSecret, {
+    const result = await stripe.confirmCardSetup(clientSecret, {
       payment_method: { card: cardElement },
     });
     if (result.error) {
