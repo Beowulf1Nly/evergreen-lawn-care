@@ -3998,7 +3998,13 @@ async function quotePaySubmit() {
   else if (/instagram/i.test(ref)) ref = 'instagram';
   function fire(page) {
     var p = new URLSearchParams({ action:'track_visit', page:page, ref:ref, ua:navigator.userAgent.substring(0,150), vid:vid });
-    fetch(TRACK_URL+'?'+p, { mode:'no-cors', keepalive:true }).catch(function(){});
+    var url = TRACK_URL + '?' + p;
+    // sendBeacon is guaranteed to complete even when the tab is closed mid-flight
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(url);
+    } else {
+      fetch(url, { mode:'no-cors', keepalive:true }).catch(function(){});
+    }
   }
   fire(location.pathname + (location.hash || ''));           // initial load
   window.addEventListener('hashchange', function(){          // /#services, /#pricing, etc.
