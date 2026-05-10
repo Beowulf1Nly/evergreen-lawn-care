@@ -1117,15 +1117,27 @@ function renderBillingCard(bookings) {
   const mowRate    = _ongoingRaw;
   const mowRateStr = '$' + mowRate.toFixed(0);
 
-  // Multi-property: count unique addresses so billing copy reflects the full charge per visit
+  // Multi-property: find each unique address and look up its actual per-mow rate.
+  // Don't assume all properties have the same price — sum the real rates.
   const _uniqueAddrs = [...new Set(subBookings.map(b => String(b.address||'').toLowerCase().trim()).filter(Boolean))];
   const propCount    = _uniqueAddrs.length || 1;
-  const totalPerVisit = mowRate * propCount;
+  const isMultiProp  = propCount > 1;
+  const _propRates   = isMultiProp ? _uniqueAddrs.map(addr => {
+    const _ab = subBookings.filter(b => String(b.address||'').toLowerCase().trim() === addr);
+    const _dp = _ab.filter(b => String(b.done||'').includes('Done'))
+                   .map(b => parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))).filter(p => p > 20);
+    const _up = _ab.filter(b => !String(b.done||'').includes('Done'))
+                   .map(b => parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))).filter(p => p > 20);
+    return _dp[0] || _up[0] || mowRate;
+  }) : [mowRate];
+  const totalPerVisit = _propRates.reduce((s, r) => s + r, 0);
   const totalStr      = '$' + totalPerVisit.toFixed(0);
-  const isMultiProp   = propCount > 1;
   // Labels that change based on single vs multi-property
   const perPropLabel  = isMultiProp ? `${mowRateStr}/property` : mowRateStr;
-  const totalLabel    = isMultiProp ? `${propCount} properties × ${mowRateStr} = ${totalStr}/visit` : `${mowRateStr}/visit`;
+  const _rateBreakdown = isMultiProp
+    ? _propRates.map(r => '$' + r.toFixed(0)).join(' + ') + ` = ${totalStr}`
+    : `${mowRateStr}/visit`;
+  const totalLabel    = isMultiProp ? `${_rateBreakdown} (${propCount} properties)` : `${mowRateStr}/visit`;
 
   // Promo: if their very next mow is priced lower than the ongoing rate, note it
   const _nextPrice = nextAppt ? parseFloat(String(nextAppt.price||'').replace(/[^0-9.]/g,'')) : 0;
@@ -1230,8 +1242,8 @@ function renderBillingCard(bookings) {
       ${alertBox}
       <div style="margin-top:12px;padding:10px 14px;background:${isCashCustomer ? '#fef9c3' : '#f0fdf4'};border-radius:10px;font-size:12px;color:${isCashCustomer ? '#854d0e' : '#166534'};line-height:1.6;">
         ${isCashCustomer
-          ? `💵 Cash customer — we'll collect ${isMultiProp ? totalStr + ' (' + propCount + ' properties)' : mowRateStr} after each weekly visit. <a href="#" onclick="openCardModal();return false;" style="color:#854d0e;font-weight:700;">Add a card →</a> to switch to autopay.`
-          : `💡 Your card is automatically charged ${isMultiProp ? totalStr + ' (' + propCount + ' properties × ' + mowRateStr + ')' : mowRateStr} after each weekly mow. No invoices, no reminders.`}
+          ? `💵 Cash customer — we'll collect ${isMultiProp ? totalStr + ' (' + _rateBreakdown + ')' : mowRateStr} after each weekly visit. <a href="#" onclick="openCardModal();return false;" style="color:#854d0e;font-weight:700;">Add a card →</a> to switch to autopay.`
+          : `💡 Your card is automatically charged ${isMultiProp ? totalStr + ' (' + _rateBreakdown + ')' : mowRateStr} after each weekly mow. No invoices, no reminders.`}
       </div>${promoNote}`;
 
   } else {
@@ -1312,8 +1324,8 @@ function renderBillingCard(bookings) {
       ${alertBox}
       <div style="margin-top:12px;padding:10px 14px;background:${isCashCustomer ? '#fef9c3' : '#f0fdf4'};border-radius:10px;font-size:12px;color:${isCashCustomer ? '#854d0e' : '#166534'};line-height:1.6;">
         ${isCashCustomer
-          ? `💵 Cash customer — we'll collect ${isMultiProp ? totalStr + ' (' + propCount + ' properties)' : mowRateStr} after each bi-weekly visit. <a href="#" onclick="openCardModal();return false;" style="color:#854d0e;font-weight:700;">Add a card →</a> to switch to autopay.`
-          : `💡 Your card is automatically charged ${isMultiProp ? totalStr + ' (' + propCount + ' properties × ' + mowRateStr + ')' : mowRateStr} after each bi-weekly mow. No invoices, no reminders.`}
+          ? `💵 Cash customer — we'll collect ${isMultiProp ? totalStr + ' (' + _rateBreakdown + ')' : mowRateStr} after each bi-weekly visit. <a href="#" onclick="openCardModal();return false;" style="color:#854d0e;font-weight:700;">Add a card →</a> to switch to autopay.`
+          : `💡 Your card is automatically charged ${isMultiProp ? totalStr + ' (' + _rateBreakdown + ')' : mowRateStr} after each bi-weekly mow. No invoices, no reminders.`}
       </div>`;
   }
 
@@ -1370,6 +1382,33 @@ function bookingCardHTML(b, isUpcoming) {
   const _apptMid     = _apptDateObj ? new Date(_apptDateObj.getFullYear(), _apptDateObj.getMonth(), _apptDateObj.getDate()) : null;
   const isLockedOut  = _apptMid && _apptMid <= _todayMid;
 
+  // Pay Now for past jobs that are done but not yet paid
+  let payNowBtn = '';
+  if (!isUpcoming && isDone && !isPaid && !isFreeMow) {
+    const invRaw   = String(b.invoiced || '');
+    const invUrl   = invRaw.match(/https:\/\/[^\s'"<>]+/)?.[0] || '';
+    const invId    = invRaw.match(/(in_[A-Za-z0-9]+)/)?.[1]    || '';
+    if (invUrl) {
+      payNowBtn = `<div style="margin-top:10px;">
+        <a href="${invUrl}" target="_blank"
+           style="display:inline-block;padding:10px 22px;background:#1a3a1a;color:#fff;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;">
+          💳 Pay Now →
+        </a>
+      </div>`;
+    } else if (invId) {
+      payNowBtn = `<div style="margin-top:10px;">
+        <button onclick="openInvoiceByFetch('${invId}', this)"
+           style="padding:10px 22px;background:#1a3a1a;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+          💳 Pay Now →
+        </button>
+      </div>`;
+    } else {
+      payNowBtn = `<div style="margin-top:10px;padding:9px 14px;background:#fef9c3;border:1.5px solid #fde047;border-radius:8px;font-size:12px;color:#854d0e;line-height:1.6;">
+        💳 Payment pending — check your email for an invoice, or <a href="tel:3524620627" style="color:#854d0e;font-weight:700;">call us</a>.
+      </div>`;
+    }
+  }
+
   // Reschedule + Cancel only on upcoming (not done) appointments
   const apptActions = isUpcoming && !isDone ? (isLockedOut ? `
     <div style="margin-top:10px;padding:9px 14px;background:#fef9c3;border:1.5px solid #fde047;border-radius:8px;font-size:12px;color:#854d0e;line-height:1.6;">
@@ -1401,6 +1440,7 @@ function bookingCardHTML(b, isUpcoming) {
         ${esc(b.frequency || '')}
       </div>
       ${apptActions}
+      ${payNowBtn}
     </div>`;
 }
 

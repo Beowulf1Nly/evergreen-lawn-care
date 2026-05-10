@@ -3343,6 +3343,10 @@ function openQuoteModal(preselectedPlan) {
   showQuoteStep(1);
   document.getElementById('quoteModalOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
+  // Track quote funnel start
+  if (typeof gtag === 'function') {
+    gtag('event', 'quote_open', { event_category: 'Quote Funnel', event_label: 'Step 1 – Address' });
+  }
   // Load Stripe.js in the background now that modal is open (async — card isn't shown until step 4)
   initStripeElements().catch(err => console.warn('Stripe init error:', err));
 }

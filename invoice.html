@@ -1774,13 +1774,20 @@ function cardHTML(b, rowIdx, isToday) {
       }
       // Not done yet — nothing shown; Mark Done unlocks it
     } else {
-      const subscribed = isSubscribed(b);
+      const subscribed  = isSubscribed(b);
+      const autopayOn   = b.portalAutopay === true || auto; // customer opted in OR booking is flagged autopay
       if (subscribed || auto) {
         const hasCard = !!(b.cardLast4);
-        if (done && hasCard) {
+        if (done && hasCard && autopayOn) {
+          // Autopay is active — charge the card directly
           actions += `<button class="btn-action btn-charge" onclick="triggerAutoCharge(${rowIdx})">💳 Charge Card</button>`;
-        } else if (done && !hasCard) {
-          actions += `<button class="btn-action btn-invoice" onclick="openInvoiceModal(${rowIdx})">📧 Invoice $${price.toFixed(0)}</button>`;
+        } else if (done) {
+          // Has card but autopay is off (or no card) — send invoice instead
+          if (invoiced) {
+            actions += `<button class="btn-action btn-disabled" disabled>📧 Sent ✓</button>`;
+          } else {
+            actions += `<button class="btn-action btn-invoice" onclick="openInvoiceModal(${rowIdx})">📧 Invoice $${price.toFixed(0)}</button>`;
+          }
         }
       } else {
         if (invoiced) {
