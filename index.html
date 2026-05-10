@@ -3381,6 +3381,11 @@ function showQuoteStep(step) {
   });
   const target = document.getElementById('quoteStep'+step) || document.getElementById('quoteSuccess');
   if (target) target.style.display = 'block';
+  // Funnel analytics
+  if (typeof trackEvt === 'function') {
+    if (step === 3) trackEvt('/evt/quote_price_viewed');
+    if (step === 4) trackEvt('/evt/quote_payment_step_reached');
+  }
   // Mount Stripe card on step 4 — ensure Stripe.js is loaded first (it's lazy-loaded)
   if (step===4 && !stripeCardMounted) {
     initStripeElements().then(() => {
@@ -3747,6 +3752,8 @@ function buildOrderSummary() {
 
 // ── STEP 4 — Payment ──
 async function quotePaySubmit() {
+  // Funnel analytics — track payment attempt
+  if (typeof trackEvt === 'function') trackEvt('/evt/payment_attempted');
   // Collect contact info entered on step 4
   const name    = (document.getElementById('q-name')?.value || '').trim();
   const email   = (document.getElementById('q-email')?.value || '').trim();
