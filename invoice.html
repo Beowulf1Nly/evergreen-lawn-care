@@ -3366,28 +3366,38 @@ function debouncedRender() {
 
 // ── Route tab ─────────────────────────────────────────────────────────────
 function initRouteTab() {
-  const todayStr = todayDateStr();
+  const todayStr  = todayDateStr();
   const todayJobs = (allBookings || []).filter(b => !isDone(b) && !b.rowCancelled && dateOf(b) === todayStr);
   const sub = document.getElementById('routeCpSub');
   if (sub) sub.textContent = todayJobs.length
-    ? todayJobs.length + ' job' + (todayJobs.length !== 1 ? 's' : '') + ' today — enter a start address and optimize.'
+    ? todayJobs.length + ' job' + (todayJobs.length !== 1 ? 's' : '') + ' today — enter a start address and hit Optimize.'
     : 'No jobs scheduled for today.';
+  // Clear any previous route output
+  const tl = document.getElementById('routeTimeline');
+  if (tl) tl.innerHTML = '';
+  const sb = document.getElementById('routeStatsBar');
+  if (sb) sb.style.display = 'none';
 }
 
 let _addrSuggs = [];
 function routeAddrInput(el) {
   const q = el.value.trim();
   const box = document.getElementById('addrSuggestions');
-  if (!q || q.length < 4) { if (box) box.innerHTML = ''; return; }
-  // Use nominatim for address suggestions
+  if (!q || q.length < 4) {
+    if (box) { box.innerHTML = ''; box.style.display = 'none'; }
+    return;
+  }
+  if (box) { box.innerHTML = '<div class="addr-suggestion-loading">Searching…</div>'; box.style.display = 'block'; }
   fetch('https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=us&q=' + encodeURIComponent(q))
     .then(r => r.json()).then(results => {
       _addrSuggs = results;
       if (!box) return;
+      if (!results.length) { box.innerHTML = ''; box.style.display = 'none'; return; }
+      box.style.display = 'block';
       box.innerHTML = results.map((r, i) =>
-        '<div class="addr-sugg-item" onmousedown="selectAddrSugg(' + i + ')">' + esc(r.display_name) + '</div>'
+        '<div class="addr-suggestion-item" onmousedown="selectAddrSugg(' + i + ')">' + esc(r.display_name) + '</div>'
       ).join('');
-    }).catch(() => {});
+    }).catch(() => { if (box) { box.innerHTML = ''; box.style.display = 'none'; } });
 }
 function selectAddrSugg(i) {
   const r = _addrSuggs[i];
@@ -3400,51 +3410,174 @@ function routeAddrKeydown(e) {
 }
 function closeAddrSuggestions() {
   const box = document.getElementById('addrSuggestions');
-  if (box) box.innerHTML = '';
+  if (box) { box.innerHTML = ''; box.style.display = 'none'; }
 }
 
 async function buildRoute() {
-  const todayStr = todayDateStr();
-  const stops = (allBookings || [])
-    .filter(b => !isDone(b) && !b.rowCancelled && dateOf(b) === todayStr && b.address)
-    .map(b => ({ name: b.name || '—', addr: b.address + (b.zip ? ', ' + b.zip : '') + ', FL' }));
+  const todayStr   = todayDateStr();
+  const errEl      = document.getElementById('routeError');
+  const optBtn     = document.getElementById('routeOptBtn');
+  const tl         = document.getElementById('routeTimeline');
+  const statsBar   = document.getElementById('routeStatsBar');
 
-  const errEl  = document.getElementById('routeError');
-  const optBtn = document.getElementById('routeOptBtn');
-  const tl     = document.getElementById('routeTimeline');
+  // All today's jobs (done ones go to end so you can still see them)
+  const rawStops = (allBookings || [])
+    .filter(b => !b.rowCancelled && dateOf(b) === todayStr && b.address)
+    .sort((a, b) => {
+      if (isDone(a) && !isDone(b)) return 1;
+      if (!isDone(a) && isDone(b)) return -1;
+      return 0;
+    });
 
-  if (!stops.length) {
+  if (!rawStops.length) {
     if (errEl) { errEl.textContent = 'No jobs with addresses today.'; errEl.style.display = 'block'; }
+    if (tl) tl.innerHTML = '';
+    if (statsBar) statsBar.style.display = 'none';
     return;
   }
   if (errEl) errEl.style.display = 'none';
-  if (optBtn) { optBtn.disabled = true; optBtn.textContent = 'Building…'; }
+  if (optBtn) { optBtn.disabled = true; optBtn.textContent = 'Building route…'; }
 
-  const startAddr = (document.getElementById('routeStartAddr')?.value || '').trim();
-  const allAddrs  = startAddr ? [startAddr, ...stops.map(s => s.addr)] : stops.map(s => s.addr);
+  const startAddr    = (document.getElementById('routeStartAddr')?.value || '').trim();
+  const startTimeVal = document.getElementById('routeStartTime')?.value || '08:00';
+  const [startH, startM] = startTimeVal.split(':').map(Number);
 
-  // Build Google Maps directions URL
-  const origin  = encodeURIComponent(allAddrs[0]);
-  const dest    = encodeURIComponent(allAddrs[allAddrs.length - 1]);
-  const waypts  = allAddrs.slice(1, -1).map(a => encodeURIComponent(a)).join('|');
-  const mapsUrl = 'https://www.google.com/maps/dir/?api=1&origin=' + origin
-    + '&destination=' + dest
-    + (waypts ? '&waypoints=' + waypts : '')
+  // ── Estimate mow time based on yard size / price ──
+  function mowMins(b) {
+    const ys = String(b.yardSize || b.yard_size || '').toLowerCase();
+    if (ys === 'small')        return 25;
+    if (ys === 'medium')       return 40;
+    if (ys === 'threequarter') return 55;
+    if (ys === 'one')          return 65;
+    if (ys === 'xl')           return 80;
+    // Fall back to price range
+    const p = parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))||0;
+    if (p > 0 && p <= 45) return 35;
+    if (p <= 55) return 50;
+    if (p <= 65) return 60;
+    if (p <= 79) return 70;
+    return 80;
+  }
+
+  // ── Format helpers ──
+  function fmtTime(totalMin) {
+    const h24 = Math.floor(totalMin / 60) % 24;
+    const m   = totalMin % 60;
+    const ampm = h24 >= 12 ? 'PM' : 'AM';
+    const h12  = h24 % 12 || 12;
+    return h12 + ':' + String(m).padStart(2, '0') + ' ' + ampm;
+  }
+  function fmtDur(mins) {
+    if (mins < 60) return mins + ' min';
+    return Math.floor(mins / 60) + 'h ' + (mins % 60 > 0 ? (mins % 60) + 'm' : '');
+  }
+
+  // Flat drive-time estimate (no API needed)
+  const DRIVE_MINS  = 15;
+  const DRIVE_MILES = 6;
+
+  // ── Build stop timing ──
+  let curMin = startH * 60 + startM;
+  const stops = rawStops.map((b, i) => {
+    const driveOffset = (i > 0 || startAddr) ? DRIVE_MINS : 0;
+    const arrivalMin  = curMin + driveOffset;
+    const mow         = mowMins(b);
+    curMin = arrivalMin + mow;
+    return { b, arrivalMin, mowMin: mow };
+  });
+
+  const totalMowMins   = stops.reduce((s, x) => s + x.mowMin, 0);
+  const numDriveLegs   = stops.length - (startAddr ? 0 : 1);
+  const totalDriveMins = Math.max(0, numDriveLegs) * DRIVE_MINS;
+  const totalMiles     = Math.max(0, numDriveLegs) * DRIVE_MILES;
+
+  // ── Stats bar ──
+  document.getElementById('rStatJobs').textContent  = stops.length;
+  document.getElementById('rStatMow').textContent   = fmtDur(totalMowMins);
+  document.getElementById('rStatDrive').textContent = fmtDur(totalDriveMins);
+  document.getElementById('rStatDist').textContent  = '~' + totalMiles + ' mi';
+  document.getElementById('rStatDone').textContent  = fmtTime(curMin);
+  if (statsBar) statsBar.style.display = 'flex';
+
+  // ── Google Maps full-route URL ──
+  const allAddrs  = startAddr
+    ? [startAddr, ...rawStops.map(b => b.address + (b.zip ? ', ' + b.zip : '') + ', FL')]
+    : rawStops.map(b => b.address + (b.zip ? ', ' + b.zip : '') + ', FL');
+  const mapsOrigin = encodeURIComponent(allAddrs[0]);
+  const mapsDest   = encodeURIComponent(allAddrs[allAddrs.length - 1]);
+  const mapsWaypts = allAddrs.slice(1, -1).map(a => encodeURIComponent(a)).join('|');
+  const mapsUrl    = 'https://www.google.com/maps/dir/?api=1'
+    + '&origin='      + mapsOrigin
+    + '&destination=' + mapsDest
+    + (mapsWaypts ? '&waypoints=' + mapsWaypts : '')
     + '&travelmode=driving';
 
-  if (tl) tl.innerHTML = stops.map((s, i) => `
-    <div style="display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);">
-      <div style="width:28px;height:28px;border-radius:50%;background:var(--green-deep);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;">${i+1}</div>
-      <div>
-        <div style="font-weight:700;font-size:14px;">${esc(s.name)}</div>
-        <div style="font-size:13px;color:var(--text-muted);">${esc(s.addr)}</div>
-      </div>
-    </div>`).join('') +
-    '<div style="margin-top:16px;">' +
-    '<a href="' + mapsUrl + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:#1a3a1a;color:#fff;padding:12px 20px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;">🗺️ Open in Google Maps</a>' +
-    '</div>';
+  // ── Build timeline HTML ──
+  let html = '';
 
-  document.getElementById('routeStatsBar')?.setAttribute('style', 'display:none;');
+  if (startAddr) {
+    html += `<div class="route-start-chip">📍 Starting from: ${esc(startAddr)} &nbsp;·&nbsp; ${fmtTime(startH * 60 + startM)}</div>`;
+  }
+
+  stops.forEach(({ b, arrivalMin, mowMin }, i) => {
+    const done     = isDone(b);
+    const freq     = String(b.frequency || '').replace(/\bplan\b/gi, '').trim();
+    const price    = parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))||0;
+    const phone    = (b.phone || '').replace(/\D/g,'');
+    const mapsAddr = encodeURIComponent((b.address||'') + (b.zip ? ', ' + b.zip : '') + ', FL');
+    const rowIdx   = allBookings.indexOf(b);
+    const hasNotes = b.notes && b.notes !== '(none)' && b.notes.trim();
+
+    // Connector between stops
+    html += `<div class="route-connector">
+      <div class="route-connector-line"></div>
+      <div class="route-connector-info">
+        <div class="route-drive-chip">🚗 ~${DRIVE_MINS} min &nbsp;·&nbsp; ~${DRIVE_MILES} mi</div>
+      </div>
+    </div>`;
+
+    html += `<div class="route-stop">
+      <div class="route-stop-badge ${done ? 'done-badge' : ''}">${done ? '✓' : i + 1}</div>
+      <div class="route-stop-card ${!done ? 'active-stop' : ''}">
+        <div class="route-stop-header">
+          <div>
+            <div class="route-stop-name">${esc(b.name || '—')}</div>
+            <div class="route-stop-addr">📍 ${esc(b.address || '—')}${b.zip ? ', ' + esc(b.zip) : ''}</div>
+          </div>
+          <div class="route-stop-time">⏰ ${fmtTime(arrivalMin)}</div>
+        </div>
+        <div class="route-stop-meta">
+          ${freq ? `<span class="route-stop-pill">${esc(freq)}</span>` : ''}
+          ${price ? `<span class="route-stop-pill">$${price.toFixed(0)}</span>` : ''}
+          <span class="route-stop-pill time-pill">🌿 ~${fmtDur(mowMin)}</span>
+          ${done ? '<span class="route-stop-pill" style="background:#dcfce7;color:#166534;">✓ Done</span>' : ''}
+        </div>
+        <div class="route-stop-footer">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <a href="https://www.google.com/maps/dir/?api=1&destination=${mapsAddr}&travelmode=driving"
+               target="_blank" rel="noopener" class="route-nav-btn">🗺️ Navigate</a>
+            ${phone ? `<a href="tel:+1${phone}" class="route-call-btn">📞 Call</a>` : ''}
+            ${hasNotes ? `<button class="route-notes-btn" style="background:#fff8e1;border:1px solid #fcd34d;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;color:#92400e;cursor:pointer;"
+              onclick="openNotesPopup(${JSON.stringify(esc(b.name||'Notes'))}, ${JSON.stringify(esc(b.notes||''))})">💬 Notes</button>` : ''}
+          </div>
+          ${!done && rowIdx >= 0 ? `<button class="route-done-btn" onclick="triggerMarkDone(${rowIdx})">✓ Mark Done</button>` : ''}
+        </div>
+      </div>
+    </div>`;
+  });
+
+  // Full route button at bottom
+  html += `<div class="route-connector"><div class="route-connector-line" style="min-height:20px;"></div></div>`;
+  html += `<div style="margin-top:4px;margin-bottom:32px;">
+    <a href="${mapsUrl}" target="_blank" rel="noopener"
+       style="display:inline-flex;align-items:center;gap:10px;background:var(--green-deep);color:#fff;
+              padding:14px 22px;border-radius:12px;font-weight:700;font-size:14px;text-decoration:none;
+              box-shadow:0 4px 16px rgba(26,58,26,.2);">
+      🗺️ Open Full Route in Google Maps
+    </a>
+  </div>`;
+
+  if (tl) tl.innerHTML = html;
   if (optBtn) { optBtn.disabled = false; optBtn.textContent = '⚡ Optimize Route'; }
 }
 
