@@ -3413,14 +3413,28 @@ function closeAddrSuggestions() {
   if (box) { box.innerHTML = ''; box.style.display = 'none'; }
 }
 
-// ── Geocode a free-text address → { lat, lon } via Nominatim ──────────────
+// ── Geocode a US address → { lat, lon }
+// Primary: US Census Geocoder (free, no key, complete US coverage)
+// Fallback: Nominatim
 async function geocodeAddr(addr) {
-  const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q='
-    + encodeURIComponent(addr);
-  const res  = await fetch(url, { headers: { 'Accept-Language': 'en' } });
-  const data = await res.json();
-  if (!data.length) return null;
-  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+  // 1. Census Geocoder
+  try {
+    const url = 'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address='
+      + encodeURIComponent(addr) + '&benchmark=Public_AR_Current&format=json';
+    const res  = await fetch(url);
+    const data = await res.json();
+    const match = data?.result?.addressMatches?.[0];
+    if (match) return { lat: match.coordinates.y, lon: match.coordinates.x };
+  } catch(e) {}
+  // 2. Nominatim fallback
+  try {
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q='
+      + encodeURIComponent(addr);
+    const res  = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const data = await res.json();
+    if (data.length) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+  } catch(e) {}
+  return null;
 }
 
 // ── Get real driving time + distance via OSRM (free, no key needed) ────────
@@ -3464,17 +3478,15 @@ async function buildRoute() {
   const startTimeVal = document.getElementById('routeStartTime')?.value || '08:00';
   const [startH, startM] = startTimeVal.split(':').map(Number);
 
-  // ── Geocode all addresses (Nominatim: 1 req/sec limit) ──
+  // ── Geocode all addresses (Census Geocoder — no rate limit, parallel) ──
   const addrsToGeocode = [];
   if (startAddr) addrsToGeocode.push(startAddr);
   rawStops.forEach(b => addrsToGeocode.push(b.address + (b.zip ? ', ' + b.zip : '') + ', FL'));
 
-  const coords = [];
-  for (let i = 0; i < addrsToGeocode.length; i++) {
-    if (i > 0) await new Promise(r => setTimeout(r, 1100)); // respect 1 req/sec
-    try { coords.push(await geocodeAddr(addrsToGeocode[i])); }
-    catch(e) { coords.push(null); }
-  }
+  // Census geocoder has no rate limit — run all in parallel
+  const coords = await Promise.all(
+    addrsToGeocode.map(addr => geocodeAddr(addr).catch(() => null))
+  );
 
   // ── Fetch real driving legs from OSRM (parallel is fine) ──
   if (optBtn) optBtn.textContent = 'Calculating drive times…';
@@ -3501,21 +3513,27 @@ async function buildRoute() {
   const FALLBACK_MINS  = 15;
   const FALLBACK_MILES = 6;
 
-  // ── Estimate mow time based on yard size / price ──
+  // ── Estimate mow time based on yard size tier or regular price ──
+  // Tiers: small(<¼ac) medium(¼-½) threequarter(½-¾) one(¾-1) xl(>1)
   function mowMins(b) {
     const ys = String(b.yardSize || b.yard_size || '').toLowerCase();
-    if (ys === 'small')        return 25;
-    if (ys === 'medium')       return 40;
-    if (ys === 'threequarter') return 55;
-    if (ys === 'one')          return 65;
-    if (ys === 'xl')           return 80;
-    // Fall back to price range
-    const p = parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))||0;
-    if (p > 0 && p <= 45) return 35;
-    if (p <= 55) return 50;
-    if (p <= 65) return 60;
-    if (p <= 79) return 70;
-    return 80;
+    if (ys === 'small')        return 20;
+    if (ys === 'medium')       return 35;
+    if (ys === 'threequarter') return 50;
+    if (ys === 'one')          return 60;
+    if (ys === 'xl')           return 75;
+    // Fall back to the REGULAR (post-promo) price — resolve it the same way revenue projection does
+    const followMatch = String(b.notes || '').match(/Following[:\s]+\$?([\d.]+)/i);
+    const regPrice = followMatch ? parseFloat(followMatch[1]) : 0;
+    const p = regPrice || (parseFloat(String(b.followingPrice||'').replace(/[^0-9.]/g,''))||0)
+                        || (parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))||0);
+    if (p > 0  && p <= 39)  return 20;  // small  (≤$39/mow)
+    if (p <= 45)             return 25;  // small-med
+    if (p <= 49)             return 35;  // medium
+    if (p <= 55)             return 45;  // threequarter low
+    if (p <= 65)             return 55;  // threequarter high
+    if (p <= 79)             return 65;  // one acre
+    return 75;                           // xl
   }
 
   // ── Format helpers ──
