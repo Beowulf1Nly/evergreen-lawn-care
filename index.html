@@ -1785,6 +1785,13 @@
           <option value="4">Over 1 acre · Free On-Site Quote</option></select>
       </div>
 
+      <!-- "Yard size looks wrong?" — shown when auto-detect has a result, hidden once XL flow kicks in -->
+      <div id="q-personal-quote-link" style="display:none;text-align:center;margin:-2px 0 14px;">
+        <button type="button" onclick="requestPersonalQuote()" style="background:none;border:none;cursor:pointer;font-family:inherit;font-size:12.5px;color:var(--green-mid);padding:0;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">
+          Yard size looks wrong? Request a free in-person quote →
+        </button>
+      </div>
+
       <div id="q-returning-banner" style="display:none;margin-bottom:14px;padding:12px 16px;background:#fff7ed;border:1.5px solid #fde68a;border-radius:10px;font-size:13px;color:#92400e;line-height:1.5;">
         👋 <strong>Welcome back!</strong> The $19 intro rate is for first-time customers only. Your regular per-mow rate applies.
       </div>
@@ -3158,6 +3165,11 @@ function onLotSelectChange() {
   if (!_lotLookupDone) { sel.value = ''; return; }
   sel._userPicked = true;
   qState.lotTierIdx = parseInt(sel.value) || 1;
+  // If they manually picked XL (4), route straight to the free-visit flow
+  if (qState.lotTierIdx === 4) { buildStep3(); return; }
+  // For non-XL manual picks, show the "wrong size?" link so they can request a visit
+  const personalLink = document.getElementById('q-personal-quote-link');
+  if (personalLink) personalLink.style.display = 'block';
   updateLotDisplay();
   renderPlanCards();
 }
@@ -3188,6 +3200,8 @@ const PLAN_PRICING = {
 };
 
 // Flow state
+let _quoteCurrentStep = 1;
+let _quoteAbandonTimer = null;
 let qState = {
   name:'', email:'', phone:'', address:'', zip:'',
   isReturning: false,
@@ -3344,7 +3358,7 @@ function calKeyHandler(e, dateStr, calType) {
 function openQuoteModal(preselectedPlan) {
   // Default to biweekly; ignore one-time if somehow passed
   const validPlan = (preselectedPlan === 'weekly') ? 'weekly' : 'biweekly';
-  qState = { name:'',email:'',phone:'',address:'',zip:'',lotTierIdx:1,lotAutoDetected:false,lotEstimated:false,detectedAcreage:null,selectedPlan:validPlan,startDate:'',stripeCustomerId:'',isReturning:false };
+  qState = { name:'',email:'',phone:'',address:'',zip:'',lotTierIdx:1,lotAutoDetected:false,lotEstimated:false,detectedAcreage:null,selectedPlan:validPlan,startDate:'',stripeCustomerId:'',isReturning:false,personalQuoteRequested:false };
   _lotLookupPromise = null;
   _lotLookupDone    = false;
   const satFrame = document.getElementById('qSatFrame');
@@ -3365,6 +3379,13 @@ function openQuoteModal(preselectedPlan) {
 function openQuoteModalPlan(plan) { openQuoteModal(plan); }
 
 function closeQuoteModal() {
+  var modal = document.getElementById('quoteModalOverlay');
+  // Only fire abandonment if the modal was open and the user didn't complete a booking (step 0 = converted)
+  if (modal && modal.classList.contains('open') && _quoteCurrentStep > 0) {
+    if (typeof trackEvt === 'function') trackEvt('/evt/quote_abandoned_step' + _quoteCurrentStep);
+  }
+  // Clear the inactivity timeout
+  if (_quoteAbandonTimer) { clearTimeout(_quoteAbandonTimer); _quoteAbandonTimer = null; }
   document.getElementById('quoteModalOverlay').classList.remove('open');
   document.body.style.overflow = '';
   if (stripeCardEl && stripeCardMounted) { try { stripeCardEl.unmount(); } catch(e){} stripeCardMounted=false; }
@@ -3394,6 +3415,17 @@ function showQuoteStep(step) {
   });
   const target = document.getElementById('quoteStep'+step) || document.getElementById('quoteSuccess');
   if (target) target.style.display = 'block';
+  // Track current step for abandonment reporting
+  _quoteCurrentStep = step;
+  // Reset 15-min inactivity abandon timer on every step change
+  if (_quoteAbandonTimer) clearTimeout(_quoteAbandonTimer);
+  _quoteAbandonTimer = setTimeout(function() {
+    var modal = document.getElementById('quoteModalOverlay');
+    if (modal && modal.classList.contains('open')) {
+      if (typeof trackEvt === 'function') trackEvt('/evt/quote_abandoned_step' + _quoteCurrentStep);
+      closeQuoteModal();
+    }
+  }, 15 * 60 * 1000); // 15 minutes
   // Funnel analytics
   if (typeof trackEvt === 'function') {
     if (step === 3) trackEvt('/evt/quote_price_viewed');
@@ -3533,6 +3565,8 @@ function updateLotDisplay() {
   const iconEl   = document.getElementById('q-lot-icon');
   const sublabel = document.getElementById('q-lot-sublabel');
   const manual   = document.getElementById('q-lot-manual');
+  const personalLink = document.getElementById('q-personal-quote-link');
+  const isXL    = qState.lotTierIdx === 4;
 
   if (labelEl) labelEl.textContent = tier ? tier.label : '—';
   if (iconEl)  iconEl.textContent  = tier ? tier.icon : '🏡';
@@ -3541,10 +3575,19 @@ function updateLotDisplay() {
     // Lookup still in flight — show a neutral state, never flash an error
     if (sublabel) sublabel.textContent = 'Detecting your yard size…';
     if (manual) manual.style.display = 'none';
+    if (personalLink) personalLink.style.display = 'none';
+  } else if (isXL) {
+    // Already on free-visit path — hide both dropdown and "wrong size?" link
+    if (sublabel) sublabel.textContent = qState.personalQuoteRequested
+      ? 'We\'ll measure your yard on the day of the visit'
+      : '~ ' + (qState.detectedAcreage || '1+') + ' acres';
+    if (manual) manual.style.display = 'none';
+    if (personalLink) personalLink.style.display = 'none';
   } else if (qState.lotAutoDetected && !qState.lotEstimated) {
-    // Exact county record — auto-selected, no dropdown needed
+    // Exact county record — auto-selected, no dropdown needed; show "wrong size?" link
     if (sublabel) sublabel.textContent = '~ ' + qState.detectedAcreage + ' acres (estimated)';
     if (manual) manual.style.display = 'none';
+    if (personalLink) personalLink.style.display = 'block';
   } else {
     // ZIP estimate or detection failed — show dropdown, force manual confirmation
     if (sublabel) sublabel.textContent = "Couldn't find your yard size — please select below:";
@@ -3554,7 +3597,20 @@ function updateLotDisplay() {
       // Only set a value if the user already picked one; otherwise show blank
       if (sel && !sel._userPicked) sel.value = '';
     }
+    // Show "wrong size?" link only if a tier has been picked via the dropdown
+    const sel = document.getElementById('q-lot-select');
+    if (personalLink) personalLink.style.display = (sel && sel._userPicked) ? 'block' : 'none';
   }
+}
+
+function requestPersonalQuote() {
+  qState.lotTierIdx = 4;
+  qState.personalQuoteRequested = true;
+  if (typeof trackEvt === 'function') trackEvt('/evt/personal_quote_requested');
+  buildStep3();
+  // Scroll to top of modal so they see the updated lot bar
+  const modal = document.querySelector('.quote-modal-inner, .quote-modal, #quoteModalOverlay > div');
+  if (modal) modal.scrollTop = 0;
 }
 
 function renderPlanCards() {
@@ -3874,6 +3930,9 @@ async function quotePaySubmit() {
     ['quoteStep1','quoteStep2','quoteStep3','quoteStep4'].forEach(id=>{
       const el=document.getElementById(id); if(el) el.style.display='none';
     });
+    // Mark as converted so closeQuoteModal() doesn't fire an abandonment event
+    _quoteCurrentStep = 0;
+    if (_quoteAbandonTimer) { clearTimeout(_quoteAbandonTimer); _quoteAbandonTimer = null; }
     document.getElementById('quoteSuccess').style.display='block';
   } catch(err) {
     errEl.textContent = err.message || 'Something went wrong. Please call (352) 462-0627.';
@@ -4018,11 +4077,13 @@ async function quotePaySubmit() {
   // Expose globally so openQuoteModal() and other funnel steps can fire named events
   window.trackEvt = fire;
 
-  // Track quote funnel abandonment — fires if user closes/navigates away while modal is open
+  // Fallback abandonment — fires if user navigates away / closes tab while modal is open
+  // (closeQuoteModal handles the normal X/overlay-click case)
   window.addEventListener('pagehide', function() {
     var modal = document.getElementById('quoteModalOverlay');
     if (modal && modal.classList.contains('open')) {
-      fire('/evt/quote_abandoned');
+      var step = (typeof _quoteCurrentStep !== 'undefined') ? _quoteCurrentStep : 1;
+      fire('/evt/quote_abandoned_step' + step);
     }
   });
 })();
