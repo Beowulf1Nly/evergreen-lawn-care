@@ -3413,6 +3413,28 @@ function closeAddrSuggestions() {
   if (box) { box.innerHTML = ''; box.style.display = 'none'; }
 }
 
+// ── Geocode a free-text address → { lat, lon } via Nominatim ──────────────
+async function geocodeAddr(addr) {
+  const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q='
+    + encodeURIComponent(addr);
+  const res  = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+  const data = await res.json();
+  if (!data.length) return null;
+  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+}
+
+// ── Get real driving time + distance via OSRM (free, no key needed) ────────
+async function getDrivingLeg(from, to) {
+  const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=false`;
+  const res  = await fetch(url);
+  const data = await res.json();
+  if (data.code !== 'Ok' || !data.routes.length) return null;
+  return {
+    mins:  Math.round(data.routes[0].duration / 60),
+    miles: Math.round(data.routes[0].distance / 1609.34 * 10) / 10,
+  };
+}
+
 async function buildRoute() {
   const todayStr   = todayDateStr();
   const errEl      = document.getElementById('routeError');
@@ -3436,11 +3458,48 @@ async function buildRoute() {
     return;
   }
   if (errEl) errEl.style.display = 'none';
-  if (optBtn) { optBtn.disabled = true; optBtn.textContent = 'Building route…'; }
+  if (optBtn) { optBtn.disabled = true; optBtn.textContent = 'Geocoding addresses…'; }
 
   const startAddr    = (document.getElementById('routeStartAddr')?.value || '').trim();
   const startTimeVal = document.getElementById('routeStartTime')?.value || '08:00';
   const [startH, startM] = startTimeVal.split(':').map(Number);
+
+  // ── Geocode all addresses (Nominatim: 1 req/sec limit) ──
+  const addrsToGeocode = [];
+  if (startAddr) addrsToGeocode.push(startAddr);
+  rawStops.forEach(b => addrsToGeocode.push(b.address + (b.zip ? ', ' + b.zip : '') + ', FL'));
+
+  const coords = [];
+  for (let i = 0; i < addrsToGeocode.length; i++) {
+    if (i > 0) await new Promise(r => setTimeout(r, 1100)); // respect 1 req/sec
+    try { coords.push(await geocodeAddr(addrsToGeocode[i])); }
+    catch(e) { coords.push(null); }
+  }
+
+  // ── Fetch real driving legs from OSRM (parallel is fine) ──
+  if (optBtn) optBtn.textContent = 'Calculating drive times…';
+  // legs[i] = drive FROM coords[i] TO coords[i+1]
+  const legPromises = [];
+  for (let i = 0; i < coords.length - 1; i++) {
+    if (coords[i] && coords[i + 1]) {
+      legPromises.push(getDrivingLeg(coords[i], coords[i + 1]));
+    } else {
+      legPromises.push(Promise.resolve(null));
+    }
+  }
+  const legResults = await Promise.all(legPromises);
+
+  // Map leg results: if startAddr, legs[0] = start→stop0, legs[1] = stop0→stop1, etc.
+  // If no startAddr, legs[0] = stop0→stop1, etc.
+  // stopLegs[i] = the driving leg ARRIVING at rawStops[i]
+  const stopLegs = rawStops.map((_, i) => {
+    const legIdx = startAddr ? i : i - 1;
+    return legIdx >= 0 ? (legResults[legIdx] || null) : null;
+  });
+
+  // Fallback estimates if geocoding/routing failed
+  const FALLBACK_MINS  = 15;
+  const FALLBACK_MILES = 6;
 
   // ── Estimate mow time based on yard size / price ──
   function mowMins(b) {
@@ -3472,24 +3531,21 @@ async function buildRoute() {
     return Math.floor(mins / 60) + 'h ' + (mins % 60 > 0 ? (mins % 60) + 'm' : '');
   }
 
-  // Flat drive-time estimate (no API needed)
-  const DRIVE_MINS  = 15;
-  const DRIVE_MILES = 6;
-
-  // ── Build stop timing ──
+  // ── Build stop timing using real leg data ──
   let curMin = startH * 60 + startM;
   const stops = rawStops.map((b, i) => {
-    const driveOffset = (i > 0 || startAddr) ? DRIVE_MINS : 0;
-    const arrivalMin  = curMin + driveOffset;
+    const leg         = stopLegs[i];
+    const driveMins   = leg ? leg.mins  : (i > 0 || startAddr ? FALLBACK_MINS  : 0);
+    const driveMiles  = leg ? leg.miles : (i > 0 || startAddr ? FALLBACK_MILES : 0);
+    const arrivalMin  = curMin + driveMins;
     const mow         = mowMins(b);
     curMin = arrivalMin + mow;
-    return { b, arrivalMin, mowMin: mow };
+    return { b, arrivalMin, mowMin: mow, driveMins, driveMiles };
   });
 
   const totalMowMins   = stops.reduce((s, x) => s + x.mowMin, 0);
-  const numDriveLegs   = stops.length - (startAddr ? 0 : 1);
-  const totalDriveMins = Math.max(0, numDriveLegs) * DRIVE_MINS;
-  const totalMiles     = Math.max(0, numDriveLegs) * DRIVE_MILES;
+  const totalDriveMins = stops.reduce((s, x) => s + x.driveMins, 0);
+  const totalMiles     = Math.round(stops.reduce((s, x) => s + x.driveMiles, 0) * 10) / 10;
 
   // ── Stats bar ──
   document.getElementById('rStatJobs').textContent  = stops.length;
@@ -3519,7 +3575,8 @@ async function buildRoute() {
     html += `<div class="route-start-chip">📍 Starting from: ${esc(startAddr)} &nbsp;·&nbsp; ${fmtTime(startH * 60 + startM)}</div>`;
   }
 
-  stops.forEach(({ b, arrivalMin, mowMin }, i) => {
+  stops.forEach((stop, i) => {
+    const { b, arrivalMin, mowMin } = stop;
     const done     = isDone(b);
     const freq     = String(b.frequency || '').replace(/\bplan\b/gi, '').trim();
     const price    = parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))||0;
@@ -3528,11 +3585,16 @@ async function buildRoute() {
     const rowIdx   = allBookings.indexOf(b);
     const hasNotes = b.notes && b.notes !== '(none)' && b.notes.trim();
 
-    // Connector between stops
+    // Connector between stops (real data if available)
+    const legMin   = stop.driveMins;
+    const legMiles = stop.driveMiles;
+    const legLabel = (legMin || legMiles)
+      ? `🚗 ${legMin} min · ${legMiles} mi`
+      : `🚗 —`;
     html += `<div class="route-connector">
       <div class="route-connector-line"></div>
       <div class="route-connector-info">
-        <div class="route-drive-chip">🚗 ~${DRIVE_MINS} min &nbsp;·&nbsp; ~${DRIVE_MILES} mi</div>
+        <div class="route-drive-chip">${legLabel}</div>
       </div>
     </div>`;
 
