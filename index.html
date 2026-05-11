@@ -8,6 +8,20 @@
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
   gtag('config', 'AW-18107107722');
+
+  // Click-based conversion helper — fires conversion then redirects (if url provided)
+  function gtag_report_conversion(url) {
+    var callback = function () {
+      if (typeof(url) != 'undefined') {
+        window.location = url;
+      }
+    };
+    gtag('event', 'conversion', {
+      'send_to': 'AW-18107107722/s6saCNGGwKccEIqTkrpD',
+      'event_callback': callback
+    });
+    return false;
+  }
 </script>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -2453,7 +2467,7 @@ async function handleQuoteRequest() {
     btn.classList.remove('loading');
     btn.disabled = false;
 
-    window.location.href = '/success';
+    gtag_report_conversion('/success');
   } catch(e) {
     btn.classList.remove('loading');
     btn.disabled = false;
@@ -2586,16 +2600,15 @@ async function handleBooking() {
   btn.classList.remove('loading');
   btn.disabled = false;
 
-  // ── Pay Now → redirect to Stripe ──
+  // ── Pay Now → fire conversion then redirect to Stripe ──
   if (payMethod === 'now') {
     const stripeUrl = STRIPE_LINKS[currentService.frequency] || STRIPE_LINKS['one-time'];
-    // Small delay so the sheet/calendar request fires before redirect
-    setTimeout(() => { window.location.href = stripeUrl; }, 400);
+    gtag_report_conversion(stripeUrl);
     return;
   }
 
-  // ── Pay Later → redirect to success page ──
-  window.location.href = '/success';
+  // ── Pay Later → fire conversion then redirect to success page ──
+  gtag_report_conversion('/success');
 }
 
 // Original Stripe handlePayment kept for reference
@@ -3686,6 +3699,9 @@ async function submitXLQuoteVisit() {
     fetch(SHEETS_SCRIPT_URL + '?' + params.toString(), { method: 'GET', mode: 'no-cors' }).catch(() => {});
   } catch(e) { /* fire and forget */ }
 
+  // Fire conversion
+  gtag_report_conversion();
+
   // Hide step 4, show success
   const step4 = document.getElementById('quoteStep4');
   if (step4) step4.style.display = 'none';
@@ -3850,14 +3866,7 @@ async function quotePaySubmit() {
     btn.classList.remove('loading'); btn.disabled=false;
 
     // ── Fire Google Ads conversion (booking confirmed) ──────────────
-    if (typeof gtag === 'function') {
-      gtag('event', 'conversion', {
-        send_to:        'AW-18107107722/s6saCNGGwKccEIqTkrpD',
-        value:          afterPrice,
-        currency:       'USD',
-        transaction_id: qState.email + '_' + qState.startDate,
-      });
-    }
+    gtag_report_conversion();
 
     document.getElementById('q-success-date').textContent =
       new Date(qState.startDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
