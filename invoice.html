@@ -866,6 +866,12 @@
   <div class="confirm-box">
     <h4 id="confirmTitle">Are you sure?</h4>
     <p id="confirmMsg"></p>
+    <!-- Crew input — only shown for mark-done actions -->
+    <div id="confirmCrewRow" style="display:none;margin-top:14px;">
+      <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:5px;letter-spacing:.03em;">COMPLETED BY <span style="font-weight:400;color:var(--text-muted);">(comma-separate multiple people)</span></label>
+      <input type="text" id="confirmCrewInput" placeholder="e.g. Hunter, Jon"
+             style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-family:inherit;font-size:14px;outline:none;"/>
+    </div>
     <div class="confirm-actions">
       <button class="btn-confirm-no" onclick="closeConfirm()">Cancel</button>
       <button class="btn-confirm-yes" id="confirmYesBtn" onclick="confirmYes()">Confirm</button>
@@ -1989,6 +1995,9 @@ function openConfirm(title, msg, callback) {
 function closeConfirm() {
   document.getElementById('confirmOverlay').classList.remove('open');
   confirmCallback = null;
+  // Always hide crew input on close so it doesn't bleed into non-done confirms
+  const crewRow = document.getElementById('confirmCrewRow');
+  if (crewRow) crewRow.style.display = 'none';
 }
 function confirmYes() {
   const cb = confirmCallback;
@@ -2032,6 +2041,11 @@ function triggerMarkDone(rowIdx) {
   if (!b) return;
   const isQuote = String(b.frequency||'').toLowerCase().includes('quote visit');
   document.getElementById('confirmYesBtn').className = 'btn-confirm-yes';
+  // Show crew input and pre-fill with current admin name
+  const crewRow   = document.getElementById('confirmCrewRow');
+  const crewInput = document.getElementById('confirmCrewInput');
+  if (crewRow)   crewRow.style.display = 'block';
+  if (crewInput) crewInput.value = adminName || '';
   openConfirm(
     isQuote ? `Mark visit for "${b.name||'customer'}" as done?`
             : `Mark "${b.name||'job'}" as done?`,
@@ -2054,10 +2068,13 @@ async function executeMarkDone(rowIdx) {
     }
   });
 
+  // Read crew from the input (may be "Hunter, Jon" etc.) — fall back to adminName
+  const crewInput = document.getElementById('confirmCrewInput');
+  const crewValue = crewInput && crewInput.value.trim() ? crewInput.value.trim() : (adminName || adminEmail || 'Staff');
   const params = new URLSearchParams({
     action:   'mark_done',
     rowIndex: b._rowIndex || (rowIdx + 2), // prefer server-provided row index
-    markedBy: adminName || adminEmail || 'Staff',
+    markedBy: crewValue,
     adminToken: adminToken,
   });
   try {
@@ -2066,7 +2083,7 @@ async function executeMarkDone(rowIdx) {
     if (data.success) {
       const todayLabel = new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
       allBookings[rowIdx].done     = '✓ Done — ' + todayLabel;
-      allBookings[rowIdx].markedBy = adminName || adminEmail || 'Staff';
+      allBookings[rowIdx].markedBy = crewValue;
       allBookings[rowIdx].doneDate = todayLabel;
       renderBookings();
       showToast('✓ ' + (b.name||'Job') + ' marked done!');
@@ -2540,8 +2557,11 @@ async function loadStats() {
     // now that handleGetBookings appends them). Falls back to backend adminStats if empty.
     const localAdminStats = {};
     (allBookings || []).filter(bk => isDone(bk)).forEach(bk => {
-      const mb = String(bk.markedBy || bk.marked_by || '').trim() || 'Unknown';
-      localAdminStats[mb] = (localAdminStats[mb] || 0) + 1;
+      const raw = String(bk.markedBy || bk.marked_by || '').trim() || 'Unknown';
+      // Split "Hunter, Jon" or "Hunter & Jon" into individual names
+      raw.split(/[,&]+/).map(n => n.trim()).filter(Boolean).forEach(name => {
+        localAdminStats[name] = (localAdminStats[name] || 0) + 1;
+      });
     });
     const staffActivityLocal = Object.entries(localAdminStats)
       .map(([name, jobs]) => ({ name, jobs }))
@@ -2628,6 +2648,18 @@ async function loadStats() {
         ${mowLogHtml}
       </div>
 
+      <!-- Revenue projection -->
+      <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:24px;">
+        <div class="section-label" style="margin-bottom:4px;">💰 Estimated Future Revenue</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">Based on active subscriptions and their billing frequency. Excludes one-time and free jobs.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;" id="revPeriodBtns">
+          ${['This Month','30 Days','90 Days','365 Days'].map((label,i) =>
+            `<button onclick="setRevPeriod(${i},this)" style="padding:6px 14px;border-radius:20px;border:1.5px solid ${i===0?'var(--green-mid)':'var(--border)'};background:${i===0?'var(--green-mid)':'#fff'};color:${i===0?'#fff':'var(--text)'};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">${esc(label)}</button>`
+          ).join('')}
+        </div>
+        <div id="revProjection">${buildRevProjection(allBookings, 0)}</div>
+      </div>
+
       <!-- Employee summary -->
       <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;">
         <div class="section-label" style="margin-bottom:16px;">Employee Summary</div>
@@ -2642,6 +2674,106 @@ async function loadStats() {
   } catch(err) {
     el.innerHTML = `<div class="empty-state" style="padding:40px;">⚠️ Could not load stats: ${esc(err.message)}</div>`;
   }
+}
+
+// ═══════════════════════════════════════════════════════
+// REVENUE PROJECTION (stats tab)
+// ═══════════════════════════════════════════════════════
+function buildRevProjection(bookings, periodIdx) {
+  const PERIODS = [
+    { label: 'This Month',  days: null  },  // remaining days in current month
+    { label: '30 Days',     days: 30    },
+    { label: '90 Days',     days: 90    },
+    { label: '365 Days',    days: 365   },
+  ];
+  const period = PERIODS[periodIdx] || PERIODS[0];
+
+  // Days to project
+  let projDays;
+  if (period.days === null) {
+    const now = new Date();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    projDays = daysInMonth - now.getDate() + 1; // include today
+  } else {
+    projDays = period.days;
+  }
+
+  // Only count active (not done, not cancelled, not free/quote) subscriptions
+  const activeSubs = (bookings || []).filter(bk => {
+    if (isDone(bk)) return false;
+    const freq = String(bk.frequency || '').toLowerCase();
+    if (freq.includes('free') || freq.includes('quote visit')) return false;
+    // Must be a recurring plan
+    return freq.includes('weekly') || freq.includes('bi-weekly') || freq.includes('biweekly');
+  });
+
+  let totalRev = 0;
+  let weeklyCount = 0, biweeklyCount = 0;
+  const rows = activeSubs.map(bk => {
+    const freq  = String(bk.frequency || '').toLowerCase();
+    const price = parseFloat(String(bk.price || '').replace(/[^0-9.]/g, '')) || 0;
+    const isWeekly = freq.includes('weekly') && !freq.includes('bi');
+    const mowsPerDay = isWeekly ? (1/7) : (1/14);
+    const projectedMows = projDays * mowsPerDay;
+    const projectedRev  = projectedMows * price;
+    totalRev += projectedRev;
+    if (isWeekly) weeklyCount++; else biweeklyCount++;
+    return { name: bk.name || '—', plan: isWeekly ? 'Weekly' : 'Bi-Weekly', price, projectedMows, projectedRev };
+  });
+
+  if (rows.length === 0) {
+    return '<div style="color:var(--text-muted);font-size:14px;padding:8px 0;">No active subscriptions found.</div>';
+  }
+
+  const bigNum = (n) => '$' + Math.round(n).toLocaleString();
+
+  return `
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
+      <div style="flex:1;min-width:140px;background:var(--green-pale);border-radius:12px;padding:16px 18px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--green-mid);margin-bottom:6px;">${esc(period.label)}</div>
+        <div style="font-size:32px;font-weight:800;color:var(--green-deep);">${bigNum(totalRev)}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">across ${rows.length} active subscription${rows.length!==1?'s':''}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;justify-content:center;">
+        <div style="font-size:13px;color:var(--text-muted);">📅 Bi-Weekly plans: <strong style="color:var(--green-deep);">${biweeklyCount}</strong></div>
+        <div style="font-size:13px;color:var(--text-muted);">⚡ Weekly plans: <strong style="color:var(--green-deep);">${weeklyCount}</strong></div>
+        <div style="font-size:13px;color:var(--text-muted);">🌿 Avg/customer: <strong style="color:var(--green-deep);">${bigNum(totalRev / rows.length)}</strong></div>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead><tr>
+          <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);">Customer</th>
+          <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);">Plan</th>
+          <th style="text-align:right;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);">$/Mow</th>
+          <th style="text-align:right;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);">Est. Mows</th>
+          <th style="text-align:right;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);">Est. Revenue</th>
+        </tr></thead>
+        <tbody>
+          ${rows.sort((a,b)=>b.projectedRev-a.projectedRev).map(r=>`<tr>
+            <td style="padding:8px 10px;font-weight:600;border-bottom:1px solid var(--border);">${esc(r.name)}</td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--border);"><span style="background:${r.plan==='Weekly'?'#dcfce7':'#eff6ff'};color:${r.plan==='Weekly'?'#166534':'#1d4ed8'};border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;">${esc(r.plan)}</span></td>
+            <td style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);color:var(--text-muted);">$${r.price.toFixed(0)}</td>
+            <td style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);color:var(--text-muted);">${r.projectedMows.toFixed(1)}</td>
+            <td style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);font-weight:700;color:var(--green-deep);">${bigNum(r.projectedRev)}</td>
+          </tr>`).join('')}
+          <tr>
+            <td colspan="4" style="padding:10px 10px 6px;font-weight:700;text-align:right;font-size:13px;">Total</td>
+            <td style="padding:10px 10px 6px;text-align:right;font-weight:800;font-size:16px;color:var(--green-deep);">${bigNum(totalRev)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function setRevPeriod(idx, btn) {
+  // Update button styles
+  document.querySelectorAll('#revPeriodBtns button').forEach((b, i) => {
+    b.style.background = i === idx ? 'var(--green-mid)' : '#fff';
+    b.style.color      = i === idx ? '#fff' : 'var(--text)';
+    b.style.borderColor= i === idx ? 'var(--green-mid)' : 'var(--border)';
+  });
+  document.getElementById('revProjection').innerHTML = buildRevProjection(allBookings, idx);
 }
 
 // ═══════════════════════════════════════════════════════
