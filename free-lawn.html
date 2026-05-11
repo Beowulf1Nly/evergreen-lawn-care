@@ -918,8 +918,13 @@ function showAlreadyClaimed() {
   else if (/google/i.test(ref))    ref = 'google';
   else if (/facebook/i.test(ref))  ref = 'facebook';
   else if (/instagram/i.test(ref)) ref = 'instagram';
-  var p = new URLSearchParams({ action:'track_visit', page:location.pathname, ref:ref, ua:navigator.userAgent.substring(0,150), vid:vid });
-  fetch(TRACK_URL+'?'+p, { mode:'no-cors', keepalive:true }).catch(function(){});
+  function fire(page) {
+    var p = new URLSearchParams({ action:'track_visit', page:page, ref:ref, ua:navigator.userAgent.substring(0,150), vid:vid });
+    fetch(TRACK_URL+'?'+p, { mode:'no-cors', keepalive:true }).catch(function(){});
+  }
+  fire(location.pathname);
+  window.trackEvt = fire;
+  window.addEventListener('pagehide', function() { fire('/evt/exit' + location.pathname); });
 })();
 </script>
 </body>

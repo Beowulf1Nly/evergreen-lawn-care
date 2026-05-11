@@ -2146,7 +2146,7 @@ function renderCalendar() {
     const date    = new Date(calYear, calMonth, d);
     const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const dateLabel = date.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-    const isWknd  = date.getDay() === 0;  // Sundays only — Saturdays available
+    const isWknd  = false;  // All days including Sundays available
     const isPast  = date < tomorrow;
     const isFar   = date > maxDate;
     const isBlock = BLOCKED_DATES.has(dateStr);
@@ -3235,7 +3235,7 @@ function renderQCal() {
     const date    = new Date(qCalYear, qCalMonth, d);
     const dateStr = `${qCalYear}-${String(qCalMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const dateLabel = date.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-    const isWknd  = date.getDay()===0;  // Sundays only — Saturdays are available
+    const isWknd  = false;  // All days including Sundays available
     const isPast  = date < earliest;
     const isFar   = date > maxDate;
     const isBlock = BLOCKED_DATES.has(dateStr);
@@ -3321,7 +3321,7 @@ function calKeyHandler(e, dateStr, calType) {
     attempts++;
     if (cur < earliest || cur > maxDate) return; // out of range, stop
   } while (
-    (cur.getDay() === 0 || BLOCKED_DATES.has(cur.toISOString().slice(0,10))) && attempts < 14
+    BLOCKED_DATES.has(cur.toISOString().slice(0,10)) && attempts < 14
   );
 
   const targetStr = cur.toISOString().slice(0,10);
