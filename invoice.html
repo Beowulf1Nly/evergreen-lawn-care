@@ -2546,6 +2546,10 @@ async function loadStats() {
   const el = document.getElementById('statsContent');
   el.innerHTML = '<div class="empty-state" style="padding:40px;">Loading…</div>';
   try {
+    // If Jobs tab hasn't loaded yet, fetch bookings first so revenue/crew stats are accurate
+    if (!allBookings.length) {
+      await loadBookings();
+    }
     const res  = await fetch(SCRIPT_URL + '?action=get_stats&' + authParam());
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'Failed');
@@ -2623,7 +2627,7 @@ async function loadStats() {
       <div class="stats-grid">
         <div class="stat-card green">
           <div class="stat-num">$${(s.revenue30||0).toFixed(0)}</div>
-          <div class="stat-label">Estimated revenue</div>
+          <div class="stat-label">Total Revenue</div>
         </div>
         <div class="stat-card green">
           <div class="stat-num">${s.jobsDone30||0}</div>
@@ -2707,18 +2711,40 @@ function buildRevProjection(bookings, periodIdx) {
     return freq.includes('weekly') || freq.includes('bi-weekly') || freq.includes('biweekly');
   });
 
+  // Resolve the real recurring price for a booking, handling $19 promo first-mow customers
+  function resolvePrice(bk) {
+    const storedPrice = parseFloat(String(bk.price || '').replace(/[^0-9.]/g, '')) || 0;
+    // Direct field — sent by website booking flow
+    const followField = parseFloat(String(bk.followingPrice || '').replace(/[^0-9.]/g, '')) || 0;
+    if (followField > 0) return { firstPrice: storedPrice, regularPrice: followField, isPromo: storedPrice < followField };
+    // Parse from notes: "First service $19 promo. Following: 45"
+    const notesMatch = String(bk.notes || '').match(/Following[:\s]+\$?([\d.]+)/i);
+    if (notesMatch) {
+      const regular = parseFloat(notesMatch[1]) || 0;
+      if (regular > 0) return { firstPrice: storedPrice, regularPrice: regular, isPromo: storedPrice < regular };
+    }
+    // No following price info — treat stored price as the recurring rate
+    return { firstPrice: storedPrice, regularPrice: storedPrice, isPromo: false };
+  }
+
   let totalRev = 0;
   let weeklyCount = 0, biweeklyCount = 0;
   const rows = activeSubs.map(bk => {
     const freq  = String(bk.frequency || '').toLowerCase();
-    const price = parseFloat(String(bk.price || '').replace(/[^0-9.]/g, '')) || 0;
     const isWeekly = freq.includes('weekly') && !freq.includes('bi');
     const mowsPerDay = isWeekly ? (1/7) : (1/14);
     const projectedMows = projDays * mowsPerDay;
-    const projectedRev  = projectedMows * price;
+    const { firstPrice, regularPrice, isPromo } = resolvePrice(bk);
+    // If promo: first mow at intro price, rest at regular rate
+    let projectedRev;
+    if (isPromo && projectedMows >= 1) {
+      projectedRev = firstPrice + (projectedMows - 1) * regularPrice;
+    } else {
+      projectedRev = projectedMows * regularPrice;
+    }
     totalRev += projectedRev;
     if (isWeekly) weeklyCount++; else biweeklyCount++;
-    return { name: bk.name || '—', plan: isWeekly ? 'Weekly' : 'Bi-Weekly', price, projectedMows, projectedRev };
+    return { name: bk.name || '—', plan: isWeekly ? 'Weekly' : 'Bi-Weekly', price: regularPrice, firstPrice, isPromo, projectedMows, projectedRev };
   });
 
   if (rows.length === 0) {
@@ -2753,7 +2779,7 @@ function buildRevProjection(bookings, periodIdx) {
           ${rows.sort((a,b)=>b.projectedRev-a.projectedRev).map(r=>`<tr>
             <td style="padding:8px 10px;font-weight:600;border-bottom:1px solid var(--border);">${esc(r.name)}</td>
             <td style="padding:8px 10px;border-bottom:1px solid var(--border);"><span style="background:${r.plan==='Weekly'?'#dcfce7':'#eff6ff'};color:${r.plan==='Weekly'?'#166534':'#1d4ed8'};border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;">${esc(r.plan)}</span></td>
-            <td style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);color:var(--text-muted);">$${r.price.toFixed(0)}</td>
+            <td style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);color:var(--text-muted);">${r.isPromo?`<span title="First mow $${r.firstPrice}, then $${r.price}">$${r.firstPrice}→$${r.price}</span>`:`$${r.price.toFixed(0)}`}</td>
             <td style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);color:var(--text-muted);">${r.projectedMows.toFixed(1)}</td>
             <td style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);font-weight:700;color:var(--green-deep);">${bigNum(r.projectedRev)}</td>
           </tr>`).join('')}
