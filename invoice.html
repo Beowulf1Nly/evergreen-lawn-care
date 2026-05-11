@@ -3413,34 +3413,24 @@ function closeAddrSuggestions() {
   if (box) { box.innerHTML = ''; box.style.display = 'none'; }
 }
 
-// ── Geocode a US address → { lat, lon, via }
+// ── Geocode a US address → { lat, lon }
+// Primary: Photon (komoot) — free, CORS-safe, great US coverage
+// Fallback: Nominatim
 async function geocodeAddr(addr) {
-  // 1. Census Geocoder
-  try {
-    const url = 'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address='
-      + encodeURIComponent(addr) + '&benchmark=Public_AR_Current&format=json';
-    const res  = await fetch(url);
-    const data = await res.json();
-    const match = data?.result?.addressMatches?.[0];
-    if (match) return { lat: match.coordinates.y, lon: match.coordinates.x, via: 'census' };
-  } catch(e) { console.warn('[geo] Census failed for:', addr, e); }
-  // 2. Photon (komoot) — good US coverage, no rate limit
   try {
     const url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(addr) + '&limit=1&countrycode=us';
     const res  = await fetch(url);
     const data = await res.json();
     const f = data?.features?.[0];
-    if (f) return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], via: 'photon' };
-  } catch(e) { console.warn('[geo] Photon failed for:', addr, e); }
-  // 3. Nominatim fallback
+    if (f) return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] };
+  } catch(e) {}
   try {
     const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q='
       + encodeURIComponent(addr);
     const res  = await fetch(url, { headers: { 'Accept-Language': 'en' } });
     const data = await res.json();
-    if (data.length) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), via: 'nominatim' };
-  } catch(e) { console.warn('[geo] Nominatim failed for:', addr, e); }
-  console.error('[geo] ALL providers failed for:', addr);
+    if (data.length) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+  } catch(e) {}
   return null;
 }
 
@@ -3495,24 +3485,6 @@ async function buildRoute() {
     addrsToGeocode.map(addr => geocodeAddr(addr).catch(() => null))
   );
 
-  // ── Debug: show geocoding results in the error element ──
-  const geoDebug = addrsToGeocode.map((addr, i) => {
-    const c = coords[i];
-    return c ? `✅ ${addr} → (${c.lat.toFixed(4)}, ${c.lon.toFixed(4)}) via ${c.via}` : `❌ FAILED: ${addr}`;
-  }).join('\n');
-  console.log('[route] geocoding results:\n' + geoDebug);
-  if (errEl) {
-    errEl.style.display = 'block';
-    errEl.style.whiteSpace = 'pre';
-    errEl.style.fontSize = '11px';
-    errEl.style.background = '#f0fdf4';
-    errEl.style.border = '1px solid #bbf7d0';
-    errEl.style.padding = '8px 10px';
-    errEl.style.borderRadius = '6px';
-    errEl.style.color = '#166534';
-    errEl.textContent = 'Geocoding:\n' + geoDebug;
-  }
-
   // ── Fetch real driving legs from OSRM (parallel is fine) ──
   if (optBtn) optBtn.textContent = 'Calculating drive times…';
   // legs[i] = drive FROM coords[i] TO coords[i+1]
@@ -3525,10 +3497,6 @@ async function buildRoute() {
     }
   }
   const legResults = await Promise.all(legPromises);
-  console.log('[route] OSRM legs:', legResults);
-
-  // Clear debug panel now that routing is done
-  if (errEl) { errEl.style.display = 'none'; errEl.style.whiteSpace = ''; }
 
   // Map leg results: if startAddr, legs[0] = start→stop0, legs[1] = stop0→stop1, etc.
   // If no startAddr, legs[0] = stop0→stop1, etc.
