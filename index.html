@@ -3568,7 +3568,7 @@ function updateLotDisplay() {
   const personalLink = document.getElementById('q-personal-quote-link');
   const isXL    = qState.lotTierIdx === 4;
 
-  if (labelEl) labelEl.textContent = tier ? tier.label : '—';
+  if (labelEl) labelEl.textContent = (isXL && qState.personalQuoteRequested) ? 'Custom Quote · Free In-Person Visit' : (tier ? tier.label : '—');
   if (iconEl)  iconEl.textContent  = tier ? tier.icon : '🏡';
 
   if (!_lotLookupDone) {
@@ -3579,7 +3579,7 @@ function updateLotDisplay() {
   } else if (isXL) {
     // Already on free-visit path — hide both dropdown and "wrong size?" link
     if (sublabel) sublabel.textContent = qState.personalQuoteRequested
-      ? 'We\'ll measure your yard on the day of the visit'
+      ? 'We\'ll come out, measure everything, and give you an exact price'
       : '~ ' + (qState.detectedAcreage || '1+') + ' acres';
     if (manual) manual.style.display = 'none';
     if (personalLink) personalLink.style.display = 'none';
@@ -3621,13 +3621,16 @@ function renderPlanCards() {
 
   // ── Large/XL lots: replace plan cards with free quote visit info ──
   if (isXL) {
+    const isPersonal = qState.personalQuoteRequested;
+    const cardTitle  = isPersonal ? 'Custom Quote · Free In-Person Visit' : 'Free On-Site Quote Visit';
+    const cardDesc   = isPersonal
+      ? "Not happy with the estimated size? We'll come out, measure your yard ourselves, and give you an exact price — completely free, no commitment required."
+      : "Properties over 1 acre get a custom quote. We'll come out, walk the lot, and give you an exact price — completely free, no commitment required.";
     document.getElementById('quotePlanCards').innerHTML = `
       <div style="background:var(--green-pale);border:1.5px solid rgba(45,106,45,0.2);border-radius:14px;padding:20px 18px;margin-bottom:4px;">
         <div style="font-size:22px;margin-bottom:10px;">🗺️</div>
-        <div style="font-size:15px;font-weight:700;color:var(--green-deep);margin-bottom:6px;">Free On-Site Quote Visit</div>
-        <div style="font-size:13px;color:var(--text-muted);line-height:1.65;">
-          Properties over 1 acre get a custom quote. We'll come out, walk the lot, and give you an exact price — completely free, no commitment required.
-        </div>
+        <div style="font-size:15px;font-weight:700;color:var(--green-deep);margin-bottom:6px;">${cardTitle}</div>
+        <div style="font-size:13px;color:var(--text-muted);line-height:1.65;">${cardDesc}</div>
         <div style="margin-top:14px;display:flex;flex-direction:column;gap:7px;">
           <div style="font-size:13px;color:var(--green-deep);display:flex;align-items:center;gap:8px;"><span style="color:var(--green-bright);font-weight:700;">✓</span> Free visit, no obligation</div>
           <div style="font-size:13px;color:var(--green-deep);display:flex;align-items:center;gap:8px;"><span style="color:var(--green-bright);font-weight:700;">✓</span> We measure the property ourselves</div>
