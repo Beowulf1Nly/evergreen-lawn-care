@@ -78,8 +78,9 @@
   /* ── Booking cards ── */
   .booking-card { background:#fff; border:1.5px solid var(--border); border-radius:14px; padding:18px 20px; margin-bottom:12px; display:grid; grid-template-columns:1fr auto; gap:12px; align-items:start; transition:box-shadow .2s,border-color .2s; }
   .booking-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.07); border-color:#c8ddc8; }
-  .booking-card.today { border-left:4px solid var(--green-bright); }
-  .booking-card.done  { background:#f8faf8; border-color:#dde8dd; }
+  .booking-card.today     { border-left:4px solid var(--green-bright); }
+  .booking-card.tomorrow  { background:#fffdf0; border-left:4px solid var(--gold); }
+  .booking-card.done      { background:#f8faf8; border-color:#dde8dd; }
   .card-name { font-size:16px; font-weight:600; color:var(--green-deep); margin-bottom:4px; }
   .card-meta { font-size:13px; color:var(--text-muted); line-height:1.7; }
   .card-meta a { color:var(--green-mid); text-decoration:none; font-weight:500; }
@@ -90,7 +91,8 @@
   .cust-name { font-size:15px; font-weight:700; color:var(--green-deep); margin-bottom:4px; }
   .cust-meta { font-size:13px; color:var(--text-muted); line-height:1.7; }
   .cust-actions { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
-  .cust-btn { padding:7px 13px; font-size:12px; font-weight:600; border:none; border-radius:8px; cursor:pointer; white-space:nowrap; }
+  .cust-btn { padding:7px 13px; font-size:12px; font-weight:600; border:none; border-radius:8px; cursor:pointer; white-space:nowrap; transition:opacity .15s; }
+  .cust-btn:disabled { opacity:.5; cursor:not-allowed; }
   .cust-btn-red    { background:#fee2e2; color:#b91c1c; }
   .cust-btn-blue   { background:#dbeafe; color:#1d4ed8; }
   .cust-btn-green  { background:#dcfce7; color:#15803d; }
@@ -786,6 +788,19 @@
 
 </div><!-- /appScreen -->
 
+<!-- ══ CUSTOMER EDIT MODAL (Price / Frequency / Notes) ══ -->
+<div class="confirm-overlay" id="custEditOverlay" onclick="if(event.target===this)closeCustEdit()">
+  <div class="confirm-box" style="max-width:400px;text-align:left;">
+    <h4 id="custEditTitle" style="margin-bottom:8px;text-align:center;">Edit</h4>
+    <p id="custEditSub" style="font-size:13px;color:var(--text-muted);margin-bottom:16px;text-align:center;"></p>
+    <div id="custEditBody"></div>
+    <div class="confirm-actions" style="margin-top:18px;">
+      <button class="btn-confirm-no" onclick="closeCustEdit()">Cancel</button>
+      <button class="btn-confirm-yes" id="custEditSaveBtn" onclick="submitCustEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ INVOICE MODAL ══ -->
 <div class="modal-overlay" id="invoiceModal" onclick="if(event.target===this)closeInvoiceModal()">
   <div class="modal">
@@ -1043,6 +1058,7 @@ window.addEventListener('DOMContentLoaded', () => {
     adminEmail = saved.email;
     adminRole  = saved.role || 'employee';
     showApp();
+    // Warm the GAS connection immediately so first action is faster
     loadBookings();
   }
 
@@ -1412,13 +1428,17 @@ function renderCustomers() {
         </div>
       </div>
       <div class="cust-actions">
+        ${c.address ? `<button class="cust-btn cust-btn-gray" onclick="custDirections(${JSON.stringify((c.address||'')+(c.zip?' '+c.zip:''))})">📍 Directions</button>` : ''}
+        ${c.phone ? `<button class="cust-btn cust-btn-gray" onclick="window.location='tel:${esc(c.phone)}'">📞 Call</button>` : ''}
+        ${c.email && !isInactive ? `<button class="cust-btn cust-btn-blue" onclick="${nextRow !== undefined ? `openInvoiceModal(${nextRow})` : `openCustomerInvoiceModal(${custIdx})`}">📧 Invoice</button>` : ''}
         ${!isInactive && nextRow !== undefined ? `<button class="cust-btn cust-btn-yellow" onclick="openOwnerResched(${nextRow})">📅 Reschedule</button>` : ''}
+        ${!isInactive && nextRow !== undefined ? `<button class="cust-btn cust-btn-yellow" onclick="custChangePrice(${custIdx},${nextRow})">💰 Change Price</button>` : ''}
+        ${!isInactive && isSub ? `<button class="cust-btn cust-btn-blue" onclick="custChangeFreq(${custIdx})">🔄 Frequency</button>` : ''}
+        <button class="cust-btn cust-btn-gray" onclick="custViewNotes(${custIdx})">📝 Notes</button>
+        ${!isInactive && nextRow !== undefined ? `<button class="cust-btn cust-btn-red" style="background:#fee2e2;color:#b91c1c;" onclick="triggerCancelJob(${nextRow})">✕ Cancel Job</button>` : ''}
         ${!isSub ? `<button class="cust-btn cust-btn-green" onclick="openScheduleModal(${custIdx})">📋 Schedule</button>` : ''}
         ${c.email && !c.reviewSent ? `<button class="cust-btn cust-btn-green" onclick="custSendReviewByEmail('${esc(c.email)}')">⭐ Review Email</button>` : ''}
-        ${c.email && c.reviewSent  ? `<button class="cust-btn cust-btn-gray" disabled title="Review sent ${esc(c.reviewSent)}">⭐ Sent</button>` : ''}
-        ${c.email && !isInactive ? `<button class="cust-btn cust-btn-blue" onclick="${nextRow !== undefined ? `openInvoiceModal(${nextRow})` : `openCustomerInvoiceModal(${custIdx})`}">📧 Invoice</button>` : ''}
         ${isSub ? `<button class="cust-btn cust-btn-red" onclick="custCancelPlan('${esc(c.email)}','${esc(c.name)}')">✕ Cancel Plan</button>` : ''}
-        ${c.phone ? `<button class="cust-btn cust-btn-gray" onclick="window.location='tel:${esc(c.phone)}'">📞 Call</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1510,8 +1530,7 @@ async function submitSchedule() {
       closeScheduleModal();
       showToast('Scheduled! ' + plan + ' starting ' + date);
       sessionStorage.removeItem('evg_customers_cache');
-      loadBookings();
-      loadCustomers();
+      loadBookings(); // single refresh — renderCustomers() is called inside if that tab is active
     } else {
       showToast('Error: ' + (data.error || 'Failed'));
     }
@@ -1560,8 +1579,12 @@ function custCancelPlan(email, name) {
         const data = await res.json();
         if (data.success) {
           allBookings = allBookings.filter(b => String(b.email||'').toLowerCase().trim() !== email);
+          // Update local customer record to Inactive immediately — avoids a slow GAS round-trip
+          const cidx = allCustomers.findIndex(c => (c.Email||'').toLowerCase().trim() === email);
+          if (cidx >= 0) allCustomers[cidx].Status = 'Inactive';
+          sessionStorage.setItem('evg_customers_cache', JSON.stringify(allCustomers));
           renderBookings();
-          loadCustomers(); // reload from Customers sheet so status/badge reflects cancellation
+          renderCustomers();
           showToast('Plan cancelled for ' + name);
         } else {
           alert('Error: ' + (data.error || 'Could not cancel.'));
@@ -1621,8 +1644,10 @@ async function loadBookings() {
 // RENDER
 // ═══════════════════════════════════════════════════════
 function renderBookings() {
-  const todayStr = todayDateStr();
-  const in7      = new Date(); in7.setDate(in7.getDate() + 7);
+  const todayStr    = todayDateStr();
+  const in7         = new Date(); in7.setDate(in7.getDate() + 7);
+  const _tom        = new Date(); _tom.setDate(_tom.getDate() + 1);
+  const tomorrowStr = _tom.getFullYear() + '-' + String(_tom.getMonth()+1).padStart(2,'0') + '-' + String(_tom.getDate()).padStart(2,'0');
 
   const f = (adminRole === 'owner') ? (document.getElementById('filterStatus')?.value || 'all') : 'all';
   const q = (adminRole === 'owner') ? (document.getElementById('searchInput')?.value || '').toLowerCase() : '';
@@ -1672,7 +1697,7 @@ function renderBookings() {
     const d = dateOf(b);
     if (!d || d === todayStr) return false;
     return new Date(d + 'T12:00') <= in7;
-  });
+  }).sort((a, b) => dateOf(a).localeCompare(dateOf(b))); // soonest first
 
   // Missed Deadline — past-date undone jobs (owner only)
   const missedBkgs = (adminRole === 'owner')
@@ -1724,10 +1749,10 @@ function renderBookings() {
     ? today.map(b => cardHTML(b, allBookings.indexOf(b), true)).join('')
     : '<div class="empty-state" style="padding:20px;">No jobs today 🎉</div>';
 
-  // Within 7 Days
+  // Within 7 Days (sorted soonest first; tomorrow gets a warm highlight)
   document.getElementById('upcomingCount').textContent = upcoming.length;
   document.getElementById('upcomingList').innerHTML = upcoming.length
-    ? upcoming.map(b => cardHTML(b, allBookings.indexOf(b), false)).join('')
+    ? upcoming.map(b => cardHTML(b, allBookings.indexOf(b), false, tomorrowStr)).join('')
     : '<div class="empty-state" style="padding:20px;">Nothing in the next 7 days.</div>';
 
   // Keep Route tab in sync — if it's currently visible, refresh its job count/state
@@ -1737,7 +1762,8 @@ function renderBookings() {
   }
 }
 
-function cardHTML(b, rowIdx, isToday) {
+function cardHTML(b, rowIdx, isToday, tomorrowStr) {
+  const isTomorrow = !isToday && tomorrowStr && dateOf(b) === tomorrowStr;
   const auto     = isAutoPay(b);
   const cash     = isCash(b);
   const done     = isDone(b);
@@ -1848,7 +1874,7 @@ function cardHTML(b, rowIdx, isToday) {
   // ── Employee view: name, address, date, phone, notes, done status only ──
   if (adminRole === 'employee') {
     return `
-      <div class="booking-card ${isToday?'today':''} ${done?'done':''}">
+      <div class="booking-card ${isToday?'today':isTomorrow?'tomorrow':''} ${done?'done':''}">
         <div>
           <div class="card-name">${esc(b.name||'—')}</div>
           <div class="card-meta">
@@ -1868,7 +1894,7 @@ function cardHTML(b, rowIdx, isToday) {
 
   // ── Owner view: full details ──
   return `
-    <div class="booking-card ${isToday?'today':''} ${done?'done':''}">
+    <div class="booking-card ${isToday?'today':isTomorrow?'tomorrow':''} ${done?'done':''}">
       <div>
         <div class="card-name">${esc(b.name||'—')}</div>
         <div class="card-meta">
@@ -2702,7 +2728,7 @@ async function loadStats() {
 
       <!-- Mow Log (collapsible, closed by default) -->
       <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;overflow:hidden;">
-        <button onclick="this.setAttribute('aria-expanded',this.getAttribute('aria-expanded')==='true'?'false':'true');var body=this.parentElement.querySelector('.mow-log-body');body.style.display=body.style.display==='none'?'block':'none';this.querySelector('.mow-log-chevron').style.transform=body.style.display==='none'?'rotate(0deg)':'rotate(180deg');"
+        <button onclick="this.setAttribute('aria-expanded',this.getAttribute('aria-expanded')==='true'?'false':'true');var body=this.parentElement.querySelector('.mow-log-body');body.style.display=body.style.display==='none'?'block':'none';this.querySelector('.mow-log-chevron').style.transform=body.style.display==='none'?'rotate(0deg)':'rotate(180deg)';"
           aria-expanded="false"
           style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:20px 24px;background:none;border:none;cursor:pointer;font-family:inherit;text-align:left;">
           <div style="display:flex;align-items:center;gap:10px;">
@@ -2793,6 +2819,15 @@ function buildRevProjection(bookings, periodIdx) {
 
   const bigNum = (n) => '$' + Math.round(n).toLocaleString();
 
+  const revTableId = 'revCustTable_' + periodIdx;
+  const rowsHtml = rows.sort((a,b)=>b.projectedRev-a.projectedRev).map(r=>`<tr>
+    <td style="padding:8px 10px;font-weight:600;border-bottom:1px solid var(--border);">${esc(r.name)}</td>
+    <td style="padding:8px 10px;border-bottom:1px solid var(--border);"><span style="background:${r.plan==='Weekly'?'#dcfce7':'#eff6ff'};color:${r.plan==='Weekly'?'#166534':'#1d4ed8'};border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;">${esc(r.plan)}</span></td>
+    <td style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);color:var(--text-muted);">${r.isPromo?`<span title="First mow $${r.firstPrice}, then $${r.price}">$${r.firstPrice}→$${r.price}</span>`:`$${r.price.toFixed(0)}`}</td>
+    <td style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);color:var(--text-muted);">${r.projectedMows.toFixed(1)}</td>
+    <td style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);font-weight:700;color:var(--green-deep);">${bigNum(r.projectedRev)}</td>
+  </tr>`).join('');
+
   return `
     <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
       <div style="flex:1;min-width:140px;background:var(--green-pale);border-radius:12px;padding:16px 18px;">
@@ -2807,29 +2842,29 @@ function buildRevProjection(bookings, periodIdx) {
         <div style="font-size:13px;color:var(--text-muted);">🌿 Avg/customer: <strong style="color:var(--green-deep);">${bigNum(totalRev / rows.length)}</strong></div>
       </div>
     </div>
-    <div style="overflow-x:auto;">
-      <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <thead><tr>
-          <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);">Customer</th>
-          <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);">Plan</th>
-          <th style="text-align:right;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);">$/Mow</th>
-          <th style="text-align:right;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);">Est. Mows</th>
-          <th style="text-align:right;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);">Est. Revenue</th>
-        </tr></thead>
-        <tbody>
-          ${rows.sort((a,b)=>b.projectedRev-a.projectedRev).map(r=>`<tr>
-            <td style="padding:8px 10px;font-weight:600;border-bottom:1px solid var(--border);">${esc(r.name)}</td>
-            <td style="padding:8px 10px;border-bottom:1px solid var(--border);"><span style="background:${r.plan==='Weekly'?'#dcfce7':'#eff6ff'};color:${r.plan==='Weekly'?'#166534':'#1d4ed8'};border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;">${esc(r.plan)}</span></td>
-            <td style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);color:var(--text-muted);">${r.isPromo?`<span title="First mow $${r.firstPrice}, then $${r.price}">$${r.firstPrice}→$${r.price}</span>`:`$${r.price.toFixed(0)}`}</td>
-            <td style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);color:var(--text-muted);">${r.projectedMows.toFixed(1)}</td>
-            <td style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);font-weight:700;color:var(--green-deep);">${bigNum(r.projectedRev)}</td>
-          </tr>`).join('')}
-          <tr>
-            <td colspan="4" style="padding:10px 10px 6px;font-weight:700;text-align:right;font-size:13px;">Total</td>
-            <td style="padding:10px 10px 6px;text-align:right;font-weight:800;font-size:16px;color:var(--green-deep);">${bigNum(totalRev)}</td>
-          </tr>
-        </tbody>
-      </table>
+    <div style="border:1.5px solid var(--border);border-radius:10px;overflow:hidden;">
+      <button onclick="(function(btn){var tbl=document.getElementById('${revTableId}');var shown=tbl.style.display!=='none';tbl.style.display=shown?'none':'block';btn.textContent=shown?'▶ Show ${rows.length} customers':'▼ Hide customers';})(this)"
+        style="width:100%;padding:11px 16px;background:#f8faf8;border:none;text-align:left;font-family:inherit;font-size:13px;font-weight:600;color:var(--green-deep);cursor:pointer;">
+        ▶ Show ${rows.length} customers
+      </button>
+      <div id="${revTableId}" style="display:none;overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr>
+            <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);">Customer</th>
+            <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);">Plan</th>
+            <th style="text-align:right;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);">$/Mow</th>
+            <th style="text-align:right;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);">Est. Mows</th>
+            <th style="text-align:right;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);">Est. Revenue</th>
+          </tr></thead>
+          <tbody>
+            ${rowsHtml}
+            <tr>
+              <td colspan="4" style="padding:10px 10px 6px;font-weight:700;text-align:right;font-size:13px;">Total</td>
+              <td style="padding:10px 10px 6px;text-align:right;font-weight:800;font-size:16px;color:var(--green-deep);">${bigNum(totalRev)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>`;
 }
 
@@ -2867,7 +2902,10 @@ async function loadAnalytics() {
     const quoteOpens    = E['quote_opened'] || 0;
     const bookCompleted = (E['booking_completed'] || 0) + (E['booking_completed_legacy'] || 0);
     const convRate      = anPct(bookCompleted, quoteOpens);
-    const revenue       = parseFloat(bk.estimatedRev || 0);
+    // Use locally computed revenue from done bookings (more accurate than backend estimatedRev)
+    const revenue = (allBookings || [])
+      .filter(bk => isDone(bk))
+      .reduce((sum, bk) => sum + (parseFloat(String(bk.price||'').replace(/[^0-9.]/g,''))||0), 0);
 
     el.innerHTML = `
       <div style="padding:4px 0 16px;">
@@ -3025,12 +3063,10 @@ function anRenderKpis(E, bk, an, totalViews, uniqueVis, quoteOpens, bookComplete
 function anRenderFunnel(E, totalViews, uniqueVis) {
   const el = document.getElementById('an-funnel');
   const STEPS = [
-    { key: null,                          label:'0 · Unique Visitors',           color:'#4b5563' },
-    { key:'quote_opened',                 label:'1 · Quote modal opened',        color:'#2d6a2d' },
-    { key:'quote_price_viewed',           label:'2 · Saw their price (Step 3)',  color:'#3d8c3d' },
-    { key:'quote_payment_step_reached',   label:'3 · Reached payment (Step 4)', color:'#4caf50' },
-    { key:'payment_attempted',            label:'4 · Clicked "Book Now"',        color:'#72c472' },
-    { key:'booking_completed',            label:'5 · Booking confirmed ✅',       color:'#9edd9e' },
+    { key: null,                label:'0 · Unique Visitors',      color:'#4b5563' },
+    { key:'quote_opened',       label:'1 · Quote opened',         color:'#2d6a2d' },
+    { key:'quote_price_viewed', label:'2 · Saw their price',      color:'#3d8c3d' },
+    { key:'booking_completed',  label:'3 · Booking confirmed ✅',  color:'#9edd9e' },
   ];
   const counts = STEPS.map((s, i) => i === 0 ? uniqueVis : (E[s.key] || 0));
   const top = counts[0] || 0;
@@ -3072,14 +3108,13 @@ function anRenderFunnel(E, totalViews, uniqueVis) {
   });
 
   // Insight
-  const opens = counts[1], completed = counts[5];
+  const opens = counts[1], completed = counts[3];
   const cr = anPct(completed, opens);
   let insight = '';
   if (opens === 0) insight = '⏳ No quote opens yet.';
-  else if (counts[2] === 0) insight = '🛑 Nobody is making it past the address form. The button or form may be confusing.';
+  else if (counts[2] === 0) insight = '🛑 Nobody is making it past seeing their price. Check the quote flow.';
   else if (biggestDropIdx === 2 && biggestDrop >= 50) insight = `💸 ${biggestDrop}% of people who see their price immediately leave. Consider A/B testing pricing or simplifying plan selection.`;
-  else if (biggestDropIdx === 3 && biggestDrop >= 40) insight = `📅 ${biggestDrop}% drop between seeing price and entering payment. The date picker or card entry may be causing friction.`;
-  else if (counts[4] > 0 && completed < counts[4]) insight = `💳 People hit "Book Now" but aren't completing. Check for payment errors.`;
+  else if (biggestDropIdx === 3 && biggestDrop >= 40) insight = `📅 ${biggestDrop}% drop between seeing price and booking. The booking form may be causing friction.`;
   else if (completed > 0) insight = `✅ Funnel is healthy — ${cr}% conversion (quote opens → bookings).`;
 
   el.innerHTML = `<div class="an-alert ${completed > 0 ? 'green' : 'yellow'}" style="margin-bottom:16px;">${insight}</div>` + html;
@@ -3707,6 +3742,150 @@ function openNotesPopup(title, body) {
 }
 function closeNotesPopup() {
   document.getElementById('notesOverlay').style.display = 'none';
+}
+
+// ── Directions ────────────────────────────────────────────────────────────
+function custDirections(addr) {
+  window.open('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(addr), '_blank');
+}
+
+// ── Customer Edit Modal ───────────────────────────────────────────────────
+let _custEditMode = null; // 'price' | 'freq' | 'notes'
+let _custEditIdx  = null;
+let _custEditRow  = null;
+
+function closeCustEdit() {
+  document.getElementById('custEditOverlay').classList.remove('open');
+  _custEditMode = null; _custEditIdx = null; _custEditRow = null;
+}
+
+// Change Price
+function custChangePrice(custIdx, rowIdx) {
+  const c = (window._custsList || [])[custIdx];
+  const b = allBookings[rowIdx];
+  if (!c || !b) return;
+  const currentPrice = parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))||0;
+  _custEditMode = 'price';
+  _custEditIdx  = custIdx;
+  _custEditRow  = rowIdx;
+  document.getElementById('custEditTitle').textContent = '💰 Change Price — ' + (c.name || '');
+  document.getElementById('custEditSub').textContent   = 'Current: $' + (currentPrice || '—') + '/mow. Sets the price on the next upcoming job.';
+  document.getElementById('custEditBody').innerHTML    =
+    `<label style="font-size:13px;font-weight:600;color:var(--green-deep);display:block;margin-bottom:6px;">New price per mow ($)</label>
+     <input type="number" id="custEditInput" value="${currentPrice||''}" min="0" step="1" placeholder="e.g. 55"
+       style="width:100%;padding:11px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:15px;outline:none;"
+       oninput="this.style.borderColor='var(--green-mid)'" onkeydown="if(event.key==='Enter')submitCustEdit()"/>`;
+  document.getElementById('custEditSaveBtn').textContent = 'Update Price';
+  document.getElementById('custEditOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('custEditInput')?.focus(), 80);
+}
+
+// Change Frequency
+function custChangeFreq(custIdx) {
+  const c = (window._custsList || [])[custIdx];
+  if (!c) return;
+  _custEditMode = 'freq';
+  _custEditIdx  = custIdx;
+  document.getElementById('custEditTitle').textContent = '🔄 Change Frequency — ' + (c.name || '');
+  document.getElementById('custEditSub').textContent   = 'Current: ' + (c.plan || 'Unknown');
+  document.getElementById('custEditBody').innerHTML    =
+    `<label style="font-size:13px;font-weight:600;color:var(--green-deep);display:block;margin-bottom:6px;">New schedule</label>
+     <select id="custEditInput" style="width:100%;padding:11px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;outline:none;">
+       <option value="Weekly Plan">Weekly</option>
+       <option value="Bi-Weekly Plan">Bi-Weekly</option>
+       <option value="Custom Plan">Custom</option>
+     </select>
+     <div id="custEditCustomDays" style="margin-top:10px;display:none;">
+       <label style="font-size:13px;font-weight:600;color:var(--green-deep);display:block;margin-bottom:6px;">Every how many days?</label>
+       <input type="number" id="custEditCustomDaysInput" min="1" placeholder="e.g. 21"
+         style="width:100%;padding:10px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;outline:none;"/>
+     </div>`;
+  document.getElementById('custEditSaveBtn').textContent = 'Update Frequency';
+  document.getElementById('custEditOverlay').classList.add('open');
+  document.getElementById('custEditInput')?.addEventListener('change', function() {
+    document.getElementById('custEditCustomDays').style.display = this.value === 'Custom Plan' ? 'block' : 'none';
+  });
+}
+
+// View / Edit Notes
+function custViewNotes(custIdx) {
+  const c = (window._custsList || [])[custIdx];
+  if (!c) return;
+  _custEditMode = 'notes';
+  _custEditIdx  = custIdx;
+  document.getElementById('custEditTitle').textContent = '📝 Notes — ' + (c.name || '');
+  document.getElementById('custEditSub').textContent   = 'View or update customer notes (gate codes, instructions, etc.)';
+  document.getElementById('custEditBody').innerHTML    =
+    `<textarea id="custEditInput" rows="5" placeholder="Gate code, don't go in backyard, dog…"
+       style="width:100%;padding:11px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;outline:none;resize:vertical;"
+       oninput="this.style.borderColor='var(--green-mid)'">${esc(c.notes||'')}</textarea>`;
+  document.getElementById('custEditSaveBtn').textContent = 'Save Notes';
+  document.getElementById('custEditOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('custEditInput')?.focus(), 80);
+}
+
+async function submitCustEdit() {
+  const c = (window._custsList || [])[_custEditIdx];
+  if (!c || !_custEditMode) return;
+  const val = document.getElementById('custEditInput')?.value?.trim();
+  const btn = document.getElementById('custEditSaveBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    let params;
+    if (_custEditMode === 'price') {
+      if (!val || isNaN(parseFloat(val))) { showToast('Enter a valid price.'); btn.disabled=false; btn.textContent='Update Price'; return; }
+      params = new URLSearchParams({
+        action: 'update_customer_price',
+        email: c.email, price: parseFloat(val).toFixed(2),
+        rowIndex: _custEditRow !== null ? (_custEditRow + 2) : '',
+        adminToken,
+      });
+    } else if (_custEditMode === 'freq') {
+      const plan = val;
+      const customDays = plan === 'Custom Plan' ? (parseInt(document.getElementById('custEditCustomDaysInput')?.value||'')||0) : 0;
+      if (plan === 'Custom Plan' && !customDays) { showToast('Enter the number of days.'); btn.disabled=false; btn.textContent='Update Frequency'; return; }
+      params = new URLSearchParams({
+        action: 'update_customer_frequency',
+        email: c.email, frequency: plan, days: customDays || '', adminToken,
+      });
+    } else if (_custEditMode === 'notes') {
+      params = new URLSearchParams({
+        action: 'update_customer_notes',
+        email: c.email, notes: val || '', adminToken,
+      });
+    }
+
+    const res  = await fetch(SCRIPT_URL + '?' + params.toString());
+    const data = await res.json();
+    if (data.success) {
+      // Update local customer record so the UI reflects the change immediately
+      if (c && _custEditMode === 'price' && _custEditRow !== null) {
+        allBookings[_custEditRow].price = val;
+      }
+      if (c && _custEditMode === 'notes') {
+        c.notes = val;
+        const idx = allCustomers.findIndex(x => (x.Email||'').toLowerCase() === c.email);
+        if (idx >= 0) allCustomers[idx].Notes = val;
+      }
+      if (c && _custEditMode === 'freq') {
+        c.plan = val;
+        const idx = allCustomers.findIndex(x => (x.Email||'').toLowerCase() === c.email);
+        if (idx >= 0) allCustomers[idx].Plan = val;
+      }
+      closeCustEdit();
+      renderCustomers();
+      showToast('✅ Updated!');
+    } else {
+      showToast('Error: ' + (data.error || 'Could not save. The backend may not support this action yet.'));
+      btn.disabled = false;
+      btn.textContent = _custEditMode === 'price' ? 'Update Price' : _custEditMode === 'freq' ? 'Update Frequency' : 'Save Notes';
+    }
+  } catch(err) {
+    showToast('Network error — ' + err.message);
+    btn.disabled = false;
+    btn.textContent = _custEditMode === 'price' ? 'Update Price' : _custEditMode === 'freq' ? 'Update Frequency' : 'Save Notes';
+  }
 }
 
 </script>
