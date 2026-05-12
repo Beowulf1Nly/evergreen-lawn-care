@@ -4056,6 +4056,7 @@ async function quotePaySubmit() {
     if (ANA.sent) return;
     ANA.sent = true;
     try {
+      const vid = localStorage.getItem('eg_vid') || '';
       const p = new URLSearchParams({
         action:    'analytics',
         page:      location.pathname,
@@ -4068,13 +4069,10 @@ async function quotePaySubmit() {
         ctas:      ANA.ctaClicks.join('|'),
         exit:      ANA.exitSection,
         screen_w:  window.innerWidth,
+        vid:       vid,
       });
       const url = SHEETS_SCRIPT_URL + '?' + p.toString();
-      if (navigator.sendBeacon) {
-        // sendBeacon fires even as page unloads
-        navigator.sendBeacon(url.replace('?', '?_method=GET&'), new Blob([], { type: 'text/plain' }));
-      }
-      // fallback: regular fetch with keepalive
+      // Use fetch with keepalive — sendBeacon sends POST which misses the doGet handler
       fetch(url, { method: 'GET', mode: 'no-cors', keepalive: true }).catch(() => {});
     } catch(e) { /* silent */ }
   }
