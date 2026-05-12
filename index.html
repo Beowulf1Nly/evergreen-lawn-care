@@ -2685,13 +2685,14 @@ async function loadData() {
 
 // Initialize carousel
 function initCarousel() {
-  if (!carouselData.images || carouselData.images.length === 0) {
-    document.getElementById('carouselTrack').innerHTML = '<div class="carousel-slide"><div style="color:#999; text-align:center;">No images yet. Add image URLs to data.json</div></div>';
-    return;
-  }
-
   const track = document.getElementById('carouselTrack');
   const dotsContainer = document.getElementById('carouselDots');
+  if (!track || !dotsContainer) return; // carousel elements not present on this page
+
+  if (!carouselData.images || carouselData.images.length === 0) {
+    track.innerHTML = '<div class="carousel-slide"><div style="color:#999; text-align:center;">No images yet. Add image URLs to data.json</div></div>';
+    return;
+  }
 
   // Populate slides
   track.innerHTML = carouselData.images.map((img, i) => `
@@ -2752,6 +2753,7 @@ function resetAutoPlay() {
 // Render testimonials from data.json
 function renderTestimonials() {
   const container = document.getElementById('testimonialsContainer');
+  if (!container) return; // element not present on this page
 
   if (!carouselData.reviews || carouselData.reviews.length === 0) {
     container.innerHTML = '<div style="text-align:center; padding:40px; color:#999;">No reviews yet. Add reviews to data.json</div>';
