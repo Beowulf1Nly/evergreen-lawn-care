@@ -941,7 +941,7 @@
 </div>
 
 <!-- Schedule Modal -->
-<div class="confirm-overlay" id="scheduleOverlay" onclick="if(event.target===this)closeScheduleModal()">
+<div class="confirm-overlay" id="scheduleOverlay" onmousedown="if(event.target===this)_schedDragOrigin=true" onmouseup="if(event.target===this&&_schedDragOrigin)closeScheduleModal();_schedDragOrigin=false;" onclick="void 0">
   <div class="confirm-box" style="max-width:420px;width:94%;">
     <h4 id="scheduleModalTitle" style="margin:0 0 16px;">📋 Start New Plan</h4>
     <div style="display:flex;flex-direction:column;gap:12px;">
@@ -972,7 +972,7 @@
       <div>
         <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Payment Method</label>
         <select id="schedPayMethod" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;">
-          <option value="card">💳 Card / Autopay</option>
+          <option value="card">💳 Card</option>
           <option value="cash">💵 Cash</option>
         </select>
       </div>
@@ -1531,20 +1531,57 @@ function schedAutoFillPrice() {
   }
 }
 let _schedCustomer = null;
+let _schedDragOrigin = false;
 function openScheduleModal(idx) {
   const c = (window._custsList || [])[idx];
   if (!c) return;
   _schedCustomer = c;
   document.getElementById('scheduleModalTitle').textContent = '📋 Schedule — ' + (c.name || '');
-  document.getElementById('schedPlan').value  = 'Weekly Plan';
-  document.getElementById('schedYard').value  = '';
-  document.getElementById('schedPrice').value = '';
+
+  // ── Auto-fill from last booking for this customer ──
+  const emailKey = String(c.email || '').toLowerCase().trim();
+  const custBookings = allBookings
+    .filter(b => String(b.email || '').toLowerCase().trim() === emailKey && !b.rowCancelled && !b.rowCompleted)
+    .sort((a, bk) => ((bk.serviceDate || '') > (a.serviceDate || '') ? 1 : -1));
+  const lastB = custBookings[0] || null;
+
+  // Plan: prefer customer's current plan, fall back to last booking's frequency
+  const rawPlan = c.plan || (lastB?.frequency) || 'Weekly Plan';
+  const validPlans = ['Weekly Plan', 'Bi-Weekly Plan', 'Custom Plan', 'One-time visit'];
+  const planToSet  = validPlans.includes(rawPlan) ? rawPlan : 'Weekly Plan';
+  document.getElementById('schedPlan').value = planToSet;
+
+  // Yard size + price: try to auto-fill from last booking
+  let lastPrice = 0;
+  if (lastB) {
+    const rawPrice = String(lastB.price || '');
+    if (/first.?service|promo/i.test(rawPrice)) {
+      // Promo price — extract the regular rate from notes
+      const m = String(lastB.notes || '').match(/following[:\s]+\$?(\d+(?:\.\d+)?)/i);
+      if (m) lastPrice = parseFloat(m[1]);
+    } else {
+      lastPrice = parseFloat(rawPrice.replace(/[^0-9.]/g, '')) || 0;
+    }
+  }
+  if (lastPrice > 0) {
+    document.getElementById('schedPrice').value = lastPrice;
+    // Reverse-lookup yard size from SCHED_PRICING
+    let matchedYard = '';
+    for (const [yard, prices] of Object.entries(SCHED_PRICING)) {
+      if (prices[planToSet] === lastPrice) { matchedYard = yard; break; }
+    }
+    document.getElementById('schedYard').value = matchedYard;
+  } else {
+    document.getElementById('schedPrice').value = '';
+    document.getElementById('schedYard').value  = '';
+  }
+
   document.getElementById('schedNotes').value = c.notes || '';
   const schedPM = document.getElementById('schedPayMethod');
   if (schedPM) schedPM.value = 'card';
   const schedPromo = document.getElementById('sched-promo');
   if (schedPromo) schedPromo.checked = false;
-  onSchedPromoChange(); // show/hide promo row for Weekly default
+  onSchedPromoChange(); // show/hide promo row + custom days row
   // Hide promo for returning customers who already have mows
   if (c.totalMows > 0) {
     const promoRow = document.getElementById('sched-promo-row');
@@ -2536,7 +2573,7 @@ function onSchedPromoChange() {
   const customDaysRow = document.getElementById('sched-custom-days-row');
   if (customDaysRow) customDaysRow.style.display = isCustom ? '' : 'none';
   const promoRow = document.getElementById('sched-promo-row');
-  if (promoRow) promoRow.style.display = (plan === 'One-time visit' || isCustom) ? 'none' : '';
+  if (promoRow) promoRow.style.display = isCustom ? 'none' : '';
   const checked  = document.getElementById('sched-promo')?.checked;
   const price    = document.getElementById('schedPrice')?.value;
   const noteEl   = document.getElementById('sched-promo-note');
