@@ -627,9 +627,14 @@
             <select id="ac-plan" onchange="onAcPlanChange()">
               <option value="Bi-Weekly Plan">Bi-Weekly</option>
               <option value="Weekly Plan">Weekly</option>
+              <option value="Custom Plan">Custom Plan</option>
               <option value="One-time visit">One-Time Visit</option>
               <option value="Monthly Plan" style="display:none;">Monthly</option>
             </select>
+          </div>
+          <div class="form-field" id="ac-custom-days-row" style="display:none;">
+            <label>Visit every (days)</label>
+            <input type="number" id="ac-custom-days" min="1" placeholder="e.g. 21" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;"/>
           </div>
           <div class="form-field">
             <label>Yard Size *</label>
@@ -889,8 +894,13 @@
         <select id="schedPlan" onchange="schedAutoFillPrice()" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;">
           <option value="Weekly Plan">Weekly Plan</option>
           <option value="Bi-Weekly Plan">Bi-Weekly Plan</option>
+          <option value="Custom Plan">Custom Plan</option>
           <option value="One-time visit">One-Time Visit</option>
         </select>
+      </div>
+      <div id="sched-custom-days-row" style="display:none;">
+        <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Visit every (days)</label>
+        <input id="schedCustomDays" type="number" min="1" placeholder="e.g. 21" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;">
       </div>
       <div>
         <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Yard Size</label>
@@ -1445,6 +1455,11 @@ function openScheduleModal(idx) {
   const schedPromo = document.getElementById('sched-promo');
   if (schedPromo) schedPromo.checked = false;
   onSchedPromoChange(); // show/hide promo row for Weekly default
+  // Hide promo for returning customers who already have mows
+  if (c.totalMows > 0) {
+    const promoRow = document.getElementById('sched-promo-row');
+    if (promoRow) promoRow.style.display = 'none';
+  }
   // Default date to tomorrow
   const tom = new Date(); tom.setDate(tom.getDate() + 1);
   document.getElementById('schedDate').value = tom.toISOString().slice(0,10);
@@ -1462,6 +1477,8 @@ async function submitSchedule() {
   const date  = document.getElementById('schedDate').value;
   const notes = document.getElementById('schedNotes').value.trim();
   const firstMowPromo = !!(document.getElementById('sched-promo')?.checked);
+  const customDays = plan === 'Custom Plan' ? (parseInt(document.getElementById('schedCustomDays')?.value || '') || 0) : 0;
+  if (plan === 'Custom Plan' && !customDays) { showToast('Enter the number of days for this custom plan.'); return; }
   if (!price || !date) { showToast('Enter a price and date.'); return; }
   const btn = document.getElementById('schedSubmitBtn');
   btn.disabled = true; btn.textContent = 'Scheduling…';
@@ -1472,6 +1489,7 @@ async function submitSchedule() {
       address: c.address || '', zip: c.zip || '',
       frequency: plan, price, serviceDate: date, notes,
       firstMowPromo: firstMowPromo ? 'true' : '',
+      days: customDays || '',
     });
     const res  = await fetch(SCRIPT_URL + '?' + authParam() + '&' + params);
     const data = await res.json();
@@ -2404,10 +2422,11 @@ const YARD_PRICING = {
 
 function onAcPlanChange() {
   updateAcPricePreview();
-  // Show promo checkbox only for recurring plans
   const plan = document.getElementById('ac-plan')?.value || '';
   const promoRow = document.getElementById('ac-promo-row');
-  if (promoRow) promoRow.style.display = '';
+  if (promoRow) promoRow.style.display = (plan === 'One-time visit' || plan === 'Custom Plan') ? 'none' : '';
+  const customDaysRow = document.getElementById('ac-custom-days-row');
+  if (customDaysRow) customDaysRow.style.display = (plan === 'Custom Plan') ? '' : 'none';
 }
 
 function onAcPromoChange() {
@@ -2424,8 +2443,12 @@ function onAcPromoChange() {
 }
 
 function onSchedPromoChange() {
+  const plan = document.getElementById('schedPlan')?.value || '';
+  const isCustom = plan === 'Custom Plan';
+  const customDaysRow = document.getElementById('sched-custom-days-row');
+  if (customDaysRow) customDaysRow.style.display = isCustom ? '' : 'none';
   const promoRow = document.getElementById('sched-promo-row');
-  if (promoRow) promoRow.style.display = '';
+  if (promoRow) promoRow.style.display = (plan === 'One-time visit' || isCustom) ? 'none' : '';
   const checked  = document.getElementById('sched-promo')?.checked;
   const price    = document.getElementById('schedPrice')?.value;
   const noteEl   = document.getElementById('sched-promo-note');
@@ -2480,6 +2503,7 @@ async function addClient() {
   const notes      = document.getElementById('ac-notes').value.trim() || '(none)';
   const paymethod  = document.getElementById('ac-paymethod').value; // 'card' or 'cash'
   const firstMowPromo = !!(document.getElementById('ac-promo')?.checked);
+  const customDays = plan === 'Custom Plan' ? (parseInt(document.getElementById('ac-custom-days')?.value || '') || 0) : 0;
   const errEl   = document.getElementById('ac-error');
   const okEl    = document.getElementById('ac-success');
   errEl.style.display = 'none';
@@ -2487,6 +2511,10 @@ async function addClient() {
 
   if (!name||!address||!date) {
     errEl.textContent = 'Please fill in name, address, and start date.';
+    errEl.style.display = 'block'; return;
+  }
+  if (plan === 'Custom Plan' && !customDays) {
+    errEl.textContent = 'Enter the number of days for the custom plan.';
     errEl.style.display = 'block'; return;
   }
   if (paymethod === 'card' && !email) {
@@ -2511,6 +2539,7 @@ async function addClient() {
     notes,
     payMethod:     paymethod,
     firstMowPromo: firstMowPromo ? 'true' : '',
+    days:          customDays || '',
     adminToken,
   });
 
