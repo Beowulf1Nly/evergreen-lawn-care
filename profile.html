@@ -1088,6 +1088,7 @@ function renderBillingCard(bookings) {
   const isWeekly    = freq === 'Weekly Plan';
   const isBiWeekly  = freq === 'Bi-Weekly Plan';
   const isCustom    = !isWeekly && !isBiWeekly;
+  const customDays  = isCustom ? (parseInt(subBookings.slice().sort((a,b) => (parseBookingDate(b.serviceDate)||0)-(parseBookingDate(a.serviceDate)||0))[0]?.days || '') || 0) : 0;
 
   const today = new Date(); today.setHours(0,0,0,0);
 
@@ -1334,6 +1335,7 @@ function renderBillingCard(bookings) {
       <div class="billing-plan-row">
         <div>
           <div class="billing-plan-name">📅 ${esc(freq)}</div>
+          ${customDays > 0 ? `<div class="billing-plan-sub" style="margin-bottom:2px;">Visit every ${customDays} days</div>` : ''}
           <div class="billing-plan-sub">${perPropLabel}/mow — ${isCashCustomer ? '💵 cash, collected after each visit' : 'charged after each mow'}</div>
         </div>
       </div>
