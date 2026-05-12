@@ -86,18 +86,54 @@
   .card-meta a { color:var(--green-mid); text-decoration:none; font-weight:500; }
   .card-badges { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
   /* ── Customer cards ── */
-  .cust-card { background:#fff; border:1.5px solid var(--border); border-radius:14px; padding:16px 18px; margin-bottom:12px; display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  .cust-card { background:#fff; border:1.5px solid var(--border); border-radius:14px; padding:16px 18px; margin-bottom:12px; }
+  .cust-card-inner { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
   .cust-info { flex:1; min-width:200px; }
   .cust-name { font-size:15px; font-weight:700; color:var(--green-deep); margin-bottom:4px; }
   .cust-meta { font-size:13px; color:var(--text-muted); line-height:1.7; }
-  .cust-actions { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
-  .cust-btn { padding:7px 13px; font-size:12px; font-weight:600; border:none; border-radius:8px; cursor:pointer; white-space:nowrap; transition:opacity .15s; }
-  .cust-btn:disabled { opacity:.5; cursor:not-allowed; }
-  .cust-btn-red    { background:#fee2e2; color:#b91c1c; }
-  .cust-btn-blue   { background:#dbeafe; color:#1d4ed8; }
-  .cust-btn-green  { background:#dcfce7; color:#15803d; }
-  .cust-btn-yellow { background:#fef9c3; color:#854d0e; }
-  .cust-btn-gray   { background:#f3f4f6; color:#374151; }
+
+  /* ── Customer action buttons ── */
+  .cust-actions { display:flex; align-items:center; gap:7px; flex-shrink:0; }
+  .cust-btn { padding:8px 14px; font-size:13px; font-weight:600; border:none; border-radius:9px; cursor:pointer; white-space:nowrap; transition:filter .15s, opacity .15s; font-family:inherit; }
+  .cust-btn:hover { filter:brightness(.94); }
+  .cust-btn:disabled { opacity:.5; cursor:not-allowed; filter:none; }
+  .cust-btn-blue { background:#2563eb; color:#fff; }
+  .cust-btn-gray { background:#f3f4f6; color:#374151; border:1.5px solid #e2e8f0; }
+
+  /* Actions dropdown trigger */
+  .cust-more-wrap { position:relative; }
+  .cust-more-btn {
+    padding:8px 13px; font-size:13px; font-weight:600; font-family:inherit;
+    border:1.5px solid #e2e8f0; border-radius:9px; cursor:pointer;
+    background:#fff; color:#374151; white-space:nowrap;
+    transition:background .15s, border-color .15s;
+    display:flex; align-items:center; gap:5px;
+  }
+  .cust-more-btn:hover { background:#f8faf8; border-color:#c8d5db; }
+  .cust-more-btn .caret { font-size:10px; opacity:.6; transition:transform .2s; }
+  .cust-more-btn.open .caret { transform:rotate(180deg); }
+
+  /* Dropdown panel */
+  .cust-dropdown {
+    position:absolute; right:0; top:calc(100% + 6px);
+    background:#fff; border:1.5px solid #e2e8f0;
+    border-radius:12px; box-shadow:0 10px 32px rgba(0,0,0,.14);
+    min-width:200px; z-index:600; overflow:hidden;
+    opacity:0; transform:translateY(-6px); pointer-events:none;
+    transition:opacity .15s, transform .15s;
+  }
+  .cust-dropdown.open { opacity:1; transform:translateY(0); pointer-events:auto; }
+  .cust-dd-item {
+    display:flex; align-items:center; gap:9px;
+    padding:11px 15px; font-size:13px; font-weight:500; font-family:inherit;
+    cursor:pointer; border:none; background:none; width:100%; text-align:left;
+    color:#1a1a1a; border-bottom:1px solid #f1f5f9; transition:background .1s;
+  }
+  .cust-dd-item:last-child { border-bottom:none; }
+  .cust-dd-item:hover { background:#f8faf8; }
+  .cust-dd-item.danger { color:#b91c1c; }
+  .cust-dd-item.danger:hover { background:#fff5f5; }
+  .cust-dd-sep { height:1px; background:#f1f5f9; margin:3px 0; }
 
   .badge-service { background:var(--green-pale); color:var(--green-deep); border-radius:6px; padding:3px 10px; font-size:12px; font-weight:600; }
   .badge-autopay { background:#1a3a1a; color:#fff; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:700; }
@@ -473,6 +509,11 @@
     .card-actions { align-items:stretch; flex-direction:row; flex-wrap:wrap; }
     .modal { padding:24px 20px; }
     .form-grid, .form-grid.three { grid-template-columns:1fr; }
+    /* Customer cards: stack on mobile */
+    .cust-card-inner { flex-direction:column; gap:12px; }
+    .cust-actions { justify-content:flex-start; flex-wrap:wrap; }
+    /* Keep dropdown anchored to right side even on mobile */
+    .cust-dropdown { right:auto; left:0; min-width:220px; }
   }
 </style>
 </head>
@@ -1415,30 +1456,47 @@ function renderCustomers() {
     const addedLine = c.dateAdded
       ? `📆 Added: ${displayDate(c.dateAdded)}` : '';
 
+    // ── Primary buttons (always visible) ──
+    const _primaryBtns = [
+      c.phone    ? `<button class="cust-btn cust-btn-gray" onclick="window.location='tel:${esc(c.phone)}'">📞 Call</button>` : '',
+      c.address  ? `<button class="cust-btn cust-btn-gray" onclick="custDirections(${JSON.stringify((c.address||'')+(c.zip?' '+c.zip:''))})">📍 Directions</button>` : '',
+      (c.email && !isInactive) ? `<button class="cust-btn cust-btn-blue" onclick="${nextRow !== undefined ? `openInvoiceModal(${nextRow})` : `openCustomerInvoiceModal(${custIdx})`}">📧 Invoice</button>` : '',
+    ].filter(Boolean).join('');
+
+    // ── Dropdown items ──
+    const _ddItems = [
+      (!isInactive && nextRow !== undefined) ? `<button class="cust-dd-item" onclick="closeCustDropdowns();openOwnerResched(${nextRow})">📅 Reschedule</button>` : '',
+      (!isInactive && nextRow !== undefined) ? `<button class="cust-dd-item" onclick="closeCustDropdowns();custChangePrice(${custIdx},${nextRow})">💰 Change Price</button>` : '',
+      (!isInactive && isSub)                 ? `<button class="cust-dd-item" onclick="closeCustDropdowns();custChangeFreq(${custIdx})">🔄 Change Frequency</button>` : '',
+                                               `<button class="cust-dd-item" onclick="closeCustDropdowns();custViewNotes(${custIdx})">📝 Notes</button>`,
+      (c.email && !c.reviewSent)             ? `<button class="cust-dd-item" onclick="closeCustDropdowns();custSendReviewByEmail('${esc(c.email)}')">⭐ Review Email</button>` : '',
+      (!isSub)                               ? `<button class="cust-dd-item" onclick="closeCustDropdowns();openScheduleModal(${custIdx})">📋 Schedule Plan</button>` : '',
+      // Danger zone
+      ((!isInactive && nextRow !== undefined) || isSub) ? '<div class="cust-dd-sep"></div>' : '',
+      (!isInactive && nextRow !== undefined) ? `<button class="cust-dd-item danger" onclick="closeCustDropdowns();triggerCancelJob(${nextRow})">✕ Cancel Job</button>` : '',
+      isSub                                  ? `<button class="cust-dd-item danger" onclick="closeCustDropdowns();custCancelPlan('${esc(c.email)}','${esc(c.name)}')">✕ Cancel Plan</button>` : '',
+    ].filter(Boolean).join('');
+
     return `<div class="cust-card"${isInactive ? ' style="opacity:0.65;"' : ''}>
-      <div class="cust-info">
-        <div class="cust-name">${esc(c.name)}${badge}</div>
-        <div class="cust-meta">
-          ${c.email ? `✉️ <a href="mailto:${esc(c.email)}" style="color:inherit;">${esc(c.email)}</a><br>` : ''}
-          ${c.phone ? `📞 <a href="tel:${esc(c.phone)}" style="color:inherit;">${esc(c.phone)}</a><br>` : ''}
-          ${c.address ? `📍 ${esc(c.address)}${c.zip ? ' · ' + esc(c.zip) : ''}<br>` : ''}
-          📋 ${esc(c.plan || 'Unknown')}${bookingPrice ? ' · <strong>$' + bookingPrice.toFixed(0) + '/mow</strong>' : ''}<br>
-          ${!isInactive ? '📅 Next: ' + (effectiveNextSched ? displayDate(effectiveNextSched) : 'Not scheduled') + '<br>' : ''}
-          ${statsLine}${lastDoneLine}${cardLine}${sourceLine}${addedLine}
+      <div class="cust-card-inner">
+        <div class="cust-info">
+          <div class="cust-name">${esc(c.name)}${badge}</div>
+          <div class="cust-meta">
+            ${c.email ? `✉️ <a href="mailto:${esc(c.email)}" style="color:inherit;">${esc(c.email)}</a><br>` : ''}
+            ${c.phone ? `📞 <a href="tel:${esc(c.phone)}" style="color:inherit;">${esc(c.phone)}</a><br>` : ''}
+            ${c.address ? `📍 ${esc(c.address)}${c.zip ? ' · ' + esc(c.zip) : ''}<br>` : ''}
+            📋 ${esc(c.plan || 'Unknown')}${bookingPrice ? ' · <strong>$' + bookingPrice.toFixed(0) + '/mow</strong>' : ''}<br>
+            ${!isInactive ? '📅 Next: ' + (effectiveNextSched ? displayDate(effectiveNextSched) : 'Not scheduled') + '<br>' : ''}
+            ${statsLine}${lastDoneLine}${cardLine}${sourceLine}${addedLine}
+          </div>
         </div>
-      </div>
-      <div class="cust-actions">
-        ${c.address ? `<button class="cust-btn cust-btn-gray" onclick="custDirections(${JSON.stringify((c.address||'')+(c.zip?' '+c.zip:''))})">📍 Directions</button>` : ''}
-        ${c.phone ? `<button class="cust-btn cust-btn-gray" onclick="window.location='tel:${esc(c.phone)}'">📞 Call</button>` : ''}
-        ${c.email && !isInactive ? `<button class="cust-btn cust-btn-blue" onclick="${nextRow !== undefined ? `openInvoiceModal(${nextRow})` : `openCustomerInvoiceModal(${custIdx})`}">📧 Invoice</button>` : ''}
-        ${!isInactive && nextRow !== undefined ? `<button class="cust-btn cust-btn-yellow" onclick="openOwnerResched(${nextRow})">📅 Reschedule</button>` : ''}
-        ${!isInactive && nextRow !== undefined ? `<button class="cust-btn cust-btn-yellow" onclick="custChangePrice(${custIdx},${nextRow})">💰 Change Price</button>` : ''}
-        ${!isInactive && isSub ? `<button class="cust-btn cust-btn-blue" onclick="custChangeFreq(${custIdx})">🔄 Frequency</button>` : ''}
-        <button class="cust-btn cust-btn-gray" onclick="custViewNotes(${custIdx})">📝 Notes</button>
-        ${!isInactive && nextRow !== undefined ? `<button class="cust-btn cust-btn-red" style="background:#fee2e2;color:#b91c1c;" onclick="triggerCancelJob(${nextRow})">✕ Cancel Job</button>` : ''}
-        ${!isSub ? `<button class="cust-btn cust-btn-green" onclick="openScheduleModal(${custIdx})">📋 Schedule</button>` : ''}
-        ${c.email && !c.reviewSent ? `<button class="cust-btn cust-btn-green" onclick="custSendReviewByEmail('${esc(c.email)}')">⭐ Review Email</button>` : ''}
-        ${isSub ? `<button class="cust-btn cust-btn-red" onclick="custCancelPlan('${esc(c.email)}','${esc(c.name)}')">✕ Cancel Plan</button>` : ''}
+        <div class="cust-actions">
+          ${_primaryBtns}
+          <div class="cust-more-wrap">
+            <button class="cust-more-btn" onclick="toggleCustMore(event,this)">Actions <span class="caret">▾</span></button>
+            <div class="cust-dropdown">${_ddItems}</div>
+          </div>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -3743,6 +3801,33 @@ function openNotesPopup(title, body) {
 function closeNotesPopup() {
   document.getElementById('notesOverlay').style.display = 'none';
 }
+
+// ── Customer dropdown helpers ─────────────────────────────────────────────
+function closeCustDropdowns() {
+  document.querySelectorAll('.cust-dropdown').forEach(d => d.classList.remove('open'));
+  document.querySelectorAll('.cust-more-btn').forEach(b => b.classList.remove('open'));
+}
+function toggleCustMore(e, btn) {
+  e.stopPropagation();
+  const dd      = btn.nextElementSibling;
+  const isOpen  = dd.classList.contains('open');
+  closeCustDropdowns();
+  if (!isOpen) {
+    dd.classList.add('open');
+    btn.classList.add('open');
+    // Flip to open above if near bottom of viewport
+    const rect = dd.getBoundingClientRect();
+    if (rect.bottom > window.innerHeight - 20) {
+      dd.style.top = 'auto';
+      dd.style.bottom = 'calc(100% + 6px)';
+    } else {
+      dd.style.top = '';
+      dd.style.bottom = '';
+    }
+  }
+}
+// Close dropdowns on any outside click
+document.addEventListener('click', closeCustDropdowns);
 
 // ── Directions ────────────────────────────────────────────────────────────
 function custDirections(addr) {
