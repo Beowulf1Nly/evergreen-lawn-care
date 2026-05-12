@@ -941,7 +941,7 @@
 </div>
 
 <!-- Schedule Modal -->
-<div class="confirm-overlay" id="scheduleOverlay" onmousedown="if(event.target===this)_schedDragOrigin=true" onmouseup="if(event.target===this&&_schedDragOrigin)closeScheduleModal();_schedDragOrigin=false;" onclick="void 0">
+<div class="confirm-overlay" id="scheduleOverlay" onmousedown="schedOverlayMD(event)" onmouseup="schedOverlayMU(event)">
   <div class="confirm-box" style="max-width:420px;width:94%;">
     <h4 id="scheduleModalTitle" style="margin:0 0 16px;">📋 Start New Plan</h4>
     <div style="display:flex;flex-direction:column;gap:12px;">
@@ -1429,12 +1429,14 @@ function renderCustomers() {
       if (ym) entry.yard = ym[1].toLowerCase();
     }
     if (entry.price === 0) {
-      const rawP = String(bk.price || '');
-      if (rawP) {
-        if (/first.?service|promo/i.test(rawP)) {
-          const m = String(bk.notes || '').match(/following[:\s]+\$?(\d+(?:\.\d+)?)/i);
-          if (m) entry.price = parseFloat(m[1]);
-        } else {
+      // Priority 1: "Following: X" in notes = the real recurring rate after a promo first-mow
+      const followM = String(bk.notes || '').match(/following[:\s]+\$?(\d+(?:\.\d+)?)/i);
+      if (followM) {
+        entry.price = parseFloat(followM[1]);
+      } else {
+        // Priority 2: price column directly
+        const rawP = String(bk.price || '');
+        if (rawP) {
           const p = parseFloat(rawP.replace(/[^0-9.]/g, ''));
           if (p > 0) entry.price = p;
         }
@@ -1565,6 +1567,8 @@ function schedAutoFillPrice() {
 }
 let _schedCustomer = null;
 let _schedDragOrigin = false;
+function schedOverlayMD(e) { if (e.target === e.currentTarget) _schedDragOrigin = true; }
+function schedOverlayMU(e) { if (e.target === e.currentTarget && _schedDragOrigin) closeScheduleModal(); _schedDragOrigin = false; }
 function openScheduleModal(idx) {
   const c = (window._custsList || [])[idx];
   if (!c) return;
