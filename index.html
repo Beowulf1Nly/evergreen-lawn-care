@@ -2578,6 +2578,9 @@ async function handleBooking() {
   const frequency = currentService.frequency === 'one-time' ? 'One-time visit'
                   : currentService.frequency === 'biweekly' ? 'Bi-Weekly Plan'
                   : 'Weekly Plan';
+  const days      = currentService.frequency === 'biweekly' ? 14
+                  : currentService.frequency === 'weekly'   ? 7
+                  : 0;
 
   const payMethod = currentPayMethod; // 'later' | 'now'
 
@@ -2586,6 +2589,7 @@ async function handleBooking() {
     service:        currentService.name,
     price:          '$' + currentService.price,
     frequency,
+    days,
     serviceDateRaw: selectedDate,
     serviceDate:    dateFormatted,
     notes,
@@ -3866,6 +3870,7 @@ async function quotePaySubmit() {
     const planId     = qState.selectedPlan;
     const planNames  = {'biweekly':'Bi-Weekly Plan','weekly':'Weekly Plan'};
     const freqLabels = {'biweekly':'Bi-Weekly Plan','weekly':'Weekly Plan'};
+    const dayValues  = {'biweekly':14,'weekly':7};
     const afterPrice = prices[planId] || 'custom';
     const dateFmt    = new Date(qState.startDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
     const isReturning = qState.isReturning || false;
@@ -3911,6 +3916,7 @@ async function quotePaySubmit() {
       zip:              qState.zip,
       service:          planNames[planId],
       frequency:        freqLabels[planId],
+      days:             dayValues[planId] || 0,
       followingPrice:   String(afterPrice),
       serviceDateRaw:   qState.startDate,
       serviceDate:      dateFmt,

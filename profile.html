@@ -1087,7 +1087,7 @@ function renderBillingCard(bookings) {
 
   const isWeekly    = freq === 'Weekly Plan';
   const isBiWeekly  = freq === 'Bi-Weekly Plan';
-  if (!isWeekly && !isBiWeekly) { section.style.display = 'none'; return; }
+  const isCustom    = !isWeekly && !isBiWeekly;
 
   const today = new Date(); today.setHours(0,0,0,0);
 
@@ -1327,6 +1327,30 @@ function renderBillingCard(bookings) {
           ? `💵 Cash customer — we'll collect ${isMultiProp ? totalStr + ' (' + _rateBreakdown + ')' : mowRateStr} after each bi-weekly visit. <a href="#" onclick="openCardModal();return false;" style="color:#854d0e;font-weight:700;">Add a card →</a> to switch to autopay.`
           : `💡 Your card is automatically charged ${isMultiProp ? totalStr + ' (' + _rateBreakdown + ')' : mowRateStr} after each bi-weekly mow. No invoices, no reminders.`}
       </div>`;
+
+  } else {
+    // Custom plan — just show next appointment and rate, no billing cycle dots
+    html = `
+      <div class="billing-plan-row">
+        <div>
+          <div class="billing-plan-name">📅 ${esc(freq)}</div>
+          <div class="billing-plan-sub">${perPropLabel}/mow — ${isCashCustomer ? '💵 cash, collected after each visit' : 'charged after each mow'}</div>
+        </div>
+      </div>
+      <hr class="billing-divider">
+      <div class="billing-info-row">
+        <span class="billing-info-label">Next appointment</span>
+        <span class="billing-info-value">${nextDateLabel}</span>
+      </div>
+      <div class="billing-info-row">
+        <span class="billing-info-label">Per-mow rate</span>
+        <span class="billing-info-value">${totalLabel} — ${isCashCustomer ? '💵 paid in cash' : 'charged after each mow'}</span>
+      </div>
+      <div style="margin-top:12px;padding:10px 14px;background:${isCashCustomer ? '#fef9c3' : '#f0fdf4'};border-radius:10px;font-size:12px;color:${isCashCustomer ? '#854d0e' : '#166534'};line-height:1.6;">
+        ${isCashCustomer
+          ? `💵 Cash customer — we'll collect ${isMultiProp ? totalStr + ' (' + _rateBreakdown + ')' : mowRateStr} after each visit. <a href="#" onclick="openCardModal();return false;" style="color:#854d0e;font-weight:700;">Add a card →</a> to switch to autopay.`
+          : `💡 Your card is automatically charged ${isMultiProp ? totalStr + ' (' + _rateBreakdown + ')' : mowRateStr} after each mow. No invoices, no reminders.`}
+      </div>${promoNote}`;
   }
 
   // Store plan name for cancel modal, reveal cancel + switch plan rows
@@ -1337,12 +1361,17 @@ function renderBillingCard(bookings) {
   const switchBtn = document.getElementById('switchPlanBtn');
   const switchSub = document.getElementById('switchPlanSub');
   if (switchRow && switchBtn && switchSub) {
-    const otherPlan = isWeekly ? 'Bi-Weekly Plan' : 'Weekly Plan';
-    const otherLabel = isWeekly ? 'Switch to Bi-Weekly' : 'Upgrade to Weekly';
-    switchSub.textContent = isWeekly ? 'Every two weeks instead of every week' : 'Every week instead of every two weeks';
-    switchBtn.textContent = otherLabel;
-    switchBtn.onclick = () => openChangePlanModal(otherPlan);
-    switchRow.style.display = '';
+    if (isCustom) {
+      // Hide the switch-plan option for custom schedules
+      switchRow.style.display = 'none';
+    } else {
+      const otherPlan = isWeekly ? 'Bi-Weekly Plan' : 'Weekly Plan';
+      const otherLabel = isWeekly ? 'Switch to Bi-Weekly' : 'Upgrade to Weekly';
+      switchSub.textContent = isWeekly ? 'Every two weeks instead of every week' : 'Every week instead of every two weeks';
+      switchBtn.textContent = otherLabel;
+      switchBtn.onclick = () => openChangePlanModal(otherPlan);
+      switchRow.style.display = '';
+    }
   }
 
   card.innerHTML = html;
