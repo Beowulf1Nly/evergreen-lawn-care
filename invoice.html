@@ -973,22 +973,25 @@ function isAutoPay(b) {
          pm.includes('autopay')  || pm.includes('auto-pay');
 }
 function isCash(b) {
-  const pm = String(b.payMethod || '').toLowerCase();
-  return pm.includes('cash');
+  const cal = String(b.calendarEvent || '').toLowerCase();
+  const pm  = String(b.payMethod     || '').toLowerCase();
+  return cal.includes('cash') || pm.includes('cash');
 }
 function isQuoteVisit(b) {
   return String(b.frequency || '').toLowerCase().includes('quote visit');
 }
 function isSubscribed(b) {
   const freq = String(b.frequency || '').toLowerCase();
-  return freq.includes('weekly') || freq.includes('bi-weekly') || freq.includes('biweekly');
+  return freq && !freq.includes('one-time') && !freq.includes('quote') && !freq.includes('free');
 }
 function needsAction(b) {
   if (isDone(b)) return false;
   const cal = String(b.calendarEvent || '').toLowerCase();
   const pm  = String(b.payMethod     || '').toLowerCase();
+  // Not an action item if: already paid (✅), autopay set up, or cash customer
   return !cal.includes('✅') && !cal.includes('autopay') && !cal.includes('auto-pay') &&
-         !pm.includes('autopay')  && !pm.includes('auto-pay') && !pm.includes('cash');
+         !cal.includes('cash') &&
+         !pm.includes('autopay') && !pm.includes('auto-pay') && !pm.includes('cash');
 }
 function todayDateStr() {
   const t = new Date();
@@ -2744,35 +2747,34 @@ function buildRevProjection(bookings, periodIdx) {
     if (isDone(bk)) return false;
     const freq = String(bk.frequency || '').toLowerCase();
     if (freq.includes('free') || freq.includes('quote visit')) return false;
-    // Must be a recurring plan
-    return freq.includes('weekly') || freq.includes('bi-weekly') || freq.includes('biweekly');
+    // Must be a recurring plan — anything that isn't one-time, free, or quote
+    return !freq.includes('one-time') && !freq.includes('free') && !freq.includes('quote');
   });
 
   // Resolve the real recurring price for a booking, handling $19 promo first-mow customers
   function resolvePrice(bk) {
     const storedPrice = parseFloat(String(bk.price || '').replace(/[^0-9.]/g, '')) || 0;
-    // Direct field — sent by website booking flow
     const followField = parseFloat(String(bk.followingPrice || '').replace(/[^0-9.]/g, '')) || 0;
     if (followField > 0) return { firstPrice: storedPrice, regularPrice: followField, isPromo: storedPrice < followField };
-    // Parse from notes: "First service $19 promo. Following: 45"
     const notesMatch = String(bk.notes || '').match(/Following[:\s]+\$?([\d.]+)/i);
     if (notesMatch) {
       const regular = parseFloat(notesMatch[1]) || 0;
       if (regular > 0) return { firstPrice: storedPrice, regularPrice: regular, isPromo: storedPrice < regular };
     }
-    // No following price info — treat stored price as the recurring rate
     return { firstPrice: storedPrice, regularPrice: storedPrice, isPromo: false };
   }
 
   let totalRev = 0;
-  let weeklyCount = 0, biweeklyCount = 0;
+  let weeklyCount = 0, biweeklyCount = 0, customCount = 0;
   const rows = activeSubs.map(bk => {
-    const freq  = String(bk.frequency || '').toLowerCase();
+    const freq     = String(bk.frequency || '').toLowerCase();
     const isWeekly = freq.includes('weekly') && !freq.includes('bi');
-    const mowsPerDay = isWeekly ? (1/7) : (1/14);
+    const isBiWeekly = freq.includes('bi') && freq.includes('weekly');
+    const customDays = (!isWeekly && !isBiWeekly) ? (parseInt(bk.days || '') || 14) : 0;
+    const intervalDays = isWeekly ? 7 : isBiWeekly ? 14 : customDays;
+    const mowsPerDay = 1 / intervalDays;
     const projectedMows = projDays * mowsPerDay;
     const { firstPrice, regularPrice, isPromo } = resolvePrice(bk);
-    // If promo: first mow at intro price, rest at regular rate
     let projectedRev;
     if (isPromo && projectedMows >= 1) {
       projectedRev = firstPrice + (projectedMows - 1) * regularPrice;
@@ -2780,8 +2782,9 @@ function buildRevProjection(bookings, periodIdx) {
       projectedRev = projectedMows * regularPrice;
     }
     totalRev += projectedRev;
-    if (isWeekly) weeklyCount++; else biweeklyCount++;
-    return { name: bk.name || '—', plan: isWeekly ? 'Weekly' : 'Bi-Weekly', price: regularPrice, firstPrice, isPromo, projectedMows, projectedRev };
+    const planLabel = isWeekly ? 'Weekly' : isBiWeekly ? 'Bi-Weekly' : `Every ${intervalDays}d`;
+    if (isWeekly) weeklyCount++; else if (isBiWeekly) biweeklyCount++; else customCount++;
+    return { name: bk.name || '—', plan: planLabel, price: regularPrice, firstPrice, isPromo, projectedMows, projectedRev };
   });
 
   if (rows.length === 0) {
@@ -2798,8 +2801,9 @@ function buildRevProjection(bookings, periodIdx) {
         <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">across ${rows.length} active subscription${rows.length!==1?'s':''}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;justify-content:center;">
-        <div style="font-size:13px;color:var(--text-muted);">📅 Bi-Weekly plans: <strong style="color:var(--green-deep);">${biweeklyCount}</strong></div>
-        <div style="font-size:13px;color:var(--text-muted);">⚡ Weekly plans: <strong style="color:var(--green-deep);">${weeklyCount}</strong></div>
+        <div style="font-size:13px;color:var(--text-muted);">📅 Bi-Weekly: <strong style="color:var(--green-deep);">${biweeklyCount}</strong></div>
+        <div style="font-size:13px;color:var(--text-muted);">⚡ Weekly: <strong style="color:var(--green-deep);">${weeklyCount}</strong></div>
+        ${customCount ? `<div style="font-size:13px;color:var(--text-muted);">🗓️ Custom: <strong style="color:var(--green-deep);">${customCount}</strong></div>` : ''}
         <div style="font-size:13px;color:var(--text-muted);">🌿 Avg/customer: <strong style="color:var(--green-deep);">${bigNum(totalRev / rows.length)}</strong></div>
       </div>
     </div>

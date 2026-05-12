@@ -1078,8 +1078,11 @@ function renderBillingCard(bookings) {
   const subBookings = bookings.filter(b => b.frequency && b.frequency !== 'One-time visit' && b.frequency !== 'Free Mow');
   if (!subBookings.length) { section.style.display = 'none'; return; }
 
-  // Detect cash customer — any sub booking with payMethod containing 'cash'
-  const isCashCustomer = subBookings.some(b => String(b.payMethod || '').toLowerCase().includes('cash'));
+  // Detect cash customer — check both calendarEvent (paidStatus) and payMethod (calStatus) for 'cash'
+  const isCashCustomer = subBookings.some(b =>
+    String(b.calendarEvent || '').toLowerCase().includes('cash') ||
+    String(b.payMethod     || '').toLowerCase().includes('cash')
+  );
 
   const freq = subBookings.slice().sort((a, b) =>
     (parseBookingDate(b.serviceDate) || 0) - (parseBookingDate(a.serviceDate) || 0)
