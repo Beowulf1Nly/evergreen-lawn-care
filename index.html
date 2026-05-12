@@ -4078,8 +4078,13 @@ async function quotePaySubmit() {
         vid:       vid,
       });
       const url = SHEETS_SCRIPT_URL + '?' + p.toString();
-      // Use fetch with keepalive — sendBeacon sends POST which misses the doGet handler
-      fetch(url, { method: 'GET', mode: 'no-cors', keepalive: true }).catch(() => {});
+      // sendBeacon is the only reliable way to fire requests on page exit.
+      // doPost now handles action=analytics so the POST lands correctly.
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(url, new Blob([], { type: 'text/plain' }));
+      } else {
+        fetch(url, { method: 'GET', mode: 'no-cors', keepalive: true }).catch(() => {});
+      }
     } catch(e) { /* silent */ }
   }
 
