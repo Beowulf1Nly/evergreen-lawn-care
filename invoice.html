@@ -1415,15 +1415,19 @@ function renderCustomers() {
     return;
   }
 
-  // ── Build price/freq lookup from ALL bookings (including archived completed rows) ──
-  // This gives openScheduleModal reliable autofill data even for inactive customers.
-  const _priceByEmail = new Map(); // email → { price, freq }
+  // ── Build price/freq/yard lookup from ALL bookings (including cancelled + archived) ──
+  // Cancelled rows are included here intentionally — they still hold the customer's rate.
+  const _priceByEmail = new Map(); // email → { price, freq, yard }
   for (const bk of allBookings) {
-    if (bk.rowCancelled) continue;
     const em = String(bk.email || '').toLowerCase().trim();
     if (!em) continue;
-    const entry = _priceByEmail.get(em) || { price: 0, freq: '' };
+    const entry = _priceByEmail.get(em) || { price: 0, freq: '', yard: '' };
     if (!entry.freq && bk.frequency) entry.freq = bk.frequency;
+    // Parse yard size from notes ("Yard: medium" pattern written by add-client flow)
+    if (!entry.yard) {
+      const ym = String(bk.notes || '').match(/\byard[:\s]+(\w+)/i);
+      if (ym) entry.yard = ym[1].toLowerCase();
+    }
     if (entry.price === 0) {
       const rawP = String(bk.price || '');
       if (rawP) {
@@ -1438,10 +1442,10 @@ function renderCustomers() {
     }
     _priceByEmail.set(em, entry);
   }
-  // Annotate each customer with their last known price + booking frequency
+  // Annotate each customer with their last known price + booking frequency + yard size
   custs = custs.map(c => {
     const info = _priceByEmail.get(c.email) || {};
-    return { ...c, bookingPrice: info.price || 0, bookingFreq: info.freq || '' };
+    return { ...c, bookingPrice: info.price || 0, bookingFreq: info.freq || '', bookingYard: info.yard || '' };
   });
 
   // Store filtered custs globally so Schedule modal can look up by index
@@ -1576,15 +1580,15 @@ function openScheduleModal(idx) {
   const lastPrice = c.bookingPrice || 0;
   if (lastPrice > 0) {
     document.getElementById('schedPrice').value = lastPrice;
-    // Reverse-lookup yard size from SCHED_PRICING
+    // Try reverse-lookup of yard size from SCHED_PRICING; fall back to stored yard from notes
     let matchedYard = '';
     for (const [yard, prices] of Object.entries(SCHED_PRICING)) {
       if (prices[planToSet] === lastPrice) { matchedYard = yard; break; }
     }
-    document.getElementById('schedYard').value = matchedYard;
+    document.getElementById('schedYard').value = matchedYard || c.bookingYard || '';
   } else {
     document.getElementById('schedPrice').value = '';
-    document.getElementById('schedYard').value  = '';
+    document.getElementById('schedYard').value  = c.bookingYard || '';
   }
 
   document.getElementById('schedNotes').value = c.notes || '';
