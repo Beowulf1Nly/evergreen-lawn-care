@@ -914,6 +914,13 @@
         </select>
       </div>
       <div>
+        <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Payment Method</label>
+        <select id="schedPayMethod" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;">
+          <option value="card">💳 Card / Autopay</option>
+          <option value="cash">💵 Cash</option>
+        </select>
+      </div>
+      <div>
         <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Price per mow ($)</label>
         <input id="schedPrice" type="number" min="0" step="1" placeholder="Auto-filled or enter manually" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;" oninput="onSchedPromoChange()">
       </div>
@@ -1452,6 +1459,8 @@ function openScheduleModal(idx) {
   document.getElementById('schedYard').value  = '';
   document.getElementById('schedPrice').value = '';
   document.getElementById('schedNotes').value = c.notes || '';
+  const schedPM = document.getElementById('schedPayMethod');
+  if (schedPM) schedPM.value = 'card';
   const schedPromo = document.getElementById('sched-promo');
   if (schedPromo) schedPromo.checked = false;
   onSchedPromoChange(); // show/hide promo row for Weekly default
@@ -1490,6 +1499,7 @@ async function submitSchedule() {
       frequency: plan, price, serviceDate: date, notes,
       firstMowPromo: firstMowPromo ? 'true' : '',
       days: customDays || '',
+      payMethod: document.getElementById('schedPayMethod')?.value || 'card',
     });
     const res  = await fetch(SCRIPT_URL + '?' + authParam() + '&' + params);
     const data = await res.json();
@@ -1689,18 +1699,9 @@ function renderBookings() {
     }
   }
 
-  // Completed section — done+paid, no review sent yet (owner only)
-  if (adminRole === 'owner') {
-    const compBkgs = doneBkgs.filter(b => isPaidDone(b) && !b.reviewSent && !isQuoteVisit(b));
-    const compSec  = document.getElementById('completedSection');
-    if (compSec) {
-      compSec.style.display = compBkgs.length ? 'block' : 'none';
-      document.getElementById('completedCount').textContent = compBkgs.length;
-      document.getElementById('completedList').innerHTML = compBkgs.length
-        ? compBkgs.map(b => completedCardHTML(b, allBookings.indexOf(b))).join('')
-        : '';
-    }
-  }
+  // Completed section hidden — review emails are now sent automatically on payment
+  const compSec = document.getElementById('completedSection');
+  if (compSec) compSec.style.display = 'none';
 
   // Needs Payment section — done but not yet paid (owner only)
   if (adminRole === 'owner') {
