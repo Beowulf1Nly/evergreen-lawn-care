@@ -1540,29 +1540,32 @@ function openScheduleModal(idx) {
 
   // ── Auto-fill from last booking for this customer ──
   const emailKey = String(c.email || '').toLowerCase().trim();
+  // Include completed/archived rows — those are the historical mows we want to read from
   const custBookings = allBookings
-    .filter(b => String(b.email || '').toLowerCase().trim() === emailKey && !b.rowCancelled && !b.rowCompleted)
+    .filter(b => String(b.email || '').toLowerCase().trim() === emailKey && !b.rowCancelled)
     .sort((a, bk) => ((bk.serviceDate || '') > (a.serviceDate || '') ? 1 : -1));
-  const lastB = custBookings[0] || null;
 
-  // Plan: prefer customer's current plan, fall back to last booking's frequency
-  const rawPlan = c.plan || (lastB?.frequency) || 'Weekly Plan';
+  // Plan: prefer customer's current plan (from Customers sheet), fall back to last booking's frequency
+  const rawPlan = c.plan || (custBookings[0]?.frequency) || 'Weekly Plan';
   const validPlans = ['Weekly Plan', 'Bi-Weekly Plan', 'Custom Plan', 'One-time visit'];
   const planToSet  = validPlans.includes(rawPlan) ? rawPlan : 'Weekly Plan';
   document.getElementById('schedPlan').value = planToSet;
 
-  // Yard size + price: try to auto-fill from last booking
+  // Price: find the most recent booking with a real (non-promo) price
   let lastPrice = 0;
-  if (lastB) {
-    const rawPrice = String(lastB.price || '');
+  for (const bk of custBookings) {
+    const rawPrice = String(bk.price || '');
+    if (!rawPrice) continue;
     if (/first.?service|promo/i.test(rawPrice)) {
-      // Promo price — extract the regular rate from notes
-      const m = String(lastB.notes || '').match(/following[:\s]+\$?(\d+(?:\.\d+)?)/i);
-      if (m) lastPrice = parseFloat(m[1]);
-    } else {
-      lastPrice = parseFloat(rawPrice.replace(/[^0-9.]/g, '')) || 0;
+      // Promo row — try to extract the regular rate stored in notes
+      const m = String(bk.notes || '').match(/following[:\s]+\$?(\d+(?:\.\d+)?)/i);
+      if (m) { lastPrice = parseFloat(m[1]); break; }
+      continue; // no regular rate found in notes, keep looking
     }
+    const p = parseFloat(rawPrice.replace(/[^0-9.]/g, ''));
+    if (p > 0) { lastPrice = p; break; }
   }
+
   if (lastPrice > 0) {
     document.getElementById('schedPrice').value = lastPrice;
     // Reverse-lookup yard size from SCHED_PRICING
@@ -1582,11 +1585,6 @@ function openScheduleModal(idx) {
   const schedPromo = document.getElementById('sched-promo');
   if (schedPromo) schedPromo.checked = false;
   onSchedPromoChange(); // show/hide promo row + custom days row
-  // Hide promo for returning customers who already have mows
-  if (c.totalMows > 0) {
-    const promoRow = document.getElementById('sched-promo-row');
-    if (promoRow) promoRow.style.display = 'none';
-  }
   // Default date to tomorrow
   const tom = new Date(); tom.setDate(tom.getDate() + 1);
   document.getElementById('schedDate').value = tom.toISOString().slice(0,10);
