@@ -3980,6 +3980,12 @@ async function quotePaySubmit() {
 // Tracks: scroll depth, sections viewed, CTA clicks, time on page
 // ═══════════════════════════════════════════════════════════════
 (function() {
+  // Ensure eg_vid exists — set it here so sendAnalytics always has an ID
+  // regardless of whether the page-view tracker ran (it has a bot filter that may skip this)
+  if (!localStorage.getItem('eg_vid')) {
+    localStorage.setItem('eg_vid', Math.random().toString(36).slice(2) + Date.now().toString(36));
+  }
+
   const ANA = {
     startTime:       Date.now(),
     maxScroll:       0,
