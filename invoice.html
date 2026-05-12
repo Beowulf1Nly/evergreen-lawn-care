@@ -1415,6 +1415,35 @@ function renderCustomers() {
     return;
   }
 
+  // ── Build price/freq lookup from ALL bookings (including archived completed rows) ──
+  // This gives openScheduleModal reliable autofill data even for inactive customers.
+  const _priceByEmail = new Map(); // email → { price, freq }
+  for (const bk of allBookings) {
+    if (bk.rowCancelled) continue;
+    const em = String(bk.email || '').toLowerCase().trim();
+    if (!em) continue;
+    const entry = _priceByEmail.get(em) || { price: 0, freq: '' };
+    if (!entry.freq && bk.frequency) entry.freq = bk.frequency;
+    if (entry.price === 0) {
+      const rawP = String(bk.price || '');
+      if (rawP) {
+        if (/first.?service|promo/i.test(rawP)) {
+          const m = String(bk.notes || '').match(/following[:\s]+\$?(\d+(?:\.\d+)?)/i);
+          if (m) entry.price = parseFloat(m[1]);
+        } else {
+          const p = parseFloat(rawP.replace(/[^0-9.]/g, ''));
+          if (p > 0) entry.price = p;
+        }
+      }
+    }
+    _priceByEmail.set(em, entry);
+  }
+  // Annotate each customer with their last known price + booking frequency
+  custs = custs.map(c => {
+    const info = _priceByEmail.get(c.email) || {};
+    return { ...c, bookingPrice: info.price || 0, bookingFreq: info.freq || '' };
+  });
+
   // Store filtered custs globally so Schedule modal can look up by index
   window._custsList = custs;
 
@@ -1538,34 +1567,13 @@ function openScheduleModal(idx) {
   _schedCustomer = c;
   document.getElementById('scheduleModalTitle').textContent = '📋 Schedule — ' + (c.name || '');
 
-  // ── Auto-fill from last booking for this customer ──
-  const emailKey = String(c.email || '').toLowerCase().trim();
-  // Include completed/archived rows — those are the historical mows we want to read from
-  const custBookings = allBookings
-    .filter(b => String(b.email || '').toLowerCase().trim() === emailKey && !b.rowCancelled)
-    .sort((a, bk) => ((bk.serviceDate || '') > (a.serviceDate || '') ? 1 : -1));
-
-  // Plan: prefer customer's current plan (from Customers sheet), fall back to last booking's frequency
-  const rawPlan = c.plan || (custBookings[0]?.frequency) || 'Weekly Plan';
+  // ── Auto-fill from pre-computed booking data (set in renderCustomers) ──
   const validPlans = ['Weekly Plan', 'Bi-Weekly Plan', 'Custom Plan', 'One-time visit'];
-  const planToSet  = validPlans.includes(rawPlan) ? rawPlan : 'Weekly Plan';
+  const rawPlan   = c.plan || c.bookingFreq || 'Weekly Plan';
+  const planToSet = validPlans.includes(rawPlan) ? rawPlan : 'Weekly Plan';
   document.getElementById('schedPlan').value = planToSet;
 
-  // Price: find the most recent booking with a real (non-promo) price
-  let lastPrice = 0;
-  for (const bk of custBookings) {
-    const rawPrice = String(bk.price || '');
-    if (!rawPrice) continue;
-    if (/first.?service|promo/i.test(rawPrice)) {
-      // Promo row — try to extract the regular rate stored in notes
-      const m = String(bk.notes || '').match(/following[:\s]+\$?(\d+(?:\.\d+)?)/i);
-      if (m) { lastPrice = parseFloat(m[1]); break; }
-      continue; // no regular rate found in notes, keep looking
-    }
-    const p = parseFloat(rawPrice.replace(/[^0-9.]/g, ''));
-    if (p > 0) { lastPrice = p; break; }
-  }
-
+  const lastPrice = c.bookingPrice || 0;
   if (lastPrice > 0) {
     document.getElementById('schedPrice').value = lastPrice;
     // Reverse-lookup yard size from SCHED_PRICING
@@ -1585,6 +1593,11 @@ function openScheduleModal(idx) {
   const schedPromo = document.getElementById('sched-promo');
   if (schedPromo) schedPromo.checked = false;
   onSchedPromoChange(); // show/hide promo row + custom days row
+  // Hide $19 promo for returning customers who've already had a mow
+  if (c.totalMows > 0) {
+    const promoRow = document.getElementById('sched-promo-row');
+    if (promoRow) promoRow.style.display = 'none';
+  }
   // Default date to tomorrow
   const tom = new Date(); tom.setDate(tom.getDate() + 1);
   document.getElementById('schedDate').value = tom.toISOString().slice(0,10);
