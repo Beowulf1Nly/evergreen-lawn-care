@@ -846,6 +846,108 @@
     transition: background .2s;
   }
   .modal-close:hover { background: #d5ecd5; }
+  /* ── Exit Intent Popup ───────────────────────────────────────── */
+  #exitPopupOverlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 900;
+    background: rgba(15,30,15,0.55);
+    backdrop-filter: blur(6px);
+    align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  #exitPopupOverlay.open { display: flex; }
+  #exitPopup {
+    background: #fff;
+    border-radius: 22px;
+    padding: 0;
+    max-width: 440px; width: 100%;
+    position: relative;
+    overflow: hidden;
+    animation: modalIn .28s ease both;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.18);
+  }
+  #exitPopup .ep-band {
+    background: linear-gradient(135deg, var(--green-deep) 0%, #2d5a2d 100%);
+    padding: 28px 32px 24px;
+    text-align: center;
+    position: relative;
+  }
+  #exitPopup .ep-badge {
+    display: inline-block;
+    background: rgba(255,255,255,0.15);
+    border: 1.5px solid rgba(255,255,255,0.3);
+    color: #fff;
+    font-size: 11px; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: 4px 12px; border-radius: 20px;
+    margin-bottom: 14px;
+  }
+  #exitPopup .ep-price {
+    font-family: 'Playfair Display', serif;
+    font-size: 62px; font-weight: 900; line-height: 1;
+    color: #fff;
+    letter-spacing: -.02em;
+  }
+  #exitPopup .ep-price sup {
+    font-size: 28px; vertical-align: super; font-weight: 700; letter-spacing: 0;
+  }
+  #exitPopup .ep-price-label {
+    font-size: 13px; color: rgba(255,255,255,0.75);
+    margin-top: 4px; letter-spacing: .03em;
+  }
+  #exitPopup .ep-body {
+    padding: 26px 32px 28px;
+    text-align: center;
+  }
+  #exitPopup .ep-headline {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px; font-weight: 700;
+    color: var(--green-deep);
+    line-height: 1.25;
+    margin-bottom: 10px;
+  }
+  #exitPopup .ep-sub {
+    font-size: 14px; color: var(--text-muted);
+    line-height: 1.6; margin-bottom: 22px;
+  }
+  #exitPopup .ep-cta {
+    display: block; width: 100%;
+    background: var(--green-mid);
+    color: #fff;
+    font-size: 15px; font-weight: 600;
+    padding: 15px 24px;
+    border: none; border-radius: 10px;
+    cursor: pointer;
+    transition: background .18s, transform .15s;
+    margin-bottom: 12px;
+  }
+  #exitPopup .ep-cta:hover {
+    background: var(--green-deep); transform: translateY(-1px);
+  }
+  #exitPopup .ep-dismiss {
+    font-size: 12px; color: var(--text-muted);
+    cursor: pointer; background: none; border: none;
+    text-decoration: underline; text-underline-offset: 2px;
+    padding: 4px 0;
+  }
+  #exitPopup .ep-dismiss:hover { color: var(--text); }
+  #exitPopup .ep-close {
+    position: absolute; top: 14px; right: 14px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: rgba(255,255,255,0.18);
+    border: none; cursor: pointer;
+    font-size: 16px; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .18s;
+  }
+  #exitPopup .ep-close:hover { background: rgba(255,255,255,0.32); }
+  #exitPopup .ep-trust {
+    display: flex; justify-content: center; gap: 18px;
+    flex-wrap: wrap; margin-bottom: 20px;
+    font-size: 12px; color: var(--text-muted);
+  }
+  #exitPopup .ep-trust span { display: flex; align-items: center; gap: 4px; }
+
   .modal h2 {
     font-family: 'Playfair Display', serif;
     font-size: 26px; font-weight: 700;
@@ -1937,6 +2039,30 @@
 
   </div>
 </div>
+
+<!-- EXIT INTENT POPUP -->
+<div id="exitPopupOverlay" role="dialog" aria-modal="true" aria-label="Special offer">
+  <div id="exitPopup">
+    <div class="ep-band">
+      <button class="ep-close" onclick="closeExitPopup()" aria-label="Close">✕</button>
+      <div class="ep-badge">New Customer Offer</div>
+      <div class="ep-price"><sup>$</sup>19</div>
+      <div class="ep-price-label">First mow — charged after we're done</div>
+    </div>
+    <div class="ep-body">
+      <div class="ep-headline">Before you go — your first cut is&nbsp;$19</div>
+      <p class="ep-sub">No contracts. No upfront payment. We mow your lawn, then bill $19 to your card. Regular pricing starts after that.</p>
+      <div class="ep-trust">
+        <span>⭐ 5-star rated</span>
+        <span>✓ No contracts</span>
+        <span>✓ Next-day availability</span>
+      </div>
+      <button class="ep-cta" onclick="exitPopupClaim()">Redeem $19 First Mow →</button>
+      <button class="ep-dismiss" onclick="closeExitPopup()">No thanks, I'll pay full price</button>
+    </div>
+  </div>
+</div>
+
 
 <!-- BOOKING MODAL -->
 <div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
@@ -4081,8 +4207,21 @@ async function quotePaySubmit() {
     });
 
     // ── Exit intent — cursor leaving toward top of browser ────
+    // Popup fires after 12s on page; once per session; desktop only
+    var _exitPopupShown = !!sessionStorage.getItem('eg_exit_shown');
+    var _exitPopupArmed = false;
+    setTimeout(function() { _exitPopupArmed = true; }, 12000);
+
     document.addEventListener('mouseleave', function(e) {
-      if (e.clientY <= 5) ANA.exitIntent = true;
+      if (e.clientY > 5) return;            // must be heading toward top bar
+      ANA.exitIntent = true;                // always log for analytics
+      if (_exitPopupShown)       return;    // already shown this session
+      if (!_exitPopupArmed)      return;    // page loaded less than 12s ago
+      if (window.innerWidth < 768) return;  // no cursor on mobile
+      if (document.querySelector('.modal-overlay.open')) return; // modal already up
+      _exitPopupShown = true;
+      sessionStorage.setItem('eg_exit_shown', '1');
+      showExitPopup();
     });
 
     // ── CTA click patching ────────────────────────────────────
@@ -4168,6 +4307,31 @@ async function quotePaySubmit() {
   window._ANA = ANA;
 
 })();
+
+// ── Exit Intent Popup ────────────────────────────────────────────────────
+function showExitPopup() {
+  var overlay = document.getElementById('exitPopupOverlay');
+  if (overlay) overlay.classList.add('open');
+}
+function closeExitPopup() {
+  var overlay = document.getElementById('exitPopupOverlay');
+  if (overlay) overlay.classList.remove('open');
+}
+function exitPopupClaim() {
+  closeExitPopup();
+  if (typeof openQuoteModal === 'function') openQuoteModal();
+  if (typeof trackEvt === 'function') trackEvt('/evt/exit_popup_claimed');
+}
+// Close on overlay click (outside card)
+document.addEventListener('DOMContentLoaded', function() {
+  var overlay = document.getElementById('exitPopupOverlay');
+  if (overlay) {
+    overlay.addEventListener('mousedown', function(e) {
+      if (e.target === overlay) closeExitPopup();
+    });
+  }
+});
+
 
 // ── Event tracker — quote funnel + conversion events ─────────────────────
 // Called throughout the quote flow: quote_opened, price_viewed, payment_attempted, etc.
