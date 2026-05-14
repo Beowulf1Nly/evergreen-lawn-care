@@ -3107,6 +3107,26 @@ async function loadAnalytics() {
               <div id="an-hourly"></div>
             </div>
           </div>
+          <div style="margin-bottom:18px;"></div>
+
+          <div class="an-section">
+            <div class="an-title">&#128250; Section Engagement &#8212; Where Do They Actually Spend Time?</div>
+            <div class="an-sub">Avg seconds spent in each page section + % of visitors who reach it. Low reach on a section = they\'re not scrolling that far. Long time = either hooked or confused.</div>
+            <div id="an-section-time"></div>
+          </div>
+
+          <div class="an-two-col">
+            <div class="an-section" style="margin-bottom:0;">
+              <div class="an-title">&#128073; Hover &#8594; No Click &#8212; Friction Points</div>
+              <div class="an-sub">Elements visitors hover over then leave without clicking. These are your conversion leaks.</div>
+              <div id="an-hover-exits"></div>
+            </div>
+            <div class="an-section" style="margin-bottom:0;">
+              <div class="an-title">&#128683; Exit Section + Intent</div>
+              <div class="an-sub">Where people are when they leave, and how many move cursor toward the browser close button.</div>
+              <div id="an-exit-section"></div>
+            </div>
+          </div>
 
         </details>
 
@@ -3125,6 +3145,11 @@ async function loadAnalytics() {
     anRenderFaq(E);
     anRenderOoaZips(E);
     anRenderHourly(an.recentVisits || []);
+    const eng = data.engagement || {};
+    anRenderSectionTime(eng);
+    anRenderHoverExits(eng);
+    anRenderExitSection(eng);
+    anUpdateKpisWithEngagement(eng, totalViews);
 
   } catch(err) {
     document.getElementById('analyticsContent').innerHTML =
@@ -3501,6 +3526,152 @@ function anRenderOoaZips(E) {
   zipEntries.map(([zip, cnt]) => anBarRow(zip, cnt, max, '#e67e22', `${cnt}x`)).join('');
 }
 
+
+// ── Section Engagement ─────────────────────────────────────────────────────
+function anRenderSectionTime(eng) {
+  const el = document.getElementById('an-section-time');
+  if (!el) return;
+  const timeAvg   = eng.sectionTimeAvg   || {};
+  const reachRate = eng.sectionReachRate || {};
+  const ORDER = ['hero','services','how','trust','faq','service-areas'];
+  const LABELS = { hero:'Hero / Above the fold', services:'Services & Pricing', how:'How It Works', trust:'Reviews & Trust', faq:'FAQ', 'service-areas':'Service Area' };
+  const sections = ORDER.filter(id => reachRate[id] > 0 || timeAvg[id] > 0);
+  if (!sections.length) { el.innerHTML = anEmpty('No section data yet — fires after visitors leave the page.'); return; }
+
+  const maxTime = Math.max(...sections.map(id => timeAvg[id] || 0), 1);
+  let html = '';
+  sections.forEach(id => {
+    const secs    = timeAvg[id] || 0;
+    const reach   = reachRate[id] || 0;
+    const barW    = Math.round((secs / maxTime) * 100);
+    const label   = LABELS[id] || id;
+    const timeStr = secs >= 60 ? Math.floor(secs/60)+'m '+(secs%60)+'s' : secs+'s';
+    const reachColor = reach >= 80 ? '#2d6a2d' : reach >= 50 ? '#f97316' : '#c0392b';
+    const timeColor  = secs >= 30 ? '#2d6a2d' : secs >= 10 ? '#f97316' : '#888';
+    html += `<div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div style="font-size:13px;font-weight:600;color:var(--green-deep);">${esc(label)}</div>
+        <div style="display:flex;gap:12px;font-size:12px;">
+          <span style="color:${reachColor};font-weight:700;">${reach}% reach</span>
+          <span style="color:${timeColor};font-weight:700;">avg ${timeStr}</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <div style="flex:1;background:#e8f5e9;border-radius:4px;height:16px;overflow:hidden;">
+          <div style="height:100%;width:${barW}%;background:${secs>=30?'#2d6a2d':secs>=10?'#f97316':'#9ca3af'};border-radius:4px;transition:width .4s;"></div>
+        </div>
+      </div>
+    </div>`;
+  });
+
+  // Insight: which section has longest avg time
+  const topSection = sections.reduce((a, b) => (timeAvg[b]||0) > (timeAvg[a]||0) ? b : a, sections[0]);
+  const lowestReach = sections.filter(id => reachRate[id] < 40);
+  let insight = '';
+  if (topSection) insight += `🔥 <strong>${esc(LABELS[topSection]||topSection)}</strong> gets the most attention (avg ${timeAvg[topSection]}s). `;
+  if (lowestReach.length) insight += `📉 <strong>${lowestReach.map(id => LABELS[id]||id).join(', ')}</strong> has low reach — most visitors never scroll that far.`;
+
+  el.innerHTML = (insight ? `<div class="an-alert yellow" style="margin-bottom:12px;font-size:13px;">${insight}</div>` : '') + html;
+}
+
+// ── Hover → No Click ──────────────────────────────────────────────────────
+function anRenderHoverExits(eng) {
+  const el = document.getElementById('an-hover-exits');
+  if (!el) return;
+  const counts = eng.hoverExitCounts || {};
+  const LABELS = {
+    cta_btn:      '📋 Main CTA button',
+    quote_cta:    '💬 Quote CTA link',
+    plan_card:    '📦 Pricing plan card',
+    service_card: '🌿 Service card',
+    promo_banner: '🎁 Promo banner',
+  };
+  const entries = Object.entries(counts)
+    .map(([k, v]) => [LABELS[k] || k, v])
+    .sort((a, b) => b[1] - a[1]);
+
+  if (!entries.length) { el.innerHTML = anEmpty('No hover data yet.'); return; }
+
+  const total = entries.reduce((s, [, c]) => s + c, 0);
+  const max   = entries[0][1];
+  const top   = entries[0];
+  let html = `<div class="an-alert yellow" style="margin-bottom:12px;font-size:13px;">
+    ⚠️ <strong>${esc(top[0])}</strong> is your biggest friction point — ${top[1]} hover-and-leave events.
+    People are looking but not pulling the trigger.
+  </div>`;
+  html += entries.map(([label, cnt]) => {
+    const w = Math.round((cnt / max) * 100);
+    return `<div class="an-bar">
+      <div class="an-bar-lbl">${esc(label)}</div>
+      <div class="an-bar-track"><div class="an-bar-fill orange" style="width:${w}%"></div></div>
+      <div class="an-bar-n">${cnt}</div>
+      <div class="an-bar-pct">${anPct(cnt,total)}%</div>
+    </div>`;
+  }).join('');
+  el.innerHTML = html;
+}
+
+// ── Exit Section + Exit Intent ────────────────────────────────────────────
+function anRenderExitSection(eng) {
+  const el = document.getElementById('an-exit-section');
+  if (!el) return;
+  const exitSecs    = eng.exitSectionCounts || {};
+  const total       = eng.totalSessions    || 0;
+  const intentCount = eng.exitIntentCount  || 0;
+  const intentRate  = eng.exitIntentRate   || 0;
+
+  let html = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;">
+    <div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:3px;">Exit Intent Rate</div>
+      <div style="font-size:28px;font-weight:800;color:${intentRate>40?'#b91c1c':intentRate>20?'#c2410c':'#2d6a2d'};">${intentRate}%</div>
+      <div style="font-size:12px;color:var(--text-muted);">${intentCount} of ${total} sessions moved cursor to close</div>
+    </div>
+  </div>`;
+
+  const LABELS = { hero:'Hero', services:'Services', how:'How It Works', trust:'Reviews', faq:'FAQ', 'service-areas':'Service Area' };
+  const entries = Object.entries(exitSecs).sort((a, b) => b[1] - a[1]);
+  if (entries.length) {
+    const max = entries[0][1];
+    html += `<div style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px;">Last Section Seen Before Leaving</div>`;
+    html += entries.map(([sec, cnt]) => {
+      const w = Math.round((cnt / max) * 100);
+      const lbl = LABELS[sec] || sec || '(unknown)';
+      return `<div class="an-bar">
+        <div class="an-bar-lbl">${esc(lbl)}</div>
+        <div class="an-bar-track"><div class="an-bar-fill" style="width:${w}%;background:#4b5563;"></div></div>
+        <div class="an-bar-n">${cnt}</div>
+        <div class="an-bar-pct">${anPct(cnt, total)}%</div>
+      </div>`;
+    }).join('');
+  } else {
+    html += anEmpty('No exit section data yet.');
+  }
+  el.innerHTML = html;
+}
+
+// ── Patch KPI grid with engagement metrics ────────────────────────────────
+function anUpdateKpisWithEngagement(eng, totalViews) {
+  if (!eng || !eng.totalSessions) return;
+  const grid = document.getElementById('an-kpis');
+  if (!grid) return;
+  const avgTime  = eng.avgTimeOnPage || 0;
+  const avgScr   = eng.avgMaxScroll  || 0;
+  const intRate  = eng.exitIntentRate || 0;
+  const timeStr  = avgTime >= 60 ? Math.floor(avgTime/60)+'m '+(avgTime%60)+'s' : avgTime+'s';
+
+  const extras = [
+    { label:'Avg Time on Page',  value: avgTime  ? timeStr        : '—', sub: eng.totalSessions+' sessions tracked', color: avgTime>=120?'':'orange' },
+    { label:'Avg Scroll Depth',  value: avgScr   ? avgScr+'%'     : '—', sub:'how far down they scroll',             color: avgScr>=60?'':avgScr>=40?'orange':'red' },
+    { label:'Exit Intent Rate',  value: intRate  ? intRate+'%'    : '—', sub:'cursor toward close button',           color: intRate>=40?'red':intRate>=20?'orange':'' },
+  ];
+  extras.forEach(c => {
+    const card = document.createElement('div');
+    card.className = 'an-kpi-card ' + (c.color || '');
+    card.innerHTML = `<div class="an-kpi-label">${esc(c.label)}</div><div class="an-kpi-value">${esc(c.value)}</div><div class="an-kpi-sub">${esc(c.sub)}</div>`;
+    grid.appendChild(card);
+  });
+}
+
 function anRenderHourly(recentVisits) {
   const el = document.getElementById('an-hourly');
   if (!el) return;
@@ -3619,416 +3790,4 @@ async function geocodeAddr(addr) {
       + encodeURIComponent(addr);
     const res  = await fetch(url, { headers: { 'Accept-Language': 'en' } });
     const data = await res.json();
-    if (data.length) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-  } catch(e) {}
-  return null;
-}
-
-// ── Get real driving time + distance via OSRM (free, no key needed) ────────
-async function getDrivingLeg(from, to) {
-  const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=false`;
-  const res  = await fetch(url);
-  const data = await res.json();
-  if (data.code !== 'Ok' || !data.routes.length) return null;
-  return {
-    mins:  Math.round(data.routes[0].duration / 60),
-    miles: Math.round(data.routes[0].distance / 1609.34 * 10) / 10,
-  };
-}
-
-async function buildRoute() {
-  const todayStr   = todayDateStr();
-  const errEl      = document.getElementById('routeError');
-  const optBtn     = document.getElementById('routeOptBtn');
-  const tl         = document.getElementById('routeTimeline');
-  const statsBar   = document.getElementById('routeStatsBar');
-
-  // All today's jobs (done ones go to end so you can still see them)
-  const rawStops = (allBookings || [])
-    .filter(b => !b.rowCancelled && dateOf(b) === todayStr && b.address)
-    .sort((a, b) => {
-      if (isDone(a) && !isDone(b)) return 1;
-      if (!isDone(a) && isDone(b)) return -1;
-      return 0;
-    });
-
-  if (!rawStops.length) {
-    if (errEl) { errEl.textContent = 'No jobs with addresses today.'; errEl.style.display = 'block'; }
-    if (tl) tl.innerHTML = '';
-    if (statsBar) statsBar.style.display = 'none';
-    return;
-  }
-  if (errEl) errEl.style.display = 'none';
-  if (optBtn) { optBtn.disabled = true; optBtn.textContent = 'Geocoding addresses…'; }
-
-  const startAddr    = (document.getElementById('routeStartAddr')?.value || '').trim();
-  const startTimeVal = document.getElementById('routeStartTime')?.value || '08:00';
-  const [startH, startM] = startTimeVal.split(':').map(Number);
-
-  // ── Geocode all addresses (Census Geocoder — no rate limit, parallel) ──
-  const addrsToGeocode = [];
-  if (startAddr) addrsToGeocode.push(startAddr);
-  rawStops.forEach(b => addrsToGeocode.push(b.address + (b.zip ? ', ' + b.zip : '') + ', FL'));
-
-  // Run all geocoding in parallel
-  const coords = await Promise.all(
-    addrsToGeocode.map(addr => geocodeAddr(addr).catch(() => null))
-  );
-
-  // ── Fetch real driving legs from OSRM (parallel is fine) ──
-  if (optBtn) optBtn.textContent = 'Calculating drive times…';
-  // legs[i] = drive FROM coords[i] TO coords[i+1]
-  const legPromises = [];
-  for (let i = 0; i < coords.length - 1; i++) {
-    if (coords[i] && coords[i + 1]) {
-      legPromises.push(getDrivingLeg(coords[i], coords[i + 1]));
-    } else {
-      legPromises.push(Promise.resolve(null));
-    }
-  }
-  const legResults = await Promise.all(legPromises);
-
-  // Map leg results: if startAddr, legs[0] = start→stop0, legs[1] = stop0→stop1, etc.
-  // If no startAddr, legs[0] = stop0→stop1, etc.
-  // stopLegs[i] = the driving leg ARRIVING at rawStops[i]
-  const stopLegs = rawStops.map((_, i) => {
-    const legIdx = startAddr ? i : i - 1;
-    return legIdx >= 0 ? (legResults[legIdx] || null) : null;
-  });
-
-  // Fallback estimates if geocoding/routing failed
-  const FALLBACK_MINS  = 15;
-  const FALLBACK_MILES = 6;
-
-  // ── Estimate mow time based on yard size tier or regular price ──
-  // Tiers: small(<¼ac) medium(¼-½) threequarter(½-¾) one(¾-1) xl(>1)
-  function mowMins(b) {
-    const ys = String(b.yardSize || b.yard_size || '').toLowerCase();
-    if (ys === 'small')        return 20;
-    if (ys === 'medium')       return 35;
-    if (ys === 'threequarter') return 50;
-    if (ys === 'one')          return 60;
-    if (ys === 'xl')           return 75;
-    // Fall back to the REGULAR (post-promo) price — resolve it the same way revenue projection does
-    const followMatch = String(b.notes || '').match(/Following[:\s]+\$?([\d.]+)/i);
-    const regPrice = followMatch ? parseFloat(followMatch[1]) : 0;
-    const p = regPrice || (parseFloat(String(b.followingPrice||'').replace(/[^0-9.]/g,''))||0)
-                        || (parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))||0);
-    if (p > 0  && p <= 39)  return 20;  // small  (≤$39/mow)
-    if (p <= 45)             return 25;  // small-med
-    if (p <= 49)             return 35;  // medium
-    if (p <= 55)             return 45;  // threequarter low
-    if (p <= 65)             return 55;  // threequarter high
-    if (p <= 79)             return 65;  // one acre
-    return 75;                           // xl
-  }
-
-  // ── Format helpers ──
-  function fmtTime(totalMin) {
-    const h24 = Math.floor(totalMin / 60) % 24;
-    const m   = totalMin % 60;
-    const ampm = h24 >= 12 ? 'PM' : 'AM';
-    const h12  = h24 % 12 || 12;
-    return h12 + ':' + String(m).padStart(2, '0') + ' ' + ampm;
-  }
-  function fmtDur(mins) {
-    if (mins < 60) return mins + ' min';
-    return Math.floor(mins / 60) + 'h ' + (mins % 60 > 0 ? (mins % 60) + 'm' : '');
-  }
-
-  // ── Build stop timing using real leg data ──
-  let curMin = startH * 60 + startM;
-  const stops = rawStops.map((b, i) => {
-    const leg         = stopLegs[i];
-    const driveMins   = leg ? leg.mins  : (i > 0 || startAddr ? FALLBACK_MINS  : 0);
-    const driveMiles  = leg ? leg.miles : (i > 0 || startAddr ? FALLBACK_MILES : 0);
-    const arrivalMin  = curMin + driveMins;
-    const mow         = mowMins(b);
-    curMin = arrivalMin + mow;
-    return { b, arrivalMin, mowMin: mow, driveMins, driveMiles };
-  });
-
-  const totalMowMins   = stops.reduce((s, x) => s + x.mowMin, 0);
-  const totalDriveMins = stops.reduce((s, x) => s + x.driveMins, 0);
-  const totalMiles     = Math.round(stops.reduce((s, x) => s + x.driveMiles, 0) * 10) / 10;
-
-  // ── Stats bar ──
-  document.getElementById('rStatJobs').textContent  = stops.length;
-  document.getElementById('rStatMow').textContent   = fmtDur(totalMowMins);
-  document.getElementById('rStatDrive').textContent = fmtDur(totalDriveMins);
-  document.getElementById('rStatDist').textContent  = '~' + totalMiles + ' mi';
-  document.getElementById('rStatDone').textContent  = fmtTime(curMin);
-  if (statsBar) statsBar.style.display = 'flex';
-
-  // ── Google Maps full-route URL ──
-  const allAddrs  = startAddr
-    ? [startAddr, ...rawStops.map(b => b.address + (b.zip ? ', ' + b.zip : '') + ', FL')]
-    : rawStops.map(b => b.address + (b.zip ? ', ' + b.zip : '') + ', FL');
-  const mapsOrigin = encodeURIComponent(allAddrs[0]);
-  const mapsDest   = encodeURIComponent(allAddrs[allAddrs.length - 1]);
-  const mapsWaypts = allAddrs.slice(1, -1).map(a => encodeURIComponent(a)).join('|');
-  const mapsUrl    = 'https://www.google.com/maps/dir/?api=1'
-    + '&origin='      + mapsOrigin
-    + '&destination=' + mapsDest
-    + (mapsWaypts ? '&waypoints=' + mapsWaypts : '')
-    + '&travelmode=driving';
-
-  // ── Build timeline HTML ──
-  let html = '';
-
-  if (startAddr) {
-    html += `<div class="route-start-chip">📍 Starting from: ${esc(startAddr)} &nbsp;·&nbsp; ${fmtTime(startH * 60 + startM)}</div>`;
-  }
-
-  stops.forEach((stop, i) => {
-    const { b, arrivalMin, mowMin } = stop;
-    const done     = isDone(b);
-    const freq     = String(b.frequency || '').replace(/\bplan\b/gi, '').trim();
-    const price    = parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))||0;
-    const phone    = String(b.phone || '').replace(/\D/g,'');
-    const mapsAddr = encodeURIComponent((b.address||'') + (b.zip ? ', ' + b.zip : '') + ', FL');
-    const rowIdx   = allBookings.indexOf(b);
-    const hasNotes = b.notes && b.notes !== '(none)' && b.notes.trim();
-
-    // Connector between stops (real data if available)
-    const legMin   = stop.driveMins;
-    const legMiles = stop.driveMiles;
-    const legLabel = (legMin || legMiles)
-      ? `🚗 ${legMin} min · ${legMiles} mi`
-      : `🚗 —`;
-    html += `<div class="route-connector">
-      <div class="route-connector-line"></div>
-      <div class="route-connector-info">
-        <div class="route-drive-chip">${legLabel}</div>
-      </div>
-    </div>`;
-
-    html += `<div class="route-stop">
-      <div class="route-stop-badge ${done ? 'done-badge' : ''}">${done ? '✓' : i + 1}</div>
-      <div class="route-stop-card ${!done ? 'active-stop' : ''}">
-        <div class="route-stop-header">
-          <div>
-            <div class="route-stop-name">${esc(b.name || '—')}</div>
-            <div class="route-stop-addr">📍 ${esc(b.address || '—')}${b.zip ? ', ' + esc(b.zip) : ''}</div>
-          </div>
-          <div class="route-stop-time">⏰ ${fmtTime(arrivalMin)}</div>
-        </div>
-        <div class="route-stop-meta">
-          ${freq ? `<span class="route-stop-pill">${esc(freq)}</span>` : ''}
-          ${price ? `<span class="route-stop-pill">$${price.toFixed(0)}</span>` : ''}
-          <span class="route-stop-pill time-pill">🌿 ~${fmtDur(mowMin)}</span>
-          ${done ? '<span class="route-stop-pill" style="background:#dcfce7;color:#166534;">✓ Done</span>' : ''}
-        </div>
-        <div class="route-stop-footer">
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <a href="https://www.google.com/maps/dir/?api=1&destination=${mapsAddr}&travelmode=driving"
-               target="_blank" rel="noopener" class="route-nav-btn">🗺️ Navigate</a>
-            ${phone ? `<a href="tel:+1${phone}" class="route-call-btn">📞 Call</a>` : ''}
-            ${hasNotes ? `<button class="route-notes-btn" style="background:#fff8e1;border:1px solid #fcd34d;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;color:#92400e;cursor:pointer;"
-              onclick="openNotesPopup(${JSON.stringify(esc(b.name||'Notes'))}, ${JSON.stringify(esc(b.notes||''))})">💬 Notes</button>` : ''}
-          </div>
-          ${!done && rowIdx >= 0 ? `<button class="route-done-btn" onclick="triggerMarkDone(${rowIdx})">✓ Mark Done</button>` : ''}
-        </div>
-      </div>
-    </div>`;
-  });
-
-  // Full route button at bottom
-  html += `<div class="route-connector"><div class="route-connector-line" style="min-height:20px;"></div></div>`;
-  html += `<div style="margin-top:4px;margin-bottom:32px;">
-    <a href="${mapsUrl}" target="_blank" rel="noopener"
-       style="display:inline-flex;align-items:center;gap:10px;background:var(--green-deep);color:#fff;
-              padding:14px 22px;border-radius:12px;font-weight:700;font-size:14px;text-decoration:none;
-              box-shadow:0 4px 16px rgba(26,58,26,.2);">
-      🗺️ Open Full Route in Google Maps
-    </a>
-  </div>`;
-
-  if (tl) tl.innerHTML = html;
-  if (optBtn) { optBtn.disabled = false; optBtn.textContent = '⚡ Optimize Route'; }
-}
-
-// ── Notes popup ───────────────────────────────────────────────────────────
-function openNotesPopup(title, body) {
-  document.getElementById('notesPopupTitle').textContent = title || 'Notes';
-  document.getElementById('notesPopupBody').textContent  = body  || '(none)';
-  document.getElementById('notesOverlay').style.display  = 'flex';
-}
-function closeNotesPopup() {
-  document.getElementById('notesOverlay').style.display = 'none';
-}
-
-// ── Customer dropdown helpers ─────────────────────────────────────────────
-function closeCustDropdowns() {
-  document.querySelectorAll('.cust-dropdown').forEach(d => d.classList.remove('open'));
-  document.querySelectorAll('.cust-more-btn').forEach(b => b.classList.remove('open'));
-}
-function toggleCustMore(e, btn) {
-  e.stopPropagation();
-  const dd      = btn.nextElementSibling;
-  const isOpen  = dd.classList.contains('open');
-  closeCustDropdowns();
-  if (!isOpen) {
-    dd.classList.add('open');
-    btn.classList.add('open');
-    // Flip to open above if near bottom of viewport
-    const rect = dd.getBoundingClientRect();
-    if (rect.bottom > window.innerHeight - 20) {
-      dd.style.top = 'auto';
-      dd.style.bottom = 'calc(100% + 6px)';
-    } else {
-      dd.style.top = '';
-      dd.style.bottom = '';
-    }
-  }
-}
-// Close dropdowns on any outside click
-document.addEventListener('click', closeCustDropdowns);
-
-// ── Directions ────────────────────────────────────────────────────────────
-function custDirections(addr) {
-  window.open('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(addr), '_blank');
-}
-
-// ── Customer Edit Modal ───────────────────────────────────────────────────
-let _custEditMode = null; // 'price' | 'freq' | 'notes'
-let _custEditIdx  = null;
-let _custEditRow  = null;
-
-function closeCustEdit() {
-  document.getElementById('custEditOverlay').classList.remove('open');
-  _custEditMode = null; _custEditIdx = null; _custEditRow = null;
-}
-
-// Change Price
-function custChangePrice(custIdx, rowIdx) {
-  const c = (window._custsList || [])[custIdx];
-  const b = allBookings[rowIdx];
-  if (!c || !b) return;
-  const currentPrice = parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))||0;
-  _custEditMode = 'price';
-  _custEditIdx  = custIdx;
-  _custEditRow  = rowIdx;
-  document.getElementById('custEditTitle').textContent = '💰 Change Price — ' + (c.name || '');
-  document.getElementById('custEditSub').textContent   = 'Current: $' + (currentPrice || '—') + '/mow. Sets the price on the next upcoming job.';
-  document.getElementById('custEditBody').innerHTML    =
-    `<label style="font-size:13px;font-weight:600;color:var(--green-deep);display:block;margin-bottom:6px;">New price per mow ($)</label>
-     <input type="number" id="custEditInput" value="${currentPrice||''}" min="0" step="1" placeholder="e.g. 55"
-       style="width:100%;padding:11px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:15px;outline:none;"
-       oninput="this.style.borderColor='var(--green-mid)'" onkeydown="if(event.key==='Enter')submitCustEdit()"/>`;
-  document.getElementById('custEditSaveBtn').textContent = 'Update Price';
-  document.getElementById('custEditOverlay').classList.add('open');
-  setTimeout(() => document.getElementById('custEditInput')?.focus(), 80);
-}
-
-// Change Frequency
-function custChangeFreq(custIdx) {
-  const c = (window._custsList || [])[custIdx];
-  if (!c) return;
-  _custEditMode = 'freq';
-  _custEditIdx  = custIdx;
-  document.getElementById('custEditTitle').textContent = '🔄 Change Frequency — ' + (c.name || '');
-  document.getElementById('custEditSub').textContent   = 'Current: ' + (c.plan || 'Unknown');
-  document.getElementById('custEditBody').innerHTML    =
-    `<label style="font-size:13px;font-weight:600;color:var(--green-deep);display:block;margin-bottom:6px;">New schedule</label>
-     <select id="custEditInput" style="width:100%;padding:11px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;outline:none;">
-       <option value="Weekly Plan">Weekly</option>
-       <option value="Bi-Weekly Plan">Bi-Weekly</option>
-       <option value="Custom Plan">Custom</option>
-     </select>
-     <div id="custEditCustomDays" style="margin-top:10px;display:none;">
-       <label style="font-size:13px;font-weight:600;color:var(--green-deep);display:block;margin-bottom:6px;">Every how many days?</label>
-       <input type="number" id="custEditCustomDaysInput" min="1" placeholder="e.g. 21"
-         style="width:100%;padding:10px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;outline:none;"/>
-     </div>`;
-  document.getElementById('custEditSaveBtn').textContent = 'Update Frequency';
-  document.getElementById('custEditOverlay').classList.add('open');
-  document.getElementById('custEditInput')?.addEventListener('change', function() {
-    document.getElementById('custEditCustomDays').style.display = this.value === 'Custom Plan' ? 'block' : 'none';
-  });
-}
-
-// View / Edit Notes
-function custViewNotes(custIdx) {
-  const c = (window._custsList || [])[custIdx];
-  if (!c) return;
-  _custEditMode = 'notes';
-  _custEditIdx  = custIdx;
-  document.getElementById('custEditTitle').textContent = '📝 Notes — ' + (c.name || '');
-  document.getElementById('custEditSub').textContent   = 'View or update customer notes (gate codes, instructions, etc.)';
-  document.getElementById('custEditBody').innerHTML    =
-    `<textarea id="custEditInput" rows="5" placeholder="Gate code, don't go in backyard, dog…"
-       style="width:100%;padding:11px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;outline:none;resize:vertical;"
-       oninput="this.style.borderColor='var(--green-mid)'">${esc(c.notes||'')}</textarea>`;
-  document.getElementById('custEditSaveBtn').textContent = 'Save Notes';
-  document.getElementById('custEditOverlay').classList.add('open');
-  setTimeout(() => document.getElementById('custEditInput')?.focus(), 80);
-}
-
-async function submitCustEdit() {
-  const c = (window._custsList || [])[_custEditIdx];
-  if (!c || !_custEditMode) return;
-  const val = document.getElementById('custEditInput')?.value?.trim();
-  const btn = document.getElementById('custEditSaveBtn');
-  btn.disabled = true; btn.textContent = 'Saving…';
-
-  try {
-    let params;
-    if (_custEditMode === 'price') {
-      if (!val || isNaN(parseFloat(val))) { showToast('Enter a valid price.'); btn.disabled=false; btn.textContent='Update Price'; return; }
-      params = new URLSearchParams({
-        action: 'update_customer_price',
-        email: c.email, price: parseFloat(val).toFixed(2),
-        rowIndex: _custEditRow !== null ? (_custEditRow + 2) : '',
-        adminToken,
-      });
-    } else if (_custEditMode === 'freq') {
-      const plan = val;
-      const customDays = plan === 'Custom Plan' ? (parseInt(document.getElementById('custEditCustomDaysInput')?.value||'')||0) : 0;
-      if (plan === 'Custom Plan' && !customDays) { showToast('Enter the number of days.'); btn.disabled=false; btn.textContent='Update Frequency'; return; }
-      params = new URLSearchParams({
-        action: 'update_customer_frequency',
-        email: c.email, frequency: plan, days: customDays || '', adminToken,
-      });
-    } else if (_custEditMode === 'notes') {
-      params = new URLSearchParams({
-        action: 'update_customer_notes',
-        email: c.email, notes: val || '', adminToken,
-      });
-    }
-
-    const res  = await fetch(SCRIPT_URL + '?' + params.toString());
-    const data = await res.json();
-    if (data.success) {
-      // Update local customer record so the UI reflects the change immediately
-      if (c && _custEditMode === 'price' && _custEditRow !== null) {
-        allBookings[_custEditRow].price = val;
-      }
-      if (c && _custEditMode === 'notes') {
-        c.notes = val;
-        const idx = allCustomers.findIndex(x => (x.Email||'').toLowerCase() === c.email);
-        if (idx >= 0) allCustomers[idx].Notes = val;
-      }
-      if (c && _custEditMode === 'freq') {
-        c.plan = val;
-        const idx = allCustomers.findIndex(x => (x.Email||'').toLowerCase() === c.email);
-        if (idx >= 0) allCustomers[idx].Plan = val;
-      }
-      closeCustEdit();
-      renderCustomers();
-      showToast('✅ Updated!');
-    } else {
-      showToast('Error: ' + (data.error || 'Could not save. The backend may not support this action yet.'));
-      btn.disabled = false;
-      btn.textContent = _custEditMode === 'price' ? 'Update Price' : _custEditMode === 'freq' ? 'Update Frequency' : 'Save Notes';
-    }
-  } catch(err) {
-    showToast('Network error — ' + err.message);
-    btn.disabled = false;
-    btn.textContent = _custEditMode === 'price' ? 'Update Price' : _custEditMode === 'freq' ? 'Update Frequency' : 'Save Notes';
-  }
-}
-
-</script>
-</body>
-</html>
+    
