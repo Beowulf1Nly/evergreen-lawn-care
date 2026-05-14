@@ -3982,166 +3982,238 @@ async function quotePaySubmit() {
 
 // ═══════════════════════════════════════════════════════════════
 // ANALYTICS TRACKER — no 3rd party, stores in Google Sheets
-// Tracks: scroll depth, sections viewed, CTA clicks, time on page
+// Tracks: scroll depth, section time, hover exits, exit intent,
+//         CTA clicks, conversion funnel events
 // ═══════════════════════════════════════════════════════════════
 (function() {
-  // Ensure eg_vid exists — set it here so sendAnalytics always has an ID
-  // regardless of whether the page-view tracker ran (it has a bot filter that may skip this)
+  // Visitor ID — persists across sessions
   if (!localStorage.getItem('eg_vid')) {
     localStorage.setItem('eg_vid', Math.random().toString(36).slice(2) + Date.now().toString(36));
   }
 
   const ANA = {
-    startTime:       Date.now(),
-    maxScroll:       0,
+    startTime:        Date.now(),
+    maxScroll:        0,
     scrollMilestones: [],
-    sectionsViewed:  new Set(),
-    ctaClicks:       [],
-    exitSection:     '',
-    device:          window.innerWidth <= 768 ? 'mobile' : 'desktop',
-    referrer:        document.referrer ? new URL(document.referrer).hostname : 'direct',
-    sent:            false,
+    sectionsViewed:   new Set(),
+    sectionTimes:     {},   // id → cumulative ms in view
+    _sectionEntry:    {},   // id → timestamp of current entry
+    ctaClicks:        [],
+    hoverExits:       [],   // label@Xs — hovered key element then left without clicking
+    exitIntent:       false,
+    exitSection:      '',
+    device:           window.innerWidth <= 768 ? 'mobile' : 'desktop',
+    referrer:         document.referrer ? (function(){ try { return new URL(document.referrer).hostname; } catch(e){ return document.referrer; }})() : 'direct',
+    sent:             false,
   };
 
-  // ── Scroll depth ─────────────────────────────────────────────
+  // ── Scroll depth ──────────────────────────────────────────────
   function updateScroll() {
     const total = document.body.scrollHeight - window.innerHeight;
     if (total <= 0) return;
     const pct = Math.round((window.scrollY / total) * 100);
     if (pct > ANA.maxScroll) ANA.maxScroll = pct;
-    [25, 50, 75, 90, 100].forEach(m => {
-      if (pct >= m && !ANA.scrollMilestones.includes(m)) ANA.scrollMilestones.push(m);
+    [25, 50, 75, 90, 100].forEach(function(m) {
+      if (pct >= m && ANA.scrollMilestones.indexOf(m) === -1) ANA.scrollMilestones.push(m);
     });
   }
   window.addEventListener('scroll', updateScroll, { passive: true });
 
-  // ── Section visibility ────────────────────────────────────────
-  const TRACKED_IDS = ['services', 'how', 'trust', 'faq'];
-  const sectionIo = new IntersectionObserver((entries) => {
-    entries.forEach(e => { if (e.isIntersecting) ANA.sectionsViewed.add(e.target.id); });
+  // ── Section enter/exit ────────────────────────────────────────
+  const TRACKED_IDS = ['hero', 'services', 'how', 'trust', 'faq', 'service-areas'];
+
+  function onSectionEnter(id) {
+    if (!id) return;
+    ANA.sectionsViewed.add(id);
+    ANA.exitSection = id;
+    if (!ANA._sectionEntry[id]) ANA._sectionEntry[id] = Date.now();
+  }
+  function onSectionExit(id) {
+    if (!id || !ANA._sectionEntry[id]) return;
+    ANA.sectionTimes[id] = (ANA.sectionTimes[id] || 0) + (Date.now() - ANA._sectionEntry[id]);
+    delete ANA._sectionEntry[id];
+  }
+
+  const sectionIo = new IntersectionObserver(function(entries) {
+    entries.forEach(function(e) {
+      var id = e.target.id || e.target.dataset.anaId;
+      if (e.isIntersecting) { onSectionEnter(id); }
+      else                  { onSectionExit(id);  }
+    });
   }, { threshold: 0.25 });
 
-  // ── Track last section in view (exit section) ─────────────────
-  const exitIo = new IntersectionObserver((entries) => {
-    entries.forEach(e => { if (e.isIntersecting) ANA.exitSection = e.target.id; });
-  }, { threshold: 0.4 });
-
-  document.addEventListener('DOMContentLoaded', () => {
-    TRACKED_IDS.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) { sectionIo.observe(el); exitIo.observe(el); }
+  document.addEventListener('DOMContentLoaded', function() {
+    TRACKED_IDS.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) sectionIo.observe(el);
     });
-    // hero
-    const hero = document.querySelector('.hero, #hero, section');
-    if (hero) { ANA.sectionsViewed.add('hero'); }
+    // Hero is above the fold — mark entered immediately
+    var hero = document.querySelector('.hero');
+    if (hero) {
+      if (!hero.id) hero.id = 'hero';
+      sectionIo.observe(hero);
+      onSectionEnter('hero');
+    }
 
-    // ── Patch CTAs ──────────────────────────────────────────────
-    const origOpenQuoteModal = window.openQuoteModal;
-    if (origOpenQuoteModal) {
-      window.openQuoteModal = function(...a) {
-        ANA.ctaClicks.push('quote_modal@' + Math.round((Date.now()-ANA.startTime)/1000) + 's');
-        return origOpenQuoteModal.apply(this, a);
-      };
-    }
-    const origOpenModal = window.openModal;
-    if (origOpenModal) {
-      window.openModal = function(...a) {
-        ANA.ctaClicks.push('book_modal@' + Math.round((Date.now()-ANA.startTime)/1000) + 's');
-        return origOpenModal.apply(this, a);
-      };
-    }
-    document.querySelectorAll('[href^="tel:"]').forEach(el => {
-      el.addEventListener('click', () => {
-        ANA.ctaClicks.push('phone@' + Math.round((Date.now()-ANA.startTime)/1000) + 's');
+    // ── Hover exit tracking ───────────────────────────────────
+    // Key conversion elements: hover + leave without clicking = "looked but left"
+    var HOVER_TARGETS = [
+      { sel: '.btn-primary, .nav-cta',              label: 'cta_btn'      },
+      { sel: '[onclick*="openQuoteModal"]',          label: 'quote_cta'    },
+      { sel: '.quote-plan-card',                    label: 'plan_card'    },
+      { sel: '.service-card',                       label: 'service_card' },
+      { sel: '#promoBanner',                        label: 'promo_banner' },
+    ];
+    HOVER_TARGETS.forEach(function(t) {
+      document.querySelectorAll(t.sel).forEach(function(el) {
+        var enterTime = 0;
+        var clicked   = false;
+        el.addEventListener('mouseenter', function() { enterTime = Date.now(); clicked = false; });
+        el.addEventListener('click',      function() { clicked = true; });
+        el.addEventListener('mouseleave', function() {
+          if (enterTime && !clicked && (Date.now() - enterTime) > 400) {
+            // Genuine look-and-leave (not just mouse passing through)
+            ANA.hoverExits.push(t.label + '@' + Math.round((Date.now() - ANA.startTime) / 1000) + 's');
+          }
+          enterTime = 0; clicked = false;
+        });
       });
     });
-    document.querySelectorAll('[href="/free-lawn"], [href*="free-lawn"]').forEach(el => {
-      el.addEventListener('click', () => {
-        ANA.ctaClicks.push('free_lawn@' + Math.round((Date.now()-ANA.startTime)/1000) + 's');
+
+    // ── Exit intent — cursor leaving toward top of browser ────
+    document.addEventListener('mouseleave', function(e) {
+      if (e.clientY <= 5) ANA.exitIntent = true;
+    });
+
+    // ── CTA click patching ────────────────────────────────────
+    var origOpenQuoteModal = window.openQuoteModal;
+    if (origOpenQuoteModal) {
+      window.openQuoteModal = function() {
+        ANA.ctaClicks.push('quote_modal@' + Math.round((Date.now() - ANA.startTime) / 1000) + 's');
+        return origOpenQuoteModal.apply(this, arguments);
+      };
+    }
+    var origOpenModal = window.openModal;
+    if (origOpenModal) {
+      window.openModal = function() {
+        ANA.ctaClicks.push('book_modal@' + Math.round((Date.now() - ANA.startTime) / 1000) + 's');
+        return origOpenModal.apply(this, arguments);
+      };
+    }
+    document.querySelectorAll('[href^="tel:"]').forEach(function(el) {
+      el.addEventListener('click', function() {
+        ANA.ctaClicks.push('phone@' + Math.round((Date.now() - ANA.startTime) / 1000) + 's');
+      });
+    });
+    document.querySelectorAll('[href="/free-lawn"], [href*="free-lawn"]').forEach(function(el) {
+      el.addEventListener('click', function() {
+        ANA.ctaClicks.push('free_lawn@' + Math.round((Date.now() - ANA.startTime) / 1000) + 's');
       });
     });
   });
 
-  // ── Send on exit ──────────────────────────────────────────────
+  // ── Flush open section timers before sending ──────────────────
+  function flushSectionTimers() {
+    Object.keys(ANA._sectionEntry).forEach(function(id) {
+      ANA.sectionTimes[id] = (ANA.sectionTimes[id] || 0) + (Date.now() - ANA._sectionEntry[id]);
+      delete ANA._sectionEntry[id];
+    });
+  }
+
+  function sectionTimesStr() {
+    flushSectionTimers();
+    return Object.keys(ANA.sectionTimes).map(function(id) {
+      return id + ':' + Math.round(ANA.sectionTimes[id] / 1000) + 's';
+    }).join(',');
+  }
+
+  // ── Send engagement snapshot on page exit ─────────────────────
   function sendAnalytics() {
     if (ANA.sent) return;
     ANA.sent = true;
     try {
-      const vid = localStorage.getItem('eg_vid') || '';
-      const p = new URLSearchParams({
-        action:    'analytics',
-        page:      location.pathname,
-        device:    ANA.device,
-        ref:       ANA.referrer,
-        time_s:    Math.round((Date.now() - ANA.startTime) / 1000),
-        max_scroll: ANA.maxScroll,
-        milestones: ANA.scrollMilestones.join(','),
-        sections:  Array.from(ANA.sectionsViewed).join(','),
-        ctas:      ANA.ctaClicks.join('|'),
-        exit:      ANA.exitSection,
-        screen_w:  window.innerWidth,
-        vid:       vid,
+      var vid = localStorage.getItem('eg_vid') || '';
+      var p = new URLSearchParams({
+        action:        'analytics',
+        page:          location.pathname,
+        device:        ANA.device,
+        ref:           ANA.referrer,
+        time_s:        Math.round((Date.now() - ANA.startTime) / 1000),
+        max_scroll:    ANA.maxScroll,
+        milestones:    ANA.scrollMilestones.join(','),
+        sections:      Array.from(ANA.sectionsViewed).join(','),
+        section_times: sectionTimesStr(),
+        ctas:          ANA.ctaClicks.join('|'),
+        hover_exits:   ANA.hoverExits.join('|'),
+        exit_intent:   ANA.exitIntent ? '1' : '0',
+        exit:          ANA.exitSection,
+        screen_w:      window.innerWidth,
+        vid:           vid,
       });
-      const url = SHEETS_SCRIPT_URL + '?' + p.toString();
-      // sendBeacon is the only reliable way to fire requests on page exit.
-      // doPost now handles action=analytics so the POST lands correctly.
+      var url = SHEETS_SCRIPT_URL + '?' + p.toString();
+      // sendBeacon works during unload — crucial for accurate exit data
       if (navigator.sendBeacon) {
-        navigator.sendBeacon(url, new Blob([], { type: 'text/plain' }));
+        navigator.sendBeacon(url);
       } else {
-        fetch(url, { method: 'GET', mode: 'no-cors', keepalive: true }).catch(() => {});
+        fetch(url, { method: 'GET', mode: 'no-cors', keepalive: true }).catch(function(){});
       }
-    } catch(e) { /* silent */ }
+    } catch(err) { /* silent */ }
   }
 
-  document.addEventListener('visibilitychange', () => {
+  document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'hidden') sendAnalytics();
   });
-  window.addEventListener('pagehide', sendAnalytics);
+  window.addEventListener('pagehide',      sendAnalytics);
+  window.addEventListener('beforeunload',  sendAnalytics);
+
+  // Expose for external access (e.g. quote funnel can read ANA.exitIntent)
+  window._ANA = ANA;
+
 })();
-</script>
 
-<script>
-/* ── Page-view tracker (feeds Stats dashboard) ── */
-(function(){
-  var TRACK_URL = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
-  // Filter out bots — Linux UA is a strong signal for headless browsers/crawlers
-  if (/Linux/i.test(navigator.userAgent) && !/Android/i.test(navigator.userAgent)) return;
-  var vid = localStorage.getItem('eg_vid');
-  if (!vid) { vid = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('eg_vid', vid); }
-  // Record session start for duration tracking (reset on every page load)
-  localStorage.setItem('eg_sess_start', Date.now().toString());
-  var ref = document.referrer || '';
-  if (!ref) ref = 'direct';
-  else if (/google/i.test(ref))    ref = 'google';
-  else if (/facebook/i.test(ref))  ref = 'facebook';
-  else if (/instagram/i.test(ref)) ref = 'instagram';
-  function fire(page) {
-    var p = new URLSearchParams({ action:'track_visit', page:page, ref:ref, ua:navigator.userAgent.substring(0,150), vid:vid });
-    fetch(TRACK_URL + '?' + p, { mode:'no-cors', keepalive:true }).catch(function(){});
-  }
-  fire(location.pathname + (location.hash || ''));           // initial load
-  window.addEventListener('hashchange', function(){          // /#services, /#pricing, etc.
-    fire(location.pathname + location.hash);
-  });
-  // Expose globally so openQuoteModal() and other funnel steps can fire named events
-  window.trackEvt = fire;
-
-  // Fallback abandonment — fires if user navigates away / closes tab while modal is open
-  // (closeQuoteModal handles the normal X/overlay-click case)
-  window.addEventListener('pagehide', function() {
-    var modal = document.getElementById('quoteModalOverlay');
-    if (modal && modal.classList.contains('open')) {
-      var step = (typeof _quoteCurrentStep !== 'undefined') ? _quoteCurrentStep : 1;
-      fire('/evt/quote_abandoned_step' + step);
+// ── Event tracker — quote funnel + conversion events ─────────────────────
+// Called throughout the quote flow: quote_opened, price_viewed, payment_attempted, etc.
+function trackEvt(evtPage) {
+  try {
+    var vid = localStorage.getItem('eg_vid') || '';
+    var ref = 'direct';
+    try { if (document.referrer) ref = new URL(document.referrer).hostname; } catch(e){}
+    var p = new URLSearchParams({
+      action: 'track_visit',
+      page:   evtPage,
+      ref:    ref,
+      ua:     navigator.userAgent.substring(0, 200),
+      vid:    vid,
+    });
+    var url = SHEETS_SCRIPT_URL + '?' + p.toString();
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(url);
+    } else {
+      fetch(url, { method: 'GET', mode: 'no-cors' }).catch(function(){});
     }
-  });
-})();
-</script>
+  } catch(err) { /* silent */ }
+}
 
-<script>
-/* ═══════════════════════════════════════════════════════════════
-   DEEP FUNNEL ANALYTICS
-   Tracks every step of the quote/booking flow so you can see
-   exactly where visitors are dropping off.
-   Events appear in Stats dashboard under Funnel Analysis.
-   ══════════════════════════════════�
+// ── Page view tracker ─────────────────────────────────────────────────────
+// Fires once per page load. Bot filter: requires a human signal within 4s.
+(function() {
+  if (!localStorage.getItem('eg_vid')) {
+    localStorage.setItem('eg_vid', Math.random().toString(36).slice(2) + Date.now().toString(36));
+  }
+  var fired = false;
+  function firePageView() {
+    if (fired) return;
+    fired = true;
+    if (typeof trackEvt === 'function') trackEvt(location.pathname);
+  }
+  // Human signal: scroll, click, touch, or keypress
+  ['scroll','click','touchstart','keydown'].forEach(function(ev) {
+    window.addEventListener(ev, firePageView, { once: true, passive: true });
+  });
+  // Fallback: fire after 4s for engaged-but-still readers
+  setTimeout(firePageView, 4000);
+})();
+
+</script>
+</body>
+</html>
