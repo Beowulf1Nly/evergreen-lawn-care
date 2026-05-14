@@ -1515,10 +1515,9 @@ function renderCustomers() {
     const _ddItems = [
       (!isInactive && nextRow !== undefined) ? `<button class="cust-dd-item" onclick="closeCustDropdowns();openOwnerResched(${nextRow})">📅 Reschedule</button>` : '',
       (!isInactive && nextRow !== undefined) ? `<button class="cust-dd-item" onclick="closeCustDropdowns();custChangePrice(${custIdx},${nextRow})">💰 Change Price</button>` : '',
-      (!isInactive && isSub)                 ? `<button class="cust-dd-item" onclick="closeCustDropdowns();custChangeFreq(${custIdx})">🔄 Change Frequency</button>` : '',
+                                               `<button class="cust-dd-item" onclick="closeCustDropdowns();openScheduleModal(${custIdx})">📋 Change Plan</button>`,
                                                `<button class="cust-dd-item" onclick="closeCustDropdowns();custViewNotes(${custIdx})">📝 Notes</button>`,
       (c.email && !c.reviewSent)             ? `<button class="cust-dd-item" onclick="closeCustDropdowns();custSendReviewByEmail('${esc(c.email)}')">⭐ Review Email</button>` : '',
-      (!isSub)                               ? `<button class="cust-dd-item" onclick="closeCustDropdowns();openScheduleModal(${custIdx})">📋 Schedule Plan</button>` : '',
       // Danger zone
       ((!isInactive && nextRow !== undefined) || isSub) ? '<div class="cust-dd-sep"></div>' : '',
       (!isInactive && nextRow !== undefined) ? `<button class="cust-dd-item danger" onclick="closeCustDropdowns();triggerCancelJob(${nextRow})">✕ Cancel Job</button>` : '',
@@ -1763,12 +1762,19 @@ async function custSendReview(rowIdx) {
 }
 
 function custCancelPlan(email, name) {
+  // Show reason field before opening confirm
+  document.getElementById('confirmYesBtn').className = 'btn-confirm-yes danger';
+  var reasonRow   = document.getElementById('confirmReasonRow');
+  var reasonInput = document.getElementById('confirmReasonInput');
+  if (reasonRow)   reasonRow.style.display = 'block';
+  if (reasonInput) reasonInput.value = '';
   openConfirm(
     'Cancel Plan — ' + name,
     'Remove all upcoming appointments and cancel the subscription?',
     async () => {
+      const reason = document.getElementById('confirmReasonInput')?.value.trim() || '';
       try {
-        const params = new URLSearchParams({ action: 'portal_cancel_subscription', cancelType: 'immediate' });
+        const params = new URLSearchParams({ action: 'portal_cancel_subscription', cancelType: 'immediate', reason });
         // Owner cancelling on behalf of customer — use admin auth + customer email
         const res  = await fetch(SCRIPT_URL + '?' + params + '&ownerEmail=' + encodeURIComponent(email) + '&' + authParam());
         const data = await res.json();
