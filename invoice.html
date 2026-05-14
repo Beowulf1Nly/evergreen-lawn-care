@@ -2373,8 +2373,9 @@ function closeConfirm() {
 }
 function confirmYes() {
   const cb = confirmCallback;
+  confirmCallback = null;
+  if (cb) cb();   // callback reads reason/crew inputs BEFORE closeConfirm wipes them
   closeConfirm();
-  if (cb) cb();
 }
 
 // ═══════════════════════════════════════════════════════
