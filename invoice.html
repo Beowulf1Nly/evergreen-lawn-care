@@ -668,6 +668,7 @@
           <div class="form-field">
             <label>Plan *</label>
             <select id="ac-plan" onchange="onAcPlanChange()">
+              <option value="Quote Visit">📋 Quote Visit (free on-site estimate)</option>
               <option value="Bi-Weekly Plan">Bi-Weekly</option>
               <option value="Weekly Plan">Weekly</option>
               <option value="Custom Plan">Custom Plan</option>
@@ -915,6 +916,11 @@
         <option value="all">All future appointments</option>
       </select>
     </div>
+    <div style="margin-bottom:16px;">
+      <label style="font-size:13px;color:#555;display:block;margin-bottom:4px;">Reason <span style="font-size:12px;color:#9ca3af;">(optional — shown in customer email)</span></label>
+      <input type="text" id="ownerReschedReason" placeholder="e.g. Schedule conflict, weather…"
+             style="width:100%;padding:8px 10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;"/>
+    </div>
     <div class="confirm-actions">
       <button class="btn-confirm-no" onclick="closeOwnerResched()">Cancel</button>
       <button class="btn-confirm-yes" id="ownerReschedBtn" onclick="submitOwnerResched()">Move It</button>
@@ -931,6 +937,12 @@
     <div id="confirmCrewRow" style="display:none;margin-top:14px;">
       <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:5px;letter-spacing:.03em;">COMPLETED BY <span style="font-weight:400;color:var(--text-muted);">(comma-separate multiple people)</span></label>
       <input type="text" id="confirmCrewInput" placeholder="e.g. Hunter, Jon"
+             style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-family:inherit;font-size:14px;outline:none;"/>
+    </div>
+    <!-- Reason input — shown for cancel/reschedule actions -->
+    <div id="confirmReasonRow" style="display:none;margin-top:10px;">
+      <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:5px;letter-spacing:.03em;">REASON <span style="font-weight:400;color:var(--text-muted);">(optional — shown in customer email)</span></label>
+      <input type="text" id="confirmReasonInput" placeholder="e.g. Weather, schedule conflict…"
              style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-family:inherit;font-size:14px;outline:none;"/>
     </div>
     <div class="confirm-actions">
@@ -2108,6 +2120,7 @@ function openOwnerResched(rowIdx) {
 function closeOwnerResched() {
   document.getElementById('ownerReschedOverlay').classList.remove('open');
   ownerReschedRowIdx = null;
+  var r = document.getElementById('ownerReschedReason'); if (r) r.value = '';
 }
 
 async function submitOwnerResched() {
@@ -2125,6 +2138,7 @@ async function submitOwnerResched() {
       rowIndex: ownerReschedRowIdx + 2,
       newDate,
       scope,
+      reason:   (document.getElementById('ownerReschedReason') ? document.getElementById('ownerReschedReason').value.trim() : ''),
     });
     const res  = await fetch(SCRIPT_URL + '?' + params.toString() + '&' + authParam());
     const data = await res.json();
@@ -2160,6 +2174,10 @@ function closeConfirm() {
   // Always hide crew input on close so it doesn't bleed into non-done confirms
   const crewRow = document.getElementById('confirmCrewRow');
   if (crewRow) crewRow.style.display = 'none';
+  var reasonRow = document.getElementById('confirmReasonRow');
+  if (reasonRow) reasonRow.style.display = 'none';
+  var reasonInput = document.getElementById('confirmReasonInput');
+  if (reasonInput) reasonInput.value = '';
 }
 function confirmYes() {
   const cb = confirmCallback;
@@ -2208,6 +2226,9 @@ function triggerMarkDone(rowIdx) {
   const crewInput = document.getElementById('confirmCrewInput');
   if (crewRow)   crewRow.style.display = 'block';
   if (crewInput) crewInput.value = adminName || '';
+  // Hide reason row — not applicable for mark-done
+  var reasonRow = document.getElementById('confirmReasonRow');
+  if (reasonRow) reasonRow.style.display = 'none';
   openConfirm(
     isQuote ? `Mark visit for "${b.name||'customer'}" as done?`
             : `Mark "${b.name||'job'}" as done?`,
@@ -2268,6 +2289,10 @@ function triggerCancelJob(rowIdx) {
   const title = `Cancel "${b.name||'job'}" — ${b.serviceDate||b.serviceDateRaw||''}?`;
   const msg   = 'This will permanently remove the booking. This cannot be undone.';
   document.getElementById('confirmYesBtn').className = 'btn-confirm-yes danger';
+  var reasonRow = document.getElementById('confirmReasonRow');
+  var reasonInput = document.getElementById('confirmReasonInput');
+  if (reasonRow) reasonRow.style.display = 'block';
+  if (reasonInput) reasonInput.value = '';
   openConfirm(title, msg, () => executeCancelJob(rowIdx));
 }
 
@@ -2277,6 +2302,7 @@ async function executeCancelJob(rowIdx) {
   const params = new URLSearchParams({
     action:     'cancel_job',
     rowIndex:   b._rowIndex || (rowIdx + 2),
+    reason:     (document.getElementById('confirmReasonInput') ? document.getElementById('confirmReasonInput').value.trim() : ''),
     adminToken: adminToken,
   });
   try {
@@ -2565,8 +2591,33 @@ const YARD_PRICING = {
 };
 
 function onAcPlanChange() {
-  updateAcPricePreview();
   const plan = document.getElementById('ac-plan')?.value || '';
+
+  // Reset button text first
+  var btn = document.getElementById('acBtn');
+  if (btn) btn.textContent = '➕ Add Client & Send Welcome Email';
+
+  if (plan === 'Quote Visit') {
+    // Hide irrelevant fields
+    var customDaysRow = document.getElementById('ac-custom-days-row');
+    if (customDaysRow) customDaysRow.style.display = 'none';
+    var promoRow = document.getElementById('ac-promo-row');
+    if (promoRow) promoRow.style.display = 'none';
+    // Set price to 0
+    var priceEl = document.getElementById('ac-price');
+    if (priceEl) { priceEl.value = '0'; priceEl.disabled = true; }
+    // Update button and preview
+    if (btn) btn.textContent = '📋 Schedule Quote Visit & Send Email';
+    var preview = document.getElementById('ac-price-preview');
+    if (preview) preview.textContent = 'Free on-site estimate — no charge';
+    return;
+  }
+
+  // Re-enable price input for non-quote plans
+  var priceEl = document.getElementById('ac-price');
+  if (priceEl) priceEl.disabled = false;
+
+  updateAcPricePreview();
   const promoRow = document.getElementById('ac-promo-row');
   if (promoRow) promoRow.style.display = (plan === 'One-time visit' || plan === 'Custom Plan') ? 'none' : '';
   const customDaysRow = document.getElementById('ac-custom-days-row');
@@ -2673,13 +2724,14 @@ async function addClient() {
   const btn = document.getElementById('acBtn');
   btn.disabled = true; btn.textContent = 'Adding…';
 
+  const isQuoteVisit = plan === 'Quote Visit';
   const params = new URLSearchParams({
-    action:        'manual_add_client',
+    action:        isQuoteVisit ? 'quote_visit' : 'manual_add_client',
     name, email, phone, address, zip,
     frequency:     plan,
     yardSize:      yard,
     serviceDate:   date,
-    price:         price || '0',
+    price:         isQuoteVisit ? '0' : (price || '0'),
     notes,
     payMethod:     paymethod,
     firstMowPromo: firstMowPromo ? 'true' : '',
@@ -2691,9 +2743,11 @@ async function addClient() {
     const res  = await fetch(SCRIPT_URL + '?' + params.toString());
     const data = await res.json();
     if (data.success) {
-      okEl.textContent  = data.cash
-        ? `✅ ${name} added as a cash customer!`
-        : `✅ ${name} added! Welcome email sent to ${email}.`;
+      okEl.textContent  = isQuoteVisit
+        ? `📋 Quote visit scheduled for ${name}! Confirmation email sent to ${email}.`
+        : data.cash
+          ? `✅ ${name} added as a cash customer!`
+          : `✅ ${name} added! Welcome email sent to ${email}.`;
       okEl.style.display = 'block';
       // Clear form
       ['ac-name','ac-email','ac-phone','ac-address','ac-zip','ac-notes'].forEach(id => {
