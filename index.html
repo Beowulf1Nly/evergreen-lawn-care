@@ -4151,12 +4151,10 @@ async function quotePaySubmit() {
         vid:           vid,
       });
       var url = SHEETS_SCRIPT_URL + '?' + p.toString();
-      // sendBeacon works during unload — crucial for accurate exit data
-      if (navigator.sendBeacon) {
-        navigator.sendBeacon(url);
-      } else {
-        fetch(url, { method: 'GET', mode: 'no-cors', keepalive: true }).catch(function(){});
-      }
+      // IMPORTANT: Apps Script URLs redirect. sendBeacon does NOT follow redirects
+      // and silently drops the request. Use fetch GET (no-cors follows redirects,
+      // keepalive: true survives page unload). Same pattern as working trackEvt calls.
+      fetch(url, { method: 'GET', mode: 'no-cors', keepalive: true }).catch(function(){});
     } catch(err) { /* silent */ }
   }
 
@@ -4186,11 +4184,8 @@ function trackEvt(evtPage) {
       vid:    vid,
     });
     var url = SHEETS_SCRIPT_URL + '?' + p.toString();
-    if (navigator.sendBeacon) {
-      navigator.sendBeacon(url);
-    } else {
-      fetch(url, { method: 'GET', mode: 'no-cors' }).catch(function(){});
-    }
+    // fetch GET no-cors follows Apps Script redirects; sendBeacon does not
+    fetch(url, { method: 'GET', mode: 'no-cors' }).catch(function(){});
   } catch(err) { /* silent */ }
 }
 
