@@ -960,6 +960,7 @@
       <div>
         <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Plan</label>
         <select id="schedPlan" onchange="schedAutoFillPrice()" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;">
+          <option value="Quote Visit">📋 Quote Visit (free on-site estimate)</option>
           <option value="Weekly Plan">Weekly Plan</option>
           <option value="Bi-Weekly Plan">Bi-Weekly Plan</option>
           <option value="Custom Plan">Custom Plan</option>
@@ -1549,6 +1550,28 @@ function renderCustomers() {
   }).join('');
 }
 
+// ── Customer Actions Dropdown ────────────────────────────────────────────
+function closeCustDropdowns() {
+  document.querySelectorAll('.cust-more-btn.open').forEach(btn => {
+    btn.classList.remove('open');
+    btn.nextElementSibling && btn.nextElementSibling.classList.remove('open');
+  });
+  document.querySelectorAll('.cust-dropdown.open').forEach(dd => dd.classList.remove('open'));
+}
+function toggleCustMore(e, btn) {
+  e.stopPropagation();
+  const dd = btn.nextElementSibling;
+  const isOpen = btn.classList.contains('open');
+  // Close all others first
+  closeCustDropdowns();
+  if (!isOpen) {
+    btn.classList.add('open');
+    if (dd) dd.classList.add('open');
+  }
+}
+// Close dropdowns when clicking anywhere outside
+document.addEventListener('click', function() { closeCustDropdowns(); });
+
 // ── Schedule Modal ──────────────────────────────────────────────────────
 const SCHED_PRICING = {
   small:        { 'Weekly Plan': 39, 'Bi-Weekly Plan': 45 },
@@ -1560,6 +1583,23 @@ const SCHED_PRICING = {
 function schedAutoFillPrice() {
   const yard  = document.getElementById('schedYard').value;
   const plan  = document.getElementById('schedPlan').value;
+
+  // Quote Visit: hide price, yard, promo — only date + notes needed
+  const isQuote = plan === 'Quote Visit';
+  const priceRow    = document.getElementById('schedPrice')?.closest('div');
+  const yardRow     = document.getElementById('schedYard')?.closest('div');
+  const promoRow    = document.getElementById('sched-promo-row');
+  const customRow   = document.getElementById('sched-custom-days-row');
+  const payRow      = document.getElementById('schedPayMethod')?.closest('div');
+  if (priceRow) priceRow.style.display  = isQuote ? 'none' : '';
+  if (yardRow)  yardRow.style.display   = isQuote ? 'none' : '';
+  if (promoRow) promoRow.style.display  = isQuote ? 'none' : '';
+  if (customRow) customRow.style.display = isQuote ? 'none' : '';
+  if (payRow)   payRow.style.display    = isQuote ? 'none' : '';
+  const submitBtn = document.getElementById('schedSubmitBtn');
+  if (submitBtn) submitBtn.textContent = isQuote ? 'Schedule Quote Visit' : 'Schedule';
+  if (isQuote) return;
+
   // Show/hide promo row based on plan
   onSchedPromoChange();
   const priceEl = document.getElementById('schedPrice');
@@ -1612,7 +1652,7 @@ function openScheduleModal(idx) {
   if (schedPM) schedPM.value = 'card';
   const schedPromo = document.getElementById('sched-promo');
   if (schedPromo) schedPromo.checked = false;
-  onSchedPromoChange(); // show/hide promo row + custom days row
+  schedAutoFillPrice(); // show/hide all rows correctly for selected plan (incl. Quote Visit)
   // Hide $19 promo for returning customers who've already had a mow
   if (c.totalMows > 0) {
     const promoRow = document.getElementById('sched-promo-row');
@@ -1631,13 +1671,42 @@ async function submitSchedule() {
   const c = _schedCustomer;
   if (!c) return;
   const plan  = document.getElementById('schedPlan').value;
-  const price = document.getElementById('schedPrice').value.trim();
   const date  = document.getElementById('schedDate').value;
   const notes = document.getElementById('schedNotes').value.trim();
+  if (!date) { showToast('Pick a date.'); return; }
+
+  // ── Quote Visit path ──
+  if (plan === 'Quote Visit') {
+    const btn = document.getElementById('schedSubmitBtn');
+    btn.disabled = true; btn.textContent = 'Scheduling…';
+    try {
+      const params = new URLSearchParams({
+        action: 'quote_visit',
+        name: c.name || '', email: c.email || '', phone: c.phone || '',
+        address: c.address || '', zip: c.zip || '',
+        serviceDate: date, notes,
+      });
+      const res  = await fetch(SCRIPT_URL + '?' + authParam() + '&' + params);
+      const data = await res.json();
+      if (data.success) {
+        closeScheduleModal();
+        showToast('Quote visit scheduled for ' + date + ' — confirmation sent!');
+        sessionStorage.removeItem('evg_customers_cache');
+        loadBookings();
+      } else {
+        showToast('Error: ' + (data.error || 'Failed'));
+      }
+    } catch(e) { showToast('Network error'); }
+    btn.disabled = false; btn.textContent = 'Schedule Quote Visit';
+    return;
+  }
+
+  // ── Regular plan path ──
+  const price = document.getElementById('schedPrice').value.trim();
   const firstMowPromo = !!(document.getElementById('sched-promo')?.checked);
   const customDays = plan === 'Custom Plan' ? (parseInt(document.getElementById('schedCustomDays')?.value || '') || 0) : 0;
   if (plan === 'Custom Plan' && !customDays) { showToast('Enter the number of days for this custom plan.'); return; }
-  if (!price || !date) { showToast('Enter a price and date.'); return; }
+  if (!price) { showToast('Enter a price.'); return; }
   const btn = document.getElementById('schedSubmitBtn');
   btn.disabled = true; btn.textContent = 'Scheduling…';
   try {
@@ -1656,7 +1725,7 @@ async function submitSchedule() {
       closeScheduleModal();
       showToast('Scheduled! ' + plan + ' starting ' + date);
       sessionStorage.removeItem('evg_customers_cache');
-      loadBookings(); // single refresh — renderCustomers() is called inside if that tab is active
+      loadBookings();
     } else {
       showToast('Error: ' + (data.error || 'Failed'));
     }
