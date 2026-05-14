@@ -1789,6 +1789,123 @@ function custCancelPlan(email, name) {
   );
 }
 
+// ── Customer Edit Modal (Notes / Price / Frequency) ─────────────────────
+let _custEditSaveHandler = null;
+
+function openCustEdit(title, subtitle, bodyHTML, saveHandler) {
+  document.getElementById('custEditTitle').textContent = title;
+  document.getElementById('custEditSub').textContent   = subtitle || '';
+  document.getElementById('custEditBody').innerHTML    = bodyHTML;
+  _custEditSaveHandler = saveHandler;
+  document.getElementById('custEditOverlay').classList.add('open');
+}
+function closeCustEdit() {
+  document.getElementById('custEditOverlay').classList.remove('open');
+  _custEditSaveHandler = null;
+}
+async function submitCustEdit() {
+  if (_custEditSaveHandler) await _custEditSaveHandler();
+}
+
+function custViewNotes(custIdx) {
+  const c = (window._custsList || [])[custIdx];
+  if (!c) return;
+  const current = c.notes || '';
+  openCustEdit(
+    '📝 Notes — ' + c.name,
+    'Saved to the customer record.',
+    `<textarea id="custEditNotes" style="width:100%;height:100px;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box;">${esc(current)}</textarea>`,
+    async () => {
+      const notes = document.getElementById('custEditNotes').value.trim();
+      const btn = document.getElementById('custEditSaveBtn');
+      btn.disabled = true; btn.textContent = 'Saving…';
+      try {
+        const params = new URLSearchParams({ action: 'owner_update_notes', email: c.email || '', notes });
+        const res  = await fetch(SCRIPT_URL + '?' + authParam() + '&' + params);
+        const data = await res.json();
+        if (data.success) {
+          // Update local cache
+          if (c.Notes !== undefined) c.Notes = notes;
+          c.notes = notes;
+          closeCustEdit();
+          showToast('Notes saved.');
+        } else {
+          showToast('Error: ' + (data.error || 'Failed'));
+        }
+      } catch(e) { showToast('Network error'); }
+      btn.disabled = false; btn.textContent = 'Save';
+    }
+  );
+}
+
+function custChangePrice(custIdx, nextRow) {
+  const c = (window._custsList || [])[custIdx];
+  if (!c) return;
+  const current = c.bookingPrice ? String(Math.round(c.bookingPrice)) : '';
+  openCustEdit(
+    '💰 Change Price — ' + c.name,
+    'Updates their next upcoming mow.',
+    `<div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-size:16px;font-weight:600;color:#374151;">$</span>
+      <input id="custEditPrice" type="number" min="0" step="1" value="${esc(current)}" placeholder="e.g. 49"
+             style="flex:1;padding:10px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:16px;font-family:inherit;box-sizing:border-box;">
+    </div>`,
+    async () => {
+      const price = document.getElementById('custEditPrice').value.trim();
+      if (!price) { showToast('Enter a price.'); return; }
+      const btn = document.getElementById('custEditSaveBtn');
+      btn.disabled = true; btn.textContent = 'Saving…';
+      try {
+        const params = new URLSearchParams({ action: 'owner_update_price', email: c.email || '', price });
+        const res  = await fetch(SCRIPT_URL + '?' + authParam() + '&' + params);
+        const data = await res.json();
+        if (data.success) {
+          closeCustEdit();
+          showToast('Price updated to $' + price + '/mow.');
+          sessionStorage.removeItem('evg_customers_cache');
+          loadBookings();
+        } else {
+          showToast('Error: ' + (data.error || 'Failed'));
+        }
+      } catch(e) { showToast('Network error'); }
+      btn.disabled = false; btn.textContent = 'Save';
+    }
+  );
+}
+
+function custChangeFreq(custIdx) {
+  const c = (window._custsList || [])[custIdx];
+  if (!c) return;
+  const current = c.plan || c.bookingFreq || 'Bi-Weekly Plan';
+  const opts = ['Weekly Plan', 'Bi-Weekly Plan', 'Custom Plan', 'One-time visit'].map(v =>
+    `<option value="${v}"${v === current ? ' selected' : ''}>${v}</option>`
+  ).join('');
+  openCustEdit(
+    '🔄 Change Frequency — ' + c.name,
+    'Updates all upcoming appointments.',
+    `<select id="custEditFreq" style="width:100%;padding:10px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;">${opts}</select>`,
+    async () => {
+      const freq = document.getElementById('custEditFreq').value;
+      const btn = document.getElementById('custEditSaveBtn');
+      btn.disabled = true; btn.textContent = 'Saving…';
+      try {
+        const params = new URLSearchParams({ action: 'owner_update_freq', email: c.email || '', freq });
+        const res  = await fetch(SCRIPT_URL + '?' + authParam() + '&' + params);
+        const data = await res.json();
+        if (data.success) {
+          closeCustEdit();
+          showToast('Frequency changed to ' + freq + '.');
+          sessionStorage.removeItem('evg_customers_cache');
+          loadBookings();
+        } else {
+          showToast('Error: ' + (data.error || 'Failed'));
+        }
+      } catch(e) { showToast('Network error'); }
+      btn.disabled = false; btn.textContent = 'Save';
+    }
+  );
+}
+
 // ═══════════════════════════════════════════════════════
 // DATA
 // ═══════════════════════════════════════════════════════
