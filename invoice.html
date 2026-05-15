@@ -1817,24 +1817,29 @@ function custViewNotes(custIdx) {
   const c = (window._custsList || [])[custIdx];
   if (!c) return;
   const current = c.notes || '';
+  const existingBlock = current
+    ? `<div style="background:#f8faf6;border:1.5px solid #d1fae5;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;color:#374151;line-height:1.6;white-space:pre-wrap;word-break:break-word;">${esc(current)}</div>`
+    : `<div style="color:#9ca3af;font-size:13px;margin-bottom:12px;">No notes yet.</div>`;
   openCustEdit(
     '📝 Notes — ' + c.name,
-    'Saved to the customer record.',
-    `<textarea id="custEditNotes" style="width:100%;height:100px;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box;">${esc(current)}</textarea>`,
+    'Notes are appended — existing notes are never overwritten.',
+    `${existingBlock}<input type="text" id="custEditNotes" placeholder="Add a new note…" style="width:100%;padding:10px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;"/>`,
     async () => {
-      const notes = document.getElementById('custEditNotes').value.trim();
+      const newNote = document.getElementById('custEditNotes').value.trim();
+      if (!newNote) { closeCustEdit(); return; }
       const btn = document.getElementById('custEditSaveBtn');
       btn.disabled = true; btn.textContent = 'Saving…';
       try {
-        const params = new URLSearchParams({ action: 'owner_update_notes', email: c.email || '', notes });
+        const params = new URLSearchParams({ action: 'owner_update_notes', email: c.email || '', notes: newNote });
         const res  = await fetch(SCRIPT_URL + '?' + authParam() + '&' + params);
         const data = await res.json();
         if (data.success) {
-          // Update local cache
-          if (c.Notes !== undefined) c.Notes = notes;
-          c.notes = notes;
+          // Append to local cache (mirrors what the backend did)
+          const combined = current ? current + ' | ' + newNote : newNote;
+          if (c.Notes !== undefined) c.Notes = combined;
+          c.notes = combined;
           closeCustEdit();
-          showToast('Notes saved.');
+          showToast('Note added.');
         } else {
           showToast('Error: ' + (data.error || 'Failed'));
         }
@@ -2082,6 +2087,10 @@ function renderBookings() {
 
 function cardHTML(b, rowIdx, isToday, tomorrowStr) {
   const isTomorrow = !isToday && tomorrowStr && dateOf(b) === tomorrowStr;
+  // Pull notes from the Customers sheet (persistent per-customer notes, not per-booking metadata)
+  const _em        = String(b.email || '').toLowerCase().trim();
+  const _cust      = allCustomers.find(c => String(c.Email || '').toLowerCase().trim() === _em);
+  const _custNotes = _cust ? String(_cust.Notes || '').trim() : '';
   const auto     = isAutoPay(b);
   const cash     = isCash(b);
   const done     = isDone(b);
@@ -2199,7 +2208,7 @@ function cardHTML(b, rowIdx, isToday, tomorrowStr) {
             ${b.address?`<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((b.address||'')+(b.zip?', '+b.zip:'')+', FL')}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">📍 ${esc(b.address)}${b.zip?' · '+esc(b.zip):''}</a>`:'📍 —'}<br>
             📅 ${esc(displayDate(b.serviceDate||b.serviceDateRaw)||'—')}<br>
             ${b.phone?`<a href="tel:${esc(b.phone)}" style="color:inherit;text-decoration:none;">📞 ${esc(b.phone)}</a><br>`:''}
-            ${b.notes&&b.notes!=='(none)'?`💬 ${esc(b.notes)}<br>`:''}
+            ${_custNotes?`💬 ${esc(_custNotes)}<br>`:''}
           </div>
           <div class="card-badges">
             <span class="badge-service">${esc(b.service||'Lawn Mow & Blow')}</span>
@@ -2221,7 +2230,7 @@ function cardHTML(b, rowIdx, isToday, tomorrowStr) {
           ${b.frequency&&!done?' · '+esc(b.frequency):''}<br>
           ${b.email?`✉️ <a href="mailto:${esc(b.email)}">${esc(b.email)}</a><br>`:''}
           ${b.phone?`<a href="tel:${esc(b.phone)}" style="color:inherit;text-decoration:none;">📞 ${esc(b.phone)}</a><br>`:''}
-          ${b.notes&&b.notes!=='(none)'?`💬 ${esc(b.notes)}<br>`:''}
+          ${_custNotes?`💬 ${esc(_custNotes)}<br>`:''}
         </div>
         <div class="card-badges">
           <span class="badge-service">${esc(b.service||'Lawn Mow & Blow')}</span>
