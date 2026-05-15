@@ -161,6 +161,7 @@
     --white: #ffffff;
     --text: #1a1a1a;
     --text-muted: #6b7280;
+    --border: #e5e7eb;
   }
 
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -1186,6 +1187,7 @@
     display: none;
     white-space: nowrap;
     overflow: hidden;
+    position: relative;
   }
   #promoBanner a {
     color: #fff;
@@ -1557,6 +1559,9 @@
     font-size:30px; font-weight:700; color:var(--green-mid);
   }
 
+  .nav-phone a { color: var(--green-bright); font-weight: 600; }
+  @media (max-width: 768px) { .nav-phone { display: none; } }
+
   @media (max-width: 900px) {
     /* ── NAV mobile ── */
     nav { padding: 12px 16px; }
@@ -1572,7 +1577,8 @@
     /* ── HERO mobile ── */
     .hero { flex-direction: column; min-height: auto; }
     .hero-left { flex: none; padding: 110px 24px 48px; }
-    .hero-right { display: none; }
+    .hero-right { display: block; width: 100%; margin-top: 0; }
+    .hero-right img { width: 100%; max-height: 260px; object-fit: cover; border-radius: 16px; }
     .hero p { max-width: 100%; }
     .hero-btns { gap: 10px; }
     .hero-btns .btn-primary, .hero-btns .btn-secondary { font-size: 14px; padding: 13px 22px; }
@@ -1684,10 +1690,11 @@
     </button>
     <div class="nav-right">
       <ul class="nav-links">
-        <li><a href="javascript:void(0)" onclick="openQuoteModal()">Pricing</a></li>
+        <li><a href="javascript:void(0)" onclick="openPricingPopup()">Pricing</a></li>
         <li><a href="#services">Services</a></li>
         <li><a href="#trust">Reviews</a></li>
         <li><a href="/faq.html">FAQ</a></li>
+        <li class="nav-phone"><a href="tel:+13524620627">📞 (352) 462-0627</a></li>
       </ul>
       <a href="javascript:void(0)" onclick="openQuoteModal()" class="nav-cta" style="font-size:14px;font-weight:600;text-decoration:none;padding:10px 22px;border-radius:6px;">Get a Quote</a>
       <a href="/profile.html" class="nav-account"><span class="nav-account-icon">&#128100;</span> My Account</a>
@@ -1713,12 +1720,13 @@
     <div class="hero-accent-line"></div>
     <div class="hero-content">
       <div class="hero-badge">Serving Citrus County, FL</div>
-      <h1>Professional Lawn Care<br/><em>First Cut $19</em></h1>
+      <h1>Professional Lawn Care<br/><em>Starting as Low as $19</em></h1>
       <p>Citrus County's local lawn crew. Instant price in 2 minutes, no contracts, cancel anytime.</p>
       <div class="hero-btns">
         <button onclick="openQuoteModal()" class="btn-primary" style="border:none;cursor:pointer;">Get a Free Quote — First Cut from $19</button>
-        <a href="tel:+13524620627" class="btn-secondary">📞 Call Us</a>
+        <button class="btn-secondary" onclick="openContactModal()">Contact Us</button>
       </div>
+      <p style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:12px;">📅 Spots fill fast — book your first cut today.</p>
       <p class="hero-pay-note">🔒 Card saved securely — <strong>charged only after your first mow</strong></p>
       <div style="border-top:1px solid rgba(255,255,255,0.12);padding-top:22px;margin-top:36px;">
         <!-- Service pills -->
@@ -1737,6 +1745,7 @@
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             Next Day Available
           </span>
+          <span class="trust-badge" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;color:rgba(255,255,255,0.45);letter-spacing:.01em;">✓ Licensed &amp; Insured</span>
         </div>
       </div>
     </div>
@@ -1748,6 +1757,31 @@
 </section>
 
 
+
+<!-- How It Works -->
+<section style="background:#fff;padding:64px 24px;text-align:center;">
+  <div style="max-width:900px;margin:0 auto;">
+    <p style="text-transform:uppercase;letter-spacing:.1em;color:#2d6a2d;font-size:12px;font-weight:700;margin-bottom:8px;">Simple Process</p>
+    <h2 style="font-family:'Playfair Display',serif;color:#1a3a1a;font-size:32px;margin-bottom:48px;">How It Works</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:32px;">
+      <div>
+        <div style="width:56px;height:56px;background:#e8f5e9;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;margin:0 auto 16px;">1</div>
+        <h3 style="color:#1a3a1a;font-size:18px;font-weight:700;margin-bottom:8px;">Enter Your Address</h3>
+        <p style="color:#6b7280;font-size:14px;line-height:1.6;">We look up your lot size automatically using satellite data — no measuring tape needed.</p>
+      </div>
+      <div>
+        <div style="width:56px;height:56px;background:#e8f5e9;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;margin:0 auto 16px;">2</div>
+        <h3 style="color:#1a3a1a;font-size:18px;font-weight:700;margin-bottom:8px;">Pick Your Plan</h3>
+        <p style="color:#6b7280;font-size:14px;line-height:1.6;">Choose weekly or biweekly service — or just a one-time cut. Instant pricing, no surprises.</p>
+      </div>
+      <div>
+        <div style="width:56px;height:56px;background:#e8f5e9;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;margin:0 auto 16px;">3</div>
+        <h3 style="color:#1a3a1a;font-size:18px;font-weight:700;margin-bottom:8px;">We Show Up. Pay After.</h3>
+        <p style="color:#6b7280;font-size:14px;line-height:1.6;">No payment upfront. We mow your lawn, then send an invoice. Easy as that.</p>
+      </div>
+    </div>
+  </div>
+</section>
 
 <!-- WHAT'S INCLUDED -->
 <section id="services" style="background:var(--cream);padding:96px 48px;">
@@ -1793,6 +1827,22 @@
   </div>
   <div style="flex:1;height:1px;background:linear-gradient(to left,transparent,rgba(45,106,45,0.18));"></div>
 </div>
+
+<!-- Photo Gallery -->
+<section id="gallery" style="background:#1a3a1a;padding:64px 24px;text-align:center;">
+  <div style="max-width:1000px;margin:0 auto;">
+    <p style="text-transform:uppercase;letter-spacing:.1em;color:#7ec87e;font-size:12px;font-weight:700;margin-bottom:8px;">Our Work</p>
+    <h2 style="font-family:'Playfair Display',serif;color:#fff;font-size:32px;margin-bottom:40px;">Real Yards. Real Results.</h2>
+    <div style="position:relative;overflow:hidden;border-radius:16px;">
+      <div id="carouselTrack" style="display:flex;transition:transform 0.4s ease;"></div>
+    </div>
+    <div id="carouselDots" style="display:flex;justify-content:center;gap:8px;margin-top:20px;"></div>
+    <div style="display:flex;justify-content:center;gap:16px;margin-top:20px;">
+      <button id="carouselPrev" onclick="prevSlide()" style="background:rgba(255,255,255,0.15);color:#fff;border:none;border-radius:50%;width:44px;height:44px;font-size:18px;cursor:pointer;">‹</button>
+      <button id="carouselNext" onclick="nextSlide()" style="background:rgba(255,255,255,0.15);color:#fff;border:none;border-radius:50%;width:44px;height:44px;font-size:18px;cursor:pointer;">›</button>
+    </div>
+  </div>
+</section>
 
 <!-- REVIEWS -->
 <section class="trust" id="trust" style="background:var(--cream);padding:96px 48px;">
@@ -1943,6 +1993,34 @@
 ">↑</button>
 
 
+<!-- About Section -->
+<section id="about" style="background:#faf9f6;padding:72px 24px;">
+  <div style="max-width:860px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center;">
+    <div>
+      <p style="text-transform:uppercase;letter-spacing:.1em;color:#2d6a2d;font-size:12px;font-weight:700;margin-bottom:8px;">About Us</p>
+      <h2 style="font-family:'Playfair Display',serif;color:#1a3a1a;font-size:32px;line-height:1.2;margin-bottom:20px;">Locally Owned &amp; Operated in Citrus County</h2>
+      <p style="color:#6b7280;font-size:15px;line-height:1.8;margin-bottom:20px;">Hi, I'm Hunter — a Citrus County local who started Evergreen Lawn Care to give homeowners a lawn service they can actually count on. No corporate runaround, no price surprises. Just honest work at a fair price.</p>
+      <p style="color:#6b7280;font-size:15px;line-height:1.8;margin-bottom:28px;">We serve Citrus County and surrounding areas. When you book with us, you're supporting a local crew that cares about your yard as much as you do.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;">
+        <span style="display:inline-flex;align-items:center;gap:6px;background:#e8f5e9;color:#1a3a1a;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;">✓ Licensed &amp; Insured</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;background:#e8f5e9;color:#1a3a1a;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;">⭐ 5-Star Rated</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;background:#e8f5e9;color:#1a3a1a;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;">📍 Citrus County Local</span>
+      </div>
+    </div>
+    <div style="background:#e8f5e9;border-radius:20px;padding:40px;text-align:center;">
+      <div style="font-size:56px;margin-bottom:16px;">🌿</div>
+      <div style="font-family:'Playfair Display',serif;font-size:22px;color:#1a3a1a;font-weight:700;margin-bottom:4px;">Hunter</div>
+      <div style="color:#6b7280;font-size:14px;margin-bottom:16px;">Owner, Evergreen Lawn Care</div>
+      <div style="color:#2d6a2d;font-size:14px;font-style:italic;">"Your lawn is the first thing people see. Let's make it look great."</div>
+    </div>
+  </div>
+</section>
+<style>
+  @media (max-width: 700px) {
+    #about > div { grid-template-columns: 1fr; }
+  }
+</style>
+
 <!-- FOOTER -->
 <footer>
   <div>
@@ -1950,7 +2028,7 @@
     <div class="footer-tagline">We mow. You relax.</div>
   </div>
   <ul class="footer-links">
-    <li><a href="javascript:void(0)" onclick="openQuoteModal()">Pricing</a></li>
+    <li><a href="javascript:void(0)" onclick="openPricingPopup()">Pricing</a></li>
     <li><a href="javascript:void(0)" onclick="openQuoteModal()">Book Now</a></li>
     <li><a href="#trust">Reviews</a></li>
     <li><a href="/faq.html">FAQ</a></li>
@@ -2082,7 +2160,7 @@
 
       <div id="q-step3-error" style="color:#e53e3e;font-size:13px;margin-bottom:12px;display:none;"></div>
       <button class="btn-primary" onclick="quoteStep3Submit()" style="width:100%;font-size:16px;padding:16px;border:none;cursor:pointer;">
-        Next: Enter Payment →
+        Reserve My Spot →
       </button>
     </div>
 
@@ -2181,161 +2259,6 @@
   </div>
 </div>
 
-
-<!-- BOOKING MODAL -->
-<div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
-  <div class="modal">
-    <button class="modal-close" onclick="closeModal()" aria-label="Close booking modal">✕</button>
-
-    <!-- FORM STATE -->
-    <div id="formState">
-      <h2>Book Your Service</h2>
-      <div class="modal-service-name" id="modalServiceName">Cut & Clean</div>
-
-      <!-- Frequency toggle -->
-      <div id="frequencySection">
-        <div style="font-size:13px;font-weight:600;color:var(--green-deep);margin-bottom:10px;letter-spacing:.02em;">BILLING FREQUENCY</div>
-        <div class="frequency-toggle" style="display:flex;gap:8px;">
-          <button class="freq-btn active" id="btn-onetime" onclick="setFrequency('one-time')" style="flex:1;font-size:13px;">One-Time Visit</button>
-          <button class="freq-btn" id="btn-biweekly" onclick="setFrequency('biweekly')" style="flex:1;font-size:13px;">Bi-Weekly</button>
-          <button class="freq-btn" id="btn-weekly" onclick="setFrequency('weekly')" style="flex:1;font-size:13px;">Weekly</button>
-        </div>
-      </div>
-
-      <div class="form-row">
-        <label>Full Name</label>
-        <input type="text" id="customerName" placeholder="Jane Smith"/>
-      </div>
-      <div class="form-row">
-        <label>Email Address</label>
-        <input type="email" id="customerEmail" placeholder="jane@email.com" required autocomplete="email"/>
-      </div>
-      <div class="form-row">
-        <label>Phone Number</label>
-        <input type="tel" id="customerPhone" placeholder="(352) 462-0627"/>
-      </div>
-      <div class="form-row">
-        <label>Property Address</label>
-        <input type="text" id="customerAddress" placeholder="123 Oak St, Citrus Springs, FL"/>
-      </div>
-      <div class="form-row">
-        <label>Zip Code</label>
-        <input type="text" id="customerZip" placeholder="34433" maxlength="5"/>
-        <div id="zip-error" style="color:#e53e3e;font-size:13px;margin-top:6px;display:none;">Sorry, that zip isn't in our service area yet. Please call us at <a href="tel:+13524620627">(352) 462-0627</a> to discuss service availability.</div>
-      </div>
-
-      <!-- YARD SIZE CHECK -->
-      <div style="background:var(--green-pale);border-radius:10px;padding:16px 18px;margin-bottom:18px;">
-        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;font-size:14px;font-weight:600;color:var(--green-deep);">
-          <input type="checkbox" id="largeYard" onchange="handleYardSize()" style="width:18px;height:18px;margin-top:1px;accent-color:var(--green-mid);flex-shrink:0;"/>
-          My yard is larger than ½ acre
-        </label>
-        <div style="font-size:12px;color:var(--text-muted);margin-top:6px;margin-left:30px;">Large properties need a custom quote — check this if you're unsure.</div>
-      </div>
-
-      <!-- BOOKING SECTION (standard yards) -->
-      <div id="bookingSection">
-        <div class="form-row">
-          <label id="dateLabel">Preferred Service Date</label>
-          <div class="cal-widget">
-            <div class="cal-header">
-              <button class="cal-nav" id="calPrev" onclick="calPrevMonth()" type="button" aria-label="Previous month">‹</button>
-              <span class="cal-month-label" id="calMonthLabel" aria-live="polite"></span>
-              <button class="cal-nav" id="calNext" onclick="calNextMonth()" type="button" aria-label="Next month">›</button>
-            </div>
-            <div class="cal-day-names">
-              <div class="cal-day-name">Su</div>
-              <div class="cal-day-name">Mo</div>
-              <div class="cal-day-name">Tu</div>
-              <div class="cal-day-name">We</div>
-              <div class="cal-day-name">Th</div>
-              <div class="cal-day-name">Fr</div>
-              <div class="cal-day-name">Sa</div>
-            </div>
-            <div class="cal-grid" id="calGrid" role="grid" aria-label="Service date picker"></div>
-            <div class="cal-picked none" id="calPicked" aria-live="polite">Select a date above</div>
-          </div>
-          <input type="hidden" id="preferredDay"/>
-          <div id="date-error" style="display:none;color:#e53e3e;font-size:13px;margin-top:6px;">Please select an available date.</div>
-        </div>
-        <div class="form-row">
-          <label>Notes (gate code, special instructions, etc.)</label>
-          <textarea id="notes" placeholder="e.g. Gate code is 1234, avoid the back corner..."></textarea>
-        </div>
-
-        <!-- PAYMENT METHOD TOGGLE -->
-        <div style="margin-bottom:16px;">
-          <div style="font-size:13px;font-weight:600;color:var(--green-deep);margin-bottom:10px;letter-spacing:.02em;">PAYMENT METHOD</div>
-          <div style="display:flex;gap:8px;">
-            <button type="button" id="togglePayLater" onclick="setPayMethod('later')"
-              style="flex:1;padding:12px 10px;border-radius:10px;border:2px solid var(--green-mid);background:var(--green-mid);color:#fff;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;text-align:center;">
-              ✅ Pay After Mow
-            </button>
-            <button type="button" id="togglePayNow" onclick="setPayMethod('now')"
-              style="flex:1;padding:12px 10px;border-radius:10px;border:2px solid #e2e8f0;background:#fff;color:var(--text-muted);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;text-align:center;">
-              💳 Pay Now / Auto-Pay
-            </button>
-          </div>
-          <div id="payMethodHint" style="font-size:12px;color:var(--text-muted);margin-top:8px;line-height:1.5;">
-            We'll send you an invoice by email after your lawn is mowed. Easy.
-          </div>
-        </div>
-
-        <div class="price-summary">
-          <div>
-            <div class="label">Service Price</div>
-            <div class="freq-label" id="freqLabel">One-time visit · Pay after we mow</div>
-          </div>
-          <div class="amount" id="priceDisplay">$45</div>
-        </div>
-
-        <button class="btn-pay" id="payBtn" onclick="handleBooking()">
-          <div class="spinner"></div>
-          <span class="pay-text" id="payBtnText">Confirm Booking →</span>
-        </button>
-
-        <div class="stripe-note" id="payStripeNote">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-          <span id="payStripeNoteText">No payment now · We invoice you after the job is done</span>
-        </div>
-      </div>
-
-      <!-- QUOTE SECTION (large yards) -->
-      <div id="quoteSection" style="display:none;">
-        <div style="background:#fff8e1;border:1px solid #f59e0b;border-radius:10px;padding:14px 16px;margin-bottom:18px;font-size:13px;color:#92400e;line-height:1.6;">
-          🌿 No problem! Large properties get a custom quote. Fill in your details and we'll reach out within 24 hours.
-        </div>
-        <div class="form-row">
-          <label>Yard Size (approximate)</label>
-          <select id="yardSize">
-            <option value="">-- Select a size --</option>
-            <option>½ – 1 acre</option>
-            <option>1 – 2 acres</option>
-            <option>2 – 5 acres</option>
-            <option>5+ acres</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <label>Notes (anything we should know)</label>
-          <textarea id="quoteNotes" placeholder="e.g. Lots of trees, steep slope, needs trimming too..."></textarea>
-        </div>
-        <button class="btn-pay" id="quoteBtn" onclick="handleQuoteRequest()" style="background:var(--green-mid);">
-          <div class="spinner"></div>
-          <span class="pay-text">Request a Quote →</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- SUCCESS STATE -->
-    <div class="success-state" id="successState">
-      <div class="success-icon">✅</div>
-      <h3>You're on the books!</h3>
-      <p>Thanks for scheduling with Evergreen Lawn Care! <strong>No payment needed now</strong> — we'll send you an invoice after your lawn is mowed. We'll see you soon!</p>
-      <br/>
-      <button class="btn-primary" onclick="closeModal()" style="width:100%;margin-top:8px;">Close</button>
-    </div>
-  </div>
-</div>
 
 <script>
 // ─────────────────────────────────────────────
@@ -2504,9 +2427,10 @@ function calNextMonth() {
 // PROMO BANNER CONFIG — edit here to control the banner
 // ─────────────────────────────────────────────
 const PROMO_BANNER = {
-  enabled: false,                                         // ← true = show banner, false = hide it
-  text: 'First cut as low as $19 — get your instant quote.',
-  url: '#services',                                       // ← change this to send to any page/link
+  enabled: true,
+  text: '🌿 First mow starting as low as $19 — get your instant quote.',
+  cta: 'Get a Quote',
+  action: 'quote',
 };
 
 // ─────────────────────────────────────────────
@@ -2531,53 +2455,17 @@ const CALENDAR_SCRIPT_URL = SHEETS_SCRIPT_URL; // same unified script
 
 let currentService = { id: 'mow-blow', name: 'Cut & Clean', price: 39, frequency: 'one-time' }; // 39 = small yard one-time
 
+// Legacy openModal — old booking modal removed; redirect to quote modal
 function openModal(serviceId, serviceName, price, frequency, customPrice) {
-  currentService = { id: serviceId, name: serviceName, price, frequency };
-  document.getElementById('modalServiceName').textContent = serviceName;
-  document.getElementById('priceDisplay').textContent = '$' + price;
-  document.getElementById('modalOverlay').classList.add('open');
-  document.body.style.overflow = 'hidden';
-  document.getElementById('formState').style.display = 'block';
-  document.getElementById('successState').style.display = 'none';
-
-  // Set frequency UI — map service ID to frequency
-  const freqMap = { 'mow-blow': 'one-time', 'biweekly': 'biweekly', 'weekly': 'weekly' };
-  const initialFreq = freqMap[serviceId] || 'one-time';
-  document.getElementById('frequencySection').style.display = 'block';
-  setFrequency(initialFreq);
-
-  // Reset pay method toggle to default (Pay Later)
-  currentPayMethod = 'later';
-  setPayMethod('later');
-
-  // Reset yard size toggle
-  document.getElementById('largeYard').checked = false;
-  document.getElementById('bookingSection').style.display = 'block';
-  document.getElementById('quoteSection').style.display = 'none';
-  document.getElementById('customerZip').value = '';
-  document.getElementById('zip-error').style.display = 'none';
-
-  // Init the calendar picker
-  initCalendar();
-
-  updatePriceSummary();
-
-  // Apply custom price from quote calculator if provided (overrides standard FREQ_DATA price)
-  if (customPrice !== undefined && customPrice !== null) {
-    currentService.price = customPrice;
-    document.getElementById('priceDisplay').textContent = '$' + customPrice;
-    const baseLabel = FREQ_DATA[initialFreq]?.label || 'One-time visit';
-    document.getElementById('freqLabel').textContent = baseLabel + ' · Pay after we mow';
-  }
+  openQuoteModal();
 }
 
 function closeModal() {
-  document.getElementById('modalOverlay').classList.remove('open');
   document.body.style.overflow = '';
 }
 
 function handleOverlayClick(e) {
-  if (e.target === document.getElementById('modalOverlay')) closeModal();
+  // Legacy — no-op, old modal removed
 }
 
 const FREQ_DATA = {
@@ -2645,13 +2533,20 @@ document.addEventListener('DOMContentLoaded', () => {
   // Promo banner
   if (PROMO_BANNER.enabled) {
     const banner = document.getElementById('promoBanner');
-    document.getElementById('promoBannerLink').href = PROMO_BANNER.url;
+    const bannerLink = document.getElementById('promoBannerLink');
+    if (PROMO_BANNER.action === 'quote') {
+      bannerLink.href = 'javascript:void(0)';
+      bannerLink.addEventListener('click', function(e) { e.preventDefault(); openQuoteModal(); });
+    } else {
+      bannerLink.href = PROMO_BANNER.url || '#';
+    }
     document.getElementById('promoBannerText').textContent = PROMO_BANNER.text;
     banner.style.display = 'block';
     // No JS positioning needed — banner and nav are in the same fixed #siteHeader container
   }
 
-  document.getElementById('customerZip').addEventListener('input', validateZip);
+  const customerZipEl = document.getElementById('customerZip');
+  if (customerZipEl) customerZipEl.addEventListener('input', validateZip);
 
   // Auto-open modal if ?service= param is in the URL
   const params = new URLSearchParams(window.location.search);
@@ -3006,6 +2901,7 @@ function renderTestimonials() {
 
 // Load on page load
 document.addEventListener('DOMContentLoaded', () => {
+  loadData();
   initScrollEffects();
   initViewportKeyboardFix();
 
@@ -3621,7 +3517,7 @@ function calKeyHandler(e, dateStr, calType) {
     attempts++;
     if (cur < earliest || cur > maxDate) return; // out of range, stop
   } while (
-    BLOCKED_DATES.has(cur.toISOString().slice(0,10)) && attempts < 14
+    (BLOCKED_DATES.has(cur.toISOString().slice(0,10)) || cur.getDay() === 0) && attempts < 14
   );
 
   const targetStr = cur.toISOString().slice(0,10);
@@ -3931,7 +3827,7 @@ function renderPlanCards() {
 
   // Reset button label for non-XL
   const nextBtn = document.querySelector('#quoteStep3 .btn-primary');
-  if (nextBtn) nextBtn.textContent = 'Next: Enter Payment →';
+  if (nextBtn) nextBtn.textContent = 'Reserve My Spot →';
 
   const plans = [
     { id:'biweekly', icon:'📅', name:'Bi-Weekly Plan', badge:'Most Popular', note:'2 visits/month · cancel anytime', afterPrice: prices.biweekly },
@@ -3939,14 +3835,13 @@ function renderPlanCards() {
   ];
   document.getElementById('quotePlanCards').innerHTML = plans.map(p => {
     const noPrice = p.afterPrice===null;
-    const firstPrice = qState.isReturning ? p.afterPrice : 19;
-    const afterLabel = noPrice ? 'Custom quote' : (qState.isReturning ? 'regular rate' : '$' + p.afterPrice + '/mow after');
-    const isSelected = qState.selectedPlan === p.id;
-    // No $19 promo for lots ¾–1 acre and up (tier 3+) — margin is too thin
-    const bigLot       = qState.lotTierIdx >= 3;
-    const showPromo    = !qState.isReturning && !bigLot;
+    const promoPrice   = getPromoPrice(qState.lotTierIdx);
+    const showPromo    = !qState.isReturning && promoPrice !== null;
+    const firstPrice   = qState.isReturning ? p.afterPrice : (showPromo ? promoPrice : p.afterPrice);
+    const afterLabel   = noPrice ? 'Custom quote' : (qState.isReturning ? 'regular rate' : '$' + p.afterPrice + '/mow after');
+    const isSelected   = qState.selectedPlan === p.id;
     const planFirstText = showPromo
-      ? '<strong>First cut $19</strong> — billed after we mow'
+      ? '<strong>First cut $' + promoPrice + '</strong> — billed after we mow'
       : (noPrice ? 'Custom quote' : '$' + p.afterPrice + '/mow');
     const notePart = p.note && p.note.split('·')[1] ? p.note.split('·')[1].trim() : 'cancel anytime';
     const planAfterText = noPrice
@@ -3972,6 +3867,14 @@ function renderPlanCards() {
 }
 
 function selectQuotePlan(planId) { qState.selectedPlan=planId; renderPlanCards(); }
+
+// Tiered first-mow promo pricing
+// Tiers 0-1 (small/medium): $19, Tiers 2-3 (large/threequarter): $29, Tier 4 (XL): no promo
+function getPromoPrice(tierIdx) {
+  if (tierIdx <= 1) return 19;
+  if (tierIdx <= 3) return 29;
+  return null;
+}
 
 function quoteStep3Submit() {
   const errEl  = document.getElementById('q-date-error');
@@ -4084,17 +3987,17 @@ function buildOrderSummary() {
   const planNames = {'biweekly':'Bi-Weekly Plan','weekly':'Weekly Plan'};
   const after      = prices[planId];
   const isRet      = qState.isReturning || false;
-  const bigLot     = qState.lotTierIdx >= 3;
-  const showPromo  = !isRet && !bigLot;
+  const promoPrice = getPromoPrice(qState.lotTierIdx);
+  const showPromo  = !isRet && promoPrice !== null;
   const afterTxt   = !after ? 'Custom quote' : '$' + after + '/mow';
-  const todayAmt   = showPromo ? '$19' : (after ? '$' + after : 'Custom');
+  const todayAmt   = showPromo ? '$' + promoPrice : (after ? '$' + after : 'Custom');
   const todayLbl   = showPromo ? 'Charged after first service' : 'Per mow';
 
   // Update pay button text to match
   const payText = document.querySelector('#q-pay-btn .pay-text');
   if (payText) {
     payText.textContent = showPromo
-      ? '🔒 Book Now — $19 Charged After First Mow'
+      ? '🔒 Book Now — $' + promoPrice + ' Charged After First Mow'
       : '🔒 Book Now — ' + (after ? '$' + after + ' per mow' : 'Request Custom Quote');
   }
 
@@ -4332,7 +4235,7 @@ async function quotePaySubmit() {
     // Popup fires after 12s on page; once per session; desktop only
     var _exitPopupShown = !!sessionStorage.getItem('eg_exit_shown');
     var _exitPopupArmed = false;
-    setTimeout(function() { _exitPopupArmed = true; }, 5000);
+    setTimeout(function() { _exitPopupArmed = true; }, 12000);
 
     document.addEventListener('mouseleave', function(e) {
       if (e.clientY > 5) return;            // must be heading toward top bar
@@ -4475,6 +4378,26 @@ function trackEvt(evtPage) {
   } catch(err) { /* silent */ }
 }
 
+// ── Pricing Popup ────────────────────────────────────────────────────────
+function openPricingPopup() {
+  const el = document.getElementById('pricingPopupOverlay');
+  if (el) { el.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
+}
+function closePricingPopup() {
+  const el = document.getElementById('pricingPopupOverlay');
+  if (el) { el.style.display = 'none'; document.body.style.overflow = ''; }
+}
+
+// ── Contact Modal ─────────────────────────────────────────────────────────
+function openContactModal() {
+  const el = document.getElementById('contactModalOverlay');
+  if (el) { el.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
+}
+function closeContactModal() {
+  const el = document.getElementById('contactModalOverlay');
+  if (el) { el.style.display = 'none'; document.body.style.overflow = ''; }
+}
+
 // ── Mobile hamburger menu ─────────────────────────────────────────────────
 function toggleMobileMenu() {
   var btn = document.getElementById('navHamburger');
@@ -4511,5 +4434,46 @@ function closeMobileMenu() {
 })();
 
 </script>
+
+<!-- Pricing Info Popup -->
+<div id="pricingPopupOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9000;align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)closePricingPopup()">
+  <div style="background:#fff;border-radius:20px;padding:40px 36px;max-width:480px;width:100%;position:relative;max-height:90vh;overflow-y:auto;">
+    <button onclick="closePricingPopup()" style="position:absolute;top:16px;right:16px;background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;">✕</button>
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="font-size:28px;margin-bottom:8px;">🌿</div>
+      <h2 style="font-family:'Playfair Display',serif;color:#1a3a1a;font-size:24px;margin-bottom:8px;">Our Pricing</h2>
+      <p style="color:#6b7280;font-size:14px;">Enter your address and we'll calculate your lot size instantly — no guessing.</p>
+    </div>
+    <div style="background:#e8f5e9;border-radius:12px;padding:16px 20px;margin-bottom:20px;">
+      <div style="font-weight:700;color:#1a3a1a;margin-bottom:12px;font-size:15px;">📐 Lot Size Pricing</div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #c8e6c9;font-size:14px;"><span style="color:#4a5568;">Small (under ¼ acre)</span><span style="font-weight:600;color:#1a3a1a;">$39–$45/mow</span></div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #c8e6c9;font-size:14px;"><span style="color:#4a5568;">Medium (¼–½ acre)</span><span style="font-weight:600;color:#1a3a1a;">$45–$49/mow</span></div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #c8e6c9;font-size:14px;"><span style="color:#4a5568;">Large (½–¾ acre)</span><span style="font-weight:600;color:#1a3a1a;">$55–$65/mow</span></div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px;"><span style="color:#4a5568;">XL (¾–1 acre)</span><span style="font-weight:600;color:#1a3a1a;">$65–$79/mow</span></div>
+    </div>
+    <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:10px;padding:14px 16px;margin-bottom:24px;text-align:center;">
+      <div style="font-weight:700;color:#92400e;font-size:15px;">🌟 First Mow Starting at $19</div>
+      <div style="color:#78350f;font-size:13px;margin-top:4px;">New customers get a discounted first cut — enter your address to get your exact price.</div>
+    </div>
+    <button onclick="closePricingPopup();openQuoteModal();" style="width:100%;background:#2d6a2d;color:#fff;border:none;border-radius:10px;padding:16px;font-size:16px;font-weight:700;cursor:pointer;">Get My Instant Quote →</button>
+  </div>
+</div>
+
+<!-- Contact Modal -->
+<div id="contactModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9000;align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)closeContactModal()">
+  <div style="background:#fff;border-radius:20px;padding:40px 36px;max-width:380px;width:100%;position:relative;text-align:center;">
+    <button onclick="closeContactModal()" style="position:absolute;top:16px;right:16px;background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;">✕</button>
+    <div style="font-size:40px;margin-bottom:12px;">🌿</div>
+    <h2 style="font-family:'Playfair Display',serif;color:#1a3a1a;font-size:22px;margin-bottom:8px;">Contact Us</h2>
+    <p style="color:#6b7280;font-size:14px;margin-bottom:28px;">We're happy to help! Reach out by text or call.</p>
+    <a href="sms:+13524620627" style="display:flex;align-items:center;justify-content:center;gap:10px;background:#e8f5e9;color:#1a3a1a;text-decoration:none;font-weight:700;font-size:16px;padding:16px 24px;border-radius:12px;margin-bottom:12px;">
+      💬 Text Us &nbsp;<span style="font-weight:400;color:#6b7280;">(352) 462-0627</span>
+    </a>
+    <a href="tel:+13524620627" style="display:flex;align-items:center;justify-content:center;gap:10px;background:#2d6a2d;color:#fff;text-decoration:none;font-weight:700;font-size:16px;padding:16px 24px;border-radius:12px;">
+      📞 Call Us &nbsp;<span style="font-weight:400;opacity:0.8;">(352) 462-0627</span>
+    </a>
+  </div>
+</div>
+
 </body>
 </html>
