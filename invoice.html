@@ -788,6 +788,7 @@
             <label>📍 Starting from <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
             <input type="text" id="routeStartAddr" placeholder="Home base address or leave blank"
               autocomplete="off"
+              onfocus="routeAddrFocus(this)"
               oninput="routeAddrInput(this)"
               onkeydown="routeAddrKeydown(event)"
               onblur="setTimeout(()=>closeAddrSuggestions(),180)">
@@ -3999,10 +4000,31 @@ function initRouteTab() {
 }
 
 let _addrSuggs = [];
+
+function routeAddrFocus(el) {
+  // Show preset addresses when input is empty and focused
+  if (el.value.trim()) return;
+  const box = document.getElementById('addrSuggestions');
+  if (!box || !ROUTE_PRESETS.length) return;
+  box.style.display = 'block';
+  box.innerHTML = ROUTE_PRESETS.map((addr, i) =>
+    `<div class="addr-suggestion-item" onmousedown="selectPreset(${i})">⭐ ${esc(addr)}</div>`
+  ).join('');
+}
+function selectPreset(i) {
+  document.getElementById('routeStartAddr').value = ROUTE_PRESETS[i];
+  closeAddrSuggestions();
+}
+
 function routeAddrInput(el) {
   const q = el.value.trim();
   const box = document.getElementById('addrSuggestions');
-  if (!q || q.length < 4) {
+  // If cleared, show presets again
+  if (!q) {
+    routeAddrFocus(el);
+    return;
+  }
+  if (q.length < 4) {
     if (box) { box.innerHTML = ''; box.style.display = 'none'; }
     return;
   }
@@ -4031,6 +4053,11 @@ function closeAddrSuggestions() {
   const box = document.getElementById('addrSuggestions');
   if (box) { box.innerHTML = ''; box.style.display = 'none'; }
 }
+
+// ── Preset starting addresses ────────────────────────────────────────────
+const ROUTE_PRESETS = [
+  '8898 N Salina Dr, Citrus Springs, FL',
+];
 
 // ── Notes popup (used by route stop cards) ──────────────────────────────
 function openNotesPopup(title, body) {
@@ -4102,10 +4129,6 @@ async function buildRoute() {
   const sb       = document.getElementById('routeStatsBar');
 
   if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
-  if (!startVal) {
-    if (errEl) { errEl.textContent = 'Enter a start address first.'; errEl.style.display = 'block'; }
-    return;
-  }
 
   // Get today's undone jobs
   const todayStr  = todayDateStr();
@@ -4120,9 +4143,12 @@ async function buildRoute() {
   if (sb) sb.style.display = 'none';
 
   try {
-    // Geocode start address
-    const startCoord = await geocodeAddr(startVal);
-    if (!startCoord) throw new Error('Could not find start address. Try a full street address.');
+    // Geocode start address (optional — if blank, start from first job)
+    let startCoord = null;
+    if (startVal) {
+      startCoord = await geocodeAddr(startVal);
+      if (!startCoord) throw new Error('Could not find start address. Try a full street address.');
+    }
 
     // Geocode each job
     const geocoded = [];
@@ -4137,8 +4163,9 @@ async function buildRoute() {
 
     if (!validStops.length) throw new Error('Could not geocode any job addresses.');
 
-    // Optimise order
-    const ordered = nearestNeighbour(startCoord, validStops);
+    // Optimise order — if no start address, use first geocoded job as anchor
+    const anchor  = startCoord || { lat: validStops[0].lat, lon: validStops[0].lon };
+    const ordered = nearestNeighbour(anchor, validStops);
 
     // Calculate stats
     let totalMiles = 0, totalMowMin = 0, totalDriveMin = 0;
@@ -4165,18 +4192,20 @@ async function buildRoute() {
     let cursor = new Date(startTime);
     let html = '';
 
-    // Start pin
-    html += `
-      <div class="route-stop" style="margin-bottom:16px;">
-        <div class="route-stop-badge" style="background:#374151;">🏠</div>
-        <div class="route-stop-card" style="border-color:#e2e8f0;">
-          <div class="route-stop-header">
-            <div class="route-stop-name" style="color:#374151;">Start</div>
-            <div class="route-stop-time">${cursor.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</div>
+    // Start pin (only if a start address was entered)
+    if (startVal) {
+      html += `
+        <div class="route-stop" style="margin-bottom:16px;">
+          <div class="route-stop-badge" style="background:#374151;">🏠</div>
+          <div class="route-stop-card" style="border-color:#e2e8f0;">
+            <div class="route-stop-header">
+              <div class="route-stop-name" style="color:#374151;">Start</div>
+              <div class="route-stop-time">${cursor.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</div>
+            </div>
+            <div class="route-stop-addr">${esc(startVal)}</div>
           </div>
-          <div class="route-stop-addr">${esc(startVal)}</div>
-        </div>
-      </div>`;
+        </div>`;
+    }
 
     for (let i = 0; i < ordered.length; i++) {
       const { bk, distFromPrev } = ordered[i];
@@ -4230,10 +4259,8 @@ async function buildRoute() {
 
     // ── "Open Full Route in Google Maps" button ──────────────────────────
     // Builds a multi-stop Maps URL: /dir/Start/Stop1/Stop2/.../StopN
-    const allAddrs = [
-      startVal,
-      ...ordered.map(s => (s.bk.address || '') + (s.bk.zip ? ', ' + s.bk.zip : '') + ', FL')
-    ].map(a => encodeURIComponent(a));
+    const stopAddrs = ordered.map(s => (s.bk.address || '') + (s.bk.zip ? ', ' + s.bk.zip : '') + ', FL');
+    const allAddrs  = (startVal ? [startVal, ...stopAddrs] : stopAddrs).map(a => encodeURIComponent(a));
     const fullRouteUrl = 'https://www.google.com/maps/dir/' + allAddrs.join('/');
 
     html += `
