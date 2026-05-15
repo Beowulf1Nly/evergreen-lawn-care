@@ -1112,8 +1112,8 @@ window.addEventListener('DOMContentLoaded', () => {
     adminEmail = saved.email;
     adminRole  = saved.role || 'employee';
     showApp();
-    // Warm the GAS connection immediately so first action is faster
-    loadBookings();
+    // Load bookings first, then customers in background so notes show on job cards
+    loadBookings().then(() => loadCustomers());
   }
 
   // Pre-fill add-client date to today
@@ -1289,6 +1289,8 @@ async function loadCustomers() {
     if (data.success && Array.isArray(data.customers)) {
       allCustomers = data.customers;
       sessionStorage.setItem('evg_customers_cache', JSON.stringify(data.customers));
+      // Re-render booking cards now that customer notes are available
+      renderBookings();
     }
   } catch(err) {
     console.error('loadCustomers error:', err);
@@ -4226,10 +4228,29 @@ async function buildRoute() {
         </div>`;
     }
 
+    // ── "Open Full Route in Google Maps" button ──────────────────────────
+    // Builds a multi-stop Maps URL: /dir/Start/Stop1/Stop2/.../StopN
+    const allAddrs = [
+      startVal,
+      ...ordered.map(s => (s.bk.address || '') + (s.bk.zip ? ', ' + s.bk.zip : '') + ', FL')
+    ].map(a => encodeURIComponent(a));
+    const fullRouteUrl = 'https://www.google.com/maps/dir/' + allAddrs.join('/');
+
+    html += `
+      <a href="${fullRouteUrl}" target="_blank" rel="noopener"
+         style="display:flex;align-items:center;justify-content:center;gap:10px;
+                width:100%;margin-top:8px;padding:16px;box-sizing:border-box;
+                background:#1a3a1a;color:#fff;border-radius:14px;
+                font-size:15px;font-weight:700;font-family:inherit;
+                text-decoration:none;cursor:pointer;transition:background .2s;"
+         onmouseover="this.style.background='#276749'" onmouseout="this.style.background='#1a3a1a'">
+        🗺 Open Full Route in Google Maps &nbsp;(${ordered.length} stops)
+      </a>`;
+
     // Failed geocodes warning
     if (failedStops.length) {
-      html += `<div style="margin-top:8px;padding:12px 16px;background:#fef9c3;border:1.5px solid #fde047;border-radius:10px;font-size:13px;color:#854d0e;">
-        ⚠️ Could not geocode ${failedStops.length} address${failedStops.length>1?'es':''} — they are not included in the route:<br>
+      html += `<div style="margin-top:12px;padding:12px 16px;background:#fef9c3;border:1.5px solid #fde047;border-radius:10px;font-size:13px;color:#854d0e;">
+        ⚠️ Could not geocode ${failedStops.length} address${failedStops.length>1?'es':''} — not included in route:<br>
         ${failedStops.map(s => `<strong>${esc(s.bk.name||'?')}</strong> — ${esc(s.bk.address||'no address')}`).join('<br>')}
       </div>`;
     }
