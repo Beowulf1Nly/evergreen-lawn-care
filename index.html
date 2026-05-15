@@ -1799,56 +1799,6 @@
   </div>
 </section>
 
-<script>
-(function(){
-  var imgs = [];
-  // Wait for loadData to populate carouselData
-  function tryInit() {
-    if (window.carouselData && window.carouselData.images && window.carouselData.images.length > 0) {
-      imgs = window.carouselData.images;
-      buildStrip();
-    } else {
-      setTimeout(tryInit, 200);
-    }
-  }
-  tryInit();
-
-  var current = 0;
-  var timer;
-  var els = [];
-
-  function buildStrip() {
-    var strip = document.getElementById('svcPhotoStrip');
-    var dots  = document.getElementById('svcPhotoDots');
-    if (!strip) return;
-
-    strip.innerHTML = imgs.map(function(src, i) {
-      return '<img src="' + src + '" alt="Lawn photo" loading="' + (i===0?'eager':'lazy') + '" ' +
-        'style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;' +
-        'opacity:' + (i===0?'1':'0') + ';transition:opacity 0.9s ease;" />';
-    }).join('');
-
-    dots.innerHTML = imgs.map(function(_, i) {
-      return '<div style="width:' + (i===0?'20':'8') + 'px;height:8px;border-radius:4px;background:' +
-        (i===0?'#fff':'rgba(255,255,255,0.45)') + ';transition:all 0.3s ease;"></div>';
-    }).join('');
-
-    els = strip.querySelectorAll('img');
-    timer = setInterval(advance, 4000);
-  }
-
-  function advance() {
-    var dotEls = document.getElementById('svcPhotoDots').children;
-    els[current].style.opacity = '0';
-    dotEls[current].style.width = '8px';
-    dotEls[current].style.background = 'rgba(255,255,255,0.45)';
-    current = (current + 1) % imgs.length;
-    els[current].style.opacity = '1';
-    dotEls[current].style.width = '20px';
-    dotEls[current].style.background = '#fff';
-  }
-})();
-</script>
 
 <!-- REVIEWS -->
 <section class="trust" id="trust" style="background:var(--cream);padding:96px 48px;">
@@ -2779,7 +2729,47 @@ async function loadData() {
     console.error('Could not load data.json:', e);
   }
   initPhotoGrid();
+  initSvcStrip();
   renderTestimonials();
+}
+
+// ── Services section photo strip ──────────────────────────────
+function initSvcStrip() {
+  var strip = document.getElementById('svcPhotoStrip');
+  var dots  = document.getElementById('svcPhotoDots');
+  if (!strip || !carouselData.images || !carouselData.images.length) return;
+
+  var imgs    = carouselData.images;
+  var current = 0;
+  var imgEls;
+
+  strip.innerHTML = imgs.map(function(src, i) {
+    return '<img src="' + src + '" alt="Lawn photo ' + (i+1) + '" loading="' + (i===0?'eager':'lazy') + '" ' +
+      'style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;' +
+      'opacity:' + (i===0?'1':'0') + ';transition:opacity 0.9s ease;" />';
+  }).join('');
+
+  dots.innerHTML = imgs.map(function(_, i) {
+    return '<div style="width:' + (i===0?'20':'8') + 'px;height:8px;border-radius:4px;background:' +
+      (i===0?'#fff':'rgba(255,255,255,0.45)') + ';transition:all 0.3s ease;cursor:pointer;" onclick="svcGoTo(' + i + ')"></div>';
+  }).join('');
+
+  imgEls = strip.querySelectorAll('img');
+
+  window.svcGoTo = function(idx) {
+    var dotEls = dots.children;
+    dotEls[current].style.width = '8px';
+    dotEls[current].style.background = 'rgba(255,255,255,0.45)';
+    imgEls[current].style.opacity = '0';
+    current = idx;
+    imgEls[current].style.opacity = '1';
+    dotEls[current].style.width = '20px';
+    dotEls[current].style.background = '#fff';
+  };
+
+  setInterval(function() {
+    window.svcGoTo((current + 1) % imgs.length);
+  }, 4500);
 }
 
 // ── Photo Grid (replaces old carousel) ────────────────────────
