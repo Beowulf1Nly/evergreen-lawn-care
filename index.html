@@ -1793,9 +1793,22 @@
 
     <!-- Photo Strip -->
     <div style="margin-top:48px;position:relative;border-radius:20px;overflow:hidden;height:420px;background:#e8ece8;">
-      <div id="svcPhotoStrip" style="position:relative;width:100%;height:100%;"></div>
-      <div id="svcPhotoDots" style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:2;"></div>
+      <div id="svcPhotoStrip" style="position:relative;width:100%;height:100%;cursor:zoom-in;"></div>
+      <!-- Arrows -->
+      <button onclick="svcGoTo((window._svcCurrent-1+window._svcTotal)%window._svcTotal)" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);z-index:3;background:rgba(0,0,0,0.35);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s;" onmouseover="this.style.background='rgba(0,0,0,0.6)'" onmouseout="this.style.background='rgba(0,0,0,0.35)'">‹</button>
+      <button onclick="svcGoTo((window._svcCurrent+1)%window._svcTotal)" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);z-index:3;background:rgba(0,0,0,0.35);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s;" onmouseover="this.style.background='rgba(0,0,0,0.6)'" onmouseout="this.style.background='rgba(0,0,0,0.35)'">›</button>
+      <!-- Dots -->
+      <div id="svcPhotoDots" style="position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:2;"></div>
     </div>
+
+<!-- Lightbox -->
+<div id="svcLightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;align-items:center;justify-content:center;" onclick="if(event.target===this)closeLightbox()">
+  <button onclick="closeLightbox()" style="position:absolute;top:20px;right:24px;background:none;border:none;color:#fff;font-size:32px;cursor:pointer;line-height:1;opacity:0.8;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">✕</button>
+  <button onclick="lightboxNav(-1)" style="position:absolute;left:20px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:50%;width:52px;height:52px;font-size:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">‹</button>
+  <img id="svcLightboxImg" src="" alt="" style="max-width:90vw;max-height:88vh;object-fit:contain;border-radius:10px;box-shadow:0 20px 80px rgba(0,0,0,0.6);"/>
+  <button onclick="lightboxNav(1)" style="position:absolute;right:20px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:50%;width:52px;height:52px;font-size:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">›</button>
+  <div id="svcLightboxCounter" style="position:absolute;bottom:20px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.6);font-size:13px;"></div>
+</div>
   </div>
 </section>
 
@@ -2741,6 +2754,8 @@ function initSvcStrip() {
 
   var imgs    = carouselData.images;
   var current = 0;
+  window._svcCurrent = 0;
+  window._svcTotal   = imgs.length;
   var imgEls;
 
   strip.innerHTML = imgs.map(function(src, i) {
@@ -2756,12 +2771,16 @@ function initSvcStrip() {
 
   imgEls = strip.querySelectorAll('img');
 
+  // Click strip to open lightbox
+  strip.addEventListener('click', function() { openLightbox(current); });
+
   window.svcGoTo = function(idx) {
     var dotEls = dots.children;
     dotEls[current].style.width = '8px';
     dotEls[current].style.background = 'rgba(255,255,255,0.45)';
     imgEls[current].style.opacity = '0';
     current = idx;
+    window._svcCurrent = idx;
     imgEls[current].style.opacity = '1';
     dotEls[current].style.width = '20px';
     dotEls[current].style.background = '#fff';
@@ -2770,6 +2789,37 @@ function initSvcStrip() {
   setInterval(function() {
     window.svcGoTo((current + 1) % imgs.length);
   }, 4500);
+
+  // Lightbox
+  window.openLightbox = function(idx) {
+    var lb = document.getElementById('svcLightbox');
+    var lbImg = document.getElementById('svcLightboxImg');
+    var lbCounter = document.getElementById('svcLightboxCounter');
+    if (!lb || !lbImg) return;
+    lbImg.src = imgs[idx];
+    lbCounter.textContent = (idx + 1) + ' / ' + imgs.length;
+    lb._idx = idx;
+    lb.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  };
+  window.closeLightbox = function() {
+    var lb = document.getElementById('svcLightbox');
+    if (lb) { lb.style.display = 'none'; document.body.style.overflow = ''; }
+  };
+  window.lightboxNav = function(dir) {
+    var lb = document.getElementById('svcLightbox');
+    if (!lb) return;
+    var idx = ((lb._idx || 0) + dir + imgs.length) % imgs.length;
+    openLightbox(idx);
+  };
+  // Keyboard nav
+  document.addEventListener('keydown', function(e) {
+    var lb = document.getElementById('svcLightbox');
+    if (!lb || lb.style.display === 'none') return;
+    if (e.key === 'ArrowRight') lightboxNav(1);
+    if (e.key === 'ArrowLeft')  lightboxNav(-1);
+    if (e.key === 'Escape')     closeLightbox();
+  });
 }
 
 // ── Photo Grid (replaces old carousel) ────────────────────────
