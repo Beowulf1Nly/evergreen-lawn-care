@@ -850,7 +850,7 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div>
             <label for="qt-name" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Customer Name *</label>
-            <input id="qt-name" type="text" class="login-input" style="margin-bottom:0;" placeholder="Fillmore Lamantia"/>
+            <input id="qt-name" type="text" class="login-input" style="margin-bottom:0;" placeholder="Fillmore Lamantia" oninput="qtAutoFillEmail()"/>
           </div>
           <div>
             <label for="qt-phone" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Phone Number</label>
@@ -925,6 +925,19 @@
         </div>
         <div id="qt-notes-list" style="display:flex;flex-direction:column;gap:8px;"></div>
         <div id="qt-notes-empty" style="font-size:13px;color:var(--text-muted);font-style:italic;">No notes yet — click "+ Add Note" to add bullet points that appear at the bottom of the estimate.</div>
+      </div>
+
+      <!-- ── EMAIL MESSAGE ── -->
+      <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:14px;">
+        <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;">Email Message</div>
+        <div style="margin-bottom:12px;">
+          <label for="qt-email-subject" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Subject Line</label>
+          <input id="qt-email-subject" type="text" class="login-input" style="margin-bottom:0;" placeholder="Your estimate from Evergreen Lawn Care" oninput="this.dataset.edited='1'"/>
+        </div>
+        <div>
+          <label for="qt-email-body" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Message <span style="font-weight:400;color:var(--text-muted);">(optional — appears at the top of the email)</span></label>
+          <textarea id="qt-email-body" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;resize:vertical;min-height:100px;outline:none;box-sizing:border-box;" placeholder="Hey Hunter,&#10;&#10;Here's your estimate — let us know if you have any questions!&#10;&#10;Thanks,&#10;Evergreen Lawn Care &amp; Landscaping" oninput="this.dataset.edited='1'"></textarea>
+        </div>
       </div>
 
       <!-- ── SEND / CLEAR ── -->
@@ -1522,6 +1535,22 @@ function qtRenderNotes() {
 }
 
 // ── FILL FROM CUSTOMER ────────────────────────────────
+function qtAutoFillEmail() {
+  const fullName  = (document.getElementById('qt-name')?.value || '').trim();
+  const firstName = fullName.split(' ')[0] || '';
+  const subjectEl = document.getElementById('qt-email-subject');
+  const bodyEl    = document.getElementById('qt-email-body');
+  // Only auto-fill if the field is still at its default or empty (don't overwrite edits)
+  if (subjectEl && !subjectEl.dataset.edited) {
+    subjectEl.value = firstName ? 'Your estimate from Evergreen Lawn Care' : '';
+  }
+  if (bodyEl && !bodyEl.dataset.edited) {
+    bodyEl.value = firstName
+      ? `Hey ${firstName},\n\nHere's your estimate — let us know if you have any questions!\n\nThanks,\nEvergreen Lawn Care & Landscaping`
+      : '';
+  }
+}
+
 function qtFillFromCustomer() {
   const query = prompt('Enter customer name or email to search:');
   if (!query) return;
@@ -1537,18 +1566,21 @@ function qtFillFromCustomer() {
   set('qt-email',   found.Email   || '');
   set('qt-address', found.Address || '');
   showToast('Filled from: ' + (found.Name || found.Email));
+  qtAutoFillEmail(); // populate subject + message with the filled name
 }
 
 // ── SEND ──────────────────────────────────────────────
 async function qtSend() {
-  const name     = (document.getElementById('qt-name')?.value       || '').trim();
-  const phone    = (document.getElementById('qt-phone')?.value      || '').trim();
-  const email    = (document.getElementById('qt-email')?.value      || '').trim();
-  const address  = (document.getElementById('qt-address')?.value    || '').trim();
-  const estNum   = (document.getElementById('qt-number')?.value     || '').trim();
-  const estDate  = (document.getElementById('qt-date')?.value       || '').trim();
-  const validThru= (document.getElementById('qt-valid-thru')?.value || '').trim();
-  const summary  = (document.getElementById('qt-summary')?.value    || '').trim();
+  const name          = (document.getElementById('qt-name')?.value          || '').trim();
+  const phone         = (document.getElementById('qt-phone')?.value         || '').trim();
+  const email         = (document.getElementById('qt-email')?.value         || '').trim();
+  const address       = (document.getElementById('qt-address')?.value       || '').trim();
+  const estNum        = (document.getElementById('qt-number')?.value        || '').trim();
+  const estDate       = (document.getElementById('qt-date')?.value          || '').trim();
+  const validThru     = (document.getElementById('qt-valid-thru')?.value    || '').trim();
+  const summary       = (document.getElementById('qt-summary')?.value       || '').trim();
+  const emailSubject  = (document.getElementById('qt-email-subject')?.value || '').trim();
+  const personalMessage = (document.getElementById('qt-email-body')?.value  || '').trim();
 
   if (!name)  { showToast('Enter customer name'); return; }
   if (!email) { showToast('Enter customer email'); return; }
@@ -1568,6 +1600,8 @@ async function qtSend() {
     estimateDate: estDate,
     validThru:    validThru,
     summary,
+    emailSubject,
+    personalMessage,
     notes: JSON.stringify(qtNotes.map(n => n.text).filter(Boolean)),
     items: JSON.stringify(qtItems
       .filter(it => it.desc.trim())
@@ -1606,8 +1640,9 @@ async function qtSend() {
 
 // ── RESET ─────────────────────────────────────────────
 function qtReset() {
-  ['qt-name','qt-phone','qt-email','qt-address','qt-summary'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.value = '';
+  ['qt-name','qt-phone','qt-email','qt-address','qt-summary','qt-email-subject','qt-email-body'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ''; delete el.dataset.edited; }
   });
   const now  = new Date();
   const rand = Math.floor(Math.random() * 900 + 100);
