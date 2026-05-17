@@ -1571,7 +1571,7 @@
     .nav-hamburger { display: flex; margin-left: auto; }
     .nav-logo span { font-size: 16px !important; white-space: nowrap; }
     .nav-account { display: none !important; }
-    .nav-right { gap: 10px; }
+    .nav-right { display: none !important; }
 
     /* ── HERO mobile ── */
     .hero { flex-direction: column; min-height: auto; }
@@ -4366,6 +4366,8 @@ async function quotePaySubmit() {
     ANA.sent = true;
     try {
       var vid = localStorage.getItem('eg_vid') || '';
+      var BLOCKED_VIDS = ['p11aykzdd0hmorg0xgv', 'iq05eltt3jmoq03373'];
+      if (BLOCKED_VIDS.indexOf(vid) !== -1) return;
       var p = new URLSearchParams({
         action:        'analytics',
         page:          location.pathname,
@@ -4432,6 +4434,8 @@ document.addEventListener('DOMContentLoaded', function() {
 function trackEvt(evtPage) {
   try {
     var vid = localStorage.getItem('eg_vid') || '';
+    var BLOCKED_VIDS = ['p11aykzdd0hmorg0xgv', 'iq05eltt3jmoq03373'];
+    if (BLOCKED_VIDS.indexOf(vid) !== -1) return;
     var ref = 'direct';
     try { if (document.referrer) ref = new URL(document.referrer).hostname; } catch(e){}
     var p = new URLSearchParams({
