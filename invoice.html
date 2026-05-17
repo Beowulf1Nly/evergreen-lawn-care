@@ -965,7 +965,18 @@
 
       <div style="margin-bottom:24px;">
         <div style="font-size:22px;font-weight:700;color:var(--green-deep);margin-bottom:4px;">📅 Schedule a Job</div>
-        <div style="font-size:14px;color:var(--text-muted);">Convert a completed quote visit into a scheduled job — sends the customer a job confirmation email.</div>
+        <div style="font-size:14px;color:var(--text-muted);">Schedule any job for a customer and send them a confirmation.</div>
+      </div>
+
+      <!-- ── JOB TYPE ── -->
+      <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:14px;">
+        <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">Job Type</div>
+        <select id="job-type" class="login-input" style="margin-bottom:0;font-weight:600;" onchange="jobTypeChange()">
+          <option value="mowing">🌿 Mowing</option>
+          <option value="landscaping">🏡 Landscaping</option>
+          <option value="pressure-washing">💦 Pressure Washing</option>
+          <option value="other">🔧 Other</option>
+        </select>
       </div>
 
       <!-- ── CUSTOMER INFO ── -->
@@ -998,40 +1009,13 @@
         </div>
       </div>
 
-      <!-- ── JOB DETAILS ── -->
+      <!-- ── COMMON FIELDS: Date + Pay Method ── -->
       <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:14px;">
-        <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;">Job Details</div>
+        <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;" id="job-details-label">Job Details</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div>
-            <label for="job-plan" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Plan *</label>
-            <select id="job-plan" class="login-input" style="margin-bottom:0;" onchange="jobAutoFillPrice()">
-              <option value="Bi-Weekly Plan">Bi-Weekly Plan</option>
-              <option value="Weekly Plan">Weekly Plan</option>
-              <option value="Custom Plan">Custom Plan</option>
-              <option value="One-time visit">One-Time Visit</option>
-            </select>
-          </div>
-          <div id="job-custom-days-wrap" style="display:none;">
-            <label for="job-custom-days" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Visit every (days)</label>
-            <input id="job-custom-days" type="number" min="1" class="login-input" style="margin-bottom:0;" placeholder="e.g. 21"/>
-          </div>
-          <div>
-            <label for="job-yard" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Yard Size *</label>
-            <select id="job-yard" class="login-input" style="margin-bottom:0;" onchange="jobAutoFillPrice()">
-              <option value="small">Small · Under ¼ acre</option>
-              <option value="medium" selected>Medium · ¼–½ acre</option>
-              <option value="threequarter">½–¾ acre</option>
-              <option value="one">¾–1 acre</option>
-              <option value="custom">Over 1 acre · Custom</option>
-            </select>
-          </div>
-          <div>
-            <label for="job-date" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">First Service Date *</label>
+            <label for="job-date" id="job-date-label" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">First Service Date *</label>
             <input id="job-date" type="date" class="login-input" style="margin-bottom:0;"/>
-          </div>
-          <div>
-            <label for="job-price" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Price per Mow ($)</label>
-            <input id="job-price" type="number" min="0" step="1" class="login-input" style="margin-bottom:0;" placeholder="Auto-filled" oninput="jobPromoCheck()"/>
           </div>
           <div>
             <label for="job-paymethod" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Payment Method *</label>
@@ -1040,7 +1024,42 @@
               <option value="cash">💵 Cash Only</option>
             </select>
           </div>
-        </div>
+
+          <!-- ── MOWING-ONLY FIELDS ── -->
+          <div id="job-mowing-fields" style="display:contents;">
+            <div>
+              <label for="job-plan" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Plan *</label>
+              <select id="job-plan" class="login-input" style="margin-bottom:0;" onchange="jobAutoFillPrice()">
+                <option value="Bi-Weekly Plan">Bi-Weekly Plan</option>
+                <option value="Weekly Plan">Weekly Plan</option>
+                <option value="Custom Plan">Custom Plan</option>
+                <option value="One-time visit">One-Time Visit</option>
+              </select>
+            </div>
+            <div id="job-custom-days-wrap" style="display:none;">
+              <label for="job-custom-days" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Visit every (days)</label>
+              <input id="job-custom-days" type="number" min="1" class="login-input" style="margin-bottom:0;" placeholder="e.g. 21"/>
+            </div>
+            <div>
+              <label for="job-yard" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Yard Size *</label>
+              <select id="job-yard" class="login-input" style="margin-bottom:0;" onchange="jobAutoFillPrice()">
+                <option value="small">Small · Under ¼ acre</option>
+                <option value="medium" selected>Medium · ¼–½ acre</option>
+                <option value="threequarter">½–¾ acre</option>
+                <option value="one">¾–1 acre</option>
+                <option value="custom">Over 1 acre · Custom</option>
+              </select>
+            </div>
+            <div>
+              <label for="job-price" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Price per Mow ($)</label>
+              <input id="job-price" type="number" min="0" step="1" class="login-input" style="margin-bottom:0;" placeholder="Auto-filled" oninput="jobPromoCheck()"/>
+            </div>
+          </div>
+          <!-- END MOWING-ONLY -->
+
+        </div><!-- /grid -->
+
+        <!-- Mowing promo + preview (mowing only) -->
         <div id="job-promo-row" style="margin-top:10px;display:none;">
           <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
             <input type="checkbox" id="job-promo" onchange="jobPromoCheck()" style="width:16px;height:16px;accent-color:#15803d;">
@@ -1051,10 +1070,58 @@
         <div id="job-price-preview" style="font-size:13px;color:#15803d;font-weight:600;margin-top:8px;min-height:18px;"></div>
       </div>
 
-      <!-- ── NOTES ── -->
+      <!-- ── NON-MOWING SECTION ── -->
+      <div id="job-section-other" style="display:none;">
+
+        <!-- Job Overview -->
+        <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:14px;">
+          <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;">Job Overview</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div style="grid-column:1/-1;">
+              <label for="job-description" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Job Description *</label>
+              <textarea id="job-description" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;resize:vertical;min-height:90px;outline:none;box-sizing:border-box;" placeholder="Describe what the job involves — e.g. 'Install mulch in front beds, edge along driveway, haul off debris'"></textarea>
+            </div>
+            <div>
+              <label for="job-crew" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Crew / Who's Going</label>
+              <input id="job-crew" type="text" class="login-input" style="margin-bottom:0;" placeholder="e.g. Hunter + Jared"/>
+            </div>
+            <div>
+              <label for="job-duration" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Estimated Duration</label>
+              <input id="job-duration" type="text" class="login-input" style="margin-bottom:0;" placeholder="e.g. 4 hours, half day, 2 days"/>
+            </div>
+          </div>
+        </div>
+
+        <!-- Materials & Cost -->
+        <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:14px;">
+          <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;">Materials &amp; Cost</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div style="grid-column:1/-1;">
+              <label for="job-materials" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Materials Needed</label>
+              <textarea id="job-materials" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;resize:vertical;min-height:70px;outline:none;box-sizing:border-box;" placeholder="e.g. 100 bags of mulch, landscape paper, edging stakes, haul-off bags..."></textarea>
+            </div>
+            <div>
+              <label for="job-materials-cost" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Materials Cost ($)</label>
+              <input id="job-materials-cost" type="number" min="0" step="0.01" class="login-input" style="margin-bottom:0;" placeholder="0.00" oninput="jobOtherCalcTotal()"/>
+            </div>
+            <div>
+              <label for="job-labor-cost" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Labor Cost ($)</label>
+              <input id="job-labor-cost" type="number" min="0" step="0.01" class="login-input" style="margin-bottom:0;" placeholder="0.00" oninput="jobOtherCalcTotal()"/>
+            </div>
+            <div style="grid-column:1/-1;">
+              <label for="job-total-other" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Total Charged to Customer ($)</label>
+              <input id="job-total-other" type="number" min="0" step="0.01" class="login-input" style="margin-bottom:0;font-weight:700;" placeholder="Auto-calculated — or enter manually" oninput="this.dataset.manualEdit='1';jobOtherCalcTotal()"/>
+              <div id="job-total-preview" style="font-size:12px;color:var(--text-muted);margin-top:4px;"></div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /job-section-other -->
+
+      <!-- ── NOTES (always visible) ── -->
       <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:14px;">
         <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">Notes</div>
-        <input id="job-notes" type="text" class="login-input" style="margin-bottom:0;" placeholder="Gate code, special instructions, tall grass, etc."/>
+        <input id="job-notes" type="text" class="login-input" style="margin-bottom:0;" placeholder="Gate code, parking, special instructions, etc."/>
       </div>
 
       <!-- ── EMAIL MESSAGE ── -->
@@ -1068,11 +1135,11 @@
         <div id="job-email-fields" style="margin-top:12px;">
           <div style="margin-bottom:12px;">
             <label for="job-email-subject" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Subject Line</label>
-            <input id="job-email-subject" type="text" class="login-input" style="margin-bottom:0;" placeholder="Your lawn service is confirmed — Evergreen Lawn Care" oninput="this.dataset.edited='1'"/>
+            <input id="job-email-subject" type="text" class="login-input" style="margin-bottom:0;" placeholder="Your service is confirmed — Evergreen Lawn Care" oninput="this.dataset.edited='1'"/>
           </div>
           <div>
             <label for="job-email-body" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Message <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
-            <textarea id="job-email-body" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;resize:vertical;min-height:90px;outline:none;box-sizing:border-box;" placeholder="Hey Jane,&#10;&#10;Great news — you're all set! We'll see you on [date].&#10;&#10;Thanks,&#10;Evergreen Lawn Care &amp; Landscaping" oninput="this.dataset.edited='1'"></textarea>
+            <textarea id="job-email-body" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;resize:vertical;min-height:90px;outline:none;box-sizing:border-box;" placeholder="Hey Jane,&#10;&#10;You're all set! We'll see you on [date].&#10;&#10;Thanks,&#10;Evergreen Lawn Care &amp; Landscaping" oninput="this.dataset.edited='1'"></textarea>
           </div>
         </div>
       </div>
@@ -1793,18 +1860,58 @@ const JOB_PRICING = {
 function jobInit() {
   // Set default date to tomorrow
   const tom = new Date(); tom.setDate(tom.getDate() + 1);
+  const iso = tom.toISOString().slice(0, 10);
   const dateEl = document.getElementById('job-date');
-  if (dateEl && !dateEl.value) dateEl.value = tom.toISOString().slice(0, 10);
-  jobAutoFillPrice();
+  if (dateEl && !dateEl.value) dateEl.value = iso;
+  jobTypeChange();
   // Wire up email toggle
   const emailToggle = document.getElementById('job-send-email');
   const emailFields = document.getElementById('job-email-fields');
   if (emailToggle && emailFields) {
-    emailToggle.addEventListener('change', () => {
+    emailToggle.onchange = () => {
       emailFields.style.opacity = emailToggle.checked ? '1' : '0.4';
       emailFields.style.pointerEvents = emailToggle.checked ? '' : 'none';
-    });
+    };
   }
+}
+
+// ── Called whenever Job Type dropdown changes ──
+function jobTypeChange() {
+  const type = document.getElementById('job-type')?.value || 'mowing';
+  const isMowing = type === 'mowing';
+
+  // Show/hide mowing-specific fields inside the shared card
+  const mowingFields = document.getElementById('job-mowing-fields');
+  if (mowingFields) {
+    // Can't toggle display:contents easily so toggle children visibility
+    Array.from(mowingFields.children).forEach(el => { el.style.display = isMowing ? '' : 'none'; });
+  }
+  const promoRow    = document.getElementById('job-promo-row');
+  const pricePreview= document.getElementById('job-price-preview');
+  if (promoRow)     promoRow.style.display     = isMowing ? '' : 'none';
+  if (pricePreview) pricePreview.style.display  = isMowing ? '' : 'none';
+
+  // Show/hide entire non-mowing section
+  const otherSection = document.getElementById('job-section-other');
+  if (otherSection) otherSection.style.display = isMowing ? 'none' : 'block';
+
+  // Update date label
+  const dateLabel = document.getElementById('job-date-label');
+  if (dateLabel) dateLabel.textContent = isMowing ? 'First Service Date *' : 'Job Date *';
+
+  if (isMowing) jobAutoFillPrice();
+  jobAutoFillEmail();
+}
+
+// ── Returns a human-readable label for the current job type ──
+function jobTypeLabel() {
+  const map = {
+    'mowing':           'lawn service',
+    'landscaping':      'landscaping job',
+    'pressure-washing': 'pressure washing job',
+    'other':            'job',
+  };
+  return map[document.getElementById('job-type')?.value || 'mowing'] || 'job';
 }
 
 function jobAutoFillPrice() {
@@ -1842,19 +1949,41 @@ function jobPromoCheck() {
   }
 }
 
+// ── Auto-sum materials + labor → total (unless user manually edited total) ──
+function jobOtherCalcTotal() {
+  const matCost   = parseFloat(document.getElementById('job-materials-cost')?.value || 0) || 0;
+  const labCost   = parseFloat(document.getElementById('job-labor-cost')?.value   || 0) || 0;
+  const totalEl   = document.getElementById('job-total-other');
+  const preview   = document.getElementById('job-total-preview');
+  const sum       = matCost + labCost;
+  if (totalEl && !totalEl.dataset.manualEdit && sum > 0) {
+    totalEl.value = sum.toFixed(2);
+  }
+  if (preview) {
+    if (matCost > 0 || labCost > 0) {
+      preview.textContent = `Materials: $${matCost.toFixed(2)} + Labor: $${labCost.toFixed(2)} = $${sum.toFixed(2)}`;
+    } else {
+      preview.textContent = '';
+    }
+  }
+}
+
 function jobAutoFillEmail() {
   const name      = (document.getElementById('job-name')?.value || '').trim();
   const firstName = name.split(' ')[0] || '';
   const date      = document.getElementById('job-date')?.value || '';
   const dateStr   = date ? displayDate(date) : '[date]';
+  const label     = jobTypeLabel();
   const subjectEl = document.getElementById('job-email-subject');
   const bodyEl    = document.getElementById('job-email-body');
   if (subjectEl && !subjectEl.dataset.edited) {
-    subjectEl.value = firstName ? `Your lawn service is confirmed — Evergreen Lawn Care & Landscaping` : '';
+    subjectEl.value = firstName
+      ? `Your ${label} is confirmed — Evergreen Lawn Care & Landscaping`
+      : '';
   }
   if (bodyEl && !bodyEl.dataset.edited) {
     bodyEl.value = firstName
-      ? `Hey ${firstName},\n\nGreat news — you're all set! We'll see you on ${dateStr}.\n\nThanks,\nEvergreen Lawn Care & Landscaping`
+      ? `Hey ${firstName},\n\nGreat news — your ${label} is all set! We'll see you on ${dateStr}.\n\nThanks,\nEvergreen Lawn Care & Landscaping`
       : '';
   }
 }
@@ -1885,6 +2014,9 @@ function openJobTab(rowIdx) {
   showTab('job');
   if (!b) return;
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  // Default to Mowing for quote visits
+  const typeEl = document.getElementById('job-type');
+  if (typeEl) typeEl.value = 'mowing';
   set('job-name',    b.name    || '');
   set('job-phone',   b.phone   || '');
   set('job-email',   b.email   || '');
@@ -1896,54 +2028,115 @@ function openJobTab(rowIdx) {
     const el = document.getElementById(id);
     if (el) { el.value = ''; delete el.dataset.edited; }
   });
-  jobAutoFillPrice();
-  jobAutoFillEmail();
-  showToast('📋 Quote info pre-filled — pick their plan & date, then click Schedule Job');
+  jobTypeChange();
+  showToast('📋 Quote info pre-filled — choose job type, fill details, then click Schedule Job');
 }
 
 async function submitJob() {
+  const jobType   = document.getElementById('job-type')?.value || 'mowing';
+  const isMowing  = jobType === 'mowing';
   const name      = (document.getElementById('job-name')?.value    || '').trim();
   const phone     = (document.getElementById('job-phone')?.value   || '').trim();
   const email     = (document.getElementById('job-email')?.value   || '').trim();
   const address   = (document.getElementById('job-address')?.value || '').trim();
   const zip       = (document.getElementById('job-zip')?.value     || '').trim();
-  const plan      = (document.getElementById('job-plan')?.value    || '').trim();
-  const yard      = (document.getElementById('job-yard')?.value    || '').trim();
   const date      = (document.getElementById('job-date')?.value    || '').trim();
-  const price     = (document.getElementById('job-price')?.value   || '').trim();
   const paymethod = (document.getElementById('job-paymethod')?.value || 'card');
-  const notes     = (document.getElementById('job-notes')?.value   || '').trim() || '(none)';
-  const firstMowPromo = !!(document.getElementById('job-promo')?.checked);
-  const customDays    = plan === 'Custom Plan' ? (parseInt(document.getElementById('job-custom-days')?.value || '') || 0) : 0;
-  const sendEmail     = !!(document.getElementById('job-send-email')?.checked);
+  const baseNotes = (document.getElementById('job-notes')?.value   || '').trim();
+  const sendEmail = !!(document.getElementById('job-send-email')?.checked);
+  const emailSubject = (document.getElementById('job-email-subject')?.value || '').trim();
+  const emailBody    = (document.getElementById('job-email-body')?.value    || '').trim();
 
   const statusEl = document.getElementById('job-status');
   if (statusEl) { statusEl.textContent = ''; statusEl.style.color = ''; }
 
   if (!name)    { showToast('Enter customer name'); return; }
-  if (!email)   { showToast('Enter customer email'); return; }
   if (!address) { showToast('Enter service address'); return; }
   if (!date)    { showToast('Pick a service date'); return; }
-  if (!price)   { showToast('Enter a price per mow'); return; }
-  if (plan === 'Custom Plan' && !customDays) { showToast('Enter the number of days for this custom plan'); return; }
+
+  let params;
+
+  if (isMowing) {
+    // ── MOWING path (existing manual_add_client flow) ──
+    const plan      = (document.getElementById('job-plan')?.value  || '').trim();
+    const yard      = (document.getElementById('job-yard')?.value  || '').trim();
+    const price     = (document.getElementById('job-price')?.value || '').trim();
+    const firstMowPromo = !!(document.getElementById('job-promo')?.checked);
+    const customDays    = plan === 'Custom Plan' ? (parseInt(document.getElementById('job-custom-days')?.value || '') || 0) : 0;
+
+    if (!email)   { showToast('Enter customer email'); return; }
+    if (!price)   { showToast('Enter a price per mow'); return; }
+    if (plan === 'Custom Plan' && !customDays) { showToast('Enter the number of days for this custom plan'); return; }
+
+    params = new URLSearchParams({
+      action:         'manual_add_client',
+      name, phone, email, address, zip,
+      frequency:      plan,
+      yardSize:       yard,
+      serviceDate:    date,
+      price,
+      notes:          baseNotes || '(none)',
+      payMethod:      paymethod,
+      firstMowPromo:  firstMowPromo ? 'true' : '',
+      days:           customDays || '',
+      serviceType:    'Lawn Mow & Blow',
+      sendCustomEmail: sendEmail && emailSubject ? 'true' : '',
+      customEmailSubject: emailSubject,
+      customEmailBody:    emailBody,
+      adminToken,
+    });
+
+  } else {
+    // ── NON-MOWING path (landscaping, pressure washing, other) ──
+    const description   = (document.getElementById('job-description')?.value   || '').trim();
+    const crew          = (document.getElementById('job-crew')?.value          || '').trim();
+    const duration      = (document.getElementById('job-duration')?.value      || '').trim();
+    const materials     = (document.getElementById('job-materials')?.value     || '').trim();
+    const materialsCost = (document.getElementById('job-materials-cost')?.value || '').trim();
+    const laborCost     = (document.getElementById('job-labor-cost')?.value    || '').trim();
+    const total         = (document.getElementById('job-total-other')?.value   || '').trim();
+
+    if (!description) { showToast('Enter a job description'); return; }
+    if (!total)       { showToast('Enter the total price for this job'); return; }
+
+    const typeLabel = { 'landscaping': 'Landscaping', 'pressure-washing': 'Pressure Washing', 'other': 'Other' }[jobType] || 'Other';
+
+    // Pack all detail fields into structured notes
+    const noteParts = [];
+    if (description) noteParts.push('Description: ' + description);
+    if (crew)        noteParts.push('Crew: ' + crew);
+    if (duration)    noteParts.push('Duration: ' + duration);
+    if (materials)   noteParts.push('Materials: ' + materials);
+    if (materialsCost) noteParts.push('Materials Cost: $' + parseFloat(materialsCost).toFixed(2));
+    if (laborCost)   noteParts.push('Labor Cost: $' + parseFloat(laborCost).toFixed(2));
+    if (baseNotes)   noteParts.push('Notes: ' + baseNotes);
+    const combinedNotes = noteParts.join(' | ') || '(none)';
+
+    params = new URLSearchParams({
+      action:         'manual_add_client',
+      name, phone, email: email || '', address, zip,
+      frequency:      typeLabel,
+      yardSize:       '',
+      serviceDate:    date,
+      price:          total,
+      notes:          combinedNotes,
+      payMethod:      paymethod,
+      firstMowPromo:  '',
+      days:           '',
+      serviceType:    typeLabel,
+      crew,
+      duration,
+      materialsCost:  materialsCost || '',
+      laborCost:      laborCost || '',
+      sendCustomEmail: sendEmail ? 'true' : '',
+      customEmailSubject: emailSubject,
+      customEmailBody:    emailBody,
+      adminToken,
+    });
+  }
 
   const btn = document.getElementById('job-submit-btn');
   btn.disabled = true; btn.textContent = '📅 Scheduling…';
-
-  try {
-    const params = new URLSearchParams({
-      action:        'manual_add_client',
-      name, phone, email, address, zip,
-      frequency:     plan,
-      yardSize:      yard,
-      serviceDate:   date,
-      price,
-      notes,
-      payMethod:     paymethod,
-      firstMowPromo: firstMowPromo ? 'true' : '',
-      days:          customDays || '',
-      adminToken,
-    });
 
     const res  = await fetch(SCRIPT_URL + '?' + params.toString());
     const data = await res.json();
@@ -1993,23 +2186,35 @@ async function submitJob() {
 }
 
 function jobReset() {
-  ['job-name','job-phone','job-email','job-address','job-zip','job-notes','job-email-subject','job-email-body','job-price','job-custom-days'].forEach(id => {
+  [
+    'job-name','job-phone','job-email','job-address','job-zip',
+    'job-notes','job-email-subject','job-email-body',
+    'job-price','job-custom-days',
+    'job-description','job-crew','job-duration','job-materials',
+    'job-materials-cost','job-labor-cost','job-total-other',
+  ].forEach(id => {
     const el = document.getElementById(id);
     if (el) { el.value = ''; delete el.dataset.edited; delete el.dataset.manualEdit; }
   });
+  const tom = new Date(); tom.setDate(tom.getDate()+1);
+  const iso = tom.toISOString().slice(0, 10);
   const dateEl = document.getElementById('job-date');
-  if (dateEl) { const tom = new Date(); tom.setDate(tom.getDate()+1); dateEl.value = tom.toISOString().slice(0,10); }
+  if (dateEl) dateEl.value = iso;
+  const typeEl = document.getElementById('job-type');
+  if (typeEl) typeEl.value = 'mowing';
   const promoEl = document.getElementById('job-promo');
   if (promoEl) promoEl.checked = false;
   const sendEmail = document.getElementById('job-send-email');
   if (sendEmail) sendEmail.checked = true;
   const emailFields = document.getElementById('job-email-fields');
   if (emailFields) { emailFields.style.opacity = '1'; emailFields.style.pointerEvents = ''; }
+  const totalPreview = document.getElementById('job-total-preview');
+  if (totalPreview) totalPreview.textContent = '';
   const status = document.getElementById('job-status');
   if (status) status.textContent = '';
-  jobAutoFillPrice();
   jobSourceRowIdx = null;
   jobSourceEstimateRowNum = null;
+  jobTypeChange(); // re-sync show/hide state after reset
 }
 
 // ── RESET ─────────────────────────────────────────────
@@ -2754,20 +2959,24 @@ function openJobTabFromEstimate(est) {
   jobSourceRowIdx = null; // no booking row to cancel — estimate is cancelled separately
   jobSourceEstimateRowNum = est.rowNum || null;
   showTab('job');
+  // Default to Mowing (most common follow-up to a quote visit)
+  const typeEl = document.getElementById('job-type');
+  if (typeEl) typeEl.value = 'mowing';
   // Fill customer fields
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
-  set('job-name',    est.name);
-  set('job-phone',   est.phone);
-  set('job-email',   est.email);
-  set('job-address', est.address);
+  set('job-name',    est.name    || '');
+  set('job-phone',   est.phone   || '');
+  set('job-email',   est.email   || '');
+  set('job-address', est.address || '');
   set('job-zip',     '');
   set('job-notes',   est.summary || '');
   // Reset edited flags so auto-fill email runs
-  jobEmailSubjectEdited = false;
-  jobEmailBodyEdited    = false;
-  jobAutoFillPrice();
-  jobAutoFillEmail();
-  showToast('📋 Estimate info pre-filled — complete the job details and schedule!');
+  ['job-email-subject','job-email-body'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ''; delete el.dataset.edited; }
+  });
+  jobTypeChange();
+  showToast('📋 Estimate info pre-filled — choose job type, fill details, and schedule!');
 }
 
 function triggerCancelEstimate(rowNum, name) {
