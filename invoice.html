@@ -138,6 +138,8 @@
   .badge-service { background:var(--green-pale); color:var(--green-deep); border-radius:6px; padding:3px 10px; font-size:12px; font-weight:600; }
   .badge-autopay { background:#1a3a1a; color:#fff; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:700; }
   .badge-invoiced { background:#f0fdf4; color:#16a34a; border:1px solid #86efac; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:600; }
+  /* Amber badge for "Invoiced (awaiting payment)" — distinct from green "Paid" */
+  .badge-invoiced-pending { background:#fffbeb; color:#b45309; border:1px solid #fcd34d; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:600; }
   .badge-paylater { background:#fffbeb; color:#92400e; border:1px solid #fcd34d; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:600; }
   .badge-done { background:#fff8e1; color:#92400e; border:1px solid #fcd34d; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:600; }
   .badge-needs { background:#fff1f2; color:#be123c; border:1px solid #fda4af; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:700; }
@@ -561,9 +563,10 @@
     <button class="tab-btn active" onclick="showTab('jobs')"  data-tab="jobs">📋 Jobs</button>
     <button class="tab-btn" onclick="showTab('route')" data-tab="route">🗺️ Route</button>
     <button class="tab-btn owner-only" onclick="showTab('add')"   data-tab="add">➕ Add Client</button>
+    <button class="tab-btn owner-only" onclick="showTab('quote')" data-tab="quote">💬 Send Quote</button>
+    <button class="tab-btn owner-only" onclick="showTab('customers')" data-tab="customers">👥 Customers</button>
     <button class="tab-btn owner-only" onclick="showTab('stats')" data-tab="stats">📊 Stats</button>
     <button class="tab-btn owner-only" onclick="showTab('analytics')" data-tab="analytics">📈 Analytics</button>
-    <button class="tab-btn owner-only" onclick="showTab('customers')" data-tab="customers">👥 Customers</button>
   </div>
 
   <!-- ── JOBS TAB ── -->
@@ -646,27 +649,27 @@
 
         <div class="form-grid">
           <div class="form-field">
-            <label>Full Name *</label>
+            <label for="ac-name">Full Name *</label>
             <input type="text" id="ac-name" placeholder="Jane Smith"/>
           </div>
           <div class="form-field">
-            <label>Email *</label>
+            <label for="ac-email">Email *</label>
             <input type="email" id="ac-email" placeholder="jane@email.com"/>
           </div>
           <div class="form-field">
-            <label>Phone <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
+            <label for="ac-phone">Phone <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
             <input type="tel" id="ac-phone" placeholder="(352) 555-0123"/>
           </div>
           <div class="form-field">
-            <label>Zip Code *</label>
+            <label for="ac-zip">Zip Code *</label>
             <input type="text" id="ac-zip" placeholder="34450" maxlength="5"/>
           </div>
           <div class="form-field full">
-            <label>Street Address *</label>
+            <label for="ac-address">Street Address *</label>
             <input type="text" id="ac-address" placeholder="123 Oak St, Inverness, FL 34450"/>
           </div>
           <div class="form-field">
-            <label>Plan *</label>
+            <label for="ac-plan">Plan *</label>
             <select id="ac-plan" onchange="onAcPlanChange()">
               <option value="Quote Visit">📋 Quote Visit (free on-site estimate)</option>
               <option value="Bi-Weekly Plan">Bi-Weekly</option>
@@ -677,11 +680,11 @@
             </select>
           </div>
           <div class="form-field" id="ac-custom-days-row" style="display:none;">
-            <label>Visit every (days)</label>
+            <label for="ac-custom-days">Visit every (days)</label>
             <input type="number" id="ac-custom-days" min="1" placeholder="e.g. 21" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;"/>
           </div>
           <div class="form-field">
-            <label>Yard Size *</label>
+            <label for="ac-yard">Yard Size *</label>
             <select id="ac-yard">
               <option value="small">Small · Under ¼ acre</option>
               <option value="medium" selected>Medium · ¼–½ acre</option>
@@ -691,18 +694,18 @@
             </select>
           </div>
           <div class="form-field">
-            <label>First Service Date *</label>
+            <label for="ac-date">First Service Date *</label>
             <input type="date" id="ac-date"/>
           </div>
           <div class="form-field">
-            <label>Payment Method *</label>
+            <label for="ac-paymethod">Payment Method *</label>
             <select id="ac-paymethod">
               <option value="card">💳 Card</option>
               <option value="cash">💵 Cash Only</option>
             </select>
           </div>
           <div class="form-field">
-            <label>Per-Mow Rate ($)</label>
+            <label for="ac-price">Per-Mow Rate ($)</label>
             <input type="number" id="ac-price" placeholder="Auto-filled" step="0.01" min="0" oninput="onAcPromoChange()"/>
           </div>
           <div class="form-field full" id="ac-promo-row" style="display:none;">
@@ -713,7 +716,7 @@
             <div id="ac-promo-note" style="font-size:12px;color:#15803d;margin-top:4px;display:none;padding-left:26px;"></div>
           </div>
           <div class="form-field full">
-            <label>Notes</label>
+            <label for="ac-notes">Notes</label>
             <input type="text" id="ac-notes" placeholder="Gate code, special instructions…"/>
           </div>
         </div>
@@ -781,11 +784,11 @@
         <div class="route-cp-sub" id="routeCpSub">Loading today's jobs…</div>
         <div class="route-cp-fields">
           <div class="route-cp-field">
-            <label>🕗 Start time</label>
+            <label for="routeStartTime">🕗 Start time</label>
             <input type="time" id="routeStartTime" value="08:00">
           </div>
           <div class="route-cp-field addr-wrap">
-            <label>📍 Starting from <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
+            <label for="routeStartAddr">📍 Starting from <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
             <input type="text" id="routeStartAddr" placeholder="Home base address or leave blank"
               autocomplete="off"
               onfocus="routeAddrFocus(this)"
@@ -829,6 +832,90 @@
     </div>
   </div>
 
+  <!-- ── SEND QUOTE TAB (owner only) ── -->
+  <div id="pane-quote" class="tab-pane">
+    <div class="container" style="max-width:700px;">
+
+      <div style="margin-bottom:24px;">
+        <div style="font-size:22px;font-weight:700;color:var(--green-deep);margin-bottom:4px;">💬 Send a Quote</div>
+        <div style="font-size:14px;color:var(--text-muted);">Build a professional estimate and email it directly to a customer.</div>
+      </div>
+
+      <!-- Customer details -->
+      <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:16px;">
+        <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;">Customer Info</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label for="qt-name" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Full Name *</label>
+            <input id="qt-name" type="text" class="login-input" style="margin-bottom:0;" placeholder="Jane Smith"/>
+          </div>
+          <div>
+            <label for="qt-email" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Email Address *</label>
+            <input id="qt-email" type="email" class="login-input" style="margin-bottom:0;" placeholder="jane@email.com"/>
+          </div>
+          <div style="grid-column:1/-1;">
+            <label for="qt-address" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Property Address</label>
+            <input id="qt-address" type="text" class="login-input" style="margin-bottom:0;" placeholder="123 Oak St, Inverness FL 34450"/>
+          </div>
+        </div>
+        <div style="margin-top:12px;">
+          <button style="background:var(--green-pale);border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;color:var(--green-deep);cursor:pointer;" onclick="qtFillFromCustomer()">⚡ Fill from existing customer</button>
+        </div>
+      </div>
+
+      <!-- Line items -->
+      <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">Line Items</div>
+          <button onclick="qtAddItem()" style="background:var(--green-mid);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;">+ Add Item</button>
+        </div>
+
+        <!-- Header -->
+        <div style="display:grid;grid-template-columns:3fr 0.7fr 1fr auto;gap:8px;margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;">Description</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;text-align:center;">Qty</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;text-align:right;">Unit Price</div>
+          <div></div>
+        </div>
+
+        <div id="qt-items-list"></div>
+
+        <!-- Subtotal -->
+        <div style="border-top:2px solid var(--border);margin-top:12px;padding-top:12px;display:flex;justify-content:flex-end;align-items:center;gap:16px;">
+          <span style="font-size:14px;font-weight:600;color:var(--text-muted);">Subtotal:</span>
+          <span id="qt-subtotal" style="font-size:20px;font-weight:800;color:var(--green-deep);">$0.00</span>
+        </div>
+      </div>
+
+      <!-- Quote settings -->
+      <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:16px;">
+        <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;">Quote Settings</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div>
+            <label for="qt-number" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Quote # (auto-generated)</label>
+            <input id="qt-number" type="text" class="login-input" style="margin-bottom:0;" placeholder="Q-2026-1234"/>
+          </div>
+          <div>
+            <label for="qt-valid-days" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Valid for (days)</label>
+            <input id="qt-valid-days" type="number" class="login-input" style="margin-bottom:0;" value="30" min="1" max="365"/>
+          </div>
+        </div>
+        <div>
+          <label for="qt-notes" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Personal note to customer (optional)</label>
+          <textarea id="qt-notes" style="width:100%;padding:11px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;resize:vertical;min-height:72px;outline:none;" placeholder="e.g. Great talking with you! Based on the property walkthrough, here's what we'd recommend…"></textarea>
+        </div>
+      </div>
+
+      <!-- Preview & Send -->
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <button onclick="qtSend()" id="qt-send-btn" style="background:var(--green-deep);color:#fff;border:none;border-radius:10px;padding:14px 28px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .2s;">📧 Send Quote Email</button>
+        <button onclick="qtReset()" style="background:transparent;border:1.5px solid var(--border);border-radius:10px;padding:13px 20px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text-muted);">🗑 Clear</button>
+        <span id="qt-status" style="font-size:14px;font-weight:600;"></span>
+      </div>
+
+    </div>
+  </div>
+
 </div><!-- /appScreen -->
 
 <!-- ══ CUSTOMER EDIT MODAL (Price / Frequency / Notes) ══ -->
@@ -852,11 +939,11 @@
     <div class="modal-detail" id="invoiceDetail"></div>
 
     <div class="form-row">
-      <label class="form-label">Invoice Amount ($)</label>
+      <label class="form-label" for="invoiceAmount">Invoice Amount ($)</label>
       <input type="number" id="invoiceAmount" class="modal-input" placeholder="e.g. 60" step="0.01" min="1" oninput="updateInvoicePreview()"/>
     </div>
     <div class="form-row">
-      <label class="form-label">Days to Pay</label>
+      <label class="form-label" for="invoiceDays">Days to Pay</label>
       <input type="number" id="invoiceDays" class="modal-input" value="7" min="1" max="30"/>
     </div>
 
@@ -875,7 +962,7 @@
     </div>
 
     <div class="form-row">
-      <label class="form-label">Note to Customer (optional)</label>
+      <label class="form-label" for="invoiceNote">Note to Customer (optional)</label>
       <textarea id="invoiceNote" class="modal-textarea" rows="2" placeholder="Thanks for your business!"></textarea>
     </div>
 
@@ -907,18 +994,18 @@
     <h4>Reschedule Appointment</h4>
     <p id="ownerReschedName" style="margin:0 0 12px;font-weight:600;color:#276749;"></p>
     <div style="margin-bottom:12px;">
-      <label style="font-size:13px;color:#555;display:block;margin-bottom:4px;">New Date</label>
+      <label for="ownerReschedDate" style="font-size:13px;color:#555;display:block;margin-bottom:4px;">New Date</label>
       <input type="date" id="ownerReschedDate" style="width:100%;padding:8px 10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;"/>
     </div>
     <div style="margin-bottom:16px;">
-      <label style="font-size:13px;color:#555;display:block;margin-bottom:4px;">Scope</label>
+      <label for="ownerReschedScope" style="font-size:13px;color:#555;display:block;margin-bottom:4px;">Scope</label>
       <select id="ownerReschedScope" style="width:100%;padding:8px 10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;">
         <option value="single">Only this appointment</option>
         <option value="all">All future appointments</option>
       </select>
     </div>
     <div style="margin-bottom:16px;">
-      <label style="font-size:13px;color:#555;display:block;margin-bottom:4px;">Reason <span style="font-size:12px;color:#9ca3af;">(optional — shown in customer email)</span></label>
+      <label for="ownerReschedReason" style="font-size:13px;color:#555;display:block;margin-bottom:4px;">Reason <span style="font-size:12px;color:#9ca3af;">(optional — shown in customer email)</span></label>
       <input type="text" id="ownerReschedReason" placeholder="e.g. Schedule conflict, weather…"
              style="width:100%;padding:8px 10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;"/>
     </div>
@@ -936,13 +1023,13 @@
     <p id="confirmMsg"></p>
     <!-- Crew input — only shown for mark-done actions -->
     <div id="confirmCrewRow" style="display:none;margin-top:14px;">
-      <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:5px;letter-spacing:.03em;">COMPLETED BY <span style="font-weight:400;color:var(--text-muted);">(comma-separate multiple people)</span></label>
+      <label for="confirmCrewInput" style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:5px;letter-spacing:.03em;">COMPLETED BY <span style="font-weight:400;color:var(--text-muted);">(comma-separate multiple people)</span></label>
       <input type="text" id="confirmCrewInput" placeholder="e.g. Hunter, Jon"
              style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-family:inherit;font-size:14px;outline:none;"/>
     </div>
     <!-- Reason input — shown for cancel/reschedule actions -->
     <div id="confirmReasonRow" style="display:none;margin-top:10px;">
-      <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:5px;letter-spacing:.03em;">REASON <span style="font-weight:400;color:var(--text-muted);">(optional — shown in customer email)</span></label>
+      <label for="confirmReasonInput" style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:5px;letter-spacing:.03em;">REASON <span style="font-weight:400;color:var(--text-muted);">(optional — shown in customer email)</span></label>
       <input type="text" id="confirmReasonInput" placeholder="e.g. Weather, schedule conflict…"
              style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-family:inherit;font-size:14px;outline:none;"/>
     </div>
@@ -959,7 +1046,7 @@
     <h4 id="scheduleModalTitle" style="margin:0 0 16px;">📋 Start New Plan</h4>
     <div style="display:flex;flex-direction:column;gap:12px;">
       <div>
-        <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Plan</label>
+        <label for="schedPlan" style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Plan</label>
         <select id="schedPlan" onchange="schedAutoFillPrice()" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;">
           <option value="Quote Visit">📋 Quote Visit (free on-site estimate)</option>
           <option value="Weekly Plan">Weekly Plan</option>
@@ -969,11 +1056,11 @@
         </select>
       </div>
       <div id="sched-custom-days-row" style="display:none;">
-        <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Visit every (days)</label>
+        <label for="schedCustomDays" style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Visit every (days)</label>
         <input id="schedCustomDays" type="number" min="1" placeholder="e.g. 21" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;">
       </div>
       <div>
-        <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Yard Size</label>
+        <label for="schedYard" style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Yard Size</label>
         <select id="schedYard" onchange="schedAutoFillPrice()" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;">
           <option value="">— Select yard size —</option>
           <option value="small">Small · Under ¼ acre</option>
@@ -984,14 +1071,14 @@
         </select>
       </div>
       <div>
-        <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Payment Method</label>
+        <label for="schedPayMethod" style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Payment Method</label>
         <select id="schedPayMethod" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;">
           <option value="card">💳 Card</option>
           <option value="cash">💵 Cash</option>
         </select>
       </div>
       <div>
-        <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Price per mow ($)</label>
+        <label for="schedPrice" style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Price per mow ($)</label>
         <input id="schedPrice" type="number" min="0" step="1" placeholder="Auto-filled or enter manually" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;" oninput="onSchedPromoChange()">
       </div>
       <div id="sched-promo-row" style="display:none;">
@@ -1002,11 +1089,11 @@
         <div id="sched-promo-note" style="font-size:12px;color:#15803d;margin-top:4px;padding-left:26px;display:none;"></div>
       </div>
       <div>
-        <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">First appointment date</label>
+        <label for="schedDate" style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">First appointment date</label>
         <input id="schedDate" type="date" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;">
       </div>
       <div>
-        <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Notes (optional)</label>
+        <label for="schedNotes" style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Notes (optional)</label>
         <input id="schedNotes" type="text" placeholder="e.g. Don't go in backyard" style="width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;">
       </div>
     </div>
@@ -1267,6 +1354,196 @@ function showTab(tab) {
   if (tab === 'analytics') loadAnalytics();
   if (tab === 'route')     initRouteTab();
   if (tab === 'customers') { loadCustomers(); }
+  if (tab === 'quote')     { qtInit(); }
+}
+
+// ═══════════════════════════════════════════════════════
+// QUOTE BUILDER TAB (owner only)
+// ═══════════════════════════════════════════════════════
+let qtItems = [];
+let qtItemIdCounter = 0;
+let qtInitialized = false;
+
+// Default service options for quick picks
+const QT_QUICK_SERVICES = [
+  { desc: 'Lawn Mow & Blow', price: 45 },
+  { desc: 'Biweekly Lawn Service', price: 49 },
+  { desc: 'Weekly Lawn Service', price: 39 },
+  { desc: 'Hedge / Shrub Trimming', price: 60 },
+  { desc: 'Leaf Cleanup', price: 75 },
+  { desc: 'Edging & Trimming', price: 35 },
+];
+
+function qtInit() {
+  if (qtInitialized) return;
+  qtInitialized = true;
+  // Auto-generate a quote number
+  const now = new Date();
+  const rand = Math.floor(Math.random() * 9000 + 1000);
+  document.getElementById('qt-number').value = 'Q-' + now.getFullYear() + '-' + rand;
+  // Add one default item
+  if (!qtItems.length) qtAddItem();
+}
+
+function qtAddItem(desc = '', price = '', qty = 1) {
+  const id = ++qtItemIdCounter;
+  qtItems.push({ id, desc, price, qty });
+  qtRenderItems();
+}
+
+function qtRemoveItem(id) {
+  qtItems = qtItems.filter(it => it.id !== id);
+  if (!qtItems.length) qtAddItem();
+  else qtRenderItems();
+}
+
+function qtRenderItems() {
+  const list = document.getElementById('qt-items-list');
+  if (!list) return;
+  list.innerHTML = qtItems.map(it => `
+    <div id="qt-row-${it.id}" style="display:grid;grid-template-columns:3fr 0.7fr 1fr auto;gap:8px;margin-bottom:8px;align-items:center;">
+      <input type="text" value="${esc(it.desc)}" placeholder="e.g. Biweekly Lawn Service"
+        style="padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px;outline:none;"
+        oninput="qtUpdateItem(${it.id},'desc',this.value)" list="qt-service-list"/>
+      <input type="number" value="${it.qty}" min="1" step="1"
+        style="padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px;text-align:center;outline:none;"
+        oninput="qtUpdateItem(${it.id},'qty',this.value)"/>
+      <div style="position:relative;">
+        <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--text-muted);">$</span>
+        <input type="number" value="${it.price}" min="0" step="0.01" placeholder="0.00"
+          style="padding:9px 10px 9px 22px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px;width:100%;outline:none;"
+          oninput="qtUpdateItem(${it.id},'price',this.value)"/>
+      </div>
+      <button onclick="qtRemoveItem(${it.id})" style="background:#fee2e2;border:none;border-radius:8px;width:34px;height:34px;cursor:pointer;font-size:16px;color:#dc2626;display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>`).join('');
+
+  // Quick-pick datalist
+  if (!document.getElementById('qt-service-list')) {
+    const dl = document.createElement('datalist');
+    dl.id = 'qt-service-list';
+    dl.innerHTML = QT_QUICK_SERVICES.map(s => `<option value="${s.desc}">`).join('');
+    document.body.appendChild(dl);
+  }
+  qtRecalc();
+}
+
+function qtUpdateItem(id, field, val) {
+  const it = qtItems.find(i => i.id === id);
+  if (!it) return;
+  it[field] = val;
+  // Auto-fill price when a known service is typed
+  if (field === 'desc') {
+    const match = QT_QUICK_SERVICES.find(s => s.desc.toLowerCase() === val.toLowerCase());
+    if (match) {
+      it.price = match.price;
+      // Update the price input in the row
+      const row = document.getElementById('qt-row-' + id);
+      if (row) {
+        const priceInput = row.querySelectorAll('input')[2];
+        if (priceInput) priceInput.value = match.price;
+      }
+    }
+  }
+  qtRecalc();
+}
+
+function qtRecalc() {
+  const subtotal = qtItems.reduce((sum, it) => {
+    return sum + (parseFloat(it.price) || 0) * (parseFloat(it.qty) || 1);
+  }, 0);
+  const el = document.getElementById('qt-subtotal');
+  if (el) el.textContent = '$' + subtotal.toFixed(2);
+}
+
+function qtFillFromCustomer() {
+  // Let owner pick from existing customers
+  const name  = prompt('Enter customer name or email to search:');
+  if (!name) return;
+  const norm  = name.toLowerCase().trim();
+  const found = allCustomers.find(c =>
+    (c.Name || '').toLowerCase().includes(norm) ||
+    (c.Email || '').toLowerCase().includes(norm)
+  );
+  if (!found) { showToast('No customer found for: ' + name); return; }
+  const nameEl    = document.getElementById('qt-name');
+  const emailEl   = document.getElementById('qt-email');
+  const addrEl    = document.getElementById('qt-address');
+  if (nameEl)  nameEl.value  = found.Name    || '';
+  if (emailEl) emailEl.value = found.Email   || '';
+  if (addrEl)  addrEl.value  = found.Address || '';
+  showToast('Filled from: ' + (found.Name || found.Email));
+}
+
+async function qtSend() {
+  const name      = (document.getElementById('qt-name')?.value      || '').trim();
+  const email     = (document.getElementById('qt-email')?.value     || '').trim();
+  const address   = (document.getElementById('qt-address')?.value   || '').trim();
+  const quoteNum  = (document.getElementById('qt-number')?.value    || '').trim();
+  const validDays = parseInt(document.getElementById('qt-valid-days')?.value || '30') || 30;
+  const notes     = (document.getElementById('qt-notes')?.value     || '').trim();
+
+  if (!name)  { showToast('Enter customer name'); return; }
+  if (!email) { showToast('Enter customer email'); return; }
+  if (!qtItems.length || qtItems.every(it => !it.desc)) { showToast('Add at least one line item'); return; }
+
+  const btn    = document.getElementById('qt-send-btn');
+  const status = document.getElementById('qt-status');
+  btn.disabled = true;
+  btn.textContent = '📧 Sending…';
+  if (status) { status.textContent = ''; status.style.color = ''; }
+
+  const params = new URLSearchParams({
+    action:      'send_quote_email',
+    adminToken:  adminToken,
+    name,
+    email,
+    address,
+    quoteNumber: quoteNum,
+    validDays:   validDays,
+    notes,
+    items:       JSON.stringify(qtItems.map(it => ({
+      desc:  it.desc || 'Service',
+      qty:   parseFloat(it.qty)   || 1,
+      price: parseFloat(it.price) || 0,
+    }))),
+  });
+
+  try {
+    const res  = await fetch(SCRIPT_URL + '?' + params.toString());
+    const data = await res.json();
+    if (data.success) {
+      if (status) {
+        status.textContent = '✅ Quote ' + (data.quoteNumber || quoteNum) + ' sent to ' + email + ' — $' + (data.subtotal || '0');
+        status.style.color = '#16a34a';
+      }
+      showToast('✅ Quote emailed to ' + name + '!');
+      // Auto-generate a fresh quote number for next use
+      const rand = Math.floor(Math.random() * 9000 + 1000);
+      const newQ = document.getElementById('qt-number');
+      if (newQ) newQ.value = 'Q-' + new Date().getFullYear() + '-' + rand;
+    } else {
+      throw new Error(data.error || 'Failed to send quote');
+    }
+  } catch(err) {
+    if (status) { status.textContent = '❌ ' + err.message; status.style.color = '#e53e3e'; }
+    showToast('Error: ' + err.message);
+  }
+  btn.disabled = false;
+  btn.textContent = '📧 Send Quote Email';
+}
+
+function qtReset() {
+  document.getElementById('qt-name').value    = '';
+  document.getElementById('qt-email').value   = '';
+  document.getElementById('qt-address').value = '';
+  document.getElementById('qt-notes').value   = '';
+  const status = document.getElementById('qt-status');
+  if (status) status.textContent = '';
+  qtItems = [];
+  qtAddItem();
+  const rand = Math.floor(Math.random() * 9000 + 1000);
+  const newQ = document.getElementById('qt-number');
+  if (newQ) newQ.value = 'Q-' + new Date().getFullYear() + '-' + rand;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -2124,7 +2401,7 @@ function cardHTML(b, rowIdx, isToday, tomorrowStr) {
   } else if (cash) {
     payBadge = `<span class="badge-paylater" style="background:#fef9c3;color:#854d0e;border-color:#fde047;">💵 Cash</span>`;
   } else if (invoiced) {
-    payBadge = `<span class="badge-invoiced">📧 Invoice sent</span>`;
+    payBadge = `<span class="badge-invoiced-pending">📧 Invoiced</span>`;
   } else if (auto) {
     payBadge = `<span class="badge-autopay">⚡ Autopay${cardInfo}</span>`;
   } else {
