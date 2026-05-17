@@ -3017,24 +3017,66 @@ async function fetchLiveReviewCount() {
 // overlay to match the visible area exactly.
 function initViewportKeyboardFix() {
   if (!window.visualViewport) return;
+  // Capture full-screen height before any keyboard shows
+  var fullHeight = window.visualViewport.height;
+  var kbOpen = false;
+
   const overlays = () => document.querySelectorAll('.modal-overlay.open');
+
   function applyVP() {
-    const vp = window.visualViewport;
-    overlays().forEach(el => {
+    var vp = window.visualViewport;
+    // Update fullHeight when it grows (keyboard closed, screen rotated, etc.)
+    if (vp.height > fullHeight) fullHeight = vp.height;
+    var isKB = vp.height < fullHeight * 0.8;
+    kbOpen = isKB;
+
+    overlays().forEach(function(el) {
       el.style.top    = vp.offsetTop + 'px';
       el.style.height = vp.height + 'px';
+      if (isKB) {
+        // Collapse top padding so modal isn't buried under keyboard
+        el.style.paddingTop  = '8px';
+        el.style.paddingBottom = '8px';
+        el.style.alignItems  = 'flex-start';
+        var modal = el.querySelector('.modal');
+        if (modal) modal.style.maxHeight = (vp.height - 16) + 'px';
+      } else {
+        el.style.paddingTop    = '';
+        el.style.paddingBottom = '';
+        el.style.alignItems    = '';
+        var modal = el.querySelector('.modal');
+        if (modal) modal.style.maxHeight = '';
+      }
     });
+
+    // Scroll focused input into view within the modal
+    if (isKB) {
+      var focused = document.activeElement;
+      if (focused && (focused.tagName === 'INPUT' || focused.tagName === 'SELECT' || focused.tagName === 'TEXTAREA')) {
+        setTimeout(function() {
+          focused.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }, 80);
+      }
+    }
   }
+
   function resetVP() {
-    overlays().forEach(el => {
-      el.style.top    = '';
-      el.style.height = '';
+    if (kbOpen) return;
+    overlays().forEach(function(el) {
+      el.style.top           = '';
+      el.style.height        = '';
+      el.style.paddingTop    = '';
+      el.style.paddingBottom = '';
+      el.style.alignItems    = '';
+      var modal = el.querySelector('.modal');
+      if (modal) modal.style.maxHeight = '';
     });
   }
+
   window.visualViewport.addEventListener('resize', applyVP);
   window.visualViewport.addEventListener('scroll', applyVP);
-  // Reset when a modal closes so the style doesn't linger
-  document.addEventListener('focusout', () => setTimeout(resetVP, 100));
+  // Reset styles after keyboard fully closes
+  document.addEventListener('focusout', function() { setTimeout(resetVP, 200); });
 }
 
 // ─────────────────────────────────────────────
