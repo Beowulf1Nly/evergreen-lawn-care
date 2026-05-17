@@ -2630,14 +2630,30 @@ function completedCardHTML(b, rowIdx) {
     </div>`;
 }
 
+// Guard set — prevents duplicate sends if button is re-rendered mid-request or clicked twice
+const _reviewSendInFlight = new Set();
+
 async function sendReviewRequest(rowIdx, skipConfirm = false) {
+  // Abort if a send is already in flight for this row
+  if (_reviewSendInFlight.has(rowIdx)) { showToast('Already sending — please wait.'); return; }
+
   const b = allBookings[rowIdx];
   if (!b) return;
   if (!b.email) { alert('No email on file for ' + (b.name||'this customer') + '.'); return; }
-  if (!skipConfirm && !confirm(`Send a review request email to ${b.name} (${b.email})?`)) return;
 
-  const btn = document.querySelector(`#compCard_${rowIdx} button`);
-  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  // Warn if a review was already sent previously
+  if (b.reviewSent) {
+    if (!confirm(`⚠️ A review email was already sent to ${b.name} on ${b.reviewSent}.\n\nSend another one anyway?`)) return;
+  } else if (!skipConfirm && !confirm(`Send a review request email to ${b.name} (${b.email})?`)) return;
+
+  _reviewSendInFlight.add(rowIdx);
+  // Disable ALL review buttons for this email to cover re-rendered cards
+  document.querySelectorAll('.btn-review-req').forEach(el => {
+    if ((el.dataset.email || '').toLowerCase() === (b.email || '').toLowerCase()) {
+      el.disabled = true; el.textContent = 'Sending…';
+    }
+  });
+  const btn = document.querySelector(`#compCard_${rowIdx} .btn-review-req`);
 
   try {
     const res  = await fetch(SCRIPT_URL + '?action=send_review_request&rowIndex=' + (rowIdx+2) + '&' + authParam());
@@ -2647,12 +2663,12 @@ async function sendReviewRequest(rowIdx, skipConfirm = false) {
       renderBookings();
       showToast('⭐ Review request sent to ' + (b.name||'customer') + '!');
     } else {
-      if (btn) { btn.disabled = false; btn.textContent = '⭐ Request Review'; }
       alert('Error: ' + (data.error || 'Could not send.'));
     }
   } catch(err) {
-    if (btn) { btn.disabled = false; btn.textContent = '⭐ Request Review'; }
     alert('Network error: ' + err.message);
+  } finally {
+    _reviewSendInFlight.delete(rowIdx);
   }
 }
 

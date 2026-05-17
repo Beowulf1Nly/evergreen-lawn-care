@@ -264,9 +264,10 @@
     white-space:nowrap; flex-shrink:0;
     text-transform:uppercase; letter-spacing:.04em;
   }
-  .chip-paid    { background:#e0f2e9; color:#166534; }
-  .chip-unpaid  { background:#fff7ed; color:#92400e; }
-  .chip-done    { background:#eff6ff; color:#1d4ed8; }
+  .chip-paid     { background:#e0f2e9; color:#166534; }
+  .chip-unpaid   { background:#fff7ed; color:#92400e; }
+  .chip-done     { background:#eff6ff; color:#1d4ed8; }
+  .chip-invoiced { background:#e0f2fe; color:#075985; }
   .booking-meta { font-size:13px; color:var(--text-muted); display:flex; flex-wrap:wrap; gap:8px 16px; }
   .booking-meta span { display:flex; align-items:center; gap:4px; }
   .price-tag { font-weight:700; color:var(--green-deep); font-size:14px; }
@@ -1396,9 +1397,11 @@ function bookingCardHTML(b, isUpcoming) {
 
   const isPaid   = paidVal.includes('✅') || paidVal.toLowerCase().includes('auto-pay')
                 || invoiced.includes('auto');
+  // Invoice was sent but customer hasn't paid yet
+  const isInvoiced = !isPaid && !!b.invoiced && String(b.invoiced).trim() !== '';
 
-  const chipClass = isPaid ? 'chip-paid' : (isDone ? 'chip-done' : 'chip-unpaid');
-  const chipText  = isPaid ? '✅ Paid' : (isDone ? '✓ Done' : 'Pending');
+  const chipClass = isPaid ? 'chip-paid' : (isInvoiced ? 'chip-invoiced' : (isDone ? 'chip-done' : 'chip-unpaid'));
+  const chipText  = isPaid ? '✅ Paid' : (isInvoiced ? '📄 Invoiced' : (isDone ? '✓ Done' : 'Pending'));
 
   const isFreeMow      = b.frequency === 'Free Mow';
   const isSubscription = b.frequency && b.frequency !== 'One-time visit' && !isFreeMow;
