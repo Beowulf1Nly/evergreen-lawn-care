@@ -834,82 +834,103 @@
 
   <!-- ── SEND QUOTE TAB (owner only) ── -->
   <div id="pane-quote" class="tab-pane">
-    <div class="container" style="max-width:700px;">
+    <div class="container" style="max-width:720px;padding-bottom:40px;">
 
       <div style="margin-bottom:24px;">
-        <div style="font-size:22px;font-weight:700;color:var(--green-deep);margin-bottom:4px;">💬 Send a Quote</div>
+        <div style="font-size:22px;font-weight:700;color:var(--green-deep);margin-bottom:4px;">📋 Send an Estimate</div>
         <div style="font-size:14px;color:var(--text-muted);">Build a professional estimate and email it directly to a customer.</div>
       </div>
 
-      <!-- Customer details -->
-      <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:16px;">
-        <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;">Customer Info</div>
+      <!-- ── CUSTOMER INFO ── -->
+      <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">Customer Info</div>
+          <button onclick="qtFillFromCustomer()" style="background:var(--green-pale);border:none;border-radius:8px;padding:7px 13px;font-size:13px;font-weight:600;color:var(--green-deep);cursor:pointer;">⚡ Fill from existing customer</button>
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div>
-            <label for="qt-name" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Full Name *</label>
-            <input id="qt-name" type="text" class="login-input" style="margin-bottom:0;" placeholder="Jane Smith"/>
+            <label for="qt-name" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Customer Name *</label>
+            <input id="qt-name" type="text" class="login-input" style="margin-bottom:0;" placeholder="Fillmore Lamantia"/>
+          </div>
+          <div>
+            <label for="qt-phone" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Phone Number</label>
+            <input id="qt-phone" type="tel" class="login-input" style="margin-bottom:0;" placeholder="(352) 555-0123"/>
           </div>
           <div>
             <label for="qt-email" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Email Address *</label>
             <input id="qt-email" type="email" class="login-input" style="margin-bottom:0;" placeholder="jane@email.com"/>
           </div>
+          <div><!-- spacer --></div>
           <div style="grid-column:1/-1;">
-            <label for="qt-address" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Property Address</label>
-            <input id="qt-address" type="text" class="login-input" style="margin-bottom:0;" placeholder="123 Oak St, Inverness FL 34450"/>
+            <label for="qt-address" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Service Address</label>
+            <input id="qt-address" type="text" class="login-input" style="margin-bottom:0;" placeholder="296 N Quartz Avenue, Inverness FL 34450"/>
           </div>
-        </div>
-        <div style="margin-top:12px;">
-          <button style="background:var(--green-pale);border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;color:var(--green-deep);cursor:pointer;" onclick="qtFillFromCustomer()">⚡ Fill from existing customer</button>
         </div>
       </div>
 
-      <!-- Line items -->
-      <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:16px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-          <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">Line Items</div>
-          <button onclick="qtAddItem()" style="background:var(--green-mid);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;">+ Add Item</button>
+      <!-- ── ESTIMATE SETTINGS ── -->
+      <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:14px;">
+        <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;">Estimate Details</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+          <div>
+            <label for="qt-number" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Estimate #</label>
+            <input id="qt-number" type="text" class="login-input" style="margin-bottom:0;" placeholder="E-2026-1001"/>
+          </div>
+          <div>
+            <label for="qt-date" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Estimate Date</label>
+            <input id="qt-date" type="date" class="login-input" style="margin-bottom:0;"/>
+          </div>
+          <div>
+            <label for="qt-valid-thru" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Valid Through</label>
+            <input id="qt-valid-thru" type="date" class="login-input" style="margin-bottom:0;"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── ESTIMATE SUMMARY ── -->
+      <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:14px;">
+        <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">Estimate Summary</div>
+        <textarea id="qt-summary" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;resize:vertical;min-height:90px;outline:none;box-sizing:border-box;" placeholder="e.g. Rake out unwanted plants in the (4) back flower beds and put new black mulch over existing mulch and dirt. The customer does not want lining for this service."></textarea>
+      </div>
+
+      <!-- ── SERVICES ── -->
+      <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">Services</div>
+          <button onclick="qtAddItem()" style="background:var(--green-mid);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;">+ Add Service</button>
         </div>
 
-        <!-- Header -->
-        <div style="display:grid;grid-template-columns:3fr 0.7fr 1fr auto;gap:8px;margin-bottom:8px;">
+        <!-- Column headers -->
+        <div style="display:grid;grid-template-columns:1fr 130px 32px;gap:8px;margin-bottom:6px;padding:0 2px;">
           <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;">Description</div>
-          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;text-align:center;">Qty</div>
-          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;text-align:right;">Unit Price</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;text-align:right;">Price</div>
           <div></div>
         </div>
 
         <div id="qt-items-list"></div>
 
-        <!-- Subtotal -->
-        <div style="border-top:2px solid var(--border);margin-top:12px;padding-top:12px;display:flex;justify-content:flex-end;align-items:center;gap:16px;">
-          <span style="font-size:14px;font-weight:600;color:var(--text-muted);">Subtotal:</span>
-          <span id="qt-subtotal" style="font-size:20px;font-weight:800;color:var(--green-deep);">$0.00</span>
+        <!-- Total -->
+        <div style="border-top:2px solid #1a3a1a;margin-top:0;display:grid;grid-template-columns:1fr 130px 32px;gap:8px;align-items:center;background:#1a3a1a;border-radius:0 0 8px 8px;padding:12px 10px;margin-left:-1px;margin-right:-1px;">
+          <div style="font-size:14px;font-weight:700;color:#fff;text-align:right;grid-column:1/2;">Total</div>
+          <div id="qt-subtotal" style="font-size:15px;font-weight:800;color:#fff;text-align:right;">$0.00</div>
+          <div></div>
         </div>
       </div>
 
-      <!-- Quote settings -->
-      <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:16px;">
-        <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;">Quote Settings</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-          <div>
-            <label for="qt-number" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Quote # (auto-generated)</label>
-            <input id="qt-number" type="text" class="login-input" style="margin-bottom:0;" placeholder="Q-2026-1234"/>
-          </div>
-          <div>
-            <label for="qt-valid-days" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Valid for (days)</label>
-            <input id="qt-valid-days" type="number" class="login-input" style="margin-bottom:0;" value="30" min="1" max="365"/>
-          </div>
+      <!-- ── NOTES (bullet list) ── -->
+      <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">Notes</div>
+          <button onclick="qtAddNote()" style="background:var(--green-pale);border:none;border-radius:8px;padding:7px 13px;font-size:13px;font-weight:600;color:var(--green-deep);cursor:pointer;">+ Add Note</button>
         </div>
-        <div>
-          <label for="qt-notes" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Personal note to customer (optional)</label>
-          <textarea id="qt-notes" style="width:100%;padding:11px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;resize:vertical;min-height:72px;outline:none;" placeholder="e.g. Great talking with you! Based on the property walkthrough, here's what we'd recommend…"></textarea>
-        </div>
+        <div id="qt-notes-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+        <div id="qt-notes-empty" style="font-size:13px;color:var(--text-muted);font-style:italic;">No notes yet — click "+ Add Note" to add bullet points that appear at the bottom of the estimate.</div>
       </div>
 
-      <!-- Preview & Send -->
+      <!-- ── SEND / CLEAR ── -->
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <button onclick="qtSend()" id="qt-send-btn" style="background:var(--green-deep);color:#fff;border:none;border-radius:10px;padding:14px 28px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .2s;">📧 Send Quote Email</button>
-        <button onclick="qtReset()" style="background:transparent;border:1.5px solid var(--border);border-radius:10px;padding:13px 20px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text-muted);">🗑 Clear</button>
+        <button onclick="qtSend()" id="qt-send-btn" style="background:var(--green-deep);color:#fff;border:none;border-radius:10px;padding:14px 28px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .2s;">📧 Send Estimate</button>
+        <button onclick="qtReset()" style="background:transparent;border:1.5px solid var(--border);border-radius:10px;padding:13px 20px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text-muted);">🗑 Clear All</button>
         <span id="qt-status" style="font-size:14px;font-weight:600;"></span>
       </div>
 
@@ -1358,36 +1379,34 @@ function showTab(tab) {
 }
 
 // ═══════════════════════════════════════════════════════
-// QUOTE BUILDER TAB (owner only)
+// ESTIMATE BUILDER TAB (owner only)
 // ═══════════════════════════════════════════════════════
-let qtItems = [];
+let qtItems   = [];
+let qtNotes   = [];
 let qtItemIdCounter = 0;
-let qtInitialized = false;
-
-// Default service options for quick picks
-const QT_QUICK_SERVICES = [
-  { desc: 'Lawn Mow & Blow', price: 45 },
-  { desc: 'Biweekly Lawn Service', price: 49 },
-  { desc: 'Weekly Lawn Service', price: 39 },
-  { desc: 'Hedge / Shrub Trimming', price: 60 },
-  { desc: 'Leaf Cleanup', price: 75 },
-  { desc: 'Edging & Trimming', price: 35 },
-];
+let qtNoteIdCounter = 0;
+let qtInitialized   = false;
 
 function qtInit() {
   if (qtInitialized) return;
   qtInitialized = true;
-  // Auto-generate a quote number
-  const now = new Date();
-  const rand = Math.floor(Math.random() * 9000 + 1000);
-  document.getElementById('qt-number').value = 'Q-' + now.getFullYear() + '-' + rand;
-  // Add one default item
+  // Auto estimate number
+  const now  = new Date();
+  const rand = Math.floor(Math.random() * 900 + 100);
+  document.getElementById('qt-number').value = 'E-' + now.getFullYear() + '-' + rand;
+  // Default dates: today + valid thru 30 days out
+  const today = now.toISOString().slice(0,10);
+  const thru  = new Date(now); thru.setDate(thru.getDate() + 30);
+  document.getElementById('qt-date').value       = today;
+  document.getElementById('qt-valid-thru').value = thru.toISOString().slice(0,10);
+  // Start with one blank service row
   if (!qtItems.length) qtAddItem();
 }
 
-function qtAddItem(desc = '', price = '', qty = 1) {
+// ── SERVICES ──────────────────────────────────────────
+function qtAddItem(desc = '', price = 0, included = false) {
   const id = ++qtItemIdCounter;
-  qtItems.push({ id, desc, price, qty });
+  qtItems.push({ id, desc, price, included });
   qtRenderItems();
 }
 
@@ -1397,33 +1416,11 @@ function qtRemoveItem(id) {
   else qtRenderItems();
 }
 
-function qtRenderItems() {
-  const list = document.getElementById('qt-items-list');
-  if (!list) return;
-  list.innerHTML = qtItems.map(it => `
-    <div id="qt-row-${it.id}" style="display:grid;grid-template-columns:3fr 0.7fr 1fr auto;gap:8px;margin-bottom:8px;align-items:center;">
-      <input type="text" value="${esc(it.desc)}" placeholder="e.g. Biweekly Lawn Service"
-        style="padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px;outline:none;"
-        oninput="qtUpdateItem(${it.id},'desc',this.value)" list="qt-service-list"/>
-      <input type="number" value="${it.qty}" min="1" step="1"
-        style="padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px;text-align:center;outline:none;"
-        oninput="qtUpdateItem(${it.id},'qty',this.value)"/>
-      <div style="position:relative;">
-        <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--text-muted);">$</span>
-        <input type="number" value="${it.price}" min="0" step="0.01" placeholder="0.00"
-          style="padding:9px 10px 9px 22px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px;width:100%;outline:none;"
-          oninput="qtUpdateItem(${it.id},'price',this.value)"/>
-      </div>
-      <button onclick="qtRemoveItem(${it.id})" style="background:#fee2e2;border:none;border-radius:8px;width:34px;height:34px;cursor:pointer;font-size:16px;color:#dc2626;display:flex;align-items:center;justify-content:center;">✕</button>
-    </div>`).join('');
-
-  // Quick-pick datalist
-  if (!document.getElementById('qt-service-list')) {
-    const dl = document.createElement('datalist');
-    dl.id = 'qt-service-list';
-    dl.innerHTML = QT_QUICK_SERVICES.map(s => `<option value="${s.desc}">`).join('');
-    document.body.appendChild(dl);
-  }
+function qtToggleIncluded(id) {
+  const it = qtItems.find(i => i.id === id);
+  if (!it) return;
+  it.included = !it.included;
+  qtRenderItems();
   qtRecalc();
 }
 
@@ -1431,60 +1428,131 @@ function qtUpdateItem(id, field, val) {
   const it = qtItems.find(i => i.id === id);
   if (!it) return;
   it[field] = val;
-  // Auto-fill price when a known service is typed
-  if (field === 'desc') {
-    const match = QT_QUICK_SERVICES.find(s => s.desc.toLowerCase() === val.toLowerCase());
-    if (match) {
-      it.price = match.price;
-      // Update the price input in the row
-      const row = document.getElementById('qt-row-' + id);
-      if (row) {
-        const priceInput = row.querySelectorAll('input')[2];
-        if (priceInput) priceInput.value = match.price;
-      }
-    }
+  qtRecalc();
+}
+
+function qtRenderItems() {
+  const list = document.getElementById('qt-items-list');
+  if (!list) return;
+
+  // Ensure datalist exists
+  if (!document.getElementById('qt-service-dl')) {
+    const dl = document.createElement('datalist');
+    dl.id = 'qt-service-dl';
+    dl.innerHTML = [
+      'Lawn Mow & Blow','Biweekly Lawn Service','Weekly Lawn Service',
+      'Hedge / Shrub Trimming','Leaf Cleanup','Edging & Trimming',
+      'Mulch bed preparation','Debris removal / haul-off','Mulch material','Mulch installation',
+      'Fertilization','Weed control','Aeration','Sod installation','Tree trimming',
+    ].map(s => `<option value="${s}">`).join('');
+    document.body.appendChild(dl);
   }
+
+  list.innerHTML = qtItems.map((it, idx) => {
+    const borderTop = idx === 0 ? '' : 'border-top:1px solid var(--border);';
+    const priceCell = it.included
+      ? `<div style="text-align:right;padding:0 2px;">
+           <span style="font-size:13px;font-weight:600;color:#6b7280;font-style:italic;">Included</span>
+         </div>`
+      : `<div style="position:relative;">
+           <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text-muted);">$</span>
+           <input type="number" value="${it.price || ''}" min="0" step="0.01" placeholder="0.00"
+             style="padding:8px 8px 8px 20px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px;width:100%;outline:none;box-sizing:border-box;"
+             oninput="qtUpdateItem(${it.id},'price',this.value)"/>
+         </div>`;
+
+    return `<div id="qt-row-${it.id}" style="display:grid;grid-template-columns:1fr 130px 32px;gap:8px;align-items:center;padding:8px 2px;${borderTop}">
+      <input type="text" value="${esc(it.desc)}" placeholder="e.g. Mulch installation — spread new black mulch"
+        list="qt-service-dl"
+        style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px;outline:none;width:100%;box-sizing:border-box;"
+        oninput="qtUpdateItem(${it.id},'desc',this.value)"/>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
+        ${priceCell}
+        <label style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none;">
+          <input type="checkbox" ${it.included ? 'checked' : ''} onchange="qtToggleIncluded(${it.id})" style="accent-color:var(--green-mid);width:13px;height:13px;">
+          Included
+        </label>
+      </div>
+      <button onclick="qtRemoveItem(${it.id})" style="background:#fee2e2;border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:15px;color:#dc2626;display:flex;align-items:center;justify-content:center;flex-shrink:0;">✕</button>
+    </div>`;
+  }).join('');
+
   qtRecalc();
 }
 
 function qtRecalc() {
-  const subtotal = qtItems.reduce((sum, it) => {
-    return sum + (parseFloat(it.price) || 0) * (parseFloat(it.qty) || 1);
+  const total = qtItems.reduce((sum, it) => {
+    if (it.included) return sum;
+    return sum + (parseFloat(it.price) || 0);
   }, 0);
   const el = document.getElementById('qt-subtotal');
-  if (el) el.textContent = '$' + subtotal.toFixed(2);
+  if (el) el.textContent = '$' + total.toFixed(2);
 }
 
+// ── NOTES (bullet list) ───────────────────────────────
+function qtAddNote(text = '') {
+  const id = ++qtNoteIdCounter;
+  qtNotes.push({ id, text });
+  qtRenderNotes();
+}
+
+function qtRemoveNote(id) {
+  qtNotes = qtNotes.filter(n => n.id !== id);
+  qtRenderNotes();
+}
+
+function qtUpdateNote(id, val) {
+  const n = qtNotes.find(n => n.id === id);
+  if (n) n.text = val;
+}
+
+function qtRenderNotes() {
+  const list  = document.getElementById('qt-notes-list');
+  const empty = document.getElementById('qt-notes-empty');
+  if (!list) return;
+  if (empty) empty.style.display = qtNotes.length ? 'none' : 'block';
+  list.innerHTML = qtNotes.map(n => `
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="color:var(--green-mid);font-weight:700;font-size:16px;flex-shrink:0;">•</span>
+      <input type="text" value="${esc(n.text)}" placeholder="e.g. Customer does not want bed lining"
+        style="flex:1;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px;outline:none;"
+        oninput="qtUpdateNote(${n.id},this.value)"/>
+      <button onclick="qtRemoveNote(${n.id})" style="background:#fee2e2;border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:14px;color:#dc2626;display:flex;align-items:center;justify-content:center;flex-shrink:0;">✕</button>
+    </div>`).join('');
+}
+
+// ── FILL FROM CUSTOMER ────────────────────────────────
 function qtFillFromCustomer() {
-  // Let owner pick from existing customers
-  const name  = prompt('Enter customer name or email to search:');
-  if (!name) return;
-  const norm  = name.toLowerCase().trim();
+  const query = prompt('Enter customer name or email to search:');
+  if (!query) return;
+  const norm  = query.toLowerCase().trim();
   const found = allCustomers.find(c =>
-    (c.Name || '').toLowerCase().includes(norm) ||
+    (c.Name  || '').toLowerCase().includes(norm) ||
     (c.Email || '').toLowerCase().includes(norm)
   );
-  if (!found) { showToast('No customer found for: ' + name); return; }
-  const nameEl    = document.getElementById('qt-name');
-  const emailEl   = document.getElementById('qt-email');
-  const addrEl    = document.getElementById('qt-address');
-  if (nameEl)  nameEl.value  = found.Name    || '';
-  if (emailEl) emailEl.value = found.Email   || '';
-  if (addrEl)  addrEl.value  = found.Address || '';
+  if (!found) { showToast('No customer found for: ' + query); return; }
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  set('qt-name',    found.Name    || '');
+  set('qt-phone',   found.Phone   || '');
+  set('qt-email',   found.Email   || '');
+  set('qt-address', found.Address || '');
   showToast('Filled from: ' + (found.Name || found.Email));
 }
 
+// ── SEND ──────────────────────────────────────────────
 async function qtSend() {
-  const name      = (document.getElementById('qt-name')?.value      || '').trim();
-  const email     = (document.getElementById('qt-email')?.value     || '').trim();
-  const address   = (document.getElementById('qt-address')?.value   || '').trim();
-  const quoteNum  = (document.getElementById('qt-number')?.value    || '').trim();
-  const validDays = parseInt(document.getElementById('qt-valid-days')?.value || '30') || 30;
-  const notes     = (document.getElementById('qt-notes')?.value     || '').trim();
+  const name     = (document.getElementById('qt-name')?.value       || '').trim();
+  const phone    = (document.getElementById('qt-phone')?.value      || '').trim();
+  const email    = (document.getElementById('qt-email')?.value      || '').trim();
+  const address  = (document.getElementById('qt-address')?.value    || '').trim();
+  const estNum   = (document.getElementById('qt-number')?.value     || '').trim();
+  const estDate  = (document.getElementById('qt-date')?.value       || '').trim();
+  const validThru= (document.getElementById('qt-valid-thru')?.value || '').trim();
+  const summary  = (document.getElementById('qt-summary')?.value    || '').trim();
 
   if (!name)  { showToast('Enter customer name'); return; }
   if (!email) { showToast('Enter customer email'); return; }
-  if (!qtItems.length || qtItems.every(it => !it.desc)) { showToast('Add at least one line item'); return; }
+  if (!qtItems.length || qtItems.every(it => !it.desc.trim())) { showToast('Add at least one service'); return; }
 
   const btn    = document.getElementById('qt-send-btn');
   const status = document.getElementById('qt-status');
@@ -1495,17 +1563,19 @@ async function qtSend() {
   const params = new URLSearchParams({
     action:      'send_quote_email',
     adminToken:  adminToken,
-    name,
-    email,
-    address,
-    quoteNumber: quoteNum,
-    validDays:   validDays,
-    notes,
-    items:       JSON.stringify(qtItems.map(it => ({
-      desc:  it.desc || 'Service',
-      qty:   parseFloat(it.qty)   || 1,
-      price: parseFloat(it.price) || 0,
-    }))),
+    name, phone, email, address,
+    quoteNumber: estNum,
+    estimateDate: estDate,
+    validThru:    validThru,
+    summary,
+    notes: JSON.stringify(qtNotes.map(n => n.text).filter(Boolean)),
+    items: JSON.stringify(qtItems
+      .filter(it => it.desc.trim())
+      .map(it => ({
+        desc:     it.desc,
+        price:    parseFloat(it.price) || 0,
+        included: it.included ? 'true' : 'false',
+      }))),
   });
 
   try {
@@ -1513,37 +1583,45 @@ async function qtSend() {
     const data = await res.json();
     if (data.success) {
       if (status) {
-        status.textContent = '✅ Quote ' + (data.quoteNumber || quoteNum) + ' sent to ' + email + ' — $' + (data.subtotal || '0');
+        status.textContent = '✅ Estimate ' + (data.quoteNumber || estNum) + ' sent to ' + email + ' — $' + (data.subtotal || '0');
         status.style.color = '#16a34a';
       }
-      showToast('✅ Quote emailed to ' + name + '!');
-      // Auto-generate a fresh quote number for next use
-      const rand = Math.floor(Math.random() * 9000 + 1000);
-      const newQ = document.getElementById('qt-number');
-      if (newQ) newQ.value = 'Q-' + new Date().getFullYear() + '-' + rand;
+      showToast('✅ Estimate emailed to ' + name + '!');
+      // Bump estimate number for next time
+      const parts = estNum.match(/^(.*-)(\d+)$/);
+      if (parts) {
+        const next = document.getElementById('qt-number');
+        if (next) next.value = parts[1] + (parseInt(parts[2]) + 1);
+      }
     } else {
-      throw new Error(data.error || 'Failed to send quote');
+      throw new Error(data.error || 'Failed to send estimate');
     }
   } catch(err) {
     if (status) { status.textContent = '❌ ' + err.message; status.style.color = '#e53e3e'; }
     showToast('Error: ' + err.message);
   }
   btn.disabled = false;
-  btn.textContent = '📧 Send Quote Email';
+  btn.textContent = '📧 Send Estimate';
 }
 
+// ── RESET ─────────────────────────────────────────────
 function qtReset() {
-  document.getElementById('qt-name').value    = '';
-  document.getElementById('qt-email').value   = '';
-  document.getElementById('qt-address').value = '';
-  document.getElementById('qt-notes').value   = '';
+  ['qt-name','qt-phone','qt-email','qt-address','qt-summary'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const now  = new Date();
+  const rand = Math.floor(Math.random() * 900 + 100);
+  const el   = document.getElementById('qt-number');
+  if (el) el.value = 'E-' + now.getFullYear() + '-' + rand;
+  const today = now.toISOString().slice(0,10);
+  const thru  = new Date(now); thru.setDate(thru.getDate() + 30);
+  const d = document.getElementById('qt-date');       if (d) d.value = today;
+  const v = document.getElementById('qt-valid-thru'); if (v) v.value = thru.toISOString().slice(0,10);
+  qtItems = []; qtNotes = [];
+  qtAddItem();
+  qtRenderNotes();
   const status = document.getElementById('qt-status');
   if (status) status.textContent = '';
-  qtItems = [];
-  qtAddItem();
-  const rand = Math.floor(Math.random() * 9000 + 1000);
-  const newQ = document.getElementById('qt-number');
-  if (newQ) newQ.value = 'Q-' + new Date().getFullYear() + '-' + rand;
 }
 
 // ═══════════════════════════════════════════════════════
