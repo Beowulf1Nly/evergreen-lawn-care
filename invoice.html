@@ -988,7 +988,7 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div>
             <label for="job-name" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Customer Name *</label>
-            <input id="job-name" type="text" class="login-input" style="margin-bottom:0;" placeholder="Jane Smith"/>
+            <input id="job-name" type="text" class="login-input" style="margin-bottom:0;" placeholder="Jane Smith" oninput="jobAutoFillEmail()"/>
           </div>
           <div>
             <label for="job-phone" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Phone Number</label>
@@ -1004,7 +1004,7 @@
           </div>
           <div style="grid-column:1/-1;">
             <label for="job-address" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Service Address *</label>
-            <input id="job-address" type="text" class="login-input" style="margin-bottom:0;" placeholder="123 Oak St, Inverness, FL 34450"/>
+            <input id="job-address" type="text" class="login-input" style="margin-bottom:0;" placeholder="123 Oak St, Inverness, FL 34450" oninput="jobAutoFillEmail()"/>
           </div>
         </div>
       </div>
@@ -1015,7 +1015,7 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div>
             <label for="job-date" id="job-date-label" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">First Service Date *</label>
-            <input id="job-date" type="date" class="login-input" style="margin-bottom:0;"/>
+            <input id="job-date" type="date" class="login-input" style="margin-bottom:0;" onchange="jobAutoFillEmail()"/>
           </div>
           <div>
             <label for="job-paymethod" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Payment Method *</label>
@@ -1052,7 +1052,7 @@
             </div>
             <div>
               <label for="job-price" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Price per Mow ($)</label>
-              <input id="job-price" type="number" min="0" step="1" class="login-input" style="margin-bottom:0;" placeholder="Auto-filled" oninput="jobPromoCheck()"/>
+              <input id="job-price" type="number" min="0" step="1" class="login-input" style="margin-bottom:0;" placeholder="Auto-filled" oninput="jobPromoCheck();jobAutoFillEmail()"/>
             </div>
           </div>
           <!-- END MOWING-ONLY -->
@@ -1083,7 +1083,7 @@
             </div>
             <div>
               <label for="job-crew" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Crew / Who's Going</label>
-              <input id="job-crew" type="text" class="login-input" style="margin-bottom:0;" placeholder="e.g. Hunter + Jared"/>
+              <input id="job-crew" type="text" class="login-input" style="margin-bottom:0;" placeholder="Hunter, Jon" oninput="jobAutoFillEmail()"/>
             </div>
             <div>
               <label for="job-duration" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Estimated Duration</label>
@@ -1110,7 +1110,7 @@
             </div>
             <div style="grid-column:1/-1;">
               <label for="job-total-other" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Total Charged to Customer ($)</label>
-              <input id="job-total-other" type="number" min="0" step="0.01" class="login-input" style="margin-bottom:0;font-weight:700;" placeholder="Auto-calculated — or enter manually" oninput="this.dataset.manualEdit='1';jobOtherCalcTotal()"/>
+              <input id="job-total-other" type="number" min="0" step="0.01" class="login-input" style="margin-bottom:0;font-weight:700;" placeholder="Auto-calculated — or enter manually" oninput="this.dataset.manualEdit='1';jobOtherCalcTotal();jobAutoFillEmail()"/>
               <div id="job-total-preview" style="font-size:12px;color:var(--text-muted);margin-top:4px;"></div>
             </div>
           </div>
@@ -1138,8 +1138,9 @@
             <input id="job-email-subject" type="text" class="login-input" style="margin-bottom:0;" placeholder="Your service is confirmed — Evergreen Lawn Care" oninput="this.dataset.edited='1'"/>
           </div>
           <div>
-            <label for="job-email-body" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Message <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
-            <textarea id="job-email-body" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;resize:vertical;min-height:90px;outline:none;box-sizing:border-box;" placeholder="Hey Jane,&#10;&#10;You're all set! We'll see you on [date].&#10;&#10;Thanks,&#10;Evergreen Lawn Care &amp; Landscaping" oninput="this.dataset.edited='1'"></textarea>
+            <label for="job-email-body" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Message <span style="font-weight:400;color:var(--text-muted);">(optional — edit freely)</span></label>
+            <textarea id="job-email-body" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;resize:vertical;min-height:110px;outline:none;box-sizing:border-box;" placeholder="Hey Jane,&#10;&#10;You're all set! We'll see you on [date].&#10;&#10;Thanks,&#10;Evergreen Lawn Care &amp; Landscaping" oninput="this.dataset.edited='1'"></textarea>
+            <div style="margin-top:6px;font-size:12px;color:var(--text-muted);">📋 Job details (date, address, price, crew) are automatically added to the email — your message goes above them.</div>
           </div>
         </div>
       </div>
@@ -1969,22 +1970,44 @@ function jobOtherCalcTotal() {
 }
 
 function jobAutoFillEmail() {
-  const name      = (document.getElementById('job-name')?.value || '').trim();
+  const jobType   = document.getElementById('job-type')?.value || 'mowing';
+  const isMowing  = jobType === 'mowing';
+  const name      = (document.getElementById('job-name')?.value    || '').trim();
   const firstName = name.split(' ')[0] || '';
-  const date      = document.getElementById('job-date')?.value || '';
+  const date      = (document.getElementById('job-date')?.value    || '').trim();
   const dateStr   = date ? displayDate(date) : '[date]';
+  const address   = (document.getElementById('job-address')?.value || '').trim();
   const label     = jobTypeLabel();
   const subjectEl = document.getElementById('job-email-subject');
   const bodyEl    = document.getElementById('job-email-body');
-  if (subjectEl && !subjectEl.dataset.edited) {
-    subjectEl.value = firstName
-      ? `Your ${label} is confirmed — Evergreen Lawn Care & Landscaping`
-      : '';
+
+  if (!firstName) {
+    if (subjectEl && !subjectEl.dataset.edited) subjectEl.value = '';
+    if (bodyEl    && !bodyEl.dataset.edited)    bodyEl.value    = '';
+    return;
   }
+
+  if (subjectEl && !subjectEl.dataset.edited) {
+    subjectEl.value = `Your ${label} is confirmed — Evergreen Lawn Care & Landscaping`;
+  }
+
   if (bodyEl && !bodyEl.dataset.edited) {
-    bodyEl.value = firstName
-      ? `Hey ${firstName},\n\nGreat news — your ${label} is all set! We'll see you on ${dateStr}.\n\nThanks,\nEvergreen Lawn Care & Landscaping`
-      : '';
+    // Build a personal note that mirrors what the backend will include in the email
+    const price    = isMowing
+      ? (document.getElementById('job-price')?.value        || '').trim()
+      : (document.getElementById('job-total-other')?.value  || '').trim();
+    const crew     = !isMowing ? (document.getElementById('job-crew')?.value     || '').trim() : '';
+    const duration = !isMowing ? (document.getElementById('job-duration')?.value || '').trim() : '';
+
+    const lines = [`Hey ${firstName},`, ''];
+    lines.push(`We're all set for your ${label}${dateStr !== '[date]' ? ' on ' + dateStr : ''}!`);
+    if (address)  lines.push('', `📍 Address: ${address}`);
+    if (price)    lines.push(`💰 ${isMowing ? 'Price' : 'Total'}: $${parseFloat(price).toFixed(2)}`);
+    if (crew)     lines.push(`👷 Crew: ${crew}`);
+    if (duration) lines.push(`⏱ Est. Duration: ${duration}`);
+    lines.push('', `If you have any questions, give us a call or text at (352) 462-0627.`);
+    lines.push('', 'Thanks,', 'Evergreen Lawn Care & Landscaping');
+    bodyEl.value = lines.join('\n');
   }
 }
 
