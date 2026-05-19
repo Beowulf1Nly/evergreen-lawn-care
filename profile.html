@@ -795,10 +795,10 @@
         </div>
         <div class="settings-row" id="switchPlanRow" style="display:none;">
           <div>
-            <div class="settings-label">Switch Plan</div>
-            <div class="settings-sub" id="switchPlanSub">Change your visit frequency</div>
+            <div class="settings-label">Change Plan</div>
+            <div class="settings-sub">Text or call us to switch your visit frequency</div>
           </div>
-          <button class="btn-add-card" id="switchPlanBtn" onclick="">Switch →</button>
+          <a href="sms:3524620627" class="btn-add-card" style="text-decoration:none;display:inline-flex;align-items:center;">Text Us →</a>
         </div>
         <div class="settings-row" id="extraMowRow" style="display:none;">
           <div>
@@ -1635,21 +1635,9 @@ function renderBillingCard(bookings, hasCard) {
   activePlanFreq = freq;
   const cancelRow = document.getElementById('cancelSubscriptionRow');
   if (cancelRow) cancelRow.style.display = '';
+  // Show the "Change Plan — contact us" row for all subscription customers
   const switchRow = document.getElementById('switchPlanRow');
-  const switchBtn = document.getElementById('switchPlanBtn');
-  const switchSub = document.getElementById('switchPlanSub');
-  if (switchRow && switchBtn && switchSub) {
-    if (isCustom) {
-      // Hide the switch-plan option for custom schedules
-      switchRow.style.display = 'none';
-    } else {
-      const otherPlan = isWeekly ? 'Bi-Weekly Plan' : 'Weekly Plan';
-      switchSub.textContent = isWeekly ? 'Every two weeks instead of every week' : 'Every week instead of every two weeks';
-      switchBtn.textContent = 'Switch →';
-      switchBtn.onclick = () => openChangePlanModal(otherPlan);
-      switchRow.style.display = '';
-    }
-  }
+  if (switchRow) switchRow.style.display = '';
 
   // Show Extra Mow button for all subscription customers
   const extraMowRow = document.getElementById('extraMowRow');
