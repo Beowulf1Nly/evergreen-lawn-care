@@ -647,6 +647,13 @@
           </div>
           <button class="btn-add-card" id="switchPlanBtn" onclick="">Switch</button>
         </div>
+        <div class="settings-row" id="extraMowRow" style="display:none;">
+          <div>
+            <div class="settings-label">Extra Mow</div>
+            <div class="settings-sub">Add a one-time visit between your regular schedule</div>
+          </div>
+          <button class="btn-add-card" id="extraMowBtn" onclick="openExtraMowModal()">Schedule</button>
+        </div>
         <div class="settings-row">
           <div>
             <div class="settings-label">Appointment Reminders</div>
@@ -769,6 +776,62 @@
       <button class="btn-confirm-cancel" id="confirmChangePlanBtn" onclick="confirmChangePlan()" style="background:var(--green-mid);">Confirm Change</button>
     </div>
     <div id="changePlanError" style="color:var(--red);font-size:13px;margin-top:10px;display:none;"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     EXTRA MOW MODAL
+═══════════════════════════════════════════ -->
+<div id="extraMowModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title">➕ Schedule Extra Mow</div>
+    <div class="modal-sub">Add an extra visit between your regular appointments.</div>
+    <div style="margin:18px 0 8px;">
+      <label style="display:block;font-size:13px;font-weight:600;color:var(--green-deep);margin-bottom:8px;">Date for extra mow</label>
+      <input type="date" id="extraMowDate" style="width:100%;padding:11px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:15px;outline:none;" oninput="this.style.borderColor='var(--green-mid)';updateExtraMowBtn()"/>
+    </div>
+    <div style="margin-bottom:18px;padding:12px 14px;background:var(--green-pale);border-radius:10px;font-size:13px;color:var(--green-deep);line-height:1.6;">
+      This adds a one-time extra mow on top of your regular schedule. Your regular appointments stay as-is.
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeExtraMowModal()">Cancel</button>
+      <button class="btn-confirm-cancel" id="confirmExtraMowBtn" disabled onclick="submitExtraMow()" style="background:var(--green-mid);">Schedule Extra Mow</button>
+    </div>
+    <div id="extraMowError" style="color:var(--red);font-size:13px;margin-top:10px;display:none;"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     SCHEDULE CONFLICT MODAL
+     (shared by reschedule + extra mow flows)
+═══════════════════════════════════════════ -->
+<div id="conflictModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title">📅 One More Thing</div>
+    <div style="margin:14px 0;padding:12px 14px;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:10px;font-size:13px;color:#92400e;line-height:1.6;" id="conflictWarningText"></div>
+    <div style="margin-bottom:16px;">
+      <button class="cancel-option" id="conflictOptMove" onclick="selectConflictResolution('move')" style="margin-bottom:8px;">
+        <div class="cancel-option-title">Move it to <span id="conflictSuggestedLabel"></span></div>
+        <div class="cancel-option-desc">Shift the nearby visit to keep your schedule on track</div>
+        <div style="margin-top:8px;display:none;" id="conflictCustomDateWrap">
+          <label style="font-size:12px;font-weight:600;color:var(--green-deep);display:block;margin-bottom:4px;">Or pick a different date:</label>
+          <input type="date" id="conflictCustomDate" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px;outline:none;" oninput="this.style.borderColor='var(--green-mid)'"/>
+        </div>
+      </button>
+      <button class="cancel-option" id="conflictOptCancel" onclick="selectConflictResolution('cancel')" style="margin-bottom:8px;">
+        <div class="cancel-option-title">Cancel that visit entirely</div>
+        <div class="cancel-option-desc">Skip the nearby visit — your schedule picks up as normal after</div>
+      </button>
+      <button class="cancel-option" id="conflictOptKeep" onclick="selectConflictResolution('keep')">
+        <div class="cancel-option-title">Keep everything as-is</div>
+        <div class="cancel-option-desc">Two mows close together is fine with me</div>
+      </button>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeConflictModal()">Back</button>
+      <button class="btn-confirm-cancel" id="confirmConflictBtn" disabled onclick="confirmConflict()" style="background:var(--green-mid);">Confirm</button>
+    </div>
+    <div id="conflictError" style="color:var(--red);font-size:13px;margin-top:10px;display:none;"></div>
   </div>
 </div>
 
@@ -984,6 +1047,8 @@ function renderProfile(data) {
   const name     = data.name     || '';
   const email    = data.email    || '';
   const bookings = data.bookings || [];
+  // Cache bookings globally so the Extra Mow pre-fill can use upcoming dates
+  window._cachedBookings = bookings;
 
   // Greeting
   const firstName = name ? name.split(' ')[0] : 'there';
@@ -1382,6 +1447,10 @@ function renderBillingCard(bookings) {
     }
   }
 
+  // Show Extra Mow button for all subscription customers
+  const extraMowRow = document.getElementById('extraMowRow');
+  if (extraMowRow) extraMowRow.style.display = '';
+
   card.innerHTML = html;
   section.style.display = 'block';
 }
@@ -1476,7 +1545,7 @@ function bookingCardHTML(b, isUpcoming) {
       <div class="booking-meta">
         ${addrTag}
         ${priceTag}
-        ${esc(b.frequency || '')}
+        ${(()=>{ const _d = parseInt(b.days||''); const _f = esc(b.frequency||''); if(!_f) return ''; const _fDays = /weekly/i.test(_f)&&!/bi/i.test(_f)?7:/bi.?weekly/i.test(_f)?14:/monthly/i.test(_f)?30:0; return (_d>0&&_d!==_fDays)?`Every ${_d} days`:_f; })()}
       </div>
       ${apptActions}
       ${payNowBtn}
@@ -1950,6 +2019,11 @@ async function submitReschedule() {
     if (data.success) {
       closeRescheduleModal();
       await loadProfile(session.token);
+    } else if (data.conflictDetected) {
+      // Close reschedule modal, open conflict modal
+      closeRescheduleModal();
+      _conflictMode = 'reschedule';
+      openConflictModal(data);
     } else {
       document.getElementById('rescheduleError').textContent = data.error || 'Could not reschedule.';
       document.getElementById('rescheduleError').style.display = 'block';
@@ -2053,6 +2127,196 @@ async function confirmChangePlan() {
   } finally {
     btn.disabled = false; btn.textContent = 'Confirm Change';
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// EXTRA MOW
+// ═══════════════════════════════════════════════════════════════════════
+function openExtraMowModal() {
+  const session = getStoredSession();
+  if (!session) return;
+  document.getElementById('extraMowError').style.display = 'none';
+  document.getElementById('confirmExtraMowBtn').disabled = true;
+
+  // Pre-fill with a smart suggested date: midpoint between today and next scheduled mow
+  const tmrw = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const tmrwISO = tmrw.getFullYear() + '-' + String(tmrw.getMonth()+1).padStart(2,'0') + '-' + String(tmrw.getDate()).padStart(2,'0');
+  document.getElementById('extraMowDate').min = tmrwISO;
+
+  // Find the soonest upcoming undone mow to compute midpoint
+  try {
+    const todayMid = new Date(); todayMid.setHours(0,0,0,0);
+    const upcomingDates = [];
+    (window._cachedBookings || []).forEach(b => {
+      const isDone = String(b.done || '').includes('Done');
+      const isCancelled = String(b.status || '').toLowerCase() === 'cancelled';
+      if (isDone || isCancelled) return;
+      const d = parseBookingDate(b.serviceDate || b.serviceDateRaw || '');
+      if (d && d > todayMid) upcomingDates.push(d);
+    });
+    upcomingDates.sort((a, b) => a - b);
+    if (upcomingDates.length >= 1) {
+      const next = upcomingDates[0];
+      const midpoint = new Date((todayMid.getTime() + next.getTime()) / 2);
+      if (midpoint > tmrw) {
+        const mp = midpoint.getFullYear() + '-' + String(midpoint.getMonth()+1).padStart(2,'0') + '-' + String(midpoint.getDate()).padStart(2,'0');
+        document.getElementById('extraMowDate').value = mp;
+        updateExtraMowBtn();
+      }
+    }
+  } catch(e) {}
+
+  document.getElementById('extraMowModal').classList.add('open');
+}
+function closeExtraMowModal() {
+  document.getElementById('extraMowModal').classList.remove('open');
+}
+function updateExtraMowBtn() {
+  document.getElementById('confirmExtraMowBtn').disabled = !document.getElementById('extraMowDate').value;
+}
+
+async function submitExtraMow() {
+  const session = getStoredSession();
+  if (!session) return;
+  const date = document.getElementById('extraMowDate').value;
+  if (!date) return;
+  const btn = document.getElementById('confirmExtraMowBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  document.getElementById('extraMowError').style.display = 'none';
+  try {
+    const data = await apiGet({
+      action:       'portal_extra_mow',
+      sessionToken: session.token,
+      date,
+    });
+    if (data.success) {
+      closeExtraMowModal();
+      await loadProfile(session.token);
+    } else if (data.conflictDetected) {
+      // Hand off to conflict modal — remember we're in extra-mow mode
+      closeExtraMowModal();
+      _conflictMode        = 'extra_mow';
+      _conflictExtraMowDate = date;
+      openConflictModal(data);
+    } else {
+      document.getElementById('extraMowError').textContent = data.error || 'Could not schedule extra mow.';
+      document.getElementById('extraMowError').style.display = 'block';
+    }
+  } catch(err) {
+    document.getElementById('extraMowError').textContent = 'Error: ' + err.message;
+    document.getElementById('extraMowError').style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Schedule Extra Mow';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SCHEDULE CONFLICT MODAL (shared by reschedule + extra mow)
+// ═══════════════════════════════════════════════════════════════════════
+let _conflictMode           = ''; // 'reschedule' | 'extra_mow'
+let _conflictRowIndex       = 0;
+let _conflictNewDate        = '';
+let _conflictExtraMowDate   = '';
+let _conflictData           = null;
+let _conflictResolution     = '';
+
+function openConflictModal(conflictResp) {
+  _conflictData       = conflictResp;
+  _conflictResolution = '';
+  document.getElementById('conflictError').style.display = 'none';
+  document.getElementById('confirmConflictBtn').disabled = true;
+
+  // Clear selections
+  ['conflictOptMove','conflictOptCancel','conflictOptKeep'].forEach(id => {
+    document.getElementById(id).classList.remove('selected');
+  });
+  document.getElementById('conflictCustomDateWrap').style.display = 'none';
+
+  // Build warning text
+  const conflictFmt = formatDateNice(conflictResp.conflictDate);
+  const suggestedFmt = formatDateNice(conflictResp.suggestedDate);
+  document.getElementById('conflictWarningText').innerHTML =
+    'The date you picked is only a couple days from your <strong>' + conflictFmt + '</strong> visit. What would you like to do with that appointment?';
+  document.getElementById('conflictSuggestedLabel').textContent = suggestedFmt;
+
+  // Pre-fill custom date picker with suggested date
+  document.getElementById('conflictCustomDate').value = conflictResp.suggestedDate || '';
+
+  document.getElementById('conflictModal').classList.add('open');
+}
+function closeConflictModal() {
+  document.getElementById('conflictModal').classList.remove('open');
+}
+function selectConflictResolution(resolution) {
+  _conflictResolution = resolution;
+  ['conflictOptMove','conflictOptCancel','conflictOptKeep'].forEach(id => {
+    document.getElementById(id).classList.remove('selected');
+  });
+  const map = { move: 'conflictOptMove', cancel: 'conflictOptCancel', keep: 'conflictOptKeep' };
+  document.getElementById(map[resolution]).classList.add('selected');
+  // Show/hide custom date picker
+  document.getElementById('conflictCustomDateWrap').style.display = resolution === 'move' ? 'block' : 'none';
+  document.getElementById('confirmConflictBtn').disabled = false;
+}
+
+async function confirmConflict() {
+  const session = getStoredSession();
+  if (!session || !_conflictResolution || !_conflictData) return;
+  const btn = document.getElementById('confirmConflictBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  document.getElementById('conflictError').style.display = 'none';
+
+  const conflictNewDate = _conflictResolution === 'move'
+    ? (document.getElementById('conflictCustomDate').value || _conflictData.suggestedDate)
+    : '';
+
+  try {
+    let data;
+    if (_conflictMode === 'extra_mow') {
+      data = await apiGet({
+        action:             'portal_extra_mow',
+        sessionToken:       session.token,
+        date:               _conflictExtraMowDate,
+        conflictResolution: _conflictResolution,
+        conflictRowIndex:   _conflictData.conflictRowIndex,
+        conflictNewDate:    conflictNewDate,
+      });
+    } else {
+      // reschedule mode
+      data = await apiGet({
+        action:             'portal_reschedule_appointment',
+        sessionToken:       session.token,
+        rowIndex:           _rescheduleRowIdx,
+        newDate:            document.getElementById('rescheduleDate').value,
+        scope:              _rescheduleScope,
+        conflictResolution: _conflictResolution,
+        conflictRowIndex:   _conflictData.conflictRowIndex,
+        conflictNewDate:    conflictNewDate,
+      });
+    }
+
+    if (data.success) {
+      closeConflictModal();
+      await loadProfile(session.token);
+    } else {
+      document.getElementById('conflictError').textContent = data.error || 'Could not complete request.';
+      document.getElementById('conflictError').style.display = 'block';
+    }
+  } catch(err) {
+    document.getElementById('conflictError').textContent = 'Error: ' + err.message;
+    document.getElementById('conflictError').style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Confirm';
+  }
+}
+
+// Format YYYY-MM-DD to "Mon, May 5"
+function formatDateNice(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso + 'T12:00:00');
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  } catch(e) { return iso; }
 }
 
 // ═══════════════════════════════════════════════════════════════════════

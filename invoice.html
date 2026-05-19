@@ -3331,7 +3331,7 @@ function cardHTML(b, rowIdx, isToday, tomorrowStr) {
         <div class="card-meta">
           ${b.address?`<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((b.address||'')+(b.zip?', '+b.zip:'')+', FL')}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">📍 ${esc(b.address)}${b.zip?' · '+esc(b.zip):''}</a>`:'📍 —'}<br>
           📅 ${esc(displayDate(b.serviceDate||b.serviceDateRaw)||'—')}
-          ${b.frequency&&!done?' · '+esc(b.frequency):''}<br>
+          ${(()=>{ if(!b.frequency||done) return ''; const _d=parseInt(b.days||''); const _f=b.frequency; const _fDays=/weekly/i.test(_f)&&!/bi/i.test(_f)?7:/bi.?weekly/i.test(_f)?14:/monthly/i.test(_f)?30:0; return ' · '+esc((_d>0&&_d!==_fDays)?`Every ${_d} days`:_f); })()}<br>
           ${b.email?`✉️ <a href="mailto:${esc(b.email)}">${esc(b.email)}</a><br>`:''}
           ${b.phone?`<a href="tel:${esc(b.phone)}" style="color:inherit;text-decoration:none;">📞 ${esc(b.phone)}</a><br>`:''}
           ${_custNotes?`💬 ${esc(_custNotes)}<br>`:''}
