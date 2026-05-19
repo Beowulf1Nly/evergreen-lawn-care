@@ -210,7 +210,7 @@
   .btn-logout:hover { background:rgba(255,255,255,.2); }
 
   /* Content */
-  .portal-body { max-width:680px; margin:0 auto; padding:28px 20px 60px; }
+  .portal-body { max-width:680px; margin:0 auto; padding:28px 20px 100px; }
 
   /* Greeting */
   .greeting-card {
@@ -448,28 +448,27 @@
   .btn-confirm-cancel:hover:not(:disabled) { background:#c53030; }
   .btn-confirm-cancel:disabled { opacity:.5; cursor:not-allowed; }
 
-  /* ── Tab bar ── */
-  .tab-bar {
-    display:flex; gap:6px; margin-bottom:24px;
-    background:var(--green-pale); border-radius:14px;
-    padding:5px;
+  /* ── Bottom nav ── */
+  .portal-bottom-nav {
+    position:fixed; bottom:0; left:0; right:0; z-index:200;
+    background:#fff; border-top:2px solid var(--border);
+    display:flex; box-shadow:0 -4px 24px rgba(0,0,0,.10);
+    padding-bottom:env(safe-area-inset-bottom, 0px);
   }
-  .tab-btn {
-    flex:1; padding:13px 16px;
-    font-family:inherit; font-size:14px; font-weight:700;
-    background:none; border:none; border-radius:10px; cursor:pointer;
-    color:var(--green-deep); transition:all .18s;
-    display:flex; align-items:center; justify-content:center; gap:7px;
-    letter-spacing:.01em;
+  .bottom-nav-btn {
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+    padding:10px 16px 13px;
+    background:none; border:none; border-top:3px solid transparent;
+    cursor:pointer; font-family:inherit; color:var(--text-muted);
+    transition:all .15s;
   }
-  .tab-btn.active {
-    background:#fff; color:var(--green-deep);
-    box-shadow:0 2px 8px rgba(0,0,0,.10);
-  }
-  .tab-btn:not(.active):hover { background:rgba(255,255,255,.5); }
+  .bottom-nav-btn.active { color:var(--green-deep); border-top-color:var(--green-deep); }
+  .bottom-nav-btn:not(.active):hover { background:var(--green-pale); color:var(--green-deep); }
+  .bottom-nav-icon  { font-size:22px; line-height:1; }
+  .bottom-nav-label { font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
 
   /* ── Tab panels ── */
-  .tab-panel { display:none; }
+  .tab-panel { display:none; animation:none; }
   .tab-panel.active { display:block; }
 
   /* ── Settings panel ── */
@@ -628,11 +627,6 @@
       </div>
     </div>
 
-    <!-- Tab bar -->
-    <div class="tab-bar">
-      <button class="tab-btn active" id="tabHome" onclick="switchTab('home')">🏠 Home</button>
-      <button class="tab-btn" id="tabSettings" onclick="switchTab('settings')">⚙️ Settings</button>
-    </div>
 
     <!-- ══════════════════════════════════════
          HOME TAB
@@ -819,6 +813,19 @@
     </div><!-- /panelSettings -->
 
   </div><!-- /portal-body -->
+
+  <!-- Fixed bottom navigation -->
+  <nav class="portal-bottom-nav">
+    <button class="bottom-nav-btn active" id="navHome" onclick="switchTab('home')">
+      <span class="bottom-nav-icon">🏠</span>
+      <span class="bottom-nav-label">Home</span>
+    </button>
+    <button class="bottom-nav-btn" id="navSettings" onclick="switchTab('settings')">
+      <span class="bottom-nav-icon">⚙️</span>
+      <span class="bottom-nav-label">Settings</span>
+    </button>
+  </nav>
+
 </div><!-- /screen-profile -->
 
 <!-- ═══════════════════════════════════════════
@@ -1736,8 +1743,9 @@ function bookingCardHTML(b, isUpcoming) {
 function switchTab(tab) {
   document.getElementById('panelHome').classList.toggle('active', tab === 'home');
   document.getElementById('panelSettings').classList.toggle('active', tab === 'settings');
-  document.getElementById('tabHome').classList.toggle('active', tab === 'home');
-  document.getElementById('tabSettings').classList.toggle('active', tab === 'settings');
+  document.getElementById('navHome').classList.toggle('active', tab === 'home');
+  document.getElementById('navSettings').classList.toggle('active', tab === 'settings');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ═══════════════════════════════════════════════════════════════════════
