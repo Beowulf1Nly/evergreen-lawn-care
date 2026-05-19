@@ -286,6 +286,12 @@
     background:#fff; border-radius:16px; border:1.5px solid var(--border);
     overflow:hidden;
   }
+  .settings-group-label {
+    padding:10px 20px 6px;
+    font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--text-muted); background:var(--green-pale);
+    border-bottom:1px solid var(--border);
+  }
   .settings-row {
     display:flex; align-items:center; justify-content:space-between;
     padding:16px 20px; border-bottom:1px solid var(--border);
@@ -617,6 +623,9 @@
     <div class="section-wrap">
       <div class="section-title">Account Settings</div>
       <div class="settings-card">
+
+        <!-- ── Contact ── -->
+        <div class="settings-group-label">Contact</div>
         <div class="settings-row">
           <div>
             <div class="settings-label">Email</div>
@@ -624,6 +633,9 @@
           </div>
           <div class="settings-value">Verified ✓</div>
         </div>
+
+        <!-- ── Billing ── -->
+        <div class="settings-group-label">Billing</div>
         <div class="settings-row" id="autopayRow">
           <div>
             <div class="settings-label">Autopay</div>
@@ -647,15 +659,18 @@
             <div class="settings-label">Switch Plan</div>
             <div class="settings-sub" id="switchPlanSub">Change your visit frequency</div>
           </div>
-          <button class="btn-add-card" id="switchPlanBtn" onclick="">Switch</button>
+          <button class="btn-add-card" id="switchPlanBtn" onclick="">Switch →</button>
         </div>
         <div class="settings-row" id="extraMowRow" style="display:none;">
           <div>
             <div class="settings-label">Extra Mow</div>
             <div class="settings-sub">Add a one-time visit between your regular schedule</div>
           </div>
-          <button class="btn-add-card" id="extraMowBtn" onclick="openExtraMowModal()">Schedule</button>
+          <button class="btn-add-card" id="extraMowBtn" onclick="openExtraMowModal()">Schedule →</button>
         </div>
+
+        <!-- ── Preferences ── -->
+        <div class="settings-group-label">Preferences</div>
         <div class="settings-row">
           <div>
             <div class="settings-label">Appointment Reminders</div>
@@ -667,6 +682,8 @@
             <div class="toggle-thumb"></div>
           </label>
         </div>
+
+        <!-- ── Danger zone ── -->
         <div class="settings-row" id="cancelSubscriptionRow" style="display:none;">
           <div>
             <div class="settings-label" style="color:var(--red);">Cancel Subscription</div>
@@ -674,6 +691,7 @@
           </div>
           <button class="btn-cancel-sub" onclick="openCancelModal()">Cancel Plan</button>
         </div>
+
       </div>
     </div>
 
@@ -1081,12 +1099,15 @@ function renderProfile(data) {
   if (reminderToggle) reminderToggle.checked = !data.reminderOptOut;
 
   // Saved card display + no-card banner
+  const autopayRow = document.getElementById('autopayRow');
   if (data.cardLast4) {
     const brand = capitalize(data.cardBrand || 'Card');
     updateSavedCardUI(brand, data.cardLast4);
     document.getElementById('noCardBanner').style.display = 'none';
+    if (autopayRow) autopayRow.style.display = '';
   } else {
     document.getElementById('noCardBanner').style.display = 'block';
+    if (autopayRow) autopayRow.style.display = 'none';
     // Pre-mount the Stripe card element in the background so the iframe is warm
     // before the user opens the modal. Fixes Stripe Link autofill race condition.
     premountCardElement();
@@ -1447,9 +1468,8 @@ function renderBillingCard(bookings, hasCard) {
       switchRow.style.display = 'none';
     } else {
       const otherPlan = isWeekly ? 'Bi-Weekly Plan' : 'Weekly Plan';
-      const otherLabel = isWeekly ? 'Switch to Bi-Weekly' : 'Upgrade to Weekly';
       switchSub.textContent = isWeekly ? 'Every two weeks instead of every week' : 'Every week instead of every two weeks';
-      switchBtn.textContent = otherLabel;
+      switchBtn.textContent = 'Switch →';
       switchBtn.onclick = () => openChangePlanModal(otherPlan);
       switchRow.style.display = '';
     }
@@ -1825,6 +1845,9 @@ function updateSavedCardUI(brand, last4) {
   if (btn) btn.textContent = 'Update Card';
   const banner = document.getElementById('noCardBanner');
   if (banner) banner.style.display = 'none';
+  // Reveal Autopay toggle now that a card exists
+  const autopayRow = document.getElementById('autopayRow');
+  if (autopayRow) autopayRow.style.display = '';
 }
 
 function capitalize(str) {
