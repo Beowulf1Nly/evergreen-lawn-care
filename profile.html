@@ -190,43 +190,51 @@
   /* Header */
   .portal-header {
     background:var(--green-deep); color:#fff;
-    padding:0 20px;
-    display:flex; align-items:stretch; justify-content:space-between;
+    padding:14px 20px;
+    display:flex; align-items:center; justify-content:space-between;
     position:sticky; top:0; z-index:100;
-    min-height:54px;
   }
   .portal-brand {
     font-family:'Playfair Display',serif; font-size:18px;
     color:#fff; text-decoration:none;
     display:flex; align-items:center; gap:0;
-    transition:opacity .2s; padding:14px 0;
+    transition:opacity .2s;
   }
   .portal-brand:hover { opacity:.8; }
   .portal-brand span { color:#7ec87e; }
-
-  /* Header nav — Home / Settings tabs */
-  .portal-nav { display:flex; align-items:stretch; gap:2px; margin:0 16px; }
-  .portal-nav-btn {
-    padding:0 18px; background:none; border:none;
-    border-bottom:3px solid transparent;
-    color:rgba(255,255,255,.55);
-    font-family:inherit; font-size:13px; font-weight:700;
-    cursor:pointer; transition:all .15s; letter-spacing:.02em;
-    display:flex; align-items:center; gap:6px;
-  }
-  .portal-nav-btn:hover { color:rgba(255,255,255,.85); }
-  .portal-nav-btn.active { color:#fff; border-bottom-color:#7ec87e; }
-
   .portal-header-right { display:flex; align-items:center; gap:8px; }
   .btn-logout {
-    padding:7px 14px; background:rgba(255,255,255,.12); color:rgba(255,255,255,.8);
+    padding:8px 14px; background:rgba(255,255,255,.12); color:rgba(255,255,255,.8);
     border:1px solid rgba(255,255,255,.25); border-radius:8px;
     font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; transition:background .2s;
   }
   .btn-logout:hover { background:rgba(255,255,255,.2); }
 
+  /* ── Page-level tab switcher ── */
+  .tab-bar {
+    display:flex; gap:10px; margin-bottom:24px;
+  }
+  .tab-btn {
+    flex:1; padding:16px 12px;
+    font-family:inherit; font-size:15px; font-weight:700;
+    border-radius:14px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    transition:all .18s; letter-spacing:.01em;
+    border:2px solid var(--green-deep);
+  }
+  .tab-btn.active {
+    background:var(--green-deep); color:#fff;
+    box-shadow:0 4px 14px rgba(26,58,26,.22);
+  }
+  .tab-btn:not(.active) {
+    background:#fff; color:var(--green-deep);
+  }
+  .tab-btn:not(.active):hover {
+    background:var(--green-pale);
+  }
+
   /* Content */
-  .portal-body { max-width:680px; margin:0 auto; padding:28px 20px 60px; }
+  .portal-body { max-width:680px; margin:0 auto; padding:24px 20px 60px; }
 
   /* Greeting */
   .greeting-card {
@@ -601,10 +609,6 @@
   <!-- Header -->
   <header class="portal-header">
     <a href="/" class="portal-brand">🌿 Evergreen <span>&nbsp;Lawn Care</span></a>
-    <nav class="portal-nav">
-      <button class="portal-nav-btn active" id="navHome" onclick="switchTab('home')">🏠 Home</button>
-      <button class="portal-nav-btn" id="navSettings" onclick="switchTab('settings')">⚙️ Settings</button>
-    </nav>
     <div class="portal-header-right">
       <a href="/invoice.html" id="adminHeaderBtn" style="display:none;padding:7px 14px;border-radius:8px;font-family:inherit;font-size:13px;font-weight:700;background:rgba(255,255,255,.15);color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.25);cursor:pointer;">🛠 Admin</a>
       <button class="btn-logout" onclick="logout()">Sign Out</button>
@@ -629,6 +633,11 @@
       </div>
     </div>
 
+    <!-- Tab switcher -->
+    <div class="tab-bar">
+      <button class="tab-btn active" id="navHome" onclick="switchTab('home')">🏠 Home</button>
+      <button class="tab-btn" id="navSettings" onclick="switchTab('settings')">⚙️ Settings</button>
+    </div>
 
     <!-- ══════════════════════════════════════
          HOME TAB
