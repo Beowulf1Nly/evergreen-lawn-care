@@ -190,27 +190,43 @@
   /* Header */
   .portal-header {
     background:var(--green-deep); color:#fff;
-    padding:14px 20px;
-    display:flex; align-items:center; justify-content:space-between;
+    padding:0 20px;
+    display:flex; align-items:stretch; justify-content:space-between;
     position:sticky; top:0; z-index:100;
+    min-height:54px;
   }
   .portal-brand {
     font-family:'Playfair Display',serif; font-size:18px;
     color:#fff; text-decoration:none;
     display:flex; align-items:center; gap:0;
-    transition:opacity .2s;
+    transition:opacity .2s; padding:14px 0;
   }
   .portal-brand:hover { opacity:.8; }
   .portal-brand span { color:#7ec87e; }
+
+  /* Header nav — Home / Settings tabs */
+  .portal-nav { display:flex; align-items:stretch; gap:2px; margin:0 16px; }
+  .portal-nav-btn {
+    padding:0 18px; background:none; border:none;
+    border-bottom:3px solid transparent;
+    color:rgba(255,255,255,.55);
+    font-family:inherit; font-size:13px; font-weight:700;
+    cursor:pointer; transition:all .15s; letter-spacing:.02em;
+    display:flex; align-items:center; gap:6px;
+  }
+  .portal-nav-btn:hover { color:rgba(255,255,255,.85); }
+  .portal-nav-btn.active { color:#fff; border-bottom-color:#7ec87e; }
+
+  .portal-header-right { display:flex; align-items:center; gap:8px; }
   .btn-logout {
-    padding:8px 14px; background:rgba(255,255,255,.12); color:rgba(255,255,255,.8);
+    padding:7px 14px; background:rgba(255,255,255,.12); color:rgba(255,255,255,.8);
     border:1px solid rgba(255,255,255,.25); border-radius:8px;
     font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; transition:background .2s;
   }
   .btn-logout:hover { background:rgba(255,255,255,.2); }
 
   /* Content */
-  .portal-body { max-width:680px; margin:0 auto; padding:28px 20px 100px; }
+  .portal-body { max-width:680px; margin:0 auto; padding:28px 20px 60px; }
 
   /* Greeting */
   .greeting-card {
@@ -448,24 +464,6 @@
   .btn-confirm-cancel:hover:not(:disabled) { background:#c53030; }
   .btn-confirm-cancel:disabled { opacity:.5; cursor:not-allowed; }
 
-  /* ── Bottom nav ── */
-  .portal-bottom-nav {
-    position:fixed; bottom:0; left:0; right:0; z-index:200;
-    background:#fff; border-top:2px solid var(--border);
-    display:flex; box-shadow:0 -4px 24px rgba(0,0,0,.10);
-    padding-bottom:env(safe-area-inset-bottom, 0px);
-  }
-  .bottom-nav-btn {
-    flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
-    padding:10px 16px 13px;
-    background:none; border:none; border-top:3px solid transparent;
-    cursor:pointer; font-family:inherit; color:var(--text-muted);
-    transition:all .15s;
-  }
-  .bottom-nav-btn.active { color:var(--green-deep); border-top-color:var(--green-deep); }
-  .bottom-nav-btn:not(.active):hover { background:var(--green-pale); color:var(--green-deep); }
-  .bottom-nav-icon  { font-size:22px; line-height:1; }
-  .bottom-nav-label { font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
 
   /* ── Tab panels ── */
   .tab-panel { display:none; animation:none; }
@@ -603,8 +601,12 @@
   <!-- Header -->
   <header class="portal-header">
     <a href="/" class="portal-brand">🌿 Evergreen <span>&nbsp;Lawn Care</span></a>
-    <div style="display:flex;align-items:center;gap:10px;">
-      <a href="/invoice.html" id="adminHeaderBtn" style="display:none;padding:7px 14px;border-radius:8px;font-family:inherit;font-size:13px;font-weight:700;background:#fff;color:var(--green-deep);text-decoration:none;border:none;cursor:pointer;">🛠 Admin</a>
+    <nav class="portal-nav">
+      <button class="portal-nav-btn active" id="navHome" onclick="switchTab('home')">🏠 Home</button>
+      <button class="portal-nav-btn" id="navSettings" onclick="switchTab('settings')">⚙️ Settings</button>
+    </nav>
+    <div class="portal-header-right">
+      <a href="/invoice.html" id="adminHeaderBtn" style="display:none;padding:7px 14px;border-radius:8px;font-family:inherit;font-size:13px;font-weight:700;background:rgba(255,255,255,.15);color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.25);cursor:pointer;">🛠 Admin</a>
       <button class="btn-logout" onclick="logout()">Sign Out</button>
     </div>
   </header>
@@ -698,6 +700,22 @@
       <!-- ── Profile ── -->
       <div class="settings-section-title">Profile</div>
       <div class="settings-card">
+
+        <div class="settings-row">
+          <div style="flex:1;min-width:0;">
+            <div class="settings-label">Name</div>
+            <div class="settings-sub" id="settingsName">—</div>
+            <div class="email-edit-form" id="nameEditForm" style="display:none;">
+              <input type="text" id="nameInput" placeholder="Your full name" autocomplete="name"/>
+              <div class="email-edit-form-btns">
+                <button class="btn-send-change" id="saveNameBtn" onclick="saveName()">Save →</button>
+                <button class="btn-edit-cancel" onclick="closeNameEdit()">Cancel</button>
+              </div>
+              <div id="nameMsg" style="font-size:12px;margin-top:8px;color:var(--text-muted);"></div>
+            </div>
+          </div>
+          <button class="btn-add-card" id="editNameBtn" onclick="toggleNameEdit()" style="margin-left:12px;flex-shrink:0;">Edit</button>
+        </div>
 
         <div class="settings-row">
           <div style="flex:1;min-width:0;">
@@ -814,17 +832,6 @@
 
   </div><!-- /portal-body -->
 
-  <!-- Fixed bottom navigation -->
-  <nav class="portal-bottom-nav">
-    <button class="bottom-nav-btn active" id="navHome" onclick="switchTab('home')">
-      <span class="bottom-nav-icon">🏠</span>
-      <span class="bottom-nav-label">Home</span>
-    </button>
-    <button class="bottom-nav-btn" id="navSettings" onclick="switchTab('settings')">
-      <span class="bottom-nav-icon">⚙️</span>
-      <span class="bottom-nav-label">Settings</span>
-    </button>
-  </nav>
 
 </div><!-- /screen-profile -->
 
@@ -1207,6 +1214,12 @@ function renderProfile(data) {
   document.getElementById('greetingName').textContent  = 'Hey, ' + firstName + ' 👋';
   document.getElementById('greetingEmail').textContent = email;
   document.getElementById('settingsEmail').textContent = email;
+
+  // Name in settings
+  const nameSettingsEl = document.getElementById('settingsName');
+  if (nameSettingsEl) nameSettingsEl.textContent = name || 'Not set';
+  const nameInputEl = document.getElementById('nameInput');
+  if (nameInputEl && name) nameInputEl.value = name;
 
   // Phone
   const phone = data.phone || '';
@@ -1745,7 +1758,7 @@ function switchTab(tab) {
   document.getElementById('panelSettings').classList.toggle('active', tab === 'settings');
   document.getElementById('navHome').classList.toggle('active', tab === 'home');
   document.getElementById('navSettings').classList.toggle('active', tab === 'settings');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1866,6 +1879,53 @@ async function savePhone() {
     msgEl.style.color = 'var(--red)';
     msgEl.textContent = 'Network error. Please try again.';
     btns.forEach(b => b.disabled = false);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// NAME UPDATE
+// ═══════════════════════════════════════════════════════════════════════
+function toggleNameEdit() {
+  const form = document.getElementById('nameEditForm');
+  const btn  = document.getElementById('editNameBtn');
+  const open = form.style.display === 'none' || form.style.display === '';
+  form.style.display = open ? 'block' : 'none';
+  btn.textContent    = open ? 'Cancel' : 'Edit';
+  if (open) document.getElementById('nameInput').focus();
+}
+function closeNameEdit() {
+  document.getElementById('nameEditForm').style.display = 'none';
+  document.getElementById('editNameBtn').textContent    = 'Edit';
+  document.getElementById('nameMsg').textContent        = '';
+}
+async function saveName() {
+  const name   = (document.getElementById('nameInput').value || '').trim();
+  const msgEl  = document.getElementById('nameMsg');
+  const btn    = document.getElementById('saveNameBtn');
+  msgEl.textContent = ''; msgEl.style.color = 'var(--text-muted)';
+  if (!name) { msgEl.style.color = 'var(--red)'; msgEl.textContent = 'Please enter your name.'; return; }
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const session = getStoredSession();
+  if (!session) { btn.disabled = false; btn.textContent = 'Save →'; return; }
+  try {
+    const data = await apiGet({ action: 'portal_update_name', sessionToken: session.token, name });
+    if (data.success) {
+      // Update greeting card + settings display
+      const firstName = name.split(' ')[0];
+      const greetEl = document.getElementById('greetingName');
+      if (greetEl) greetEl.textContent = 'Hey, ' + firstName + ' 👋';
+      const nameSettingsEl = document.getElementById('settingsName');
+      if (nameSettingsEl) nameSettingsEl.textContent = name;
+      msgEl.style.color = '#166534'; msgEl.textContent = '✅ Name saved.';
+      setTimeout(() => closeNameEdit(), 1200);
+    } else {
+      msgEl.style.color = 'var(--red)';
+      msgEl.textContent = data.error || 'Could not save. Please try again.';
+      btn.disabled = false; btn.textContent = 'Save →';
+    }
+  } catch(e) {
+    msgEl.style.color = 'var(--red)'; msgEl.textContent = 'Network error. Please try again.';
+    btn.disabled = false; btn.textContent = 'Save →';
   }
 }
 
