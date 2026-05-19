@@ -448,6 +448,65 @@
   .btn-confirm-cancel:hover:not(:disabled) { background:#c53030; }
   .btn-confirm-cancel:disabled { opacity:.5; cursor:not-allowed; }
 
+  /* ── Tab bar ── */
+  .tab-bar {
+    display:flex; gap:0; margin-bottom:24px;
+    background:#fff; border-radius:14px;
+    border:1.5px solid var(--border);
+    overflow:hidden;
+  }
+  .tab-btn {
+    flex:1; padding:11px 16px;
+    font-family:inherit; font-size:14px; font-weight:600;
+    background:none; border:none; cursor:pointer;
+    color:var(--text-muted); transition:all .18s;
+    display:flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .tab-btn:first-child { border-right:1.5px solid var(--border); }
+  .tab-btn.active {
+    background:var(--green-deep); color:#fff;
+  }
+  .tab-btn:not(.active):hover { background:var(--green-pale); color:var(--green-deep); }
+
+  /* ── Tab panels ── */
+  .tab-panel { display:none; }
+  .tab-panel.active { display:block; }
+
+  /* ── Settings panel ── */
+  .settings-panel { }
+  .settings-section-title {
+    font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--text-muted); margin:24px 0 8px 4px;
+  }
+  .settings-section-title:first-child { margin-top:0; }
+
+  /* ── Email change inline form ── */
+  .email-edit-form {
+    margin-top:10px; padding:14px 16px;
+    background:var(--green-pale); border-radius:10px;
+    border:1.5px solid #c8e6c9;
+  }
+  .email-edit-form input {
+    width:100%; box-sizing:border-box;
+    padding:10px 12px; border:1.5px solid var(--border);
+    border-radius:8px; font-family:inherit; font-size:14px;
+    outline:none; margin-bottom:10px; transition:border .2s;
+  }
+  .email-edit-form input:focus { border-color:var(--green-mid); }
+  .email-edit-form-btns { display:flex; gap:8px; }
+  .btn-send-change {
+    flex:1; padding:10px; background:var(--green-mid); color:#fff; border:none;
+    border-radius:8px; font-family:inherit; font-size:13px; font-weight:600;
+    cursor:pointer; transition:background .2s;
+  }
+  .btn-send-change:hover:not(:disabled) { background:var(--green-deep); }
+  .btn-send-change:disabled { opacity:.5; cursor:not-allowed; }
+  .btn-edit-cancel {
+    padding:10px 16px; background:#fff; color:var(--text-muted);
+    border:1.5px solid var(--border); border-radius:8px;
+    font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;
+  }
+
   /* Mobile tweaks */
   @media (max-width:480px) {
     .login-card, .sent-card { padding:36px 24px; }
@@ -569,74 +628,140 @@
       </div>
     </div>
 
-    <!-- No Card Banner -->
-    <div id="noCardBanner" style="display:none;background:#fffbeb;border:1.5px solid #fde68a;border-radius:12px;padding:12px 16px;margin-bottom:18px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-        <div style="font-size:13px;color:#92400e;font-weight:500;">💳 No card on file — <span style="font-weight:400;">add one for automatic billing after each visit.</span></div>
-        <button onclick="openCardModal()" style="background:#f59e0b;color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;">Add Card →</button>
-      </div>
+    <!-- Tab bar -->
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tabHome" onclick="switchTab('home')">🏠 Home</button>
+      <button class="tab-btn" id="tabSettings" onclick="switchTab('settings')">⚙️ Settings</button>
     </div>
 
-    <!-- Plan & Billing (rendered by JS) -->
-    <div id="billingSection" class="section-wrap" style="display:none;">
-      <div class="section-title">Plan &amp; Billing</div>
-      <div class="billing-card" id="billingCard"></div>
-    </div>
+    <!-- ══════════════════════════════════════
+         HOME TAB
+    ══════════════════════════════════════ -->
+    <div class="tab-panel active" id="panelHome">
 
-    <!-- Upcoming Appointments -->
-    <div class="section-wrap">
-      <div class="section-title">
-        Upcoming Appointments
-        <span class="section-badge" id="upcomingBadge">0</span>
-      </div>
-      <div id="upcomingList">
-        <div class="empty-state">
-          <div class="empty-icon">📅</div>
-          Loading your appointments…
+      <!-- No Card Banner -->
+      <div id="noCardBanner" style="display:none;background:#fffbeb;border:1.5px solid #fde68a;border-radius:12px;padding:12px 16px;margin-bottom:18px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div style="font-size:13px;color:#92400e;font-weight:500;">💳 No card on file — <span style="font-weight:400;">add one for automatic billing after each visit.</span></div>
+          <button onclick="openCardModal()" style="background:#f59e0b;color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;">Add Card →</button>
         </div>
       </div>
-    </div>
 
-    <!-- Past Bookings -->
-    <div class="section-wrap">
-      <div class="section-title">
-        Booking History
-        <span class="section-badge" id="historyBadge">0</span>
+      <!-- Plan & Billing (rendered by JS) -->
+      <div id="billingSection" class="section-wrap" style="display:none;">
+        <div class="section-title">Plan &amp; Billing</div>
+        <div class="billing-card" id="billingCard"></div>
       </div>
-      <div id="historyList">
-        <div class="empty-state">
-          <div class="empty-icon">📋</div>
-          Loading booking history…
+
+      <!-- Upcoming Appointments -->
+      <div class="section-wrap">
+        <div class="section-title">
+          Upcoming Appointments
+          <span class="section-badge" id="upcomingBadge">0</span>
+        </div>
+        <div id="upcomingList">
+          <div class="empty-state">
+            <div class="empty-icon">📅</div>
+            Loading your appointments…
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Staff Portal (hidden unless user is also a staff member) -->
-    <div class="staff-portal-section" id="staffPortalSection">
-      <div class="staff-portal-label">🛠 Staff Access</div>
-      <div class="staff-portal-title">Staff Portal</div>
-      <div class="staff-portal-sub">Manage jobs, routes, and client billing</div>
-      <a href="/invoice.html" class="btn-staff-portal">📋 Open Staff Portal →</a>
-    </div>
+      <!-- Past Bookings -->
+      <div class="section-wrap">
+        <div class="section-title">
+          Booking History
+          <span class="section-badge" id="historyBadge">0</span>
+        </div>
+        <div id="historyList">
+          <div class="empty-state">
+            <div class="empty-icon">📋</div>
+            Loading booking history…
+          </div>
+        </div>
+      </div>
 
-    <!-- Account Settings -->
-    <div class="section-wrap">
-      <div class="section-title">Account Settings</div>
+      <!-- Staff Portal (hidden unless user is also a staff member) -->
+      <div class="staff-portal-section" id="staffPortalSection">
+        <div class="staff-portal-label">🛠 Staff Access</div>
+        <div class="staff-portal-title">Staff Portal</div>
+        <div class="staff-portal-sub">Manage jobs, routes, and client billing</div>
+        <a href="/invoice.html" class="btn-staff-portal">📋 Open Staff Portal →</a>
+      </div>
+
+    </div><!-- /panelHome -->
+
+    <!-- ══════════════════════════════════════
+         SETTINGS TAB
+    ══════════════════════════════════════ -->
+    <div class="tab-panel" id="panelSettings">
+
+      <!-- Email change success banner (shown after clicking confirm link) -->
+      <div id="emailChangeSuccess" style="display:none;background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#166534;font-weight:500;">
+        ✅ Email updated successfully. Use your new address to log in next time.
+      </div>
+
+      <!-- ── Profile ── -->
+      <div class="settings-section-title">Profile</div>
       <div class="settings-card">
 
-        <!-- ── Contact ── -->
-        <div class="settings-group-label">Contact</div>
         <div class="settings-row">
-          <div>
+          <div style="flex:1;min-width:0;">
             <div class="settings-label">Email</div>
             <div class="settings-sub" id="settingsEmail">—</div>
+            <!-- Inline email change form (hidden by default) -->
+            <div class="email-edit-form" id="emailEditForm" style="display:none;">
+              <input type="email" id="newEmailInput" placeholder="New email address" autocomplete="off"/>
+              <div class="email-edit-form-btns">
+                <button class="btn-send-change" id="sendEmailChangeBtn" onclick="requestEmailChange()">Send Confirmation →</button>
+                <button class="btn-edit-cancel" onclick="closeEmailEdit()">Cancel</button>
+              </div>
+              <div id="emailChangeMsg" style="font-size:12px;margin-top:8px;color:var(--text-muted);"></div>
+            </div>
           </div>
-          <div class="settings-value">Verified ✓</div>
+          <button class="btn-add-card" id="editEmailBtn" onclick="toggleEmailEdit()" style="margin-left:12px;flex-shrink:0;">Edit</button>
         </div>
 
-        <!-- ── Billing ── -->
-        <div class="settings-group-label">Billing</div>
-        <div class="settings-row" id="autopayRow">
+        <div class="settings-row">
+          <div style="flex:1;min-width:0;">
+            <div class="settings-label">Phone</div>
+            <div class="settings-sub" id="settingsPhone">Not set</div>
+            <div id="phoneEditWrap" style="display:none;margin-top:10px;">
+              <input type="tel" id="phoneInput" placeholder="(352) 000-0000"
+                style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px;outline:none;margin-bottom:8px;"
+                oninput="this.style.borderColor='var(--green-mid)'" autocomplete="tel"/>
+              <div style="display:flex;gap:8px;">
+                <button class="btn-send-change" onclick="savePhone()">Save →</button>
+                <button class="btn-edit-cancel" onclick="closePhoneEdit()">Cancel</button>
+              </div>
+              <div id="phoneMsg" style="font-size:12px;margin-top:6px;color:var(--text-muted);"></div>
+            </div>
+          </div>
+          <button class="btn-add-card" id="editPhoneBtn" onclick="togglePhoneEdit()" style="margin-left:12px;flex-shrink:0;">Edit</button>
+        </div>
+
+        <div class="settings-row" id="addressesRow" style="display:none;">
+          <div>
+            <div class="settings-label">Service Address</div>
+            <div id="settingsAddresses" style="font-size:12px;color:var(--text-muted);margin-top:2px;line-height:1.7;"></div>
+          </div>
+          <div class="settings-value">On file</div>
+        </div>
+
+      </div>
+
+      <!-- ── Billing ── -->
+      <div class="settings-section-title">Billing</div>
+      <div class="settings-card">
+
+        <div class="settings-row">
+          <div>
+            <div class="settings-label">Saved Card</div>
+            <div class="settings-sub" id="savedCard">No card on file</div>
+          </div>
+          <button class="btn-add-card" id="addCardBtn" onclick="openCardModal()">Add Card</button>
+        </div>
+        <div class="settings-row" id="autopayRow" style="display:none;">
           <div>
             <div class="settings-label">Autopay</div>
             <div class="settings-sub" id="autopaySub">Charge my card automatically after each visit — no invoices</div>
@@ -646,13 +771,6 @@
             <div class="toggle-track"></div>
             <div class="toggle-thumb"></div>
           </label>
-        </div>
-        <div class="settings-row">
-          <div>
-            <div class="settings-label">Saved Card</div>
-            <div class="settings-sub" id="savedCard">No card on file</div>
-          </div>
-          <button class="btn-add-card" id="addCardBtn" onclick="openCardModal()">Add Card</button>
         </div>
         <div class="settings-row" id="switchPlanRow" style="display:none;">
           <div>
@@ -669,8 +787,12 @@
           <button class="btn-add-card" id="extraMowBtn" onclick="openExtraMowModal()">Schedule →</button>
         </div>
 
-        <!-- ── Preferences ── -->
-        <div class="settings-group-label">Preferences</div>
+      </div>
+
+      <!-- ── Preferences ── -->
+      <div class="settings-section-title">Preferences</div>
+      <div class="settings-card">
+
         <div class="settings-row">
           <div>
             <div class="settings-label">Appointment Reminders</div>
@@ -683,17 +805,18 @@
           </label>
         </div>
 
-        <!-- ── Danger zone ── -->
-        <div class="settings-row" id="cancelSubscriptionRow" style="display:none;">
-          <div>
-            <div class="settings-label" style="color:var(--red);">Cancel Subscription</div>
-            <div class="settings-sub">End your lawn care plan</div>
-          </div>
-          <button class="btn-cancel-sub" onclick="openCancelModal()">Cancel Plan</button>
-        </div>
-
       </div>
-    </div>
+
+      <!-- ── Danger zone ── -->
+      <div class="settings-row" id="cancelSubscriptionRow" style="display:none;margin-top:24px;background:#fff;border-radius:16px;border:1.5px solid #fca5a5;">
+        <div>
+          <div class="settings-label" style="color:var(--red);">Cancel Subscription</div>
+          <div class="settings-sub">End your lawn care plan</div>
+        </div>
+        <button class="btn-cancel-sub" onclick="openCancelModal()">Cancel Plan</button>
+      </div>
+
+    </div><!-- /panelSettings -->
 
   </div><!-- /portal-body -->
 </div><!-- /screen-profile -->
@@ -868,8 +991,9 @@ const STRIPE_PUB_KEY  = 'pk_live_51TLrat4J18msjfgfYqm9zvDa2pkr5ZPv6s10bl5UwMIYnA
 // INIT — on page load, figure out which screen to show
 // ═══════════════════════════════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', async () => {
-  const params = new URLSearchParams(window.location.search);
-  const token  = params.get('token');
+  const params         = new URLSearchParams(window.location.search);
+  const token          = params.get('token');
+  const emailChangeToken = params.get('emailchange');
 
   if (token) {
     // Magic link clicked — verify the token
@@ -878,10 +1002,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Check for an existing session in localStorage
-  // loadProfile verifies the session server-side internally — no separate verifySession needed
   const session = getStoredSession();
   if (session) {
     await loadProfile(session.token);
+    // After profile loads, handle email change confirmation if present
+    if (emailChangeToken) await handleEmailChangeToken(emailChangeToken);
     return;
   }
 
@@ -1075,6 +1200,28 @@ function renderProfile(data) {
   document.getElementById('greetingName').textContent  = 'Hey, ' + firstName + ' 👋';
   document.getElementById('greetingEmail').textContent = email;
   document.getElementById('settingsEmail').textContent = email;
+
+  // Phone
+  const phone = data.phone || '';
+  const phoneEl = document.getElementById('settingsPhone');
+  if (phoneEl) phoneEl.textContent = phone || 'Not set';
+  const phoneInput = document.getElementById('phoneInput');
+  if (phoneInput && phone) phoneInput.value = phone;
+
+  // Service addresses (unique addresses from bookings)
+  const addrs = [...new Set(
+    (data.bookings || []).map(b => String(b.address || '').trim()).filter(Boolean)
+  )];
+  const addrRow = document.getElementById('addressesRow');
+  const addrEl  = document.getElementById('settingsAddresses');
+  if (addrRow && addrEl) {
+    if (addrs.length > 0) {
+      addrEl.innerHTML = addrs.map(a => `<div>${esc(a)}</div>`).join('');
+      addrRow.style.display = '';
+    } else {
+      addrRow.style.display = 'none';
+    }
+  }
 
   // Admin button — server is the source of truth. Revoked = hidden immediately.
   const isAdmin = !!data.isStaff;
@@ -1581,6 +1728,137 @@ function bookingCardHTML(b, isUpcoming) {
       ${apptActions}
       ${payNowBtn}
     </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════════════════════════════
+function switchTab(tab) {
+  document.getElementById('panelHome').classList.toggle('active', tab === 'home');
+  document.getElementById('panelSettings').classList.toggle('active', tab === 'settings');
+  document.getElementById('tabHome').classList.toggle('active', tab === 'home');
+  document.getElementById('tabSettings').classList.toggle('active', tab === 'settings');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// EMAIL CHANGE
+// ═══════════════════════════════════════════════════════════════════════
+function toggleEmailEdit() {
+  const form = document.getElementById('emailEditForm');
+  const btn  = document.getElementById('editEmailBtn');
+  const open = form.style.display === 'none' || form.style.display === '';
+  form.style.display = open ? 'block' : 'none';
+  btn.textContent    = open ? 'Cancel' : 'Edit';
+  if (open) document.getElementById('newEmailInput').focus();
+}
+function closeEmailEdit() {
+  document.getElementById('emailEditForm').style.display = 'none';
+  document.getElementById('editEmailBtn').textContent    = 'Edit';
+  document.getElementById('emailChangeMsg').textContent  = '';
+  document.getElementById('newEmailInput').value         = '';
+}
+async function requestEmailChange() {
+  const newEmail = (document.getElementById('newEmailInput').value || '').trim();
+  const msgEl    = document.getElementById('emailChangeMsg');
+  const btn      = document.getElementById('sendEmailChangeBtn');
+  msgEl.textContent = ''; msgEl.style.color = 'var(--text-muted)';
+  if (!newEmail || !newEmail.includes('@')) {
+    msgEl.textContent = 'Please enter a valid email address.'; msgEl.style.color = 'var(--red)'; return;
+  }
+  btn.disabled = true; btn.textContent = 'Sending…';
+  const session = getStoredSession();
+  if (!session) { btn.disabled = false; btn.textContent = 'Send Confirmation →'; return; }
+  try {
+    const data = await apiGet({ action: 'portal_request_email_change', sessionToken: session.token, newEmail });
+    if (data.success) {
+      msgEl.style.color = '#166534';
+      msgEl.textContent = '✅ Confirmation sent to ' + newEmail + ' — click the link in that email to confirm.';
+      btn.textContent = 'Sent!';
+    } else {
+      msgEl.style.color = 'var(--red)';
+      msgEl.textContent = data.error || 'Something went wrong. Please try again.';
+      btn.disabled = false; btn.textContent = 'Send Confirmation →';
+    }
+  } catch(e) {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = 'Network error. Please try again.';
+    btn.disabled = false; btn.textContent = 'Send Confirmation →';
+  }
+}
+
+// Called on page load if ?emailchange=TOKEN is in the URL
+async function handleEmailChangeToken(token) {
+  try {
+    const data = await apiGet({ action: 'portal_confirm_email_change', token });
+    // Strip the param from the URL so a refresh doesn't re-trigger
+    const url = new URL(window.location.href);
+    url.searchParams.delete('emailchange');
+    window.history.replaceState({}, '', url.toString());
+    if (data.success) {
+      // Switch to settings tab and show the success banner
+      switchTab('settings');
+      const banner = document.getElementById('emailChangeSuccess');
+      if (banner) banner.style.display = 'block';
+      // Update displayed email
+      const emailEl = document.getElementById('settingsEmail');
+      if (emailEl) emailEl.textContent = data.newEmail || '';
+      const greetEl = document.getElementById('greetingEmail');
+      if (greetEl) greetEl.textContent = data.newEmail || '';
+      // Update stored session email so API calls still work
+      try {
+        const sess = getStoredSession();
+        if (sess) { sess.email = data.newEmail; storeSession(sess); }
+      } catch(e) { /* best effort */ }
+    } else {
+      switchTab('settings');
+      const msgEl = document.getElementById('emailChangeMsg');
+      if (msgEl) { msgEl.style.color = 'var(--red)'; msgEl.textContent = data.error || 'Link expired. Please request a new one.'; }
+    }
+  } catch(e) { /* silent — user can still use the page normally */ }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PHONE UPDATE
+// ═══════════════════════════════════════════════════════════════════════
+function togglePhoneEdit() {
+  const wrap = document.getElementById('phoneEditWrap');
+  const btn  = document.getElementById('editPhoneBtn');
+  const open = wrap.style.display === 'none' || wrap.style.display === '';
+  wrap.style.display = open ? 'block' : 'none';
+  btn.textContent    = open ? 'Cancel' : 'Edit';
+  if (open) document.getElementById('phoneInput').focus();
+}
+function closePhoneEdit() {
+  document.getElementById('phoneEditWrap').style.display = 'none';
+  document.getElementById('editPhoneBtn').textContent    = 'Edit';
+  document.getElementById('phoneMsg').textContent        = '';
+}
+async function savePhone() {
+  const phone  = (document.getElementById('phoneInput').value || '').trim();
+  const msgEl  = document.getElementById('phoneMsg');
+  const btns   = document.querySelectorAll('#phoneEditWrap button');
+  msgEl.textContent = ''; msgEl.style.color = 'var(--text-muted)';
+  btns.forEach(b => b.disabled = true);
+  const session = getStoredSession();
+  if (!session) { btns.forEach(b => b.disabled = false); return; }
+  try {
+    const data = await apiGet({ action: 'portal_update_phone', sessionToken: session.token, phone });
+    if (data.success) {
+      const phoneEl = document.getElementById('settingsPhone');
+      if (phoneEl) phoneEl.textContent = phone || 'Not set';
+      msgEl.style.color   = '#166534';
+      msgEl.textContent   = '✅ Phone saved.';
+      setTimeout(() => closePhoneEdit(), 1200);
+    } else {
+      msgEl.style.color   = 'var(--red)';
+      msgEl.textContent   = data.error || 'Could not save. Please try again.';
+      btns.forEach(b => b.disabled = false);
+    }
+  } catch(e) {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = 'Network error. Please try again.';
+    btns.forEach(b => b.disabled = false);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
