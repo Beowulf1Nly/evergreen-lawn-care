@@ -254,8 +254,9 @@
     transition:border-color .2s, box-shadow .2s;
   }
   .booking-card:hover { border-color:#c8e6c9; box-shadow:var(--shadow); }
-  .booking-card.upcoming { border-left:4px solid var(--green-bright); }
-  .booking-card.paid     { border-left:4px solid var(--blue); }
+  .booking-card.upcoming      { border-left:4px solid var(--green-bright); }
+  .booking-card.upcoming.extra { border-left:4px solid #7c3aed; }
+  .booking-card.paid          { border-left:4px solid var(--blue); }
   .booking-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
   .booking-service { font-weight:600; font-size:15px; }
   .booking-date { font-size:13px; color:var(--text-muted); margin-top:2px; }
@@ -563,10 +564,11 @@
     </div>
 
     <!-- No Card Banner -->
-    <div id="noCardBanner" style="display:none;background:#fff3cd;border:2px solid #f59e0b;border-radius:14px;padding:18px 20px;margin-bottom:20px;">
-      <div style="font-size:17px;font-weight:700;color:#92400e;margin-bottom:6px;">💳 No payment card on file</div>
-      <div style="font-size:14px;color:#78350f;margin-bottom:14px;line-height:1.5;">Add a card so we can automatically charge you after each visit — no hassle, no invoices.</div>
-      <button onclick="openCardModal()" style="background:#f59e0b;color:#fff;border:none;border-radius:9px;padding:10px 22px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">Add Card Now →</button>
+    <div id="noCardBanner" style="display:none;background:#fffbeb;border:1.5px solid #fde68a;border-radius:12px;padding:12px 16px;margin-bottom:18px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div style="font-size:13px;color:#92400e;font-weight:500;">💳 No card on file — <span style="font-weight:400;">add one for automatic billing after each visit.</span></div>
+        <button onclick="openCardModal()" style="background:#f59e0b;color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;">Add Card →</button>
+      </div>
     </div>
 
     <!-- Plan & Billing (rendered by JS) -->
@@ -1120,7 +1122,7 @@ function renderProfile(data) {
   document.getElementById('historyBadge').textContent  = past.length;
 
   // Billing card
-  renderBillingCard(bookings);
+  renderBillingCard(bookings, !!data.cardLast4);
 
   // Render upcoming
   const upEl = document.getElementById('upcomingList');
@@ -1135,13 +1137,13 @@ function renderProfile(data) {
     : `<div class="empty-state"><div class="empty-icon">📋</div>No past bookings yet.</div>`;
 }
 
-function renderBillingCard(bookings) {
+function renderBillingCard(bookings, hasCard) {
   const section = document.getElementById('billingSection');
   const card    = document.getElementById('billingCard');
   if (!section || !card) return;
 
   // Find the customer's active subscription plan (most recent booking with a plan, excluding free mows)
-  const subBookings = bookings.filter(b => b.frequency && b.frequency !== 'One-time visit' && b.frequency !== 'Free Mow');
+  const subBookings = bookings.filter(b => b.frequency && b.frequency !== 'One-time visit' && b.frequency !== 'Free Mow' && b.frequency !== 'Extra Mow');
   if (!subBookings.length) { section.style.display = 'none'; return; }
 
   // Detect cash customer — check both calendarEvent (paidStatus) and payMethod (calStatus) for 'cash'
@@ -1297,7 +1299,7 @@ function renderBillingCard(bookings) {
       <div class="billing-plan-row">
         <div>
           <div class="billing-plan-name">📅 Weekly Plan</div>
-          <div class="billing-plan-sub">${perPropLabel}/mow — ${isCashCustomer ? '💵 cash, collected after each visit' : 'charged after each visit'}</div>
+          <div class="billing-plan-sub">${perPropLabel}/mow — ${isCashCustomer ? '💵 cash, collected after each visit' : hasCard ? 'charged after each visit' : 'invoiced after each visit'}</div>
         </div>
       </div>
       <hr class="billing-divider">
@@ -1307,7 +1309,7 @@ function renderBillingCard(bookings) {
       </div>
       <div class="billing-info-row">
         <span class="billing-info-label">Per-mow rate</span>
-        <span class="billing-info-value">${totalLabel} — ${isCashCustomer ? '💵 paid in cash' : 'charged after each mow'}</span>
+        <span class="billing-info-value">${totalLabel} — ${isCashCustomer ? '💵 paid in cash' : hasCard ? 'charged after each mow' : 'invoiced after each mow'}</span>
       </div>
       ${chargeInfo ? `<div class="billing-info-row"><span class="billing-info-label">This month</span>${chargeInfo}</div>` : ''}
       <div class="mow-dots">${dotsHtml}</div>
@@ -1315,7 +1317,9 @@ function renderBillingCard(bookings) {
       <div style="margin-top:12px;padding:10px 14px;background:${isCashCustomer ? '#fef9c3' : '#f0fdf4'};border-radius:10px;font-size:12px;color:${isCashCustomer ? '#854d0e' : '#166534'};line-height:1.6;">
         ${isCashCustomer
           ? `💵 Cash customer — we'll collect ${isMultiProp ? totalStr + ' (' + _rateBreakdown + ')' : mowRateStr} after each weekly visit. <a href="#" onclick="openCardModal();return false;" style="color:#854d0e;font-weight:700;">Add a card →</a> to switch to autopay.`
-          : `💡 Your card is automatically charged ${isMultiProp ? totalStr + ' (' + _rateBreakdown + ')' : mowRateStr} after each weekly mow. No invoices, no reminders.`}
+          : hasCard
+            ? `💡 Your card is automatically charged ${isMultiProp ? totalStr + ' (' + _rateBreakdown + ')' : mowRateStr} after each weekly mow. No invoices, no reminders.`
+            : `📬 We'll email you an invoice after each weekly mow. <a href="#" onclick="openCardModal();return false;" style="color:#166534;font-weight:700;">Add a card →</a> to enable autopay.`}
       </div>${promoNote}`;
 
   } else if (isBiWeekly) {
@@ -1379,7 +1383,7 @@ function renderBillingCard(bookings) {
       <div class="billing-plan-row">
         <div>
           <div class="billing-plan-name">📅 Bi-Weekly Plan</div>
-          <div class="billing-plan-sub">${perPropLabel}/mow — ${isCashCustomer ? '💵 cash, collected after each visit' : 'charged after each visit'}</div>
+          <div class="billing-plan-sub">${perPropLabel}/mow — ${isCashCustomer ? '💵 cash, collected after each visit' : hasCard ? 'charged after each visit' : 'invoiced after each visit'}</div>
         </div>
       </div>
       <hr class="billing-divider">
@@ -1389,7 +1393,7 @@ function renderBillingCard(bookings) {
       </div>
       <div class="billing-info-row">
         <span class="billing-info-label">Per-mow rate</span>
-        <span class="billing-info-value">${totalLabel} — ${isCashCustomer ? '💵 paid in cash' : 'charged after each mow'}</span>
+        <span class="billing-info-value">${totalLabel} — ${isCashCustomer ? '💵 paid in cash' : hasCard ? 'charged after each mow' : 'invoiced after each mow'}</span>
       </div>
       ${chargeInfo ? `<div class="billing-info-row"><span class="billing-info-label">This month</span>${chargeInfo}</div>` : ''}
       <div class="mow-dots">${dotsHtml}</div>
@@ -1397,7 +1401,9 @@ function renderBillingCard(bookings) {
       <div style="margin-top:12px;padding:10px 14px;background:${isCashCustomer ? '#fef9c3' : '#f0fdf4'};border-radius:10px;font-size:12px;color:${isCashCustomer ? '#854d0e' : '#166534'};line-height:1.6;">
         ${isCashCustomer
           ? `💵 Cash customer — we'll collect ${isMultiProp ? totalStr + ' (' + _rateBreakdown + ')' : mowRateStr} after each bi-weekly visit. <a href="#" onclick="openCardModal();return false;" style="color:#854d0e;font-weight:700;">Add a card →</a> to switch to autopay.`
-          : `💡 Your card is automatically charged ${isMultiProp ? totalStr + ' (' + _rateBreakdown + ')' : mowRateStr} after each bi-weekly mow. No invoices, no reminders.`}
+          : hasCard
+            ? `💡 Your card is automatically charged ${isMultiProp ? totalStr + ' (' + _rateBreakdown + ')' : mowRateStr} after each bi-weekly mow. No invoices, no reminders.`
+            : `📬 We'll email you an invoice after each bi-weekly mow. <a href="#" onclick="openCardModal();return false;" style="color:#166534;font-weight:700;">Add a card →</a> to enable autopay.`}
       </div>`;
 
   } else {
@@ -1407,7 +1413,7 @@ function renderBillingCard(bookings) {
         <div>
           <div class="billing-plan-name">📅 ${esc(freq)}</div>
           ${customDays > 0 ? `<div class="billing-plan-sub" style="margin-bottom:2px;">Visit every ${customDays} days</div>` : ''}
-          <div class="billing-plan-sub">${perPropLabel}/mow — ${isCashCustomer ? '💵 cash, collected after each visit' : 'charged after each mow'}</div>
+          <div class="billing-plan-sub">${perPropLabel}/mow — ${isCashCustomer ? '💵 cash, collected after each visit' : hasCard ? 'charged after each mow' : 'invoiced after each mow'}</div>
         </div>
       </div>
       <hr class="billing-divider">
@@ -1417,12 +1423,14 @@ function renderBillingCard(bookings) {
       </div>
       <div class="billing-info-row">
         <span class="billing-info-label">Per-mow rate</span>
-        <span class="billing-info-value">${totalLabel} — ${isCashCustomer ? '💵 paid in cash' : 'charged after each mow'}</span>
+        <span class="billing-info-value">${totalLabel} — ${isCashCustomer ? '💵 paid in cash' : hasCard ? 'charged after each mow' : 'invoiced after each mow'}</span>
       </div>
       <div style="margin-top:12px;padding:10px 14px;background:${isCashCustomer ? '#fef9c3' : '#f0fdf4'};border-radius:10px;font-size:12px;color:${isCashCustomer ? '#854d0e' : '#166534'};line-height:1.6;">
         ${isCashCustomer
           ? `💵 Cash customer — we'll collect ${isMultiProp ? totalStr + ' (' + _rateBreakdown + ')' : mowRateStr} after each visit. <a href="#" onclick="openCardModal();return false;" style="color:#854d0e;font-weight:700;">Add a card →</a> to switch to autopay.`
-          : `💡 Your card is automatically charged ${isMultiProp ? totalStr + ' (' + _rateBreakdown + ')' : mowRateStr} after each mow. No invoices, no reminders.`}
+          : hasCard
+            ? `💡 Your card is automatically charged ${isMultiProp ? totalStr + ' (' + _rateBreakdown + ')' : mowRateStr} after each mow. No invoices, no reminders.`
+            : `📬 We'll email you an invoice after each mow. <a href="#" onclick="openCardModal();return false;" style="color:#166534;font-weight:700;">Add a card →</a> to enable autopay.`}
       </div>${promoNote}`;
   }
 
@@ -1473,12 +1481,15 @@ function bookingCardHTML(b, isUpcoming) {
   const chipText  = isPaid ? '✅ Paid' : (isInvoiced ? '📄 Invoiced' : (isDone ? '✓ Done' : 'Pending'));
 
   const isFreeMow      = b.frequency === 'Free Mow';
-  const isSubscription = b.frequency && b.frequency !== 'One-time visit' && !isFreeMow;
+  const isExtraMow     = b.frequency === 'Extra Mow';
+  const isSubscription = b.frequency && b.frequency !== 'One-time visit' && !isFreeMow && !isExtraMow;
   const priceTag = isFreeMow
     ? `<span style="color:var(--green-mid);font-weight:600;">🌿 Free Visit</span>`
-    : isSubscription
-      ? `<span style="color:var(--green-mid);font-weight:600;">✓ Included in plan</span>`
-      : (price ? `<span>💵 $${price}</span>` : '');
+    : isExtraMow
+      ? `<span style="color:#6d28d9;font-weight:600;">➕ Extra Visit</span>`
+      : isSubscription
+        ? `<span style="color:var(--green-mid);font-weight:600;">✓ Included in plan</span>`
+        : (price ? `<span>💵 $${price}</span>` : '');
   const addrTag  = address ? `<span>📍 ${address}</span>` : '';
 
   const rowIndex   = b._rowIndex || 0;
@@ -1534,7 +1545,7 @@ function bookingCardHTML(b, isUpcoming) {
     </div>`) : '';
 
   return `
-    <div class="booking-card ${isUpcoming ? 'upcoming' : ''}">
+    <div class="booking-card ${isUpcoming ? 'upcoming' : ''}${isExtraMow ? ' extra' : ''}">
       <div class="booking-top">
         <div>
           <div class="booking-service">${service}</div>
@@ -1545,7 +1556,7 @@ function bookingCardHTML(b, isUpcoming) {
       <div class="booking-meta">
         ${addrTag}
         ${priceTag}
-        ${(()=>{ const _d = parseInt(b.days||''); const _f = esc(b.frequency||''); if(!_f) return ''; const _fDays = /weekly/i.test(_f)&&!/bi/i.test(_f)?7:/bi.?weekly/i.test(_f)?14:/monthly/i.test(_f)?30:0; return (_d>0&&_d!==_fDays)?`Every ${_d} days`:_f; })()}
+        ${(()=>{ const _d = parseInt(b.days||''); const _f = esc(b.frequency||''); if(!_f||_f==='Extra Mow'||_f==='Free Mow') return ''; const _fDays = /weekly/i.test(_f)&&!/bi/i.test(_f)?7:/bi.?weekly/i.test(_f)?14:/monthly/i.test(_f)?30:0; const _label = (_d>0&&_d!==_fDays)?`Every ${_d} days`:_f; return `<span>🔁 ${_label}</span>`; })()}
       </div>
       ${apptActions}
       ${payNowBtn}
