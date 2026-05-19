@@ -1231,7 +1231,11 @@
 <div class="confirm-overlay" id="ownerReschedOverlay">
   <div class="confirm-box" style="max-width:360px;">
     <h4>Reschedule Appointment</h4>
-    <p id="ownerReschedName" style="margin:0 0 12px;font-weight:600;color:#276749;"></p>
+    <p id="ownerReschedName" style="margin:0 0 8px;font-weight:600;color:#276749;"></p>
+    <!-- Email confirmation pill — visible BEFORE clicking Move It so you can verify the recipient -->
+    <div id="ownerReschedEmailPill" style="display:inline-flex;align-items:center;gap:6px;background:#fef9c3;border:1.5px solid #fde047;border-radius:999px;padding:5px 13px;margin-bottom:14px;font-size:12px;font-weight:700;color:#854d0e;word-break:break-all;">
+      📧 Email will go to: <span id="ownerReschedEmailDisplay" style="font-weight:800;"></span>
+    </div>
     <div style="margin-bottom:12px;">
       <label for="ownerReschedDate" style="font-size:13px;color:#555;display:block;margin-bottom:4px;">New Date</label>
       <input type="date" id="ownerReschedDate" style="width:100%;padding:8px 10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;"/>
@@ -1282,7 +1286,11 @@
 <!-- Schedule Modal -->
 <div class="confirm-overlay" id="scheduleOverlay" onmousedown="schedOverlayMD(event)" onmouseup="schedOverlayMU(event)">
   <div class="confirm-box" style="max-width:420px;width:94%;">
-    <h4 id="scheduleModalTitle" style="margin:0 0 16px;">📋 Start New Plan</h4>
+    <h4 id="scheduleModalTitle" style="margin:0 0 8px;">📋 Start New Plan</h4>
+    <!-- Email confirmation pill — verify the recipient before scheduling -->
+    <div id="schedEmailPill" style="display:inline-flex;align-items:center;gap:6px;background:#fef9c3;border:1.5px solid #fde047;border-radius:999px;padding:5px 13px;margin-bottom:14px;font-size:12px;font-weight:700;color:#854d0e;word-break:break-all;">
+      📧 Confirmation goes to: <span id="schedEmailDisplay" style="font-weight:800;"></span>
+    </div>
     <div style="display:flex;flex-direction:column;gap:12px;">
       <div>
         <label for="schedPlan" style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">Plan</label>
@@ -2091,21 +2099,28 @@ async function submitJob() {
     if (!price)   { showToast('Enter a price per mow'); return; }
     if (plan === 'Custom Plan' && !customDays) { showToast('Enter the number of days for this custom plan'); return; }
 
+    // If this job was opened from a visited quote, pass the quote customer's email
+    // so the server can find and remove the visited quote row atomically.
+    // (Doing it client-side after the fact causes an off-by-one index bug.)
+    const _srcQuoteEmail = (jobSourceRowIdx !== null && allBookings[jobSourceRowIdx]?.email)
+      ? allBookings[jobSourceRowIdx].email : '';
+
     params = new URLSearchParams({
-      action:         'manual_add_client',
+      action:            'manual_add_client',
       name, phone, email, address, zip,
-      frequency:      plan,
-      yardSize:       yard,
-      serviceDate:    date,
+      frequency:         plan,
+      yardSize:          yard,
+      serviceDate:       date,
       price,
-      notes:          baseNotes || '(none)',
-      payMethod:      paymethod,
-      firstMowPromo:  firstMowPromo ? 'true' : '',
-      days:           customDays || '',
-      serviceType:    'Lawn Mow & Blow',
-      sendCustomEmail: sendEmail && emailSubject ? 'true' : '',
+      notes:             baseNotes || '(none)',
+      payMethod:         paymethod,
+      firstMowPromo:     firstMowPromo ? 'true' : '',
+      days:              customDays || '',
+      serviceType:       'Lawn Mow & Blow',
+      sendCustomEmail:   sendEmail && emailSubject ? 'true' : '',
       customEmailSubject: emailSubject,
       customEmailBody:    emailBody,
+      sourceQuoteEmail:  _srcQuoteEmail,  // server deletes the visited quote row if set
       adminToken,
     });
 
@@ -2166,22 +2181,8 @@ async function submitJob() {
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'Failed to schedule job');
 
-    // ── Remove the source quote visit row (silently, no email) ──
-    if (jobSourceRowIdx !== null) {
-      const srcBooking = allBookings[jobSourceRowIdx];
-      if (srcBooking) {
-        try {
-          const cancelParams = new URLSearchParams({
-            action:     'cancel_job',
-            rowIndex:   srcBooking._rowIndex || (jobSourceRowIdx + 2),
-            skipEmail:  'true',
-            reason:     '',
-            adminToken,
-          });
-          await fetch(SCRIPT_URL + '?' + cancelParams.toString());
-        } catch(e) { /* silent — job was already created */ }
-      }
-    }
+    // NOTE: Quote visit row cleanup is now handled server-side in handleManualAddClient
+    // via the sourceQuoteEmail param — no separate cancel_job call needed here.
 
     if (statusEl) {
       statusEl.textContent = `✅ Job scheduled for ${name} on ${displayDate(date)}!`;
@@ -2198,8 +2199,10 @@ async function submitJob() {
       jobSourceEstimateRowNum = null;
     }
     jobReset();
-    // Reload data and go back to Jobs tab
+    // Reload both bookings AND customers so customer-card nextRow indices
+    // are never stale after the new row is inserted at the top of the sheet.
     await loadBookings();
+    loadCustomers();
     showTab('jobs');
 
   } catch(err) {
@@ -2513,7 +2516,7 @@ function renderCustomers() {
       (!isInactive && nextRow !== undefined) ? `<button class="cust-dd-item" onclick="closeCustDropdowns();custChangePrice(${custIdx},${nextRow})">💰 Change Price</button>` : '',
                                                `<button class="cust-dd-item" onclick="closeCustDropdowns();openScheduleModal(${custIdx})">📋 Change Plan</button>`,
                                                `<button class="cust-dd-item" onclick="closeCustDropdowns();custViewNotes(${custIdx})">📝 Notes</button>`,
-      (c.email && !c.reviewSent)             ? `<button class="cust-dd-item" onclick="closeCustDropdowns();custSendReviewByEmail('${esc(c.email)}')">⭐ Review Email</button>` : '',
+      (c.email && !c.reviewSent && c.totalMows > 0) ? `<button class="cust-dd-item" onclick="closeCustDropdowns();custSendReviewByEmail('${esc(c.email)}')">⭐ Review Email</button>` : '',
       // Danger zone
       ((!isInactive && nextRow !== undefined) || isSub) ? '<div class="cust-dd-sep"></div>' : '',
       (!isInactive && nextRow !== undefined) ? `<button class="cust-dd-item danger" onclick="closeCustDropdowns();triggerCancelJob(${nextRow})">✕ Cancel Job</button>` : '',
@@ -2621,6 +2624,15 @@ function openScheduleModal(idx) {
   if (!c) return;
   _schedCustomer = c;
   document.getElementById('scheduleModalTitle').textContent = '📋 Schedule — ' + (c.name || '');
+  // Show exact recipient email so you can verify before hitting Schedule
+  const _schedEmail = (c.email || '').toLowerCase().trim();
+  document.getElementById('schedEmailDisplay').textContent = _schedEmail || '(no email on file)';
+  const _schedPill = document.getElementById('schedEmailPill');
+  if (_schedPill) {
+    _schedPill.style.background   = _schedEmail ? '#fef9c3' : '#fee2e2';
+    _schedPill.style.borderColor  = _schedEmail ? '#fde047' : '#fca5a5';
+    _schedPill.style.color        = _schedEmail ? '#854d0e' : '#991b1b';
+  }
 
   // ── Auto-fill from pre-computed booking data (set in renderCustomers) ──
   const validPlans = ['Weekly Plan', 'Bi-Weekly Plan', 'Custom Plan', 'One-time visit'];
@@ -2720,7 +2732,10 @@ async function submitSchedule() {
       closeScheduleModal();
       showToast('Scheduled! ' + plan + ' starting ' + date);
       sessionStorage.removeItem('evg_customers_cache');
-      loadBookings();
+      // Load both — bookings AND customers — so customer-card nextRow indices
+      // are never stale after a new booking row is inserted at the top of the sheet.
+      await loadBookings();
+      loadCustomers();
     } else {
       showToast('Error: ' + (data.error || 'Failed'));
     }
@@ -3421,13 +3436,19 @@ async function sendReviewRequest(rowIdx, skipConfirm = false) {
 // ═══════════════════════════════════════════════════════
 // OWNER RESCHEDULE MODAL
 // ═══════════════════════════════════════════════════════
-let ownerReschedRowIdx = null;
+let ownerReschedRowIdx   = null;
+let ownerReschedEmail    = '';   // captured when modal opens — sent as expectedEmail guard
 
 function openOwnerResched(rowIdx) {
   const b = allBookings[rowIdx];
   if (!b) return;
   ownerReschedRowIdx = rowIdx;
+  ownerReschedEmail  = (b.email || '').toLowerCase().trim();
   document.getElementById('ownerReschedName').textContent = b.name || '—';
+  // Show exact recipient email so you can verify before hitting Move It
+  document.getElementById('ownerReschedEmailDisplay').textContent = ownerReschedEmail || '(no email on file)';
+  document.getElementById('ownerReschedEmailPill').style.background = ownerReschedEmail ? '#fef9c3' : '#fee2e2';
+  document.getElementById('ownerReschedEmailPill').style.borderColor = ownerReschedEmail ? '#fde047' : '#fca5a5';
   // Pre-fill with existing date
   const existing = b.serviceDate || b.serviceDateRaw || '';
   const iso = /^\d{4}-\d{2}-\d{2}/.test(existing) ? existing.substring(0, 10) : '';
@@ -3441,6 +3462,7 @@ function openOwnerResched(rowIdx) {
 function closeOwnerResched() {
   document.getElementById('ownerReschedOverlay').classList.remove('open');
   ownerReschedRowIdx = null;
+  ownerReschedEmail  = '';
   var r = document.getElementById('ownerReschedReason'); if (r) r.value = '';
 }
 
@@ -3455,11 +3477,12 @@ async function submitOwnerResched() {
 
   try {
     const params = new URLSearchParams({
-      action:   'owner_reschedule',
-      rowIndex: ownerReschedRowIdx + 2,
+      action:        'owner_reschedule',
+      rowIndex:      ownerReschedRowIdx + 2,
       newDate,
       scope,
-      reason:   (document.getElementById('ownerReschedReason') ? document.getElementById('ownerReschedReason').value.trim() : ''),
+      reason:        (document.getElementById('ownerReschedReason') ? document.getElementById('ownerReschedReason').value.trim() : ''),
+      expectedEmail: ownerReschedEmail,  // server verifies this matches the row — prevents wrong-customer emails
     });
     const res  = await fetch(SCRIPT_URL + '?' + params.toString() + '&' + authParam());
     const data = await res.json();
