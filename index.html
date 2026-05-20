@@ -1681,7 +1681,9 @@
   <!-- NAV -->
   <nav id="navbar">
     <div class="nav-logo">
-      <span style="font-family:'Playfair Display',serif; font-size:20px; font-weight:700; color:var(--green-deep);">🌿 Evergreen <span style="color:var(--green-bright);">Lawn Care</span></span>
+      <a href="/" style="text-decoration:none;">
+        <span style="font-family:'Playfair Display',serif; font-size:20px; font-weight:700; color:var(--green-deep);">🌿 Evergreen <span style="color:var(--green-bright);">Lawn Care</span></span>
+      </a>
     </div>
     <button class="nav-hamburger" id="navHamburger" onclick="toggleMobileMenu()" aria-label="Open menu" aria-expanded="false">
       <span></span><span></span><span></span>
@@ -2459,6 +2461,7 @@ const VALID_ZIPS = new Set([
   '34433','34434',                    // Citrus Springs
   '34436',                            // Floral City
   '34442',                            // Hernando
+  '34446','34447','34448',            // Homosassa Springs / Homosassa
   '34464','34465',                    // Beverly Hills / Pine Ridge
   '34449',                            // Inglis
   '34498',                            // Yankeetown
@@ -3268,7 +3271,7 @@ async function lookupLotSize(address, zip) {
   qState.lotAutoDetected = false;
   qState.lotEstimated    = false;
   qState.detectedAcreage = null;
-  qState.lotTierIdx      = 1;
+  qState.lotTierIdx      = 0; // default to Small (cheapest) if detection fails
 
   // ── Step 1: Geocode with Nominatim (with 1 retry for rate-limit flakiness) ─
   let lat = null, lon = null;
@@ -3456,7 +3459,7 @@ function onLotSelectChange() {
   // Don't allow manual pick while lookup is still running — the result will refresh the display
   if (!_lotLookupDone) { sel.value = ''; return; }
   sel._userPicked = true;
-  qState.lotTierIdx = parseInt(sel.value) || 1;
+  qState.lotTierIdx = parseInt(sel.value) || 0;
   // If they manually picked XL (4), route straight to the free-visit flow
   if (qState.lotTierIdx === 4) { buildStep3(); return; }
   // For non-XL manual picks, show the "wrong size?" link so they can request a visit
@@ -3651,7 +3654,7 @@ function calKeyHandler(e, dateStr, calType) {
 function openQuoteModal(preselectedPlan) {
   // Default to biweekly; ignore one-time if somehow passed
   const validPlan = (preselectedPlan === 'weekly') ? 'weekly' : 'biweekly';
-  qState = { name:'',email:'',phone:'',address:'',zip:'',lotTierIdx:1,lotAutoDetected:false,lotEstimated:false,detectedAcreage:null,selectedPlan:validPlan,startDate:'',stripeCustomerId:'',isReturning:false,personalQuoteRequested:false };
+  qState = { name:'',email:'',phone:'',address:'',zip:'',lotTierIdx:0,lotAutoDetected:false,lotEstimated:false,detectedAcreage:null,selectedPlan:validPlan,startDate:'',stripeCustomerId:'',isReturning:false,personalQuoteRequested:false };
   _lotLookupPromise = null;
   _lotLookupDone    = false;
   const satFrame = document.getElementById('qSatFrame');
@@ -3907,7 +3910,7 @@ function requestPersonalQuote() {
 }
 
 function renderPlanCards() {
-  if (!LOT_TIERS[qState.lotTierIdx]) { qState.lotTierIdx = 1; } // safety guard
+  if (!LOT_TIERS[qState.lotTierIdx]) { qState.lotTierIdx = 0; } // safety guard — default Small
   const tierKey = LOT_TIERS[qState.lotTierIdx].key;
   const prices  = PLAN_PRICING[tierKey];
   const isXL    = tierKey === 'xl' || (prices && prices.biweekly === null && prices.weekly === null);
