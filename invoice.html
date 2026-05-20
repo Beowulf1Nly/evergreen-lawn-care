@@ -1116,6 +1116,23 @@
           </div>
         </div>
 
+        <!-- Recurring Option -->
+        <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:14px;">
+          <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">Frequency</div>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:4px;">
+            <input type="checkbox" id="job-recurring" onchange="jobRecurringToggle()" style="width:16px;height:16px;accent-color:#15803d;">
+            <span style="font-size:14px;font-weight:600;color:#374151;">Make this a recurring job</span>
+          </label>
+          <div style="font-size:12px;color:var(--text-muted);padding-left:26px;margin-bottom:10px;">By default, jobs are scheduled as one-time only.</div>
+          <div id="job-recurring-fields" style="display:none;padding-left:26px;">
+            <select id="job-recurring-freq" class="login-input" style="margin-bottom:0;max-width:240px;">
+              <option value="Weekly Plan">Weekly</option>
+              <option value="Bi-Weekly Plan">Bi-Weekly</option>
+              <option value="Custom Plan">Custom</option>
+            </select>
+          </div>
+        </div>
+
       </div><!-- /job-section-other -->
 
       <!-- ── NOTES (always visible) ── -->
@@ -1909,7 +1926,18 @@ function jobTypeChange() {
   if (dateLabel) dateLabel.textContent = isMowing ? 'First Service Date *' : 'Job Date *';
 
   if (isMowing) jobAutoFillPrice();
+  // Reset recurring toggle when switching job types
+  const recurringCb = document.getElementById('job-recurring');
+  if (recurringCb) recurringCb.checked = false;
+  const recurringFields = document.getElementById('job-recurring-fields');
+  if (recurringFields) recurringFields.style.display = 'none';
   jobAutoFillEmail();
+}
+
+function jobRecurringToggle() {
+  const checked = document.getElementById('job-recurring')?.checked;
+  const fields  = document.getElementById('job-recurring-fields');
+  if (fields) fields.style.display = checked ? 'block' : 'none';
 }
 
 // ── Returns a human-readable label for the current job type ──
@@ -2139,6 +2167,11 @@ async function submitJob() {
 
     const typeLabel = { 'landscaping': 'Landscaping', 'pressure-washing': 'Pressure Washing', 'other': 'Other' }[jobType] || 'Other';
 
+    // Frequency: one-time by default; recurring only if the checkbox is checked
+    const isRecurring   = document.getElementById('job-recurring')?.checked;
+    const recurringFreq = document.getElementById('job-recurring-freq')?.value || 'Custom Plan';
+    const jobFrequency  = isRecurring ? recurringFreq : 'One-time visit';
+
     // Pack all detail fields into structured notes
     const noteParts = [];
     if (description) noteParts.push('Description: ' + description);
@@ -2153,7 +2186,7 @@ async function submitJob() {
     params = new URLSearchParams({
       action:         'manual_add_client',
       name, phone, email: email || '', address, zip,
-      frequency:      typeLabel,
+      frequency:      jobFrequency,
       yardSize:       '',
       serviceDate:    date,
       price:          total,
@@ -2531,7 +2564,7 @@ function renderCustomers() {
             ${c.email ? `✉️ <a href="mailto:${esc(c.email)}" style="color:inherit;">${esc(c.email)}</a><br>` : ''}
             ${c.phone ? `📞 <a href="tel:${esc(c.phone)}" style="color:inherit;">${esc(c.phone)}</a><br>` : ''}
             ${c.address ? `📍 ${esc(c.address)}${c.zip ? ' · ' + esc(c.zip) : ''}<br>` : ''}
-            📋 ${esc(c.plan || 'Unknown')}${bookingPrice ? ' · <strong>$' + bookingPrice.toFixed(0) + '/mow</strong>' : ''}<br>
+            📋 ${esc(c.plan || 'Unknown')}${bookingPrice ? ' · <strong>$' + bookingPrice.toFixed(0) + (/weekly|bi.weekly|custom plan/i.test(c.plan) ? '/mow' : '') + '</strong>' : ''}<br>
             ${!isInactive ? '📅 Next: ' + (effectiveNextSched ? displayDate(effectiveNextSched) : 'Not scheduled') + '<br>' : ''}
             ${statsLine}${lastDoneLine}${cardLine}${sourceLine}${addedLine}
           </div>
