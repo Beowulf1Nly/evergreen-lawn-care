@@ -2501,7 +2501,7 @@ function renderCustomers() {
   el.innerHTML = custs.map((c, custIdx) => {
     const isInactive = /inactive|cancelled/i.test(c.status);
     const isFree     = /free/i.test(c.plan);
-    const isSub      = !isFree && !isInactive && !/one.time|one time/i.test(c.plan) && !/quote/i.test(c.plan);
+    const isSub      = !isInactive && /weekly plan|bi.weekly plan|custom plan/i.test(c.plan);
 
     // Find booking row indices for action buttons.
     // Use composite email|address key first (multi-property), fall back to email-only.
@@ -4246,13 +4246,14 @@ async function loadStats() {
       <!-- Revenue projection -->
       <div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:24px;">
         <div class="section-label" style="margin-bottom:4px;">💰 Estimated Future Revenue</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">Based on active subscriptions and their billing frequency. Excludes one-time and free jobs.</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">Based on active subscriptions and their billing frequency. One-time confirmed jobs shown below the table.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;" id="revPeriodBtns">
           ${['This Month','30 Days','90 Days','365 Days'].map((label,i) =>
             `<button onclick="setRevPeriod(${i},this)" style="padding:6px 14px;border-radius:20px;border:1.5px solid ${i===0?'var(--green-mid)':'var(--border)'};background:${i===0?'var(--green-mid)':'#fff'};color:${i===0?'#fff':'var(--text)'};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">${esc(label)}</button>`
           ).join('')}
         </div>
         <div id="revProjection">${buildRevProjection(allBookings, 0)}</div>
+        <div id="oneTimeSection">${buildOneTimeSection(allBookings)}</div>
       </div>
 
       <!-- Employee summary -->
@@ -4417,6 +4418,73 @@ function setRevPeriod(idx, btn) {
     b.style.borderColor= i === idx ? 'var(--green-mid)' : 'var(--border)';
   });
   document.getElementById('revProjection').innerHTML = buildRevProjection(allBookings, idx);
+  // One-time section doesn't change with period — always refresh it too
+  document.getElementById('oneTimeSection').innerHTML = buildOneTimeSection(allBookings);
+}
+
+// ═══════════════════════════════════════════════════════
+// ONE-TIME JOB REVENUE SECTION
+// ═══════════════════════════════════════════════════════
+function buildOneTimeSection(bookings) {
+  const SUBSCRIPTION_PLANS = ['weekly plan', 'bi-weekly plan', 'custom plan'];
+  const pending = (bookings || []).filter(bk => {
+    if (isDone(bk)) return false;
+    if (String(bk.rowCancelled || '').trim()) return false;
+    const freq = String(bk.frequency || '').toLowerCase();
+    if (freq.includes('free') || freq.includes('quote')) return false;
+    if (freq.includes('extra mow')) return false;
+    // Exclude recurring subscription plans
+    if (SUBSCRIPTION_PLANS.some(p => freq === p)) return false;
+    // Include: one-time, landscaping, pressure washing, other, etc.
+    return true;
+  });
+
+  if (!pending.length) return '';
+
+  const total = pending.reduce((sum, bk) =>
+    sum + (parseFloat(String(bk.price || '').replace(/[^0-9.]/g, '')) || 0), 0);
+
+  const rowsHtml = pending
+    .slice()
+    .sort((a, b) => (parseBookingDate(a.serviceDate) || 0) - (parseBookingDate(b.serviceDate) || 0))
+    .map(bk => {
+      const price       = parseFloat(String(bk.price || '').replace(/[^0-9.]/g, '')) || 0;
+      const jobType     = bk.serviceType || (String(bk.frequency || '') !== 'One-time visit' ? bk.frequency : '') || 'One-time';
+      const dateLabel   = bk.serviceDate ? displayDate(bk.serviceDate) : '—';
+      return `<tr>
+        <td style="padding:8px 10px;font-weight:600;border-bottom:1px solid var(--border);">${esc(bk.name || '—')}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid var(--border);"><span style="background:#f3f4f6;color:#374151;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;">${esc(jobType)}</span></td>
+        <td style="padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);">${esc(dateLabel)}</td>
+        <td style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);font-weight:700;color:var(--green-deep);">${price ? '$' + price.toFixed(0) : '—'}</td>
+      </tr>`;
+    }).join('');
+
+  return `
+    <div style="margin-top:20px;border-top:1.5px solid var(--border);padding-top:20px;">
+      <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">📌 Confirmed One-Time Jobs</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;">
+        <div style="flex:1;min-width:140px;background:#f0fdf4;border-radius:12px;padding:14px 16px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#15803d;margin-bottom:4px;">Confirmed Revenue</div>
+          <div style="font-size:28px;font-weight:800;color:var(--green-deep);">$${Math.round(total).toLocaleString()}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">${pending.length} pending job${pending.length !== 1 ? 's' : ''}</div>
+        </div>
+      </div>
+      <div style="border:1.5px solid var(--border);border-radius:10px;overflow:hidden;overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr>
+            <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);">Customer</th>
+            <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);">Job Type</th>
+            <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);">Date</th>
+            <th style="text-align:right;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:2px solid var(--border);">Price</th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+          <tfoot><tr>
+            <td colspan="3" style="padding:10px;text-align:right;font-weight:700;font-size:13px;color:var(--text-muted);">Total</td>
+            <td style="padding:10px;text-align:right;font-weight:800;font-size:14px;color:var(--green-deep);">$${Math.round(total).toLocaleString()}</td>
+          </tr></tfoot>
+        </table>
+      </div>
+    </div>`;
 }
 
 // ═══════════════════════════════════════════════════════
