@@ -5502,10 +5502,17 @@ async function buildRoute() {
         const mowMin    = mowMinutes(bk);
         const doneAt    = new Date(cursor.getTime() + mowMin * 60000);
 
-        // Queue this job for Google Calendar update
-        if (bk.eventId) {
-          calendarUpdates.push({ eventId: bk.eventId, startIso: cursor.toISOString(), endIso: doneAt.toISOString() });
-        }
+        // Queue this job for Google Calendar update (always — handler will create event if missing)
+        calendarUpdates.push({
+          eventId:  bk.eventId  || '',
+          rowIndex: bk._rowIndex || 0,
+          name:     bk.name     || '',
+          address:  (bk.address || '') + (bk.zip ? ', ' + bk.zip : '') + ', FL',
+          service:  bk.service  || bk.frequency || 'Lawn Service',
+          frequency: bk.frequency || '',
+          startIso: cursor.toISOString(),
+          endIso:   doneAt.toISOString(),
+        });
 
         cursor = doneAt;
 
@@ -5580,8 +5587,11 @@ async function buildRoute() {
         if (syncData.success) {
           const banner = document.createElement('div');
           banner.style.cssText = 'margin-bottom:16px;padding:12px 16px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;font-size:13px;color:#166534;font-weight:600;';
-          banner.innerHTML = '✅ Google Calendar updated — ' + syncData.updated + ' event' + (syncData.updated !== 1 ? 's' : '') + ' scheduled' +
-            (syncData.failed ? ' · ' + syncData.failed + ' skipped (no calendar event)' : '') + '.';
+          const parts = [];
+          if (syncData.updated) parts.push(syncData.updated + ' updated');
+          if (syncData.created) parts.push(syncData.created + ' new calendar event' + (syncData.created !== 1 ? 's' : '') + ' created');
+          if (syncData.failed)  parts.push(syncData.failed  + ' failed');
+          banner.innerHTML = '✅ Google Calendar synced — ' + (parts.join(' · ') || 'no changes') + '.';
           if (tl) tl.insertAdjacentElement('afterbegin', banner);
         }
       } catch(calErr) {
@@ -5606,24 +5616,63 @@ async function buildRoute() {
   }
 }
 
+// ── Zip → city name for the Citrus County service area ───────────────────
+const ZIP_CITY = {
+  '34428': 'Crystal River', '34429': 'Crystal River',
+  '34450': 'Inverness',     '34451': 'Inverness', '34452': 'Inverness', '34453': 'Inverness',
+  '34460': 'Lecanto',       '34461': 'Lecanto',
+  '34433': 'Dunnellon',     '34434': 'Dunnellon',
+  '34436': 'Floral City',   '34442': 'Hernando',
+  '34464': 'Beverly Hills', '34465': 'Beverly Hills',
+  '34449': 'Inglis',        '34498': 'Yankeetown',
+};
+
 // ── Geocode a US address → { lat, lon }
-// Primary: Photon (komoot) — free, CORS-safe, great US coverage
-// Fallback: Nominatim
+// Tries four sources in order: Photon → Nominatim (zip) → Nominatim (city) → US Census Bureau
+// The Census Bureau geocoder is free, no API key, and has excellent rural FL coverage.
 async function geocodeAddr(addr) {
+  // Derive a city-name version of the address as a fallback
+  // e.g. "802 W Walkertown Dr, 34428, FL" → "802 W Walkertown Dr, Crystal River, FL"
+  const zipMatch   = addr.match(/,\s*(\d{5})/);
+  const zip        = zipMatch ? zipMatch[1] : '';
+  const city       = ZIP_CITY[zip] || '';
+  const addrByCity = city
+    ? addr.replace(/,\s*\d{5}/, '').replace(/, FL$/i, '') + ', ' + city + ', FL'
+    : '';
+
+  // 1. Photon (komoot) — fast, CORS-safe
   try {
-    const url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(addr) + '&limit=1&countrycode=us';
-    const res  = await fetch(url);
+    const res  = await fetch('https://photon.komoot.io/api/?q=' + encodeURIComponent(addr) + '&limit=1&countrycode=us');
     const data = await res.json();
-    const f = data?.features?.[0];
+    const f    = data?.features?.[0];
     if (f) return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] };
   } catch(e) {}
+
+  // 2. Nominatim with original address (zip-based)
   try {
-    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q='
-      + encodeURIComponent(addr);
-    const res  = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const res  = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=' + encodeURIComponent(addr), { headers: { 'Accept-Language': 'en' } });
     const data = await res.json();
     if (data?.[0]) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
   } catch(e) {}
+
+  // 3. Nominatim with city name (better for rural roads)
+  if (addrByCity) {
+    try {
+      const res  = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=' + encodeURIComponent(addrByCity), { headers: { 'Accept-Language': 'en' } });
+      const data = await res.json();
+      if (data?.[0]) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    } catch(e) {}
+  }
+
+  // 4. US Census Bureau geocoder — free, no API key, excellent rural US coverage
+  try {
+    const query = encodeURIComponent(addrByCity || addr);
+    const res   = await fetch('https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=' + query + '&benchmark=2020&format=json');
+    const data  = await res.json();
+    const match = data?.result?.addressMatches?.[0];
+    if (match) return { lat: match.coordinates.y, lon: match.coordinates.x };
+  } catch(e) {}
+
   return null;
 }
 
