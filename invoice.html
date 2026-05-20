@@ -4446,7 +4446,7 @@ function buildOneTimeSection(bookings) {
 
   const rowsHtml = pending
     .slice()
-    .sort((a, b) => (parseBookingDate(a.serviceDate) || 0) - (parseBookingDate(b.serviceDate) || 0))
+    .sort((a, b) => (dateOf(a) || '').localeCompare(dateOf(b) || ''))
     .map(bk => {
       const price       = parseFloat(String(bk.price || '').replace(/[^0-9.]/g, '')) || 0;
       const jobType     = bk.serviceType || (String(bk.frequency || '') !== 'One-time visit' ? bk.frequency : '') || 'One-time';
