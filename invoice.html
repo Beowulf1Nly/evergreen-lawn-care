@@ -789,8 +789,8 @@
 
       <!-- Control panel -->
       <div class="route-cp">
-        <div class="route-cp-title">🗺️ Today's Route</div>
-        <div class="route-cp-sub" id="routeCpSub">Loading today's jobs…</div>
+        <div class="route-cp-title">🗺️ Route Planner</div>
+        <div class="route-cp-sub" id="routeCpSub">Loading upcoming jobs…</div>
         <div class="route-cp-fields">
           <div class="route-cp-field">
             <label for="routeStartTime">🕗 Start time</label>
@@ -831,7 +831,7 @@
         </div>
         <div class="route-stat">
           <div class="route-stat-val" id="rStatDone">—</div>
-          <div class="route-stat-lbl">Done by</div>
+          <div class="route-stat-lbl">Days</div>
         </div>
       </div>
 
@@ -5221,11 +5221,35 @@ function debouncedRender() {
 }
 
 // ── Route tab ─────────────────────────────────────────────────────────────
+function next7DayStrs() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today.getTime() + i * 24 * 60 * 60 * 1000);
+    days.push(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'));
+  }
+  return days;
+}
+
 function initRouteTab() {
-  const todayStr  = todayDateStr();
-  const todayJobs = (allBookings || []).filter(b => !isDone(b) && !b.rowCancelled && dateOf(b) === todayStr);
+  const todayStr     = todayDateStr();
+  const next7        = next7DayStrs();
+  const upcomingJobs = (allBookings || []).filter(b => !b.rowCancelled && !b.rowCompleted && next7.includes(dateOf(b)));
+  const todayJobs    = upcomingJobs.filter(b => dateOf(b) === todayStr);
   const sub = document.getElementById('routeCpSub');
-  if (sub) sub.textContent = todayJobs.length
+  if (sub) {
+    if (!upcomingJobs.length) {
+      sub.textContent = 'No jobs scheduled in the next 7 days.';
+    } else {
+      const dayCount = new Set(upcomingJobs.map(b => dateOf(b))).size;
+      sub.textContent = upcomingJobs.length + ' job' + (upcomingJobs.length !== 1 ? 's' : '') +
+        ' across ' + dayCount + ' day' + (dayCount !== 1 ? 's' : '') +
+        ' (next 7 days)' + (todayJobs.length ? ' · ' + todayJobs.length + ' today' : '');
+    }
+  }
+  // legacy ref kept for any callers that check todayJobs.length
+  const _ignored = todayJobs.length
     ? todayJobs.length + ' job' + (todayJobs.length !== 1 ? 's' : '') + ' today — enter a start address and hit Optimize.'
     : 'No jobs scheduled for today.';
   // Clear any previous route output
@@ -5358,167 +5382,221 @@ function nearestNeighbour(startCoord, stops) {
 
 // ── MAIN: Build & render the optimized route ─────────────────────────────
 async function buildRoute() {
-  const startVal = (document.getElementById('routeStartAddr')?.value || '').trim();
-  const errEl    = document.getElementById('routeError');
-  const btn      = document.getElementById('routeOptBtn');
-  const tl       = document.getElementById('routeTimeline');
-  const sb       = document.getElementById('routeStatsBar');
+  const startVal  = (document.getElementById('routeStartAddr')?.value || '').trim();
+  const startTime = (document.getElementById('routeStartTime')?.value || '08:00');
+  const errEl     = document.getElementById('routeError');
+  const btn       = document.getElementById('routeOptBtn');
+  const tl        = document.getElementById('routeTimeline');
+  const sb        = document.getElementById('routeStatsBar');
 
   if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
 
-  // Get today's undone jobs
-  const todayStr  = todayDateStr();
-  const todayJobs = (allBookings || []).filter(b => !b.rowCancelled && !b.rowCompleted && dateOf(b) === todayStr);
-  if (!todayJobs.length) {
-    if (errEl) { errEl.textContent = 'No jobs scheduled for today.'; errEl.style.display = 'block'; }
+  // Collect all non-cancelled jobs in the next 7 days
+  const next7       = next7DayStrs();
+  const allUpcoming = (allBookings || []).filter(b => !b.rowCancelled && !b.rowCompleted && next7.includes(dateOf(b)));
+
+  if (!allUpcoming.length) {
+    if (errEl) { errEl.textContent = 'No jobs scheduled in the next 7 days.'; errEl.style.display = 'block'; }
     return;
   }
+
+  // Group by date
+  const byDate = {};
+  for (const dateStr of next7) {
+    const jobs = allUpcoming.filter(b => dateOf(b) === dateStr);
+    if (jobs.length) byDate[dateStr] = jobs;
+  }
+  const sortedDates = Object.keys(byDate).sort();
 
   btn.disabled = true; btn.textContent = '⏳ Optimizing…';
   if (tl) tl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:14px;">Geocoding addresses…</div>';
   if (sb) sb.style.display = 'none';
 
   try {
-    // Geocode start address (optional — if blank, start from first job)
+    // Geocode start address (optional — if blank, start from first job each day)
     let startCoord = null;
     if (startVal) {
       startCoord = await geocodeAddr(startVal);
       if (!startCoord) throw new Error('Could not find start address. Try a full street address.');
     }
 
-    // Geocode each job
-    const geocoded = [];
-    for (const bk of todayJobs) {
+    // Geocode all job addresses with a cache so duplicate addresses don't double-fetch
+    const geoCache = {};
+    async function geocodeCached(addr) {
+      if (geoCache[addr] !== undefined) return geoCache[addr];
+      const r = await geocodeAddr(addr);
+      geoCache[addr] = r;
+      return r;
+    }
+    for (const bk of allUpcoming) {
       const fullAddr = (bk.address || '') + (bk.zip ? ', ' + bk.zip : '') + ', FL';
-      const coord    = await geocodeAddr(fullAddr);
-      geocoded.push({ bk, lat: coord?.lat, lon: coord?.lon, failed: !coord });
+      await geocodeCached(fullAddr);
     }
 
-    const validStops  = geocoded.filter(s => !s.failed);
-    const failedStops = geocoded.filter(s => s.failed);
-
-    if (!validStops.length) throw new Error('Could not geocode any job addresses.');
-
-    // Optimise order — if no start address, use first geocoded job as anchor
-    const anchor  = startCoord || { lat: validStops[0].lat, lon: validStops[0].lon };
-    const ordered = nearestNeighbour(anchor, validStops);
-
-    // Calculate stats
-    let totalMiles = 0, totalMowMin = 0, totalDriveMin = 0;
+    // Parse configured start time (HH:MM)
+    const [startH, startM] = startTime.split(':').map(Number);
     const AVG_SPEED_MPH = 25;
-    for (const stop of ordered) {
-      totalMiles    += stop.distFromPrev;
-      totalDriveMin += (stop.distFromPrev / AVG_SPEED_MPH) * 60;
-      totalMowMin   += mowMinutes(stop.bk);
+
+    let totalMiles = 0, totalMowMin = 0, totalDriveMin = 0, totalJobs = 0;
+    const calendarUpdates = []; // { eventId, startIso, endIso }
+    const allFailedStops  = [];
+    let html = '';
+
+    for (const dateStr of sortedDates) {
+      const dayJobs = byDate[dateStr];
+
+      // Attach geocode results for this day's jobs
+      const geocoded    = dayJobs.map(bk => {
+        const fullAddr = (bk.address || '') + (bk.zip ? ', ' + bk.zip : '') + ', FL';
+        const coord    = geoCache[fullAddr];
+        return { bk, lat: coord?.lat, lon: coord?.lon, failed: !coord };
+      });
+      const validStops  = geocoded.filter(s => !s.failed);
+      const failedStops = geocoded.filter(s => s.failed);
+      allFailedStops.push(...failedStops);
+
+      if (!validStops.length) continue;
+
+      // Nearest-neighbour from start coord (or first stop of the day)
+      const anchor  = startCoord || { lat: validStops[0].lat, lon: validStops[0].lon };
+      const ordered = nearestNeighbour(anchor, validStops);
+
+      // Accumulate overall stats
+      for (const stop of ordered) {
+        totalMiles    += stop.distFromPrev;
+        totalDriveMin += (stop.distFromPrev / AVG_SPEED_MPH) * 60;
+        totalMowMin   += mowMinutes(stop.bk);
+        totalJobs++;
+      }
+
+      // Day cursor starts at the configured start time
+      const [y, mo, d] = dateStr.split('-').map(Number);
+      let cursor = new Date(y, mo - 1, d, startH, startM, 0, 0);
+
+      // Day header
+      const dayLabel = new Date(y, mo - 1, d).toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric' });
+      html += `<div style="font-size:13px;font-weight:700;color:var(--text-muted);text-transform:uppercase;
+               letter-spacing:.08em;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);">
+               ${dayLabel} &nbsp;·&nbsp; ${ordered.length} stop${ordered.length!==1?'s':''}</div>`;
+
+      // Start pin
+      if (startVal) {
+        html += `
+          <div class="route-stop" style="margin-bottom:16px;">
+            <div class="route-stop-badge" style="background:#374151;">🏠</div>
+            <div class="route-stop-card" style="border-color:#e2e8f0;">
+              <div class="route-stop-header">
+                <div class="route-stop-name" style="color:#374151;">Start</div>
+                <div class="route-stop-time">${cursor.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</div>
+              </div>
+              <div class="route-stop-addr">${esc(startVal)}</div>
+            </div>
+          </div>`;
+      }
+
+      for (let i = 0; i < ordered.length; i++) {
+        const { bk, distFromPrev } = ordered[i];
+        const driveMin  = Math.round((distFromPrev / AVG_SPEED_MPH) * 60);
+        cursor          = new Date(cursor.getTime() + driveMin * 60000);
+        const arrivalTime = cursor.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+        const mowMin    = mowMinutes(bk);
+        const doneAt    = new Date(cursor.getTime() + mowMin * 60000);
+
+        // Queue this job for Google Calendar update
+        if (bk.eventId) {
+          calendarUpdates.push({ eventId: bk.eventId, startIso: cursor.toISOString(), endIso: doneAt.toISOString() });
+        }
+
+        cursor = doneAt;
+
+        const done    = isDone(bk);
+        const rowIdx  = allBookings.indexOf(bk);
+        const mapsUrl = 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent((bk.address||'') + (bk.zip?', '+bk.zip:'') + ', FL');
+
+        const _em        = String(bk.email || '').toLowerCase().trim();
+        const _custRec   = allCustomers.find(c => String(c.Email||'').toLowerCase().trim() === _em);
+        const _custNotes = _custRec ? String(_custRec.Notes || '').trim() : '';
+        const notesBtn   = _custNotes
+          ? `<button class="route-notes-btn" onclick="openNotesPopup('📝 ${esc(bk.name||'Notes')}', ${JSON.stringify(_custNotes)})" title="View notes">💬</button>`
+          : '';
+
+        const drivePill = `<span class="route-stop-pill time-pill">🚗 ${driveMin}m drive</span>`;
+        const mowPill   = `<span class="route-stop-pill time-pill">⏱ ~${mowMin}m mow</span>`;
+        const planPill  = bk.frequency ? `<span class="route-stop-pill">${esc(bk.frequency)}</span>` : '';
+        const donePill  = done ? `<span class="route-stop-pill" style="background:#f1f5f9;color:#64748b;">✓ Done</span>` : '';
+
+        html += `
+          <div class="route-stop" style="margin-bottom:16px;" id="routeStop_${dateStr}_${i}">
+            <div class="route-stop-badge ${done ? 'done-badge' : ''}">${done ? '✓' : i+1}</div>
+            <div class="route-stop-card ${done ? '' : 'active-stop'}">
+              <div class="route-stop-header">
+                <div>
+                  <div class="route-stop-name">${esc(bk.name||'—')} ${notesBtn}</div>
+                  <div class="route-stop-addr">${esc(bk.address||'—')}${bk.zip ? ', '+esc(bk.zip) : ''}</div>
+                </div>
+                <div class="route-stop-time">${arrivalTime}</div>
+              </div>
+              <div class="route-stop-meta">${drivePill}${mowPill}${planPill}${donePill}</div>
+              ${_custNotes ? `<div style="font-size:12px;color:#6b7280;margin-bottom:10px;padding:6px 10px;background:#f8faf6;border-radius:6px;">💬 ${esc(_custNotes)}</div>` : ''}
+              <div class="route-stop-footer">
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <a class="route-nav-btn" href="${mapsUrl}" target="_blank" rel="noopener">🗺 Navigate</a>
+                  ${bk.phone ? `<a class="route-call-btn" href="tel:${esc(bk.phone)}">📞 Call</a>` : ''}
+                </div>
+                ${rowIdx >= 0 && !done ? `<button class="route-done-btn" onclick="triggerMarkDone(${rowIdx});this.disabled=true;this.textContent='Marking…'">✓ Mark Done</button>` : ''}
+              </div>
+            </div>
+          </div>`;
+      }
+
+      // "Done by" chip for this day
+      html += `
+        <div class="route-finish" style="margin-bottom:28px;margin-top:4px;">
+          <div class="route-finish-badge">✓</div>
+          <div class="route-finish-card">
+            <div class="route-finish-label">Done for ${dayLabel}</div>
+            <div class="route-finish-time">${cursor.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</div>
+          </div>
+        </div>`;
     }
 
-    // "Done by" estimate from now
-    const startTime = new Date();
-    const doneByTime = addMin(startTime, totalMowMin + totalDriveMin);
-
-    // Update stats bar
-    document.getElementById('rStatJobs').textContent  = ordered.length + (failedStops.length ? '+' + failedStops.length + '⚠' : '');
+    // Stats bar (totals across all days)
+    document.getElementById('rStatJobs').textContent  = totalJobs + (allFailedStops.length ? '+' + allFailedStops.length + '⚠' : '');
     document.getElementById('rStatMow').textContent   = fmtMin(totalMowMin);
     document.getElementById('rStatDrive').textContent = fmtMin(totalDriveMin);
     document.getElementById('rStatDist').textContent  = totalMiles.toFixed(1);
-    document.getElementById('rStatDone').textContent  = doneByTime;
+    document.getElementById('rStatDone').textContent  = sortedDates.length + (sortedDates.length !== 1 ? ' days' : ' day');
     if (sb) sb.style.display = 'flex';
 
-    // Render timeline
-    let cursor = new Date(startTime);
-    let html = '';
+    if (tl) tl.innerHTML = html;
 
-    // Start pin (only if a start address was entered)
-    if (startVal) {
-      html += `
-        <div class="route-stop" style="margin-bottom:16px;">
-          <div class="route-stop-badge" style="background:#374151;">🏠</div>
-          <div class="route-stop-card" style="border-color:#e2e8f0;">
-            <div class="route-stop-header">
-              <div class="route-stop-name" style="color:#374151;">Start</div>
-              <div class="route-stop-time">${cursor.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</div>
-            </div>
-            <div class="route-stop-addr">${esc(startVal)}</div>
-          </div>
-        </div>`;
+    // ── Push optimized times to Google Calendar ────────────────────────────
+    if (calendarUpdates.length) {
+      btn.textContent = '📅 Syncing to Calendar…';
+      try {
+        const syncParams = new URLSearchParams({ action: 'sync_route_to_calendar', updates: JSON.stringify(calendarUpdates) });
+        const syncRes    = await fetch(SCRIPT_URL + '?' + syncParams + '&' + authParam());
+        const syncData   = await syncRes.json();
+        if (syncData.success) {
+          const banner = document.createElement('div');
+          banner.style.cssText = 'margin-bottom:16px;padding:12px 16px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;font-size:13px;color:#166534;font-weight:600;';
+          banner.innerHTML = '✅ Google Calendar updated — ' + syncData.updated + ' event' + (syncData.updated !== 1 ? 's' : '') + ' scheduled' +
+            (syncData.failed ? ' · ' + syncData.failed + ' skipped (no calendar event)' : '') + '.';
+          if (tl) tl.insertAdjacentElement('afterbegin', banner);
+        }
+      } catch(calErr) {
+        console.warn('Calendar sync failed:', calErr);
+      }
     }
-
-    for (let i = 0; i < ordered.length; i++) {
-      const { bk, distFromPrev } = ordered[i];
-      const driveMin = Math.round((distFromPrev / AVG_SPEED_MPH) * 60);
-      cursor = new Date(cursor.getTime() + driveMin * 60000);
-      const arrivalTime = cursor.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
-      const mowMin = mowMinutes(bk);
-      cursor = new Date(cursor.getTime() + mowMin * 60000);
-
-      const done     = isDone(bk);
-      const rowIdx   = allBookings.indexOf(bk);
-      const mapsUrl  = 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent((bk.address||'') + (bk.zip?', '+bk.zip:'') + ', FL');
-
-      // Customer notes from customer sheet
-      const _em        = String(bk.email || '').toLowerCase().trim();
-      const _custRec   = allCustomers.find(c => String(c.Email||'').toLowerCase().trim() === _em);
-      const _custNotes = _custRec ? String(_custRec.Notes || '').trim() : '';
-
-      const notesBtn   = _custNotes
-        ? `<button class="route-notes-btn" onclick="openNotesPopup('📝 ${esc(bk.name||'Notes')}', ${JSON.stringify(_custNotes)})" title="View notes">💬</button>`
-        : '';
-
-      const drivePill  = `<span class="route-stop-pill time-pill">🚗 ${driveMin}m drive</span>`;
-      const mowPill    = `<span class="route-stop-pill time-pill">⏱ ~${mowMin}m mow</span>`;
-      const planPill   = bk.frequency ? `<span class="route-stop-pill">${esc(bk.frequency)}</span>` : '';
-      const donePill   = done ? `<span class="route-stop-pill" style="background:#f1f5f9;color:#64748b;">✓ Done</span>` : '';
-
-      html += `
-        <div class="route-stop" style="margin-bottom:16px;" id="routeStop_${i}">
-          <div class="route-stop-badge ${done ? 'done-badge' : ''}">${done ? '✓' : i+1}</div>
-          <div class="route-stop-card ${done ? '' : 'active-stop'}">
-            <div class="route-stop-header">
-              <div>
-                <div class="route-stop-name">${esc(bk.name||'—')} ${notesBtn}</div>
-                <div class="route-stop-addr">${esc(bk.address||'—')}${bk.zip ? ', '+esc(bk.zip) : ''}</div>
-              </div>
-              <div class="route-stop-time">${arrivalTime}</div>
-            </div>
-            <div class="route-stop-meta">${drivePill}${mowPill}${planPill}${donePill}</div>
-            ${_custNotes ? `<div style="font-size:12px;color:#6b7280;margin-bottom:10px;padding:6px 10px;background:#f8faf6;border-radius:6px;">💬 ${esc(_custNotes)}</div>` : ''}
-            <div class="route-stop-footer">
-              <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <a class="route-nav-btn" href="${mapsUrl}" target="_blank" rel="noopener">🗺 Navigate</a>
-                ${bk.phone ? `<a class="route-call-btn" href="tel:${esc(bk.phone)}">📞 Call</a>` : ''}
-              </div>
-              ${rowIdx >= 0 && !done ? `<button class="route-done-btn" onclick="triggerMarkDone(${rowIdx});this.disabled=true;this.textContent='Marking…'">✓ Mark Done</button>` : ''}
-            </div>
-          </div>
-        </div>`;
-    }
-
-    // ── "Open Full Route in Google Maps" button ──────────────────────────
-    // Builds a multi-stop Maps URL: /dir/Start/Stop1/Stop2/.../StopN
-    const stopAddrs = ordered.map(s => (s.bk.address || '') + (s.bk.zip ? ', ' + s.bk.zip : '') + ', FL');
-    const allAddrs  = (startVal ? [startVal, ...stopAddrs] : stopAddrs).map(a => encodeURIComponent(a));
-    const fullRouteUrl = 'https://www.google.com/maps/dir/' + allAddrs.join('/');
-
-    html += `
-      <a href="${fullRouteUrl}" target="_blank" rel="noopener"
-         style="display:flex;align-items:center;justify-content:center;gap:10px;
-                width:100%;margin-top:8px;padding:16px;box-sizing:border-box;
-                background:#1a3a1a;color:#fff;border-radius:14px;
-                font-size:15px;font-weight:700;font-family:inherit;
-                text-decoration:none;cursor:pointer;transition:background .2s;"
-         onmouseover="this.style.background='#276749'" onmouseout="this.style.background='#1a3a1a'">
-        🗺 Open Full Route in Google Maps &nbsp;(${ordered.length} stops)
-      </a>`;
 
     // Failed geocodes warning
-    if (failedStops.length) {
-      html += `<div style="margin-top:12px;padding:12px 16px;background:#fef9c3;border:1.5px solid #fde047;border-radius:10px;font-size:13px;color:#854d0e;">
-        ⚠️ Could not geocode ${failedStops.length} address${failedStops.length>1?'es':''} — not included in route:<br>
-        ${failedStops.map(s => `<strong>${esc(s.bk.name||'?')}</strong> — ${esc(s.bk.address||'no address')}`).join('<br>')}
-      </div>`;
+    if (allFailedStops.length) {
+      const warn = document.createElement('div');
+      warn.style.cssText = 'margin-top:12px;padding:12px 16px;background:#fef9c3;border:1.5px solid #fde047;border-radius:10px;font-size:13px;color:#854d0e;';
+      warn.innerHTML = '⚠️ Could not geocode ' + allFailedStops.length + ' address' + (allFailedStops.length > 1 ? 'es' : '') + ' — not included in route:<br>' +
+        allFailedStops.map(s => '<strong>' + esc(s.bk.name||'?') + '</strong> — ' + esc(s.bk.address||'no address')).join('<br>');
+      if (tl) tl.appendChild(warn);
     }
-
-    if (tl) tl.innerHTML = html;
 
   } catch(err) {
     if (tl) tl.innerHTML = '';
