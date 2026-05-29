@@ -749,12 +749,12 @@
 
   .dispatch-job-block { position:absolute; top:8px; height:calc(100% - 16px); border-radius:8px; cursor:pointer; display:flex; flex-direction:column; justify-content:center; padding:6px 10px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,.12); transition:transform .15s, box-shadow .15s; min-width:90px; }
   .dispatch-job-block:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.18); z-index:5; }
-  .dispatch-job-block.status-upcoming  { background:#1a73e8; color:#fff; }  /* GCal blue */
-  .dispatch-job-block.status-done      { background:#34a853; color:#fff; }  /* GCal green */
-  .dispatch-job-block.status-cash      { background:#f9ab00; color:#1a1a1a; }  /* GCal yellow */
-  .dispatch-job-block.status-invoiced  { background:#24c1e0; color:#1a1a1a; }  /* GCal teal */
-  .dispatch-job-block.status-paid      { background:#0f9d58; color:#fff; }  /* GCal dark green */
-  .dispatch-job-block.status-completed { background:#5f6368; color:#fff; }  /* GCal gray */
+  .dispatch-job-block.status-upcoming  { background:#d32f2f; color:#fff; }  /* red = upcoming/not started */
+  .dispatch-job-block.status-done      { background:#f9a825; color:#1a1a1a; }  /* yellow = done, awaiting payment */
+  .dispatch-job-block.status-cash      { background:#f9a825; color:#1a1a1a; }  /* yellow = cash collected, awaiting completion */
+  .dispatch-job-block.status-invoiced  { background:#f9a825; color:#1a1a1a; }  /* yellow = invoiced, not fully complete */
+  .dispatch-job-block.status-paid      { background:#1565c0; color:#fff; }  /* blue = paid but not done yet */
+  .dispatch-job-block.status-completed { background:#2e7d32; color:#fff; }  /* green = fully completed & archived */
   .dispatch-job-name { font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .dispatch-job-time { font-size:10px; opacity:.8; white-space:nowrap; }
   .dispatch-job-plan { font-size:10px; opacity:.75; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -795,17 +795,17 @@
   }
   .dispatch-week-day-body.drag-target { background:#f0fdf4; }
   .dispatch-week-card {
-    background:#1a73e8; color:#fff; border-radius:8px; padding:7px 9px;
+    background:#d32f2f; color:#fff; border-radius:8px; padding:7px 9px;
     font-size:12px; cursor:grab; transition:transform .15s, box-shadow .15s;
     box-shadow:0 1px 4px rgba(0,0,0,.12); user-select:none;
   }
   .dispatch-week-card:hover { transform:translateY(-1px); box-shadow:0 3px 10px rgba(0,0,0,.2); }
   .dispatch-week-card.dragging { opacity:.5; cursor:grabbing; }
-  .dispatch-week-card.status-done      { background:#34a853; }
-  .dispatch-week-card.status-cash      { background:#f9ab00; color:#1a1a1a; }
-  .dispatch-week-card.status-invoiced  { background:#24c1e0; color:#1a1a1a; }
-  .dispatch-week-card.status-paid      { background:#0f9d58; }
-  .dispatch-week-card.status-completed { background:#5f6368; }
+  .dispatch-week-card.status-done      { background:#f9a825; color:#1a1a1a; }  /* yellow = done, awaiting payment */
+  .dispatch-week-card.status-cash      { background:#f9a825; color:#1a1a1a; }
+  .dispatch-week-card.status-invoiced  { background:#f9a825; color:#1a1a1a; }
+  .dispatch-week-card.status-paid      { background:#1565c0; color:#fff; }    /* blue = paid not done */
+  .dispatch-week-card.status-completed { background:#2e7d32; color:#fff; }    /* green = fully complete */
   .dispatch-week-card-name { font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .dispatch-week-card-meta { font-size:10px; opacity:.85; margin-top:1px; }
   .dispatch-week-card-hint { font-size:10px; margin-top:3px; padding:2px 5px; background:rgba(255,255,255,.25); border-radius:4px; display:inline-block; }
@@ -7234,14 +7234,29 @@ function isCashPaid(b) {
   return cal.includes('✅') || cal.includes('paid');
 }
 function dispatchJobClass(b) {
+  // Green  = fully archived (Complete Job was clicked)
   if (b.rowCompleted) return 'status-completed';
-  if (isDone(b)) return 'status-done';
-  const cash = isCash(b), inv = String(b.invoiced || '').length > 2;
-  if (cash && !isCashPaid(b)) return 'status-cash';
-  if (inv) return 'status-invoiced';
-  const cal = String(b.calendarEvent || '').toLowerCase(), pm = String(b.payMethod || '').toLowerCase();
-  if (cal.includes('✅') || pm.includes('autopay')) return 'status-paid';
+  const cash = isCash(b);
+  const paid = isCashPaid(b); // payment confirmed (card charged, cash recorded, autopay)
+  const done = isDone(b);
+  // Yellow = job done, waiting on payment
+  if (done && !paid) return 'status-done';
+  // Green  = done + paid (Complete Job not yet clicked — still shows yellow until archived)
+  if (done && paid) return 'status-done'; // keep yellow until owner clicks Complete Job
+  // Blue   = paid but job not done yet (prepaid / autopay charged before visit)
+  if (!done && paid) return 'status-paid';
+  // Yellow = invoiced but not done
+  if (String(b.invoiced || '').length > 2) return 'status-invoiced';
+  // Red    = upcoming, nothing done yet
   return 'status-upcoming';
+}
+function dispatchPayIcon(b) {
+  if (isCash(b)) return ' 💵';
+  const cal = String(b.calendarEvent || '').toLowerCase();
+  const pm  = String(b.payMethod     || '').toLowerCase();
+  const hasCard = !!(b.cardLast4);
+  if (hasCard || cal.includes('autopay') || pm.includes('autopay') || pm.includes('card') || cal.includes('✅')) return ' 💳';
+  return '';
 }
 function fmtDispatchTime(startMin) {
   const abs = DISPATCH_START_HOUR * 60 + startMin;
@@ -7314,7 +7329,7 @@ function _filterJobs(dateStr) {
   return jobs;
 }
 
-// ── Week view ─────────────────────────────────────────────────────────────
+// ── Week view — per-crew rows ─────────────────────────────────────────────
 function renderDispatchWeek() {
   const anchor = document.getElementById('dispatchDate')?.value;
   if (!anchor) return;
@@ -7323,7 +7338,7 @@ function renderDispatchWeek() {
   const rowsEl  = document.getElementById('dispatchBoardRows');
   if (!rowsEl) return;
 
-  // Build 7-day range starting from anchor
+  // 7-day range from anchor
   const dates = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(anchor + 'T12:00:00');
@@ -7340,85 +7355,114 @@ function renderDispatchWeek() {
     if (!dates.includes(dateOf(b))) return false;
     if (crewFilt !== 'all') {
       const c = (b.crew||'').trim();
-      if (crewFilt === 'unassigned') return !c;
-      return c === crewFilt;
+      return crewFilt === 'unassigned' ? !c : c === crewFilt;
     }
     return true;
   });
 
   if (axisEl) axisEl.innerHTML = '';
+
+  if (!allWeekJobs.length) {
+    if (emptyEl) emptyEl.style.display = 'block';
+    rowsEl.innerHTML = '';
+    return;
+  }
   if (emptyEl) emptyEl.style.display = 'none';
 
-  // Build route-optimization hints: for each job, count how many other jobs
-  // are on the same date and in the same zone — higher = well-clustered
-  function clusterScore(b) {
-    const zone = b.zone || getZoneFromZip(b.zip) || '';
-    const d    = dateOf(b);
-    return allWeekJobs.filter(j => dateOf(j) === d && (j.zone || getZoneFromZip(j.zip) || '') === zone && j !== b).length;
-  }
-  // Lone jobs (score=0, has a zone) could be moved to a better day
+  // Cluster hint: show if a job is the only one of its zone on its day
   function isolatedHint(b) {
     const zone = b.zone || getZoneFromZip(b.zip) || '';
     if (!zone) return '';
-    const score = clusterScore(b);
-    if (score > 0) return ''; // already clustered
-    // Find a day this week with more same-zone jobs
-    let bestDay = '', bestCount = 0;
-    for (const d of dates) {
-      if (d === dateOf(b)) continue;
-      const cnt = allWeekJobs.filter(j => dateOf(j) === d && (j.zone || getZoneFromZip(j.zip) || '') === zone).length;
-      if (cnt > bestCount) { bestCount = cnt; bestDay = d; }
+    const d = dateOf(b);
+    if (allWeekJobs.filter(j => dateOf(j) === d && (j.zone||getZoneFromZip(j.zip)||'') === zone && j !== b).length > 0) return '';
+    let best = '', bestCnt = 0;
+    for (const ds of dates) {
+      if (ds === d) continue;
+      const cnt = allWeekJobs.filter(j => dateOf(j) === ds && (j.zone||getZoneFromZip(j.zip)||'') === zone).length;
+      if (cnt > bestCnt) { bestCnt = cnt; best = ds; }
     }
-    if (bestDay && bestCount > 0) {
-      const bd = new Date(bestDay + 'T12:00'); 
-      return `💡 ${bestCount} ${zone} job${bestCount>1?'s':''} on ${dayNames[bd.getDay()]}`;
+    if (best && bestCnt > 0) {
+      const bd = new Date(best + 'T12:00');
+      return `💡 ${bestCnt} ${zone} job${bestCnt>1?'s':''} on ${dayNames[bd.getDay()]}`;
     }
     return '';
   }
 
-  // Build grid HTML
-  let gridHtml = `<div class="dispatch-week-grid" style="display:grid;grid-template-columns:repeat(${dates.length},minmax(150px,1fr));border:1.5px solid var(--border);border-radius:14px;overflow:hidden;">`;
-  for (const dateStr of dates) {
-    const d   = new Date(dateStr + 'T12:00');
-    const isT = dateStr === todayStr;
-    const lbl = `${dayNames[d.getDay()]} ${d.getMonth()+1}/${d.getDate()}`;
-    const dayJobs = allWeekJobs.filter(b => dateOf(b) === dateStr);
-    const jobCount = dayJobs.length;
-
-    gridHtml += `<div class="dispatch-week-day-col">
-      <div class="dispatch-week-day-hdr ${isT?'today-col':''}"
-           style="${isT?'border-bottom-color:var(--green-mid);color:var(--green-mid);':''}"
-           ondragover="dispatchWeekDragOver(event,'${dateStr}')"
-           ondrop="dispatchWeekDrop(event,'${dateStr}')">
-        ${lbl}${jobCount ? ` <span style="background:var(--green-mid);color:#fff;border-radius:20px;padding:1px 7px;font-size:10px;font-weight:800;">${jobCount}</span>` : ''}
-      </div>
-      <div class="dispatch-week-day-body" id="weekCol_${dateStr}"
-           ondragover="dispatchWeekDragOver(event,'${dateStr}')"
-           ondrop="dispatchWeekDrop(event,'${dateStr}')">`;
-
-    if (!dayJobs.length) {
-      gridHtml += `<div class="dispatch-week-empty">No jobs</div>`;
-    } else {
-      for (const b of dayJobs) {
-        const ri   = allBookings.indexOf(b);
-        const cls  = dispatchJobClass(b);
-        const hint = isolatedHint(b);
-        gridHtml += `<div class="dispatch-week-card ${cls}" draggable="true"
-            ondragstart="dispatchWeekDragStart(event,${ri})"
-            ondragend="dispatchWeekDragEnd(event)"
-            onclick="openDispatchDetail(${ri})">
-          <div class="dispatch-week-card-name">${esc(b.name||'—')}</div>
-          <div class="dispatch-week-card-meta">${esc(b.address||'—')}${b.zip?' · '+esc(b.zip):''}</div>
-          <div class="dispatch-week-card-meta">${esc(b.frequency||'')}${b.jobTime?' · ⏰'+esc(b.jobTime):''}</div>
-          ${hint ? `<div class="dispatch-week-card-hint">${hint}</div>` : ''}
-        </div>`;
-      }
-    }
-    gridHtml += `</div></div>`;
+  // Group jobs by crew
+  const crewKeys = [];
+  const crewJobs = {};
+  for (const b of allWeekJobs) {
+    const k = (b.crew || '').trim() || 'Unassigned';
+    if (!crewJobs[k]) { crewJobs[k] = {}; crewKeys.push(k); dates.forEach(d => crewJobs[k][d] = []); }
+    const d = dateOf(b);
+    if (crewJobs[k][d]) crewJobs[k][d].push(b);
   }
-  gridHtml += '</div>';
+  // Deduplicate crewKeys
+  const orderedCrews = [...new Set(['A','B','Unassigned',...crewKeys].filter(k => crewJobs[k]))];
 
-  rowsEl.innerHTML = gridHtml;
+  // ── Header row (date labels) ──────────────────────────────────────────
+  const totalCols = dates.length;
+  let html = `<div style="border:1.5px solid var(--border);border-radius:14px;overflow:hidden;overflow-x:auto;">
+  <table style="width:100%;border-collapse:collapse;min-width:${totalCols*130+160}px;">
+    <thead>
+      <tr style="background:#f8faf6;border-bottom:2px solid var(--border);">
+        <th style="width:130px;min-width:130px;padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);border-right:1.5px solid var(--border);">Crew</th>`;
+  for (const ds of dates) {
+    const d   = new Date(ds + 'T12:00');
+    const isT = ds === todayStr;
+    const cnt = allWeekJobs.filter(b => dateOf(b) === ds).length;
+    html += `<th style="padding:10px 8px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
+              color:${isT?'var(--green-mid)':'var(--text-muted)'};border-right:1px solid var(--border);
+              border-bottom:${isT?'2px solid var(--green-mid)':'none'};">
+      ${dayNames[d.getDay()]} ${d.getMonth()+1}/${d.getDate()}
+      ${cnt ? `<span style="background:var(--green-mid);color:#fff;border-radius:20px;padding:0 6px;font-size:9px;font-weight:800;vertical-align:middle;"> ${cnt}</span>` : ''}
+    </th>`;
+  }
+  html += '</tr></thead><tbody>';
+
+  // ── One row per crew ──────────────────────────────────────────────────
+  for (const crew of orderedCrews) {
+    const crewLabel = crew === 'A' ? '🔵 Crew A' : crew === 'B' ? '🩷 Crew B' : crew === 'Unassigned' ? '⬜ Unassigned' : esc(crew);
+    const crewTotal = Object.values(crewJobs[crew]).flat().length;
+    html += `<tr style="border-bottom:1.5px solid var(--border);vertical-align:top;">
+      <td style="padding:12px 14px;border-right:1.5px solid var(--border);background:#f8faf6;white-space:nowrap;">
+        <div style="font-size:13px;font-weight:700;color:var(--green-deep);">${crewLabel}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${crewTotal} job${crewTotal!==1?'s':''}</div>
+      </td>`;
+    for (const ds of dates) {
+      const cellJobs = crewJobs[crew][ds] || [];
+      html += `<td style="padding:6px;border-right:1px solid var(--border);vertical-align:top;min-width:130px;"
+               ondragover="dispatchWeekDragOver(event,'${ds}')"
+               ondrop="dispatchWeekDrop(event,'${ds}')">`;
+      if (!cellJobs.length) {
+        html += `<div style="font-size:11px;color:#e2e8f0;font-style:italic;padding:4px 2px;">—</div>`;
+      } else {
+        for (const b of cellJobs) {
+          const ri   = allBookings.indexOf(b);
+          const cls  = dispatchJobClass(b);
+          const hint = isolatedHint(b);
+          const pay  = dispatchPayIcon(b);
+          const timeStr = b.jobTime ? fmtDispatchTime(
+            (() => { const [hh,mm]=b.jobTime.split(':').map(Number); return (hh-DISPATCH_START_HOUR)*60+(mm||0); })()
+          ) : '';
+          html += `<div class="dispatch-week-card ${cls}" draggable="true"
+              ondragstart="dispatchWeekDragStart(event,${ri})"
+              ondragend="dispatchWeekDragEnd(event)"
+              onclick="openDispatchDetail(${ri})"
+              id="wkcard_${ri}">
+            <div class="dispatch-week-card-name">${esc(b.name||'—')}${pay}</div>
+            <div class="dispatch-week-card-meta">${esc(b.address||'—')}</div>
+            <div class="dispatch-week-card-meta">${esc(b.frequency||'')}${timeStr?' · '+timeStr:''}</div>
+            ${hint ? `<div class="dispatch-week-card-hint">${hint}</div>` : ''}
+          </div>`;
+        }
+      }
+      html += '</td>';
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  rowsEl.innerHTML = html;
 }
 
 // ── Day view (timeline) ───────────────────────────────────────────────────
@@ -7479,8 +7523,9 @@ function renderDispatchDay() {
       const width = Math.min(100 - left, Math.max(1.8, (dur / DISPATCH_TOTAL_MINS) * 100));
       const cls   = dispatchJobClass(b);
       const ri    = allBookings.indexOf(b);
+      const _payIco = dispatchPayIcon(b);
       blocks += `<div class="dispatch-job-block ${cls}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%;" onclick="openDispatchDetail(${ri})" title="${esc(b.name || '')}">
-        <div class="dispatch-job-name">${esc(b.name || '—')}</div>
+        <div class="dispatch-job-name">${esc(b.name || '—')}${_payIco}</div>
         <div class="dispatch-job-time">${fmtDispatchTime(start)} · ${dur}m</div>
         <div class="dispatch-job-plan">${esc(b.frequency || '')}</div>
       </div>`;
@@ -7636,11 +7681,27 @@ function _fillDispatchDetail(b, rowIdx) {
     ${done ? `<span style="background:#dcfce7;color:#15803d;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">✓ Done</span>`
            : `<span style="background:#fef9c3;color:#92400e;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">Upcoming</span>`}
   </div>`;
-  info += dRow('Customer', b.name) + dRow('Address', (b.address || '') + (b.zip ? ', ' + b.zip : ''))
-       + dRow('Phone', b.phone) + dRow('Email', b.email)
-       + dRow('Date', b.serviceDate || b.serviceDateRaw) + dRow('Plan', b.frequency)
-       + dRow('Price', b.price) + dRow('Payment', cash ? '💵 Cash' : (b.payMethod || b.calendarEvent))
-       + dRow('Crew', b.crew) + dRow('Done by', b.markedBy);
+  const zone     = b.zone || getZoneFromZip(b.zip) || '';
+  const doneDate = b.doneDate || String(b.done||'').replace(/^✓ Done —?\s*/i,'').trim();
+  const payStr   = cash ? '💵 Cash' + (isCashPaid(b) ? ' ✅ Collected' : ' — Pending') : (b.payMethod || b.calendarEvent || '');
+  const cardStr  = b.cardLast4 ? `💳 ${b.cardBrand||'Card'} ••${b.cardLast4}` : '';
+  info += dRow('Customer', b.name)
+       + dRow('Address',  (b.address || '') + (b.zip ? ', ' + b.zip : ''))
+       + dRow('Phone',    b.phone)
+       + dRow('Email',    b.email)
+       + dRow('Date',     b.serviceDate || b.serviceDateRaw)
+       + dRow('Time',     b.jobTime)
+       + dRow('Plan',     b.frequency)
+       + dRow('Price',    b.price)
+       + dRow('Payment',  payStr)
+       + dRow('Card',     cardStr)
+       + dRow('Zone',     zone)
+       + dRow('Crew',     b.crew)
+       + dRow('Status',   b.rowCompleted ? '✅ Completed & Archived' : done ? '✓ Done' : '🕐 Upcoming')
+       + dRow('Done by',  b.markedBy)
+       + dRow('Done on',  doneDate)
+       + dRow('Service',  b.service || 'Lawn Mow & Blow')
+       + dRow('Notes',    b.notes && b.notes !== '(none)' ? b.notes : '');
   // Crew assignment row
   const curCrew = b.crew || '';
   info += `<div style="margin-bottom:14px;display:flex;align-items:center;gap:10px;">
