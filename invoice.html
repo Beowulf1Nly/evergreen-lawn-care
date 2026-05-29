@@ -686,8 +686,33 @@
     aspect-ratio:1; border-radius:10px; overflow:hidden;
     border:1.5px solid var(--border); background:#f1f5f9;
     display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:opacity .15s;
   }
+  .hist-photo-thumb:hover { opacity:.85; }
   .hist-photo-thumb img { width:100%; height:100%; object-fit:cover; }
+  /* Photo lightbox */
+  .photo-lightbox {
+    position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:9000;
+    display:none; align-items:center; justify-content:center;
+    animation:fadeIn .15s ease;
+  }
+  .photo-lightbox.open { display:flex; }
+  .photo-lightbox img {
+    max-width:92vw; max-height:88vh; border-radius:10px;
+    box-shadow:0 8px 40px rgba(0,0,0,.6); object-fit:contain;
+  }
+  .photo-lightbox-close {
+    position:fixed; top:16px; right:20px; background:rgba(255,255,255,.18);
+    color:#fff; border:none; border-radius:50%; width:40px; height:40px;
+    font-size:22px; cursor:pointer; display:flex; align-items:center;
+    justify-content:center; line-height:1;
+  }
+  .photo-lightbox-drive {
+    position:fixed; bottom:22px; left:50%; transform:translateX(-50%);
+    background:rgba(255,255,255,.15); color:#fff; border:none; border-radius:20px;
+    padding:8px 20px; font-size:13px; font-weight:600; cursor:pointer;
+    text-decoration:none; display:inline-block;
+  }
   .hist-photo-link { font-size:12px; color:var(--green-mid); text-decoration:none; font-weight:600; }
   .hist-empty { text-align:center; padding:48px 20px; color:var(--text-muted); font-size:15px; }
   .hist-search-bar { display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
@@ -3691,9 +3716,10 @@ function cardHTML(b, rowIdx, isToday, tomorrowStr) {
     actions += `<button class="btn-action btn-cancel-job" onclick="custCancelPlan('${esc(_email)}','${esc(_name)}')" style="margin-top:4px;background:#7f1d1d;border-color:#7f1d1d;">✕ Cancel Plan</button>`;
   }
 
-  // 📷 Photo — visible to all roles on any job
+  // 📷 Photo + 📝 Note — visible to all roles on any job
   if (!isQuote) {
     actions += `<button class="btn-action" style="background:#7c3aed;color:#fff;margin-top:4px;" onclick="openPhotoUpload(${rowIdx})">📷 Add Photo</button>`;
+    actions += `<button class="btn-action" style="background:#0369a1;color:#fff;margin-top:4px;" onclick="openNoteModal(${rowIdx})">📝 ${b.employeeNotes ? 'Edit Note' : 'Add Note'}</button>`;
   }
 
   // Crew + zone badges
@@ -6489,9 +6515,12 @@ function renderHistoryList() {
   }).join('');
 }
 
+let _currentHistPhotoUrls = [];
+
 function openHistoryDetail(rowIdx) {
   const b = allBookings[rowIdx];
   if (!b) return;
+  _currentHistPhotoUrls = (b.photos || '').split(',').map(u => u.trim()).filter(Boolean);
   document.getElementById('histDetailTitle').textContent = b.name || 'Job Detail';
   const status = _histStatusLabel(b);
   document.getElementById('histDetailStatus').innerHTML = status === 'issue'
@@ -6501,6 +6530,39 @@ function openHistoryDetail(rowIdx) {
   const overlay = document.getElementById('histDetailOverlay');
   overlay.classList.add('open');
   overlay.scrollTop = 0;
+}
+
+// ── PHOTO LIGHTBOX ──────────────────────────────────────────────────────────
+let _lightboxUrls = [];
+let _lightboxIdx  = 0;
+
+function openPhotoLightbox(idx, urls) {
+  _lightboxUrls = urls || [];
+  _lightboxIdx  = idx;
+  _renderLightbox();
+  document.getElementById('photoLightbox').classList.add('open');
+}
+
+function _renderLightbox() {
+  const url = _lightboxUrls[_lightboxIdx] || '';
+  const m   = url.match(/\/d\/([^\/\?]+)/);
+  const full = m ? 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1600' : url;
+  document.getElementById('lightboxImg').src = full;
+  document.getElementById('lightboxDriveLink').href = url;
+  // Prev/next
+  const prev = document.getElementById('lightboxPrev');
+  const next = document.getElementById('lightboxNext');
+  if (prev) prev.style.display = _lightboxUrls.length > 1 ? '' : 'none';
+  if (next) next.style.display = _lightboxUrls.length > 1 ? '' : 'none';
+}
+
+function lightboxNav(dir) {
+  _lightboxIdx = (_lightboxIdx + dir + _lightboxUrls.length) % _lightboxUrls.length;
+  _renderLightbox();
+}
+
+function closePhotoLightbox() {
+  document.getElementById('photoLightbox').classList.remove('open');
 }
 
 function closeHistoryDetail() {
@@ -6524,12 +6586,12 @@ function buildHistDetailHTML(b) {
   const photoUrls = (b.photos || '').split(',').map(u => u.trim()).filter(Boolean);
   let photosHTML;
   if (photoUrls.length) {
-    photosHTML = '<div class="hist-photo-grid">' + photoUrls.map(url => {
+    photosHTML = '<div class="hist-photo-grid">' + photoUrls.map((url, pi) => {
       const m = url.match(/\/d\/([^\/\?]+)/);
       const thumb = m ? 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w400' : url;
-      return '<a href="' + url + '" target="_blank" class="hist-photo-thumb">' +
+      return '<div class="hist-photo-thumb" onclick="openPhotoLightbox(' + pi + ',_currentHistPhotoUrls)">' +
         '<img src="' + thumb + '" onerror="this.parentElement.innerHTML=\'<span style=\\\"font-size:28px;color:#9ca3af\\\">📷</span>\'">' +
-        '</a>';
+        '</div>';
     }).join('') + '</div>';
   } else {
     photosHTML = '<div style="color:var(--text-muted);font-size:13px;">No photos attached to this job.</div>';
@@ -6558,6 +6620,9 @@ function buildHistDetailHTML(b) {
     ].join('')),
     b.notes && b.notes !== '(none)'
       ? card('📝 Customer Notes', '<div class="hist-notes-box">' + esc(b.notes) + '</div>')
+      : '',
+    b.employeeNotes
+      ? card('🗒️ Employee Note', '<div class="hist-notes-box">' + esc(b.employeeNotes) + '</div>')
       : '',
     card('✓ Completion', [
       row('Completed', esc(doneClean || doneRaw)),
@@ -6652,40 +6717,45 @@ async function uploadPhoto() {
   btn.disabled = true;
 
   const total = photoSelectedFiles.length;
-  let uploaded = 0;
-  const errors = [];
+  btn.textContent = total > 1 ? 'Uploading ' + total + ' photos…' : 'Uploading…';
 
-  for (let fi = 0; fi < total; fi++) {
-    const file = photoSelectedFiles[fi];
-    btn.textContent = 'Uploading ' + (fi + 1) + ' of ' + total + '…';
+  // Compress all photos first, in parallel
+  const b = allBookings[photoTargetRowIdx];
+  const jobLabel = b ? (b.name || '') + ' — ' + (displayDate(b.serviceDate || b.serviceDateRaw) || '') : '';
 
+  const results = await Promise.all(photoSelectedFiles.map(async (file) => {
     try {
       const base64 = await _fileToBase64(file);
-      const b      = allBookings[photoTargetRowIdx];
       const body   = JSON.stringify({
         action:     'upload_job_photo',
         base64Data: base64,
         fileName:   file.name,
         mimeType:   file.type,
         rowIndex:   (photoTargetRowIdx + 2),
-        jobLabel:   b ? (b.name || '') + ' — ' + (displayDate(b.serviceDate || b.serviceDateRaw) || '') : '',
+        jobLabel,
         markedBy:   adminName || adminEmail || 'Staff',
         adminToken,
       });
       const res  = await fetch(SCRIPT_URL, { method: 'POST', body });
       const data = await res.json();
-      if (data.success) {
-        uploaded++;
-        if (data.fileUrl && b) {
-          b.photos = [b.photos, data.fileUrl].filter(Boolean).join(',');
-        }
-      } else {
-        errors.push(file.name + ': ' + (data.error || 'failed'));
-      }
+      return { file, data };
     } catch(e) {
-      errors.push(file.name + ': ' + e.message);
+      return { file, data: { success: false, error: e.message } };
     }
-  }
+  }));
+
+  let uploaded = 0;
+  const errors = [];
+  results.forEach(({ file, data }) => {
+    if (data.success) {
+      uploaded++;
+      if (data.fileUrl && b) {
+        b.photos = [b.photos, data.fileUrl].filter(Boolean).join(',');
+      }
+    } else {
+      errors.push(file.name + ': ' + (data.error || 'failed'));
+    }
+  });
 
   if (errors.length) {
     errEl.textContent = '❌ ' + errors.join(' | ');
@@ -6702,8 +6772,8 @@ async function uploadPhoto() {
   }
 }
 
-// Compress image to max 1600px / 0.82 quality before base64-encoding
-// Cuts upload size ~70-80% for typical phone photos
+// Compress image to max 1000px / 0.70 quality before base64-encoding
+// Keeps file sizes small for fast uploads while still looking good in the history view
 function _fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -6712,7 +6782,7 @@ function _fileToBase64(file) {
       const img = new Image();
       img.onerror = reject;
       img.onload = () => {
-        const MAX = 1600;
+        const MAX = 1000;
         let w = img.width, h = img.height;
         if (w > MAX || h > MAX) {
           if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
@@ -6721,13 +6791,75 @@ function _fileToBase64(file) {
         const canvas = document.createElement('canvas');
         canvas.width = w; canvas.height = h;
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.70);
         resolve(dataUrl.split(',')[1]);
       };
       img.src = e.target.result;
     };
     reader.readAsDataURL(file);
   });
+}
+
+// =======================================================
+// EMPLOYEE NOTE
+// =======================================================
+let _noteTargetRowIdx = null;
+
+function openNoteModal(rowIdx) {
+  _noteTargetRowIdx = rowIdx;
+  const b = allBookings[rowIdx];
+  document.getElementById('noteModalSub').textContent =
+    b ? (b.name || '—') + ' · ' + (displayDate(b.serviceDate || b.serviceDateRaw) || '—') : '';
+  document.getElementById('noteModalText').value = b ? (b.employeeNotes || '') : '';
+  document.getElementById('noteModalError').style.display = 'none';
+  document.getElementById('noteModalSaveBtn').disabled = false;
+  document.getElementById('noteModalSaveBtn').textContent = '💾 Save Note';
+  document.getElementById('employeeNoteModal').classList.add('open');
+  setTimeout(() => document.getElementById('noteModalText').focus(), 80);
+}
+
+function closeNoteModal() {
+  document.getElementById('employeeNoteModal').classList.remove('open');
+  _noteTargetRowIdx = null;
+}
+
+async function saveEmployeeNote() {
+  if (_noteTargetRowIdx === null) return;
+  const note = (document.getElementById('noteModalText').value || '').trim();
+  const btn  = document.getElementById('noteModalSaveBtn');
+  const errEl = document.getElementById('noteModalError');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  errEl.style.display = 'none';
+  try {
+    const params = new URLSearchParams({
+      action:    'set_employee_note',
+      rowIndex:  (_noteTargetRowIdx + 2).toString(),
+      note,
+      markedBy:  adminName || adminEmail || 'Staff',
+      adminToken,
+    });
+    const res  = await fetch(SCRIPT_URL + '?' + params);
+    const data = await res.json();
+    if (data.success) {
+      if (allBookings[_noteTargetRowIdx]) {
+        allBookings[_noteTargetRowIdx].employeeNotes = note;
+      }
+      btn.textContent = '✅ Saved';
+      showToast('📝 Note saved');
+      setTimeout(() => closeNoteModal(), 1200);
+    } else {
+      errEl.textContent = '❌ ' + (data.error || 'Could not save');
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = '💾 Save Note';
+    }
+  } catch(e) {
+    errEl.textContent = '❌ Network error';
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = '💾 Save Note';
+  }
 }
 
 </script>
@@ -6779,6 +6911,38 @@ function _fileToBase64(file) {
               style="background:#f1f5f9;color:var(--text);border-color:#e2e8f0;">Cancel</button>
     </div>
 
+  </div>
+</div>
+
+<!-- PHOTO LIGHTBOX -->
+<div id="photoLightbox" class="photo-lightbox" onclick="if(event.target===this)closePhotoLightbox()">
+  <button class="photo-lightbox-close" onclick="closePhotoLightbox()">✕</button>
+  <button id="lightboxPrev" onclick="lightboxNav(-1)"
+    style="position:fixed;left:14px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:50%;width:44px;height:44px;font-size:22px;cursor:pointer;">‹</button>
+  <img id="lightboxImg" src="" alt="Job photo" onerror="this.src=''">
+  <button id="lightboxNext" onclick="lightboxNav(1)"
+    style="position:fixed;right:14px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:50%;width:44px;height:44px;font-size:22px;cursor:pointer;">›</button>
+  <a id="lightboxDriveLink" href="#" target="_blank" class="photo-lightbox-drive">Open in Drive ↗</a>
+</div>
+
+<!-- EMPLOYEE NOTE MODAL -->
+<div class="modal-overlay" id="employeeNoteModal" onclick="if(event.target===this)closeNoteModal()">
+  <div class="modal" style="max-width:420px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+      <div>
+        <div style="font-size:18px;font-weight:700;color:var(--green-deep);">📝 Employee Note</div>
+        <div id="noteModalSub" style="font-size:13px;color:var(--text-muted);margin-top:3px;"></div>
+      </div>
+      <button onclick="closeNoteModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-muted);line-height:1;padding:0;">✕</button>
+    </div>
+    <textarea id="noteModalText" placeholder="Enter a note for the owner (e.g. gate code, issue noticed, equipment needed…)"
+      style="width:100%;min-height:110px;padding:11px 13px;border:1.5px solid var(--border);border-radius:10px;
+             font-size:14px;font-family:inherit;resize:vertical;outline:none;box-sizing:border-box;"></textarea>
+    <div id="noteModalError" style="display:none;color:#dc2626;font-size:13px;font-weight:600;margin-top:6px;"></div>
+    <div style="display:flex;gap:10px;margin-top:12px;">
+      <button id="noteModalSaveBtn" class="btn-action btn-done" style="flex:1;" onclick="saveEmployeeNote()">💾 Save Note</button>
+      <button class="btn-action" onclick="closeNoteModal()" style="background:#f1f5f9;color:var(--text);border-color:#e2e8f0;">Cancel</button>
+    </div>
   </div>
 </div>
 
