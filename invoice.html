@@ -1175,22 +1175,45 @@
             <div class="addr-suggestions" id="addrSuggestions"></div>
           </div>
         </div>
-        <button class="route-optimize-btn" id="routeOptBtn" onclick="buildRoute()">⚡ Optimize Route</button>
-
-        <!-- Date range toggle -->
-        <div class="route-range-btns">
-          <button id="routeDateToday" class="route-range-btn active" onclick="setRouteRange('today')">📅 Today</button>
-          <button id="routeDateWeek"  class="route-range-btn"        onclick="setRouteRange('week')">📆 Next 7 days</button>
+        <!-- Date mode toggle -->
+        <div class="route-range-btns" style="margin-bottom:10px;">
+          <button id="routeModeSingle" class="route-range-btn active" onclick="setRouteDateMode('single')">📅 Single Day</button>
+          <button id="routeModeRange"  class="route-range-btn"        onclick="setRouteDateMode('range')">📆 Date Range</button>
         </div>
 
-        <!-- Crew filter + dispatch link -->
-        <div class="route-sync-row">
+        <!-- Single day picker -->
+        <div id="routeSinglePicker" style="margin-bottom:10px;">
+          <div class="route-cp-field">
+            <label for="routeSingleDate">📆 Date to optimize</label>
+            <input type="date" id="routeSingleDate" style="padding:9px 12px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;outline:none;width:180px;" oninput="initRouteTab()">
+          </div>
+        </div>
+
+        <!-- Date range picker -->
+        <div id="routeRangePicker" style="display:none;margin-bottom:10px;">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+            <div class="route-cp-field">
+              <label for="routeRangeFrom">📆 From</label>
+              <input type="date" id="routeRangeFrom" style="padding:9px 12px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;outline:none;width:160px;" oninput="initRouteTab()">
+            </div>
+            <div class="route-cp-field">
+              <label for="routeRangeTo">📆 To</label>
+              <input type="date" id="routeRangeTo" style="padding:9px 12px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;outline:none;width:160px;" oninput="initRouteTab()">
+            </div>
+          </div>
+        </div>
+
+        <button class="route-optimize-btn" id="routeOptBtn" onclick="buildRoute()">⚡ Optimize Route</button>
+
+        <!-- Crew filter -->
+        <div class="route-sync-row" style="margin-top:12px;">
           <select id="routeCrewFilter" class="route-crew-select" onchange="setRouteCrew(this.value)">
             <option value="all">👥 All crews</option>
             <option value="A">🔵 Crew A</option>
             <option value="B">🩷 Crew B</option>
             <option value="unassigned">⬜ Unassigned</option>
           </select>
+          <button class="route-range-btn" id="routeClearSavedBtn" onclick="clearSavedRoute()" style="display:none;background:#fff1f2;border-color:#fca5a5;color:#dc2626;">🗑 Clear Saved</button>
         </div>
 
         <div id="routeError" class="route-error" style="display:none;"></div>
@@ -1219,6 +1242,19 @@
           <div class="route-stat-lbl">Days</div>
         </div>
       </div>
+
+      <!-- Day navigation (multi-day routes) -->
+      <div id="routeDayNav" style="display:none;background:#fff;border:1.5px solid var(--border);border-radius:12px;padding:12px 16px;margin-bottom:16px;display:none;align-items:center;justify-content:space-between;gap:12px;">
+        <button onclick="navRouteDay(-1)" style="padding:8px 16px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px;cursor:pointer;background:#fff;font-weight:600;" id="routeDayPrev">← Prev Day</button>
+        <div style="text-align:center;">
+          <div id="routeDayNavLabel" style="font-size:15px;font-weight:700;color:var(--green-deep);"></div>
+          <div id="routeDayNavSub" style="font-size:12px;color:var(--text-muted);margin-top:2px;"></div>
+        </div>
+        <button onclick="navRouteDay(1)" style="padding:8px 16px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px;cursor:pointer;background:#fff;font-weight:600;" id="routeDayNext">Next Day →</button>
+      </div>
+
+      <!-- Saved route banner -->
+      <div id="routeSavedBanner" style="display:none;padding:10px 14px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;font-size:13px;color:#166534;font-weight:600;margin-bottom:12px;"></div>
 
       <!-- Timeline renders here -->
       <div id="routeTimeline"></div>
@@ -5866,10 +5902,14 @@ function debouncedRender() {
 // ── Route tab ─────────────────────────────────────────────────────────────
 
 // ── Route state ─────────────────────────────────────────────────────────
-let routeDateRange   = 'today';  // 'today' | 'week'
+let routeDateMode    = 'single'; // 'single' | 'range'
 let routeCrewFilter  = 'all';    // 'all' | 'A' | 'B' | 'unassigned'
 // Per-day custom order: { '2026-06-01': [bk, bk, ...] }
 let _routeCustomOrder = {};
+// Saved route (persisted to localStorage)
+let _savedRoute = null;           // { customOrder, stats, startTime, startAddr, dates, savedAt }
+let _routeViewDayIdx = 0;         // which day we're currently viewing in day-nav mode
+let _routeViewDates  = [];        // ordered list of dates in current saved/built route
 
 // ── Zip → Zone mapping for Citrus County service area ───────────────────
 const ZIP_ZONE = {
@@ -5920,27 +5960,44 @@ function crewBadgeHTML(crew) {
   return `<span class="crew-badge ${cls}">${label}</span>`;
 }
 
+function todayISOStr() {
+  const d = new Date(); d.setHours(0,0,0,0);
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
 function getRouteDateStrs() {
-  const today = new Date();
-  today.setHours(0,0,0,0);
   const fmt = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-  if (routeDateRange === 'today') return [fmt(today)];
-  const days = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(today.getTime() + i * 24 * 60 * 60 * 1000);
-    days.push(fmt(d));
+  if (routeDateMode === 'single') {
+    const v = document.getElementById('routeSingleDate')?.value;
+    return v ? [v] : [todayISOStr()];
+  } else {
+    const from = document.getElementById('routeRangeFrom')?.value;
+    const to   = document.getElementById('routeRangeTo')?.value;
+    if (!from || !to) return [];
+    const days = [];
+    let cur = new Date(from + 'T00:00:00');
+    const end = new Date(to   + 'T00:00:00');
+    while (cur <= end) { days.push(fmt(cur)); cur = new Date(cur.getTime() + 86400000); }
+    return days;
   }
-  return days;
 }
 
 function next7DayStrs() { return getRouteDateStrs(); } // backward compat
 
-function setRouteRange(mode) {
-  routeDateRange = mode;
-  document.getElementById('routeDateToday')?.classList.toggle('active', mode === 'today');
-  document.getElementById('routeDateWeek')?.classList.toggle('active', mode === 'week');
-  _routeCustomOrder = {}; // clear custom order when range changes
+function setRouteDateMode(mode) {
+  routeDateMode = mode;
+  document.getElementById('routeModeSingle')?.classList.toggle('active', mode === 'single');
+  document.getElementById('routeModeRange')?.classList.toggle('active', mode === 'range');
+  document.getElementById('routeSinglePicker').style.display = mode === 'single' ? '' : 'none';
+  document.getElementById('routeRangePicker').style.display  = mode === 'range'  ? '' : 'none';
+  _routeCustomOrder = {};
   initRouteTab();
+}
+
+// legacy alias (was setRouteRange)
+function setRouteRange(mode) {
+  if (mode === 'today')  { setRouteDateMode('single'); }
+  else                   { setRouteDateMode('range');  }
 }
 
 function setRouteCrew(crew) {
@@ -5949,11 +6006,67 @@ function setRouteCrew(crew) {
   initRouteTab();
 }
 
+// ── Persist / restore saved route ────────────────────────────────────────
+function saveRouteToStorage(customOrder, stats, dates) {
+  try {
+    const startTime = document.getElementById('routeStartTime')?.value || '08:00';
+    const startAddr = (document.getElementById('routeStartAddr')?.value || '').trim();
+    const payload   = { customOrder, stats, dates, startTime, startAddr, savedAt: Date.now() };
+    // customOrder contains booking objects — store minimal info only (use rowIndex as key)
+    const serializable = {};
+    for (const [date, stops] of Object.entries(customOrder)) {
+      serializable[date] = stops.map(s => ({
+        rowIndex: allBookings.indexOf(s.bk),
+        distFromPrev: s.distFromPrev,
+        geocodeFailed: !!s.geocodeFailed,
+      }));
+    }
+    localStorage.setItem('eg_savedRoute', JSON.stringify({ serializable, stats, dates, startTime, startAddr, savedAt: Date.now() }));
+    _savedRoute = { customOrder, stats, dates, startTime, startAddr };
+    document.getElementById('routeClearSavedBtn').style.display = '';
+  } catch(e) { console.warn('Route save failed:', e); }
+}
+
+function loadRouteFromStorage() {
+  try {
+    const raw = localStorage.getItem('eg_savedRoute');
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data?.serializable || !data?.dates) return null;
+    // Reconstruct customOrder using rowIndex pointers into allBookings
+    const customOrder = {};
+    for (const [date, stops] of Object.entries(data.serializable)) {
+      customOrder[date] = stops.map(s => {
+        const bk = allBookings[s.rowIndex];
+        if (!bk) return null;
+        return { bk, distFromPrev: s.distFromPrev, geocodeFailed: !!s.geocodeFailed };
+      }).filter(Boolean);
+    }
+    return { customOrder, stats: data.stats, dates: data.dates, startTime: data.startTime, startAddr: data.startAddr, savedAt: data.savedAt };
+  } catch(e) { return null; }
+}
+
+function clearSavedRoute() {
+  localStorage.removeItem('eg_savedRoute');
+  _savedRoute = null;
+  _routeViewDates  = [];
+  _routeViewDayIdx = 0;
+  _routeCustomOrder = {};
+  document.getElementById('routeClearSavedBtn').style.display = 'none';
+  document.getElementById('routeSavedBanner').style.display = 'none';
+  document.getElementById('routeDayNav').style.display = 'none';
+  document.getElementById('routeTimeline').innerHTML = '';
+  document.getElementById('routeStatsBar').style.display = 'none';
+  initRouteTab();
+}
+
 function initRouteTab() {
-  const todayStr   = todayDateStr();
-  const dateStrs   = getRouteDateStrs();
-  const allValid   = (allBookings || []).filter(b => !b.rowCancelled && !b.rowCompleted && dateStrs.includes(dateOf(b)));
-  // Apply crew filter for the count display
+  // Set default dates if not yet set
+  const singleEl = document.getElementById('routeSingleDate');
+  if (singleEl && !singleEl.value) singleEl.value = todayISOStr();
+
+  const dateStrs     = getRouteDateStrs();
+  const allValid     = (allBookings || []).filter(b => !b.rowCancelled && !b.rowCompleted && dateStrs.includes(dateOf(b)));
   const crewFiltered = allValid.filter(b => matchesCrewFilter(b));
   const noDateCount  = (allBookings || []).filter(b => !b.rowCancelled && !b.rowCompleted && !dateOf(b)).length;
 
@@ -5961,24 +6074,114 @@ function initRouteTab() {
   if (sub) {
     if (!crewFiltered.length) {
       const hint = noDateCount > 0 ? ` (${noDateCount} job${noDateCount!==1?'s':''} have no scheduled date and are hidden)` : '';
-      sub.textContent = routeDateRange === 'today'
-        ? 'No jobs scheduled for today.' + hint
-        : 'No jobs scheduled in the next 7 days.' + hint;
+      sub.textContent = 'No jobs scheduled for the selected date(s).' + hint;
     } else {
-      const dayCount  = new Set(crewFiltered.map(b => dateOf(b))).size;
-      const rangeStr  = routeDateRange === 'today' ? 'today' : 'next 7 days';
-      const crewStr   = routeCrewFilter !== 'all' ? ` · ${routeCrewFilter === 'unassigned' ? 'Unassigned' : 'Crew ' + routeCrewFilter}` : '';
+      const dayCount = new Set(crewFiltered.map(b => dateOf(b))).size;
+      const crewStr  = routeCrewFilter !== 'all' ? ` · ${routeCrewFilter === 'unassigned' ? 'Unassigned' : 'Crew ' + routeCrewFilter}` : '';
       sub.textContent = crewFiltered.length + ' job' + (crewFiltered.length !== 1 ? 's' : '') +
-        (dayCount > 1 ? ' across ' + dayCount + ' days' : '') +
-        ' (' + rangeStr + ')' + crewStr +
+        (dayCount > 1 ? ' across ' + dayCount + ' days' : '') + crewStr +
         (noDateCount > 0 ? ` · ${noDateCount} hidden (no date)` : '');
     }
   }
-  // Clear previous route output
+
+  // Try to restore saved route
+  const saved = loadRouteFromStorage();
+  if (saved && Object.keys(saved.customOrder).length) {
+    _savedRoute      = saved;
+    _routeCustomOrder = saved.customOrder;
+    _routeViewDates   = saved.dates.filter(d => saved.customOrder[d]);
+    if (_routeViewDayIdx >= _routeViewDates.length) _routeViewDayIdx = 0;
+    document.getElementById('routeClearSavedBtn').style.display = '';
+    renderSavedRoute(saved);
+  } else {
+    // No saved route — just clear
+    const tl = document.getElementById('routeTimeline');
+    if (tl) tl.innerHTML = '';
+    const sb = document.getElementById('routeStatsBar');
+    if (sb) sb.style.display = 'none';
+    document.getElementById('routeDayNav').style.display = 'none';
+    document.getElementById('routeSavedBanner').style.display = 'none';
+    document.getElementById('routeClearSavedBtn').style.display = 'none';
+  }
+}
+
+function renderSavedRoute(saved) {
+  const { customOrder, stats, dates, startTime, startAddr, savedAt } = saved;
   const tl = document.getElementById('routeTimeline');
-  if (tl) tl.innerHTML = '';
   const sb = document.getElementById('routeStatsBar');
-  if (sb) sb.style.display = 'none';
+  const nav = document.getElementById('routeDayNav');
+  const banner = document.getElementById('routeSavedBanner');
+
+  // Restore settings inputs silently
+  if (startTime) { const el = document.getElementById('routeStartTime'); if (el) el.value = startTime; }
+  if (startAddr) { const el = document.getElementById('routeStartAddr'); if (el) el.value = startAddr; }
+
+  // Stats bar
+  if (stats && sb) {
+    document.getElementById('rStatJobs').textContent  = stats.jobs  || '—';
+    document.getElementById('rStatMow').textContent   = stats.mow   || '—';
+    document.getElementById('rStatDrive').textContent = stats.drive || '—';
+    document.getElementById('rStatDist').textContent  = stats.dist  || '—';
+    document.getElementById('rStatDone').textContent  = stats.days  || '—';
+    sb.style.display = 'flex';
+  }
+
+  const sortedDates = (dates || Object.keys(customOrder)).filter(d => customOrder[d]).sort();
+  _routeViewDates = sortedDates;
+
+  // Saved banner
+  const whenStr = savedAt ? new Date(savedAt).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+  if (banner) {
+    banner.style.display = '';
+    banner.innerHTML = `✅ Saved route loaded${whenStr ? ' · optimized ' + whenStr : ''} · ${sortedDates.length} day${sortedDates.length!==1?'s':''}`;
+  }
+
+  if (sortedDates.length <= 1) {
+    // Single day — show directly, no nav
+    nav.style.display = 'none';
+    let outerHtml = '';
+    for (const dateStr of sortedDates) {
+      const [y,mo,d] = dateStr.split('-').map(Number);
+      const dayLabel = new Date(y,mo-1,d).toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+      const cnt = customOrder[dateStr]?.length || 0;
+      outerHtml += `<div style="font-size:13px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);">${dayLabel} &nbsp;·&nbsp; ${cnt} stop${cnt!==1?'s':''}</div><div id="routeDay_${dateStr}"></div>`;
+    }
+    if (tl) tl.innerHTML = outerHtml;
+    for (const dateStr of sortedDates) {
+      if (customOrder[dateStr]) renderRouteDay(dateStr, customOrder[dateStr]);
+    }
+  } else {
+    // Multi-day — show nav + one day at a time
+    nav.style.display = 'flex';
+    renderRouteDayNavView();
+  }
+}
+
+function renderRouteDayNavView() {
+  const sortedDates = _routeViewDates;
+  if (!sortedDates.length) return;
+  if (_routeViewDayIdx < 0) _routeViewDayIdx = 0;
+  if (_routeViewDayIdx >= sortedDates.length) _routeViewDayIdx = sortedDates.length - 1;
+
+  const dateStr = sortedDates[_routeViewDayIdx];
+  const [y,mo,d] = dateStr.split('-').map(Number);
+  const dayLabel = new Date(y,mo-1,d).toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+  const cnt = _routeCustomOrder[dateStr]?.length || 0;
+
+  document.getElementById('routeDayNavLabel').textContent = dayLabel;
+  document.getElementById('routeDayNavSub').textContent   = `${_routeViewDayIdx+1} of ${sortedDates.length} days · ${cnt} stop${cnt!==1?'s':''}`;
+  document.getElementById('routeDayPrev').disabled = _routeViewDayIdx === 0;
+  document.getElementById('routeDayNext').disabled = _routeViewDayIdx === sortedDates.length - 1;
+
+  const tl = document.getElementById('routeTimeline');
+  const outerHtml = `<div style="font-size:13px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);">${dayLabel} &nbsp;·&nbsp; ${cnt} stop${cnt!==1?'s':''}</div><div id="routeDay_${dateStr}"></div>`;
+  if (tl) tl.innerHTML = outerHtml;
+  if (_routeCustomOrder[dateStr]) renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
+}
+
+function navRouteDay(dir) {
+  _routeViewDayIdx += dir;
+  renderRouteDayNavView();
 }
 
 function matchesCrewFilter(b) {
@@ -6422,19 +6625,44 @@ async function buildRoute() {
     }
 
     // Stats bar
-    document.getElementById('rStatJobs').textContent  = totalJobs + (allFailedStops.length ? ' +'+allFailedStops.length+'⚠' : '');
-    document.getElementById('rStatMow').textContent   = fmtMin(totalMowMin);
-    document.getElementById('rStatDrive').textContent = fmtMin(totalDriveMin);
-    document.getElementById('rStatDist').textContent  = totalMiles.toFixed(1);
-    document.getElementById('rStatDone').textContent  = sortedDates.length + (sortedDates.length !== 1 ? ' days' : ' day');
+    const statsObj = {
+      jobs:  totalJobs + (allFailedStops.length ? ' +'+allFailedStops.length+'⚠' : ''),
+      mow:   fmtMin(totalMowMin),
+      drive: fmtMin(totalDriveMin),
+      dist:  totalMiles.toFixed(1),
+      days:  sortedDates.length + (sortedDates.length !== 1 ? ' days' : ' day'),
+    };
+    document.getElementById('rStatJobs').textContent  = statsObj.jobs;
+    document.getElementById('rStatMow').textContent   = statsObj.mow;
+    document.getElementById('rStatDrive').textContent = statsObj.drive;
+    document.getElementById('rStatDist').textContent  = statsObj.dist;
+    document.getElementById('rStatDone').textContent  = statsObj.days;
     if (sb) sb.style.display = 'flex';
 
-    if (tl) tl.innerHTML = outerHtml;
+    // Save route to localStorage for persistence
+    saveRouteToStorage(_routeCustomOrder, statsObj, sortedDates);
+    _routeViewDates  = sortedDates;
+    _routeViewDayIdx = 0;
 
-    // Render each day's stop list into its container div
-    for (const dateStr of sortedDates) {
-      if (_routeCustomOrder[dateStr]) renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
+    // Show saved banner
+    const banner = document.getElementById('routeSavedBanner');
+    if (banner) {
+      banner.style.display = '';
+      banner.innerHTML = `✅ Route optimized &amp; saved · ${sortedDates.length} day${sortedDates.length!==1?'s':''} · Re-opens automatically on the Route tab`;
     }
+
+    if (sortedDates.length > 1) {
+      // Multi-day: show day-nav and render the first day
+      document.getElementById('routeDayNav').style.display = 'flex';
+      renderRouteDayNavView();
+    } else {
+      document.getElementById('routeDayNav').style.display = 'none';
+      if (tl) tl.innerHTML = outerHtml;
+      for (const dateStr of sortedDates) {
+        if (_routeCustomOrder[dateStr]) renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
+      }
+    }
+
     // Refresh dispatch board if open so it reflects new optimized times
     if (document.getElementById('pane-dispatch')?.classList.contains('active')) {
       renderDispatchBoard();
