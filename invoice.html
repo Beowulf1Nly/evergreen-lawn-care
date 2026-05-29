@@ -6011,19 +6011,18 @@ function saveRouteToStorage(customOrder, stats, dates) {
   try {
     const startTime = document.getElementById('routeStartTime')?.value || '08:00';
     const startAddr = (document.getElementById('routeStartAddr')?.value || '').trim();
-    const payload   = { customOrder, stats, dates, startTime, startAddr, savedAt: Date.now() };
-    // customOrder contains booking objects — store minimal info only (use rowIndex as key)
     const serializable = {};
     for (const [date, stops] of Object.entries(customOrder)) {
-      serializable[date] = stops.map(s => ({
-        rowIndex: allBookings.indexOf(s.bk),
-        distFromPrev: s.distFromPrev,
+      serializable[date] = (stops || []).map(s => ({
+        rowIndex: (allBookings || []).indexOf(s.bk),
+        distFromPrev: s.distFromPrev || 0,
         geocodeFailed: !!s.geocodeFailed,
       }));
     }
     localStorage.setItem('eg_savedRoute', JSON.stringify({ serializable, stats, dates, startTime, startAddr, savedAt: Date.now() }));
     _savedRoute = { customOrder, stats, dates, startTime, startAddr };
-    document.getElementById('routeClearSavedBtn').style.display = '';
+    const clrBtn = document.getElementById('routeClearSavedBtn');
+    if (clrBtn) clrBtn.style.display = '';
   } catch(e) { console.warn('Route save failed:', e); }
 }
 
@@ -6463,7 +6462,7 @@ async function buildRoute() {
   const allUpcoming = (allBookings || []).filter(b =>
     !b.rowCancelled && !b.rowCompleted && dateStrs.includes(dateOf(b)) && matchesCrewFilter(b)
   );
-  const rangeLabel  = routeDateRange === 'today' ? 'today' : 'the next 7 days';
+  const rangeLabel  = getRouteDateStrs().join(', ') || 'the selected date(s)';
 
   if (!allUpcoming.length) {
     if (errEl) { errEl.textContent = 'No jobs scheduled for ' + rangeLabel + '.'; errEl.style.display = 'block'; }
@@ -6478,7 +6477,7 @@ async function buildRoute() {
   }
   const sortedDates = Object.keys(byDate).sort();
 
-  btn.disabled = true; btn.textContent = '⏳ Optimizing…';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Optimizing…'; }
   if (tl) tl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:14px;">Geocoding addresses…</div>';
   if (sb) sb.style.display = 'none';
 
@@ -6700,10 +6699,11 @@ async function buildRoute() {
     }
 
   } catch(err) {
+    console.error('buildRoute error:', err);
     if (tl) tl.innerHTML = '';
-    if (errEl) { errEl.textContent = '❌ ' + err.message; errEl.style.display = 'block'; }
+    if (errEl) { errEl.textContent = '❌ ' + (err.message || String(err)); errEl.style.display = 'block'; }
   } finally {
-    btn.disabled = false; btn.textContent = '⚡ Optimize Route';
+    if (btn) { btn.disabled = false; btn.textContent = '⚡ Optimize Route'; }
   }
 }
 
