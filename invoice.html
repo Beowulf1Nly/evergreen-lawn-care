@@ -7211,6 +7211,27 @@ const DISPATCH_TOTAL_MINS = (DISPATCH_END_HOUR - DISPATCH_START_HOUR) * 60;
 let   _dispatchJobIdx     = -1;
 let   _dispatchPhotoUrls  = [];
 
+function isCashPaid(b) {
+  const cal = String(b.calendarEvent || '').toLowerCase();
+  return cal.includes('✅') || cal.includes('paid');
+}
+function dispatchJobClass(b) {
+  if (b.rowCompleted) return 'status-completed';
+  if (isDone(b)) return 'status-done';
+  const cash = isCash(b), inv = String(b.invoiced || '').length > 2;
+  if (cash && !isCashPaid(b)) return 'status-cash';
+  if (inv) return 'status-invoiced';
+  const cal = String(b.calendarEvent || '').toLowerCase(), pm = String(b.payMethod || '').toLowerCase();
+  if (cal.includes('✅') || pm.includes('autopay')) return 'status-paid';
+  return 'status-upcoming';
+}
+function fmtDispatchTime(startMin) {
+  const abs = DISPATCH_START_HOUR * 60 + startMin;
+  const h = Math.floor(abs / 60), m = abs % 60;
+  const ap = h >= 12 ? 'PM' : 'AM', hd = h > 12 ? h - 12 : h === 0 ? 12 : h;
+  return hd + ':' + String(m).padStart(2, '0') + ' ' + ap;
+}
+
 // ── Zone hint helper (used by Add Client + Add Job zip fields) ────────────
 function showZoneHint(inputId, hintId) {
   if (!cfgData) loadCfgData();
@@ -7427,26 +7448,7 @@ function renderDispatchDay() {
       return { b, start, dur };
     });
   }
-  function dispatchJobClass(b) {
-    if (b.rowCompleted) return 'status-completed';
-    if (isDone(b)) return 'status-done';
-    const cash = isCash(b), inv = String(b.invoiced || '').length > 2;
-    if (cash && !isCashPaid(b)) return 'status-cash';
-    if (inv) return 'status-invoiced';
-    const cal = String(b.calendarEvent || '').toLowerCase(), pm = String(b.payMethod || '').toLowerCase();
-    if (cal.includes('✅') || pm.includes('autopay')) return 'status-paid';
-    return 'status-upcoming';
-  }
-  function isCashPaid(b) {
-    const cal = String(b.calendarEvent || '').toLowerCase();
-    return cal.includes('✅') || cal.includes('paid');
-  }
-  function fmtDispatchTime(startMin) {
-    const abs = DISPATCH_START_HOUR * 60 + startMin;
-    const h = Math.floor(abs / 60), m = abs % 60;
-    const ap = h >= 12 ? 'PM' : 'AM', hd = h > 12 ? h - 12 : h === 0 ? 12 : h;
-    return hd + ':' + String(m).padStart(2, '0') + ' ' + ap;
-  }
+
 
   let rowsHtml = '';
   const crewOrder = ['A', 'B', ...Object.keys(crews).filter(k => k !== 'A' && k !== 'B')];
