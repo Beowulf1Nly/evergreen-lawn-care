@@ -749,11 +749,12 @@
 
   .dispatch-job-block { position:absolute; top:8px; height:calc(100% - 16px); border-radius:8px; cursor:pointer; display:flex; flex-direction:column; justify-content:center; padding:6px 10px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,.12); transition:transform .15s, box-shadow .15s; min-width:90px; }
   .dispatch-job-block:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.18); z-index:5; }
-  .dispatch-job-block.status-upcoming  { background:#16a34a; color:#fff; }
-  .dispatch-job-block.status-done      { background:#64748b; color:#fff; }
-  .dispatch-job-block.status-cash      { background:#b45309; color:#fff; }
-  .dispatch-job-block.status-invoiced  { background:#1d4ed8; color:#fff; }
-  .dispatch-job-block.status-paid      { background:#7c3aed; color:#fff; }
+  .dispatch-job-block.status-upcoming  { background:#1a73e8; color:#fff; }  /* GCal blue */
+  .dispatch-job-block.status-done      { background:#34a853; color:#fff; }  /* GCal green */
+  .dispatch-job-block.status-cash      { background:#f9ab00; color:#1a1a1a; }  /* GCal yellow */
+  .dispatch-job-block.status-invoiced  { background:#24c1e0; color:#1a1a1a; }  /* GCal teal */
+  .dispatch-job-block.status-paid      { background:#0f9d58; color:#fff; }  /* GCal dark green */
+  .dispatch-job-block.status-completed { background:#5f6368; color:#fff; }  /* GCal gray */
   .dispatch-job-name { font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .dispatch-job-time { font-size:10px; opacity:.8; white-space:nowrap; }
   .dispatch-job-plan { font-size:10px; opacity:.75; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -6261,6 +6262,11 @@ async function buildRoute() {
           startIso:  cursor.toISOString(),
           endIso:    doneAt.toISOString(),
         });
+        // ── Sync optimized arrival time into booking for Dispatch Board ──
+        const bkIdx = allBookings.indexOf(stop.bk);
+        if (bkIdx >= 0) {
+          allBookings[bkIdx].jobTime = cursor.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', hour12:false });
+        }
         cursor = doneAt;
       }
 
@@ -6285,6 +6291,10 @@ async function buildRoute() {
     // Render each day's stop list into its container div
     for (const dateStr of sortedDates) {
       if (_routeCustomOrder[dateStr]) renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
+    }
+    // Refresh dispatch board if open so it reflects new optimized times
+    if (document.getElementById('pane-dispatch')?.classList.contains('active')) {
+      renderDispatchBoard();
     }
 
     // ── Push optimized times to Google Calendar (only if checkbox is checked) ──
@@ -6374,15 +6384,7 @@ async function geocodeAddr(addr) {
     } catch(e) {}
   }
 
-  // 4. US Census Bureau geocoder — free, no API key, excellent rural US coverage
-  try {
-    const query = encodeURIComponent(addrByCity || addr);
-    const res   = await fetch('https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=' + query + '&benchmark=2020&format=json');
-    const data  = await res.json();
-    const match = data?.result?.addressMatches?.[0];
-    if (match) return { lat: match.coordinates.y, lon: match.coordinates.x };
-  } catch(e) {}
-
+  // 4. (Census geocoder removed — CORS not supported from browser)
   return null;
 }
 
@@ -7248,6 +7250,19 @@ function closeDispatchDetail() {
   document.getElementById('dispatchDetailOverlay').classList.remove('open');
   _dispatchJobIdx = -1;
 }
+async function dispatchAssignCrew(rowIdx, crew) {
+  const b = allBookings[rowIdx]; if (!b) return;
+  try {
+    const params = new URLSearchParams({ action:'set_crew', rowIndex:(b._rowIndex||(rowIdx+2)).toString(), crew, adminToken });
+    const res  = await fetch(SCRIPT_URL + '?' + params.toString());
+    const data = await res.json();
+    if (data.success) {
+      allBookings[rowIdx].crew = crew;
+      renderDispatchBoard();
+      showToast(crew ? 'Assigned to Crew ' + crew : 'Crew cleared');
+    } else { showToast('Error: ' + (data.error || 'Failed')); }
+  } catch { showToast('Network error'); }
+}
 function showDispatchTab(tab) {
   ['info', 'notes', 'photos', 'history'].forEach(t => {
     document.getElementById('dTab-' + t)?.classList.toggle('active', t === tab);
@@ -7273,6 +7288,16 @@ function _fillDispatchDetail(b, rowIdx) {
        + dRow('Date', b.serviceDate || b.serviceDateRaw) + dRow('Plan', b.frequency)
        + dRow('Price', b.price) + dRow('Payment', cash ? '💵 Cash' : (b.payMethod || b.calendarEvent))
        + dRow('Crew', b.crew) + dRow('Done by', b.markedBy);
+  // Crew assignment row
+  const curCrew = b.crew || '';
+  info += `<div style="margin-bottom:14px;display:flex;align-items:center;gap:10px;">
+    <span style="font-size:13px;font-weight:600;color:var(--text-muted);min-width:80px;">Crew</span>
+    <select onchange="dispatchAssignCrew(${rowIdx}, this.value)" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;cursor:pointer;">
+      <option value="" ${!curCrew?'selected':''}>⬜ Unassigned</option>
+      <option value="A" ${curCrew==='A'?'selected':''}>🔵 Crew A</option>
+      <option value="B" ${curCrew==='B'?'selected':''}>🩷 Crew B</option>
+    </select>
+  </div>`;
   info += `<div class="dispatch-action-row">`;
   if (b.phone) info += `<a href="tel:${esc(b.phone)}" class="dispatch-action-btn" style="background:var(--green-mid);color:#fff;text-decoration:none;">📞 Call</a>`;
   info += `<a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent((b.address || '') + (b.zip ? ', ' + b.zip : '') + ', FL')}" target="_blank" rel="noopener" class="dispatch-action-btn" style="background:#1d4ed8;color:#fff;text-decoration:none;">🗺 Navigate</a>`;
@@ -7291,12 +7316,16 @@ function _fillDispatchDetail(b, rowIdx) {
   notes += `<button class="dispatch-action-btn" style="background:#0369a1;color:#fff;margin-top:12px;" onclick="closeDispatchDetail();openNoteModal(${rowIdx})">📝 ${b.employeeNotes ? 'Edit Crew Note' : 'Add Crew Note'}</button>`;
   document.getElementById('dispatch-tab-notes').innerHTML = notes;
 
-  // Photos tab
+  // Photos tab — convert Google Drive share links to embeddable thumbnails
+  function driveThumb(url) {
+    const m = url.match(/\/d\/([^\/\?]+)/);
+    return m ? 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w400' : url;
+  }
   const photoUrls = (b.photos || '').split(',').map(s => s.trim()).filter(Boolean);
-  let photos = photoUrls.length
-    ? `<div class="hist-photo-grid">${photoUrls.map((url, pi) => `<div class="hist-photo-thumb" onclick="openPhotoLightbox(${pi}, _dispatchPhotoUrls)"><img src="${esc(url)}" alt="Job photo" onerror="this.parentElement.style.display='none'"></div>`).join('')}</div>`
-    : `<div style="color:var(--text-muted);font-size:14px;padding:16px 0;">No photos yet.</div>`;
   window._dispatchPhotoUrls = photoUrls;
+  let photos = photoUrls.length
+    ? `<div class="hist-photo-grid">${photoUrls.map((url, pi) => `<div class="hist-photo-thumb" onclick="openPhotoLightbox(${pi}, _dispatchPhotoUrls)"><img src="${esc(driveThumb(url))}" alt="Job photo" onerror="this.parentElement.style.display='none'"></div>`).join('')}</div>`
+    : `<div style="color:var(--text-muted);font-size:14px;padding:16px 0;">No photos yet.</div>`;
   photos += `<button class="dispatch-action-btn" style="background:#7c3aed;color:#fff;margin-top:16px;" onclick="closeDispatchDetail();openPhotoUpload(${rowIdx})">📷 Add Photo</button>`;
   document.getElementById('dispatch-tab-photos').innerHTML = photos;
 
