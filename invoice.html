@@ -5973,11 +5973,10 @@ const ZIP_ZONE = {
   '34428':'Z1','34429':'Z1','34449':'Z1','34498':'Z1','34423':'Z1',
   // Zone 2 — Inverness / Floral City / Hernando
   '34450':'Z2','34451':'Z2','34452':'Z2','34453':'Z2','34436':'Z2','34442':'Z2',
-  '34484':'Z2',
   // Zone 3 — Lecanto / Beverly Hills / Citrus Hills
   '34460':'Z3','34461':'Z3','34464':'Z3','34465':'Z3','34446':'Z3',
   // Zone 4 — Dunnellon / Holder / Rainbow Lakes / Citrus Springs
-  '34431':'Z4','34432':'Z4','34433':'Z4','34434':'Z4','34430':'Z4',
+  '34431':'Z4','34432':'Z4','34433':'Z4','34434':'Z4',
   // Zone 4b — Chiefland / Morriston / Levy County (adjacent to Z4)
   '32626':'Z4','32668':'Z4','32621':'Z4','32693':'Z4',
   // Zone 5 — Ocala / Marion County
@@ -5985,14 +5984,13 @@ const ZIP_ZONE = {
   '34475':'Z5','34476':'Z5','34479':'Z5','34480':'Z5','34481':'Z5',
   '34482':'Z5','34491':'Z5','34488':'Z5','34489':'Z5','34492':'Z5',
   '34478':'Z5','34483':'Z5',
-  // Zone 6 — The Villages / Sumter County
-  '34785':'Z6','34788':'Z6','34762':'Z6','32162':'Z6','34737':'Z6',
   // Zone 7 — Spring Hill / New Port Richey / Pasco County
   '34653':'Z7','34654':'Z7','34655':'Z7','34667':'Z7','34668':'Z7',
   '34669':'Z7','34690':'Z7','34691':'Z7',
+  '34638':'Z7','34639':'Z7','34610':'Z7',
   // Zone 8 — Brooksville / Hernando County
   '34601':'Z8','34602':'Z8','34604':'Z8','34606':'Z8','34608':'Z8','34609':'Z8',
-  '34613':'Z8','34614':'Z8','34638':'Z8','34639':'Z8','34610':'Z8',
+  '34613':'Z8','34614':'Z8',
 };
 
 function getZoneFromZip(zip) {
@@ -6907,10 +6905,9 @@ const ZONE_CITIES = {
   'Z1': { label:'Zone 1', cities:'Crystal River, Inglis, Yankeetown', zips:['34428','34429','34449','34498','34423'] },
   'Z2': { label:'Zone 2', cities:'Inverness, Floral City, Hernando',  zips:['34450','34451','34452','34453','34436','34442','34484'] },
   'Z3': { label:'Zone 3', cities:'Lecanto, Beverly Hills, Citrus Hills', zips:['34460','34461','34464','34465','34446'] },
-  'Z4': { label:'Zone 4', cities:'Dunnellon, Holder, Citrus Springs, Chiefland', zips:['34431','34432','34433','34434','34430','32626','32668','32621'] },
+  'Z4': { label:'Zone 4', cities:'Dunnellon, Holder, Citrus Springs, Chiefland', zips:['34431','34432','34433','34434','32626','32668','32621','32693'] },
   'Z5': { label:'Zone 5', cities:'Ocala / Marion County',             zips:['34470','34471','34472','34473','34474','34475','34476','34479','34480','34481','34482','34491'] },
-  'Z6': { label:'Zone 6', cities:'The Villages / Sumter County',      zips:['34785','34788','34762','32162','34737'] },
-  'Z7': { label:'Zone 7', cities:'Spring Hill / Pasco County',        zips:['34653','34654','34655','34667','34668','34669'] },
+  'Z7': { label:'Zone 7', cities:'Spring Hill / Pasco County',        zips:['34653','34654','34655','34667','34668','34669','34638','34639','34610'] },
   'Z8': { label:'Zone 8', cities:'Brooksville / Hernando County',     zips:['34601','34602','34604','34606','34608','34609','34613','34614'] },
 };
 const DAYS_OF_WEEK = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -8366,15 +8363,15 @@ function _fillDispatchDetail(b, rowIdx) {
 // ── Zone Guide ────────────────────────────────────────────────────────────
 const ZONE_PAIRS = [
   { day:'MON', dayFull:'Monday',    z1:{zone:'Z1',name:'Crystal River',   cities:'Inglis · Yankeetown'},               z2:{zone:'Z2',name:'Inverness',              cities:'Floral City · Hernando'},      drive:'~15 min between zones' },
-  { day:'TUE', dayFull:'Tuesday',   z1:{zone:'Z3',name:'Lecanto',         cities:'Beverly Hills · Citrus Hills'},      z2:{zone:'Z4',name:'Dunnellon / Citrus Springs', cities:'Holder · Chiefland', big:true}, drive:'~20 min between zones · Z4 is biggest' },
-  { day:'WED', dayFull:'Wednesday', z1:{zone:'Z5',name:'Ocala',           cities:'Marion County'},                     z2:{zone:'Z6',name:'The Villages',           cities:'Sumter County'},               drive:'~35 min between zones' },
+  { day:'TUE', dayFull:'Tuesday',   z1:{zone:'Z3',name:'Lecanto',         cities:'Beverly Hills · Homosassa'},         z2:{zone:'Z4',name:'Dunnellon / Citrus Springs', cities:'Holder · Chiefland', big:true}, drive:'~20 min between zones · Z4 is biggest' },
+  { day:'WED', dayFull:'Wednesday', z1:{zone:'Z5',name:'Ocala',           cities:'Marion County'},                     z2:null },
   { day:'THU', dayFull:'Thursday',  z1:{zone:'Z7',name:'Spring Hill',     cities:'Pasco County'},                      z2:{zone:'Z8',name:'Brooksville',            cities:'Hernando County'},             drive:'~20 min between zones' },
   { day:'FRI', dayFull:'Friday',    flex:true },
 ];
 const ZONE_SCHEDULE = [
   { day:'MON', dayFull:'Monday',    crewA:{zone:'Z1',name:'Crystal River',         cities:'Inglis · Yankeetown'},         crewB:{zone:'Z5',name:'Ocala',             cities:'Marion County'} },
-  { day:'TUE', dayFull:'Tuesday',   crewA:{zone:'Z2',name:'Inverness',             cities:'Floral City · Hernando'},       crewB:{zone:'Z6',name:'The Villages',      cities:'Sumter County'} },
-  { day:'WED', dayFull:'Wednesday', crewA:{zone:'Z3',name:'Lecanto',               cities:'Beverly Hills · Citrus Hills'}, crewB:{zone:'Z7',name:'Spring Hill',       cities:'Pasco County'} },
+  { day:'TUE', dayFull:'Tuesday',   crewA:{zone:'Z2',name:'Inverness',             cities:'Floral City · Hernando'},       crewB:{zone:'Z5',name:'Ocala',             cities:'Marion County'} },
+  { day:'WED', dayFull:'Wednesday', crewA:{zone:'Z3',name:'Lecanto',               cities:'Beverly Hills · Homosassa'},    crewB:{zone:'Z7',name:'Spring Hill',       cities:'Pasco County'} },
   { day:'THU', dayFull:'Thursday',  crewA:{zone:'Z4 ⭐',name:'Dunnellon / Citrus Springs',cities:'Holder · Chiefland — day 1',big:true}, crewB:{zone:'Z8',name:'Brooksville',cities:'Hernando County'} },
   { day:'FRI', dayFull:'Friday',    crewA:{zone:'Z4 ⭐',name:'Dunnellon / Citrus Springs',cities:'Holder · Chiefland — day 2',big:true}, crewB:null },
   { day:'SAT', dayFull:'Saturday',  crewA:null, crewB:{zone:'Overflow',name:'Catch-up / Biweeklies',cities:'Any zone with pending work',weekend:true} },
@@ -8439,6 +8436,14 @@ function renderZoneGuide() {
         <td style="padding:10px 12px;background:#f0f6ff;border:1px solid #e2e8f0;text-align:center;font-size:12px;font-weight:700;color:#2a50a0;">FRI<br><span style="font-size:10px;font-weight:400;color:#9ca3af;">Friday</span></td>
         <td colspan="2" style="padding:12px 16px;background:#f0f6ff;border:1px solid #e2e8f0;color:#374151;font-size:13px;"><strong>Flex / Overflow day</strong> — all 8 zones done Mon–Thu. Use for biweekly customers, Z4 overflow, or any zone that ran long.</td>
       </tr>`;
+      const z2Cell = row.z2
+        ? `<td style="padding:10px 14px;background:${row.z2.big?'#fff7f0':'#f8fbff'};border:1px solid #e2e8f0;text-align:center;">
+             <div style="display:inline-block;background:${row.z2.big?'#fde8d0':'#d0e8ff'};color:${row.z2.big?'#a04010':'#1a4080'};font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:4px;">${row.z2.zone}${row.z2.big?' ⭐':''}</div>
+             <div style="font-size:12px;font-weight:600;color:#1e293b;">${row.z2.name}</div>
+             <div style="font-size:10px;color:#64748b;margin-top:2px;">${row.z2.cities}</div>
+             <div style="font-size:10px;color:#2d6a2d;background:#e8f5e8;border-radius:20px;padding:1px 7px;margin-top:4px;display:inline-block;">${row.drive}</div>
+           </td>`
+        : `<td style="padding:10px 14px;background:#fafafa;border:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:12px;font-style:italic;">Full day — Z5 is large</td>`;
       return `<tr>
         <td style="padding:10px 12px;background:#f8faf6;border:1px solid #e2e8f0;text-align:center;font-size:12px;font-weight:700;color:#374151;">${row.day}<br><span style="font-size:10px;font-weight:400;color:#9ca3af;">${row.dayFull}</span></td>
         <td style="padding:10px 14px;background:#f8fbff;border:1px solid #e2e8f0;text-align:center;">
@@ -8446,12 +8451,7 @@ function renderZoneGuide() {
           <div style="font-size:12px;font-weight:600;color:#1e293b;">${row.z1.name}</div>
           <div style="font-size:10px;color:#64748b;margin-top:2px;">${row.z1.cities}</div>
         </td>
-        <td style="padding:10px 14px;background:${row.z2.big?'#fff7f0':'#f8fbff'};border:1px solid #e2e8f0;text-align:center;">
-          <div style="display:inline-block;background:${row.z2.big?'#fde8d0':'#d0e8ff'};color:${row.z2.big?'#a04010':'#1a4080'};font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:4px;">${row.z2.zone}${row.z2.big?' ⭐':''}</div>
-          <div style="font-size:12px;font-weight:600;color:#1e293b;">${row.z2.name}</div>
-          <div style="font-size:10px;color:#64748b;margin-top:2px;">${row.z2.cities}</div>
-          <div style="font-size:10px;color:#2d6a2d;background:#e8f5e8;border-radius:20px;padding:1px 7px;margin-top:4px;display:inline-block;">${row.drive}</div>
-        </td>
+        ${z2Cell}
       </tr>`;
     }).join('')}</tbody>`;
     note.innerHTML = '<strong>How it works:</strong> Start the morning in Zone 1, knock out all jobs there, then drive to Zone 2 and finish the day. Each pair is chosen so Zone 2 is the closest neighbor — no criss-crossing the map.';
