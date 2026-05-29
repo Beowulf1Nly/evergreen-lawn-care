@@ -1338,6 +1338,13 @@
           <label style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:5px;">New Date</label>
           <input type="date" id="dispReschedDate" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;">
         </div>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:5px;">Move</label>
+          <select id="dispReschedScope" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;">
+            <option value="single">Only this appointment</option>
+            <option value="all">This + all future appointments</option>
+          </select>
+        </div>
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:18px;font-size:14px;">
           <input type="checkbox" id="dispReschedNotify" checked style="width:16px;height:16px;accent-color:var(--green-mid);">
           <span>📧 Notify customer via email</span>
@@ -5978,14 +5985,14 @@ const ZIP_ZONE = {
   '34475':'Z5','34476':'Z5','34479':'Z5','34480':'Z5','34481':'Z5',
   '34482':'Z5','34491':'Z5','34488':'Z5','34489':'Z5','34492':'Z5',
   '34478':'Z5','34483':'Z5',
-  // Zone 6 — Brooksville / Hernando County / Spring Hill
-  '34601':'Z6','34602':'Z6','34604':'Z6','34606':'Z6','34608':'Z6','34609':'Z6',
-  '34613':'Z6','34614':'Z6','34638':'Z6','34639':'Z6','34610':'Z6',
+  // Zone 6 — The Villages / Sumter County
+  '34785':'Z6','34788':'Z6','34762':'Z6','32162':'Z6','34737':'Z6',
   // Zone 7 — Spring Hill / New Port Richey / Pasco County
   '34653':'Z7','34654':'Z7','34655':'Z7','34667':'Z7','34668':'Z7',
   '34669':'Z7','34690':'Z7','34691':'Z7',
-  // Zone 8 — The Villages / Sumter County
-  '34785':'Z8','34788':'Z8','34762':'Z8','32162':'Z8','34737':'Z8',
+  // Zone 8 — Brooksville / Hernando County
+  '34601':'Z8','34602':'Z8','34604':'Z8','34606':'Z8','34608':'Z8','34609':'Z8',
+  '34613':'Z8','34614':'Z8','34638':'Z8','34639':'Z8','34610':'Z8',
 };
 
 function getZoneFromZip(zip) {
@@ -6902,9 +6909,9 @@ const ZONE_CITIES = {
   'Z3': { label:'Zone 3', cities:'Lecanto, Beverly Hills, Citrus Hills', zips:['34460','34461','34464','34465','34446'] },
   'Z4': { label:'Zone 4', cities:'Dunnellon, Holder, Citrus Springs, Chiefland', zips:['34431','34432','34433','34434','34430','32626','32668','32621'] },
   'Z5': { label:'Zone 5', cities:'Ocala / Marion County',             zips:['34470','34471','34472','34473','34474','34475','34476','34479','34480','34481','34482','34491'] },
-  'Z6': { label:'Zone 6', cities:'Brooksville / Hernando County',     zips:['34601','34602','34604','34606','34608','34609','34613','34614'] },
+  'Z6': { label:'Zone 6', cities:'The Villages / Sumter County',      zips:['34785','34788','34762','32162','34737'] },
   'Z7': { label:'Zone 7', cities:'Spring Hill / Pasco County',        zips:['34653','34654','34655','34667','34668','34669'] },
-  'Z8': { label:'Zone 8', cities:'The Villages / Sumter County',      zips:['34785','34788','34762','32162','34737'] },
+  'Z8': { label:'Zone 8', cities:'Brooksville / Hernando County',     zips:['34601','34602','34604','34606','34608','34609','34613','34614'] },
 };
 const DAYS_OF_WEEK = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
@@ -7685,7 +7692,33 @@ function showZoneHint(inputId, hintId) {
   const days  = getCfgZoneDays(zone);
   const info  = ZONE_CITIES[zone];
   const label = info ? info.label + ' · ' + info.cities : zone;
-  const dayStr = days.length ? ' · Typically: ' + days.join('/') : '';
+
+  // Suggest the next service date in the corresponding date field
+  const dateFieldId = inputId === 'ac-zip' ? 'ac-date' : inputId === 'job-zip' ? 'job-date' : null;
+  let suggestedDate = '';
+  if (dateFieldId && days.length) {
+    const dateEl = document.getElementById(dateFieldId);
+    // Only suggest if the date field is empty or still at today's default
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (dateEl && (!dateEl.value || dateEl.value === todayStr)) {
+      const dayNameToNum = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
+      const targetDay = dayNameToNum[days[0]]; // use first configured day
+      if (targetDay !== undefined) {
+        const d = new Date();
+        d.setDate(d.getDate() + 1); // start from tomorrow
+        for (let i = 0; i < 7; i++) {
+          if (d.getDay() === targetDay) break;
+          d.setDate(d.getDate() + 1);
+        }
+        suggestedDate = d.toISOString().slice(0, 10);
+        dateEl.value = suggestedDate;
+      }
+    }
+  }
+
+  const dayStr = days.length
+    ? ' · ' + days.join('/') + (suggestedDate ? ' — suggested ' + new Date(suggestedDate + 'T12:00').toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'}) : '')
+    : '';
   hint.textContent = '📍 ' + label + dayStr;
 }
 
@@ -8032,6 +8065,7 @@ function openDispatchResched(rowIdx, newDate) {
     `<strong>${esc(b.name||'—')}</strong><br>` +
     `Moving from <strong>${fmtDate(oldDate)}</strong> → <strong>${fmtDate(newDate)}</strong>`;
   document.getElementById('dispReschedDate').value = newDate;
+  document.getElementById('dispReschedScope').value = 'single';
   document.getElementById('dispReschedError').style.display = 'none';
   const btn = document.getElementById('dispReschedConfirmBtn');
   btn.disabled = false; btn.textContent = 'Reschedule';
@@ -8046,6 +8080,7 @@ async function submitDispatchResched() {
   if (!b) return;
   const newDate  = document.getElementById('dispReschedDate').value || _reschedNewDate;
   const notify   = document.getElementById('dispReschedNotify').checked;
+  const scope    = document.getElementById('dispReschedScope').value || 'single';
   const btn      = document.getElementById('dispReschedConfirmBtn');
   const errEl    = document.getElementById('dispReschedError');
   if (btn.disabled) return;
@@ -8055,7 +8090,7 @@ async function submitDispatchResched() {
       action:        'owner_reschedule',
       rowIndex:      b._rowIndex || (_reschedRowIdx + 2),
       newDate,
-      scope:         'single',
+      scope,
       sendEmail:     notify ? 'true' : 'false',
       expectedEmail: b.email || '',
       adminToken,
