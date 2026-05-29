@@ -845,7 +845,7 @@
   <div class="tab-bar" id="ownerTabs" style="display:none;">
     <button class="tab-btn active" onclick="showTab('jobs')"  data-tab="jobs">📋 Jobs</button>
     <button class="tab-btn" onclick="showTab('route')" data-tab="route">🗺️ Route</button>
-    <button class="tab-btn owner-only" onclick="showTab('dispatch')" data-tab="dispatch">📅 Dispatch</button>
+    <button class="tab-btn" onclick="showTab('dispatch')" data-tab="dispatch">📅 Dispatch</button>
     <button class="tab-btn owner-only" onclick="showTab('add')"   data-tab="add">➕ Add Client</button>
     <button class="tab-btn" onclick="showTab('quote')" data-tab="quote">📋 Estimate</button>
     <button class="tab-btn owner-only" onclick="showTab('job')" data-tab="job">📅 Add Job</button>
@@ -1285,13 +1285,16 @@
             <option value="unassigned">⬜ Unassigned</option>
           </select>
         </div>
-        <div class="dispatch-legend">
-          <span class="dispatch-legend-dot" style="background:#1a73e8;"></span>Upcoming
-          <span class="dispatch-legend-dot" style="background:#34a853;margin-left:8px;"></span>Done
-          <span class="dispatch-legend-dot" style="background:#f9ab00;margin-left:8px;"></span>Cash
-          <span class="dispatch-legend-dot" style="background:#24c1e0;margin-left:8px;"></span>Invoiced
-          <span class="dispatch-legend-dot" style="background:#0f9d58;margin-left:8px;"></span>Paid
-          <span class="dispatch-legend-dot" style="background:#5f6368;margin-left:8px;"></span>Completed
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <button onclick="openZoneGuide()" style="padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;background:#fff;font-size:13px;font-family:inherit;cursor:pointer;font-weight:600;color:var(--green-deep);transition:all .15s;" onmouseover="this.style.borderColor='var(--green-mid)'" onmouseout="this.style.borderColor='var(--border)'">🗺 Zone Guide</button>
+          <div class="dispatch-legend">
+            <span class="dispatch-legend-dot" style="background:#1a73e8;"></span>Upcoming
+            <span class="dispatch-legend-dot" style="background:#34a853;margin-left:8px;"></span>Done
+            <span class="dispatch-legend-dot" style="background:#f9ab00;margin-left:8px;"></span>Cash
+            <span class="dispatch-legend-dot" style="background:#24c1e0;margin-left:8px;"></span>Invoiced
+            <span class="dispatch-legend-dot" style="background:#0f9d58;margin-left:8px;"></span>Paid
+            <span class="dispatch-legend-dot" style="background:#5f6368;margin-left:8px;"></span>Completed
+          </div>
         </div>
       </div>
 
@@ -8277,6 +8280,129 @@ function _fillDispatchDetail(b, rowIdx) {
     : `<div style="color:var(--text-muted);font-size:14px;padding:16px 0;">No history found.</div>`;
 
   showDispatchTab('info');
+}
+
+// ── Zone Guide ────────────────────────────────────────────────────────────
+const ZONE_PAIRS = [
+  { day:'MON', dayFull:'Monday',    z1:{zone:'Z1',name:'Crystal River',   cities:'Inglis · Yankeetown'},           z2:{zone:'Z2',name:'Inverness',              cities:'Floral City · Hernando'},   drive:'~15 min between zones' },
+  { day:'TUE', dayFull:'Tuesday',   z1:{zone:'Z3',name:'Lecanto',         cities:'Beverly Hills · Citrus Hills'},  z2:{zone:'Z4',name:'Dunnellon / Citrus Springs', cities:'Holder · Chiefland', big:true}, drive:'~20 min between zones · Z4 is biggest' },
+  { day:'WED', dayFull:'Wednesday', z1:{zone:'Z5',name:'Ocala',           cities:'Marion County'},                 z2:{zone:'Z8',name:'The Villages',           cities:'Sumter County'},            drive:'~35 min between zones' },
+  { day:'THU', dayFull:'Thursday',  z1:{zone:'Z6',name:'Brooksville',     cities:'Hernando County'},               z2:{zone:'Z7',name:'Spring Hill',            cities:'Pasco County'},             drive:'~20 min between zones' },
+  { day:'FRI', dayFull:'Friday',    flex:true },
+];
+const ZONE_SCHEDULE = [
+  { day:'MON', dayFull:'Monday',    crewA:{zone:'Z1',name:'Crystal River',         cities:'Inglis · Yankeetown'},         crewB:{zone:'Z5',name:'Ocala',          cities:'Marion County'} },
+  { day:'TUE', dayFull:'Tuesday',   crewA:{zone:'Z2',name:'Inverness',             cities:'Floral City · Hernando'},       crewB:{zone:'Z6',name:'Brooksville',    cities:'Hernando County'} },
+  { day:'WED', dayFull:'Wednesday', crewA:{zone:'Z3',name:'Lecanto',               cities:'Beverly Hills · Citrus Hills'}, crewB:{zone:'Z7',name:'Spring Hill',    cities:'Pasco County'} },
+  { day:'THU', dayFull:'Thursday',  crewA:{zone:'Z4 ⭐',name:'Dunnellon / Citrus Springs',cities:'Holder · Chiefland — day 1',big:true}, crewB:{zone:'Z8',name:'The Villages',cities:'Sumter County'} },
+  { day:'FRI', dayFull:'Friday',    crewA:{zone:'Z4 ⭐',name:'Dunnellon / Citrus Springs',cities:'Holder · Chiefland — day 2',big:true}, crewB:null },
+  { day:'SAT', dayFull:'Saturday',  crewA:null, crewB:{zone:'Overflow',name:'Catch-up / Biweeklies',cities:'Any zone with pending work',weekend:true} },
+  { day:'SUN', dayFull:'Sunday',    crewA:null, crewB:{zone:'Buffer',name:'Catch-up / Rest',cities:'Finish anything outstanding',weekend:true} },
+];
+let _zgTab = 'current';
+
+function openZoneGuide() {
+  _zgTab = 'current';
+  let overlay = document.getElementById('zoneGuideOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'zoneGuideOverlay';
+    overlay.onclick = e => { if (e.target === overlay) closeZoneGuide(); };
+    overlay.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:800;align-items:center;justify-content:center;padding:16px;';
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:20px;width:100%;max-width:700px;max-height:90vh;overflow-y:auto;box-shadow:0 12px 48px rgba(0,0,0,.22);">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px 14px;border-bottom:1.5px solid #e2e8f0;position:sticky;top:0;background:#fff;z-index:2;">
+          <div>
+            <div style="font-family:'Playfair Display',serif;font-size:18px;color:#1a3a1a;">🗺 Zone Schedule Guide</div>
+            <div style="font-size:12px;color:#64748b;margin-top:2px;">Reference only — use this while rebooking customers into the right days</div>
+          </div>
+          <button onclick="closeZoneGuide()" style="width:34px;height:34px;border-radius:50%;border:1.5px solid #e2e8f0;background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">✕</button>
+        </div>
+        <div style="padding:20px;">
+          <div style="display:flex;gap:8px;margin-bottom:16px;">
+            <button id="zgTabCurrent" onclick="switchZgTab('current')" style="font-family:inherit;">📍 Current — 1 Crew</button>
+            <button id="zgTabFuture"  onclick="switchZgTab('future')"  style="font-family:inherit;">🔮 Future — 2 Crews</button>
+          </div>
+          <table id="zoneGuideBody" style="width:100%;border-collapse:collapse;font-family:inherit;"></table>
+          <div id="zoneGuideNote" style="margin-top:16px;background:#f8faf8;border-radius:10px;padding:12px 14px;font-size:12px;color:#374151;line-height:1.7;"></div>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+  }
+  overlay.style.display = 'flex';
+  renderZoneGuide();
+}
+function closeZoneGuide() {
+  const o = document.getElementById('zoneGuideOverlay');
+  if (o) o.style.display = 'none';
+}
+function switchZgTab(t) { _zgTab = t; renderZoneGuide(); }
+
+function renderZoneGuide() {
+  const isCurrent = _zgTab === 'current';
+  const activeSty  = 'padding:8px 18px;border:none;border-radius:8px;background:#1a3a1a;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;';
+  const inactiveSty= 'padding:8px 18px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;color:#64748b;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;';
+  const ec = document.getElementById('zgTabCurrent'); if (ec) ec.style.cssText = isCurrent ? activeSty : inactiveSty;
+  const ef = document.getElementById('zgTabFuture');  if (ef) ef.style.cssText = !isCurrent ? activeSty : inactiveSty;
+  const body = document.getElementById('zoneGuideBody');
+  const note = document.getElementById('zoneGuideNote');
+  if (!body || !note) return;
+
+  if (isCurrent) {
+    body.innerHTML = `<thead><tr>
+      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;width:70px;">Day</th>
+      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">Zone 1 — Start here</th>
+      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">Zone 2 — Roll into next</th>
+    </tr></thead><tbody>${ZONE_PAIRS.map(row => {
+      if (row.flex) return `<tr>
+        <td style="padding:10px 12px;background:#f0f6ff;border:1px solid #e2e8f0;text-align:center;font-size:12px;font-weight:700;color:#2a50a0;">FRI<br><span style="font-size:10px;font-weight:400;color:#9ca3af;">Friday</span></td>
+        <td colspan="2" style="padding:12px 16px;background:#f0f6ff;border:1px solid #e2e8f0;color:#374151;font-size:13px;"><strong>Flex / Overflow day</strong> — all 8 zones done Mon–Thu. Use for biweekly customers, Z4 overflow, or any zone that ran long.</td>
+      </tr>`;
+      return `<tr>
+        <td style="padding:10px 12px;background:#f8faf6;border:1px solid #e2e8f0;text-align:center;font-size:12px;font-weight:700;color:#374151;">${row.day}<br><span style="font-size:10px;font-weight:400;color:#9ca3af;">${row.dayFull}</span></td>
+        <td style="padding:10px 14px;background:#f8fbff;border:1px solid #e2e8f0;text-align:center;">
+          <div style="display:inline-block;background:#d0e8ff;color:#1a4080;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:4px;">${row.z1.zone}</div>
+          <div style="font-size:12px;font-weight:600;color:#1e293b;">${row.z1.name}</div>
+          <div style="font-size:10px;color:#64748b;margin-top:2px;">${row.z1.cities}</div>
+        </td>
+        <td style="padding:10px 14px;background:${row.z2.big?'#fff7f0':'#f8fbff'};border:1px solid #e2e8f0;text-align:center;">
+          <div style="display:inline-block;background:${row.z2.big?'#fde8d0':'#d0e8ff'};color:${row.z2.big?'#a04010':'#1a4080'};font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:4px;">${row.z2.zone}${row.z2.big?' ⭐':''}</div>
+          <div style="font-size:12px;font-weight:600;color:#1e293b;">${row.z2.name}</div>
+          <div style="font-size:10px;color:#64748b;margin-top:2px;">${row.z2.cities}</div>
+          <div style="font-size:10px;color:#2d6a2d;background:#e8f5e8;border-radius:20px;padding:1px 7px;margin-top:4px;display:inline-block;">${row.drive}</div>
+        </td>
+      </tr>`;
+    }).join('')}</tbody>`;
+    note.innerHTML = '<strong>How it works:</strong> Start the morning in Zone 1, knock out all jobs there, then drive to Zone 2 and finish the day. Each pair is chosen so Zone 2 is the closest neighbor — no criss-crossing the map.';
+  } else {
+    body.innerHTML = `<thead><tr>
+      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;width:70px;">Day</th>
+      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">💗 Crew A — April</th>
+      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">🔵 Crew B — Hunter &amp; Jon</th>
+    </tr></thead><tbody>${ZONE_SCHEDULE.map(row => {
+      const aCell = row.crewA
+        ? `<td style="padding:10px 12px;background:${row.crewA.big?'#fff7f0':'#fff8fb'};border:1px solid #e2e8f0;text-align:center;">
+             <div style="display:inline-block;background:${row.crewA.big?'#fce0ec':'#f7d6e6'};color:#a0305a;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:4px;">${row.crewA.zone}</div>
+             <div style="font-size:12px;font-weight:600;color:#1e293b;">${row.crewA.name}</div>
+             <div style="font-size:10px;color:#64748b;margin-top:2px;">${row.crewA.cities}</div>
+           </td>`
+        : `<td style="padding:10px 12px;background:#fafafa;border:1px solid #e2e8f0;text-align:center;color:#cbd5e1;font-size:12px;">OFF</td>`;
+      const bCell = row.crewB
+        ? `<td style="padding:10px 12px;background:${row.crewB.weekend?'#eef6ff':'#f8fbff'};border:1px solid #e2e8f0;text-align:center;">
+             <div style="display:inline-block;background:#d0e4f8;color:#1a4080;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:4px;">${row.crewB.zone}</div>
+             <div style="font-size:12px;font-weight:600;color:#1e293b;">${row.crewB.name}</div>
+             <div style="font-size:10px;color:#64748b;margin-top:2px;">${row.crewB.cities}</div>
+           </td>`
+        : `<td style="padding:10px 12px;background:#fafafa;border:1px solid #e2e8f0;text-align:center;color:#cbd5e1;font-size:12px;">OFF</td>`;
+      const isWeekend = row.day==='SAT'||row.day==='SUN';
+      return `<tr>
+        <td style="padding:10px 12px;background:${isWeekend?'#e8f2e8':'#f8faf6'};border:1px solid #e2e8f0;text-align:center;font-size:12px;font-weight:700;color:${isWeekend?'#2d6a2d':'#374151'};">
+          ${row.day}<br><span style="font-size:10px;font-weight:400;color:${isWeekend?'#4a8a4a':'#9ca3af'};">${row.dayFull}</span>
+        </td>${aCell}${bCell}
+      </tr>`;
+    }).join('')}</tbody>`;
+    note.innerHTML = '<strong>Future setup:</strong> Crew A owns north Citrus (Z1–Z4), Crew B owns south/east (Z5–Z8). Z4 gets two days — it\'s the biggest zone.';
+  }
 }
 </script>
 </body>
