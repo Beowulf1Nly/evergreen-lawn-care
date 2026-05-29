@@ -888,30 +888,33 @@
 </div>
 
 <!-- ═══════════════════════════════════════════
-     RESCHEDULE MODAL
+     RESCHEDULE MODAL (request flow)
 ═══════════════════════════════════════════ -->
 <div id="rescheduleModal" class="modal-overlay">
   <div class="modal-box">
-    <div class="modal-title">📅 Reschedule Appointment</div>
-    <div class="modal-sub" id="rescheduleSub">Choose a new date for your appointment.</div>
+    <div class="modal-title">📅 Request a Reschedule</div>
+    <div class="modal-sub" id="rescheduleSub">Tell us your preferred new date and we'll confirm with you.</div>
     <div style="margin:18px 0 8px;">
-      <label style="display:block;font-size:13px;font-weight:600;color:var(--green-deep);margin-bottom:8px;">New Date</label>
+      <label style="display:block;font-size:13px;font-weight:600;color:var(--green-deep);margin-bottom:8px;">Preferred New Date</label>
       <input type="date" id="rescheduleDate" style="width:100%;padding:11px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:15px;outline:none;" oninput="this.style.borderColor='var(--green-mid)'"/>
     </div>
     <div style="margin-bottom:18px;">
       <label style="display:block;font-size:13px;font-weight:600;color:var(--green-deep);margin-bottom:8px;">Apply to</label>
       <button class="cancel-option" id="rScopeOne" onclick="selectRescheduleScope('single')" style="margin-bottom:8px;">
         <div class="cancel-option-title">Just this appointment</div>
-        <div class="cancel-option-desc">Only this one visit moves to the new date.</div>
+        <div class="cancel-option-desc">Only this one visit would move to the new date.</div>
       </button>
       <button class="cancel-option" id="rScopeAll" onclick="selectRescheduleScope('all')">
         <div class="cancel-option-title">All upcoming appointments</div>
-        <div class="cancel-option-desc">Every future visit shifts by the same number of days.</div>
+        <div class="cancel-option-desc">Every future visit would shift by the same number of days.</div>
       </button>
     </div>
-    <div class="modal-btns">
+    <div id="rescheduleRequestSuccess" style="display:none;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:14px 16px;font-size:14px;color:#15803d;font-weight:600;margin-bottom:12px;">
+      ✅ Request sent! We'll confirm your new date via text or email soon.
+    </div>
+    <div class="modal-btns" id="rescheduleBtns">
       <button class="btn-cancel" onclick="closeRescheduleModal()">Back</button>
-      <button class="btn-confirm-cancel" id="confirmRescheduleBtn" disabled onclick="submitReschedule()" style="background:var(--green-mid);">Confirm Reschedule</button>
+      <button class="btn-confirm-cancel" id="confirmRescheduleBtn" disabled onclick="submitReschedule()" style="background:var(--green-mid);">Send Request</button>
     </div>
     <div id="rescheduleError" style="color:var(--red);font-size:13px;margin-top:10px;display:none;"></div>
   </div>
@@ -955,18 +958,21 @@
 ═══════════════════════════════════════════ -->
 <div id="extraMowModal" class="modal-overlay">
   <div class="modal-box">
-    <div class="modal-title">➕ Schedule Extra Mow</div>
-    <div class="modal-sub">Add an extra visit between your regular appointments.</div>
+    <div class="modal-title">➕ Request an Extra Mow</div>
+    <div class="modal-sub">We'll review your request and confirm the date with you.</div>
     <div style="margin:18px 0 8px;">
-      <label style="display:block;font-size:13px;font-weight:600;color:var(--green-deep);margin-bottom:8px;">Date for extra mow</label>
+      <label style="display:block;font-size:13px;font-weight:600;color:var(--green-deep);margin-bottom:8px;">Preferred date</label>
       <input type="date" id="extraMowDate" style="width:100%;padding:11px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:15px;outline:none;" oninput="this.style.borderColor='var(--green-mid)';updateExtraMowBtn()"/>
     </div>
     <div style="margin-bottom:18px;padding:12px 14px;background:var(--green-pale);border-radius:10px;font-size:13px;color:var(--green-deep);line-height:1.6;">
-      This adds a one-time extra mow on top of your regular schedule. Your regular appointments stay as-is.
+      This requests a one-time extra mow on top of your regular schedule. We'll confirm the date and pricing before scheduling.
     </div>
-    <div class="modal-btns">
+    <div id="extraMowRequestSuccess" style="display:none;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:14px 16px;font-size:14px;color:#15803d;font-weight:600;margin-bottom:12px;">
+      ✅ Request sent! We'll confirm the date via text or email soon.
+    </div>
+    <div class="modal-btns" id="extraMowBtns">
       <button class="btn-cancel" onclick="closeExtraMowModal()">Cancel</button>
-      <button class="btn-confirm-cancel" id="confirmExtraMowBtn" disabled onclick="submitExtraMow()" style="background:var(--green-mid);">Schedule Extra Mow</button>
+      <button class="btn-confirm-cancel" id="confirmExtraMowBtn" disabled onclick="submitExtraMow()" style="background:var(--green-mid);">Send Request</button>
     </div>
     <div id="extraMowError" style="color:var(--red);font-size:13px;margin-top:10px;display:none;"></div>
   </div>
@@ -2365,9 +2371,7 @@ function openRescheduleModal(rowIndex, currentDateStr) {
   } catch(e) {}
   document.getElementById('rescheduleModal').classList.add('open');
 }
-function closeRescheduleModal() {
-  document.getElementById('rescheduleModal').classList.remove('open');
-}
+
 function selectRescheduleScope(scope) {
   _rescheduleScope = scope;
   document.getElementById('rScopeOne').classList.toggle('selected', scope === 'single');
@@ -2389,34 +2393,41 @@ async function submitReschedule() {
   const newDate = document.getElementById('rescheduleDate').value;
   if (!newDate || !_rescheduleScope) return;
   const btn = document.getElementById('confirmRescheduleBtn');
-  btn.disabled = true; btn.textContent = 'Saving…';
+  btn.disabled = true; btn.textContent = 'Sending…';
   document.getElementById('rescheduleError').style.display = 'none';
   try {
     const data = await apiGet({
-      action:       'portal_reschedule_appointment',
+      action:       'portal_request_reschedule',
       sessionToken: session.token,
       rowIndex:     _rescheduleRowIdx,
       newDate,
       scope:        _rescheduleScope,
     });
     if (data.success) {
-      closeRescheduleModal();
-      await loadProfile(session.token);
-    } else if (data.conflictDetected) {
-      // Close reschedule modal, open conflict modal
-      closeRescheduleModal();
-      _conflictMode = 'reschedule';
-      openConflictModal(data);
+      // Show success message and hide the buttons
+      document.getElementById('rescheduleRequestSuccess').style.display = 'block';
+      document.getElementById('rescheduleBtns').style.display = 'none';
+      // Auto-close after 3 seconds
+      setTimeout(() => closeRescheduleModal(), 3000);
     } else {
-      document.getElementById('rescheduleError').textContent = data.error || 'Could not reschedule.';
+      document.getElementById('rescheduleError').textContent = data.error || 'Could not send request.';
       document.getElementById('rescheduleError').style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Send Request';
     }
   } catch(err) {
     document.getElementById('rescheduleError').textContent = 'Error: ' + err.message;
     document.getElementById('rescheduleError').style.display = 'block';
-  } finally {
-    btn.disabled = false; btn.textContent = 'Confirm Reschedule';
+    btn.disabled = false; btn.textContent = 'Send Request';
   }
+}
+
+function closeRescheduleModal() {
+  document.getElementById('rescheduleModal').classList.remove('open');
+  // Reset state for next open
+  document.getElementById('rescheduleRequestSuccess').style.display = 'none';
+  document.getElementById('rescheduleBtns').style.display = '';
+  const btn = document.getElementById('confirmRescheduleBtn');
+  btn.disabled = true; btn.textContent = 'Send Request';
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -2551,6 +2562,11 @@ function openExtraMowModal() {
 }
 function closeExtraMowModal() {
   document.getElementById('extraMowModal').classList.remove('open');
+  // Reset state for next open
+  document.getElementById('extraMowRequestSuccess').style.display = 'none';
+  document.getElementById('extraMowBtns').style.display = '';
+  const btn = document.getElementById('confirmExtraMowBtn');
+  btn.disabled = true; btn.textContent = 'Send Request';
 }
 function updateExtraMowBtn() {
   document.getElementById('confirmExtraMowBtn').disabled = !document.getElementById('extraMowDate').value;
@@ -2562,32 +2578,28 @@ async function submitExtraMow() {
   const date = document.getElementById('extraMowDate').value;
   if (!date) return;
   const btn = document.getElementById('confirmExtraMowBtn');
-  btn.disabled = true; btn.textContent = 'Saving…';
+  btn.disabled = true; btn.textContent = 'Sending…';
   document.getElementById('extraMowError').style.display = 'none';
   try {
     const data = await apiGet({
-      action:       'portal_extra_mow',
+      action:       'portal_request_extra_mow',
       sessionToken: session.token,
       date,
     });
     if (data.success) {
-      closeExtraMowModal();
-      await loadProfile(session.token);
-    } else if (data.conflictDetected) {
-      // Hand off to conflict modal — remember we're in extra-mow mode
-      closeExtraMowModal();
-      _conflictMode        = 'extra_mow';
-      _conflictExtraMowDate = date;
-      openConflictModal(data);
+      // Show success, hide buttons
+      document.getElementById('extraMowRequestSuccess').style.display = 'block';
+      document.getElementById('extraMowBtns').style.display = 'none';
+      setTimeout(() => closeExtraMowModal(), 3000);
     } else {
-      document.getElementById('extraMowError').textContent = data.error || 'Could not schedule extra mow.';
+      document.getElementById('extraMowError').textContent = data.error || 'Could not send request.';
       document.getElementById('extraMowError').style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Send Request';
     }
   } catch(err) {
     document.getElementById('extraMowError').textContent = 'Error: ' + err.message;
     document.getElementById('extraMowError').style.display = 'block';
-  } finally {
-    btn.disabled = false; btn.textContent = 'Schedule Extra Mow';
+    btn.disabled = false; btn.textContent = 'Send Request';
   }
 }
 
