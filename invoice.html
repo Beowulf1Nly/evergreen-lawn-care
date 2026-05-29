@@ -626,6 +626,77 @@
     /* Keep dropdown anchored to right side even on mobile */
     .cust-dropdown { right:auto; left:0; min-width:220px; }
   }
+  /* ── HISTORY TAB ── */
+  .hist-list { display:flex; flex-direction:column; gap:10px; }
+  .hist-item {
+    background:#fff; border:1.5px solid var(--border); border-radius:14px;
+    padding:16px 18px; cursor:pointer; transition:box-shadow .15s, border-color .15s;
+    display:flex; align-items:center; gap:14px;
+  }
+  .hist-item:hover { box-shadow:0 4px 16px rgba(0,0,0,.09); border-color:var(--green-mid); }
+  .hist-item-avatar {
+    width:42px; height:42px; border-radius:50%; background:var(--green-light);
+    display:flex; align-items:center; justify-content:center;
+    font-size:18px; flex-shrink:0;
+  }
+  .hist-item-main { flex:1; min-width:0; }
+  .hist-item-name { font-size:15px; font-weight:700; color:var(--green-deep); }
+  .hist-item-meta { font-size:12px; color:var(--text-muted); margin-top:2px; }
+  .hist-item-right { display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0; }
+  .hist-status-done   { background:#dcfce7; color:#15803d; border:1px solid #bbf7d0; font-size:11px; font-weight:700; padding:2px 9px; border-radius:20px; }
+  .hist-status-issue  { background:#fef9c3; color:#92400e; border:1px solid #fde68a; font-size:11px; font-weight:700; padding:2px 9px; border-radius:20px; }
+  .hist-photo-count { font-size:11px; color:var(--text-muted); }
+  /* Detail overlay */
+  .hist-detail-overlay {
+    position:fixed; inset:0; background:#f4f7f4; z-index:3000;
+    overflow-y:auto; display:none; animation:slideInUp .22s ease;
+  }
+  .hist-detail-overlay.open { display:block; }
+  @keyframes slideInUp { from { transform:translateY(30px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+  .hist-detail-header {
+    position:sticky; top:0; background:#fff; border-bottom:1.5px solid var(--border);
+    display:flex; align-items:center; gap:12px; padding:14px 20px; z-index:10;
+  }
+  .hist-back-btn {
+    background:none; border:none; font-size:22px; cursor:pointer;
+    color:var(--green-deep); padding:0; line-height:1;
+  }
+  .hist-detail-title { font-size:17px; font-weight:700; color:var(--green-deep); flex:1; }
+  .hist-detail-body { max-width:680px; margin:0 auto; padding:24px 16px 60px; }
+  .hist-card {
+    background:#fff; border:1.5px solid var(--border); border-radius:14px;
+    padding:20px 22px; margin-bottom:16px;
+    box-shadow:0 1px 8px rgba(0,0,0,.04);
+  }
+  .hist-card-title {
+    font-size:13px; font-weight:700; color:var(--text-muted); text-transform:uppercase;
+    letter-spacing:.05em; margin-bottom:12px;
+  }
+  .hist-row { display:flex; gap:8px; margin-bottom:8px; font-size:14px; }
+  .hist-row:last-child { margin-bottom:0; }
+  .hist-row-label { color:var(--text-muted); min-width:110px; flex-shrink:0; }
+  .hist-row-val { color:var(--text); font-weight:500; }
+  .hist-notes-box {
+    background:#f8faf8; border:1.5px solid var(--border); border-radius:10px;
+    padding:12px 14px; font-size:13px; color:var(--text); line-height:1.6;
+    white-space:pre-wrap; word-break:break-word;
+  }
+  .hist-photo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; }
+  .hist-photo-thumb {
+    aspect-ratio:1; border-radius:10px; overflow:hidden;
+    border:1.5px solid var(--border); background:#f1f5f9;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .hist-photo-thumb img { width:100%; height:100%; object-fit:cover; }
+  .hist-photo-link { font-size:12px; color:var(--green-mid); text-decoration:none; font-weight:600; }
+  .hist-empty { text-align:center; padding:48px 20px; color:var(--text-muted); font-size:15px; }
+  .hist-search-bar { display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+  .hist-search-input {
+    flex:1; min-width:160px; padding:9px 14px; border:1.5px solid var(--border);
+    border-radius:10px; font-size:14px; font-family:inherit; outline:none;
+    background:#fff; transition:border .2s;
+  }
+  .hist-search-input:focus { border-color:var(--green-mid); }
 </style>
 </head>
 <body>
@@ -678,6 +749,7 @@
     <button class="tab-btn owner-only" onclick="showTab('stats')" data-tab="stats">📊 Stats</button>
     <button class="tab-btn owner-only" onclick="showTab('analytics')" data-tab="analytics">📈 Analytics</button>
     <button class="tab-btn owner-only" onclick="showTab('config')" data-tab="config">⚙️ Config</button>
+    <button class="tab-btn owner-only" onclick="showTab('history')" data-tab="history">🗂️ History</button>
   </div>
 
   <!-- ── JOBS TAB ── -->
@@ -941,6 +1013,37 @@
 
       <div style="margin-top:20px;font-size:12px;color:var(--text-muted);">Settings are stored in your browser's local storage and only affect this device.</div>
     </div>
+  </div>
+
+  <!-- ── HISTORY TAB (owner only) ── -->
+  <div id="pane-history" class="tab-pane">
+    <div class="container" style="max-width:700px;padding-bottom:60px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+        <div>
+          <div style="font-size:22px;font-weight:800;color:var(--green-deep);">🗂️ Job History</div>
+          <div style="font-size:13px;color:var(--text-muted);margin-top:2px;" id="histCount"></div>
+        </div>
+        <select id="histCrewFilter" onchange="renderHistoryList()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;background:#fff;font-family:inherit;">
+          <option value="all">👥 All Crews</option>
+          <option value="A">🔵 Crew A</option>
+          <option value="B">🩷 Crew B</option>
+        </select>
+      </div>
+      <div class="hist-search-bar">
+        <input type="text" id="histSearch" class="hist-search-input" placeholder="🔍 Search by name, address, service…" oninput="renderHistoryList()">
+      </div>
+      <div id="histList" class="hist-list"></div>
+    </div>
+  </div>
+
+  <!-- ── HISTORY DETAIL OVERLAY ── -->
+  <div id="histDetailOverlay" class="hist-detail-overlay">
+    <div class="hist-detail-header">
+      <button class="hist-back-btn" onclick="closeHistoryDetail()">←</button>
+      <div class="hist-detail-title" id="histDetailTitle"></div>
+      <div id="histDetailStatus"></div>
+    </div>
+    <div class="hist-detail-body" id="histDetailBody"></div>
   </div>
 
   <!-- ── ROUTE TAB (owner only) ── -->
@@ -1807,6 +1910,7 @@ function showTab(tab) {
   if (tab === 'quote')     { qtInit(); qtSetupForRole(); }
   if (tab === 'job')       { jobInit(); }
   if (tab === 'config')    { initConfigTab(); }
+  if (tab === 'history')   { initHistoryTab(); }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -6256,9 +6360,9 @@ function getZoneDayHint(zip, resolvedZone) {
   return days.length ? days.join('/') : '';
 }
 
-// ═══════════════════════════════════════════════════════
+// =======================================================
 // CREW ASSIGNMENT
-// ═══════════════════════════════════════════════════════
+// =======================================================
 async function assignCrew(rowIdx, crew) {
   const b = allBookings[rowIdx];
   if (!b) return;
@@ -6266,30 +6370,39 @@ async function assignCrew(rowIdx, crew) {
     const params = new URLSearchParams({
       action:   'set_crew',
       rowIndex: (rowIdx + 2).toString(),
-      crew:     crew,
+      crew,
       adminToken,
     });
     const res  = await fetch(SCRIPT_URL + '?' + params);
     const data = await res.json();
     if (data.success) {
       allBookings[rowIdx].crew = crew;
-      showToast(crew ? '🔵 Crew ' + crew + ' assigned' : 'Crew unassigned');
+      showToast(crew ? 'Crew ' + crew + ' assigned' : 'Crew unassigned');
       renderBookings();
     } else {
-      showToast('⚠️ Could not save crew: ' + (data.error || 'error'));
+      showToast('Could not save crew: ' + (data.error || 'error'));
     }
   } catch(err) {
-    showToast('⚠️ Network error saving crew');
+    showToast('Network error saving crew');
   }
 }
 
-// ═══════════════════════════════════════════════════════
+// =======================================================
 // JOB TIME SETTING
-// ═══════════════════════════════════════════════════════
+// =======================================================
+// =======================================================
+// CREW ASSIGNMENT
+// =======================================================
+
+}
+
+// =======================================================
+// JOB TIME SETTING
+// =======================================================
 let _jobTimeSaveTimer = null;
 async function setJobTime(rowIdx, time) {
   const b = allBookings[rowIdx];
-  if (!b || String(b.jobTime || '') === time) return; // no change
+  if (!b || String(b.jobTime || '') === time) return;
   clearTimeout(_jobTimeSaveTimer);
   _jobTimeSaveTimer = setTimeout(async () => {
     try {
@@ -6313,38 +6426,191 @@ async function setJobTime(rowIdx, time) {
   }, 600);
 }
 
-// ═══════════════════════════════════════════════════════
-// PHOTO UPLOAD (employees & owners)
-// ═══════════════════════════════════════════════════════
+// =======================================================
+// HISTORY TAB
+// =======================================================
+function initHistoryTab() {
+  renderHistoryList();
+}
+
+function _histIsDone(b) {
+  const d = String(b.done || '');
+  return d.length > 0;
+}
+
+function _histStatusLabel(b) {
+  const d = String(b.done || '').toLowerCase();
+  if (d.includes('issue')) return 'issue';
+  return 'done';
+}
+
+function renderHistoryList() {
+  const listEl  = document.getElementById('histList');
+  const countEl = document.getElementById('histCount');
+  if (!listEl) return;
+
+  const q    = (document.getElementById('histSearch')?.value || '').toLowerCase();
+  const crew = document.getElementById('histCrewFilter')?.value || 'all';
+
+  let jobs = (allBookings || [])
+    .map((b, i) => ({ b, i }))
+    .filter(({ b }) => _histIsDone(b) && !b.rowCancelled)
+    .filter(({ b }) => crew === 'all' || (b.crew || '') === crew)
+    .filter(({ b }) => {
+      if (!q) return true;
+      return [b.name, b.address, b.service, b.crew, b.markedBy].some(v =>
+        String(v || '').toLowerCase().includes(q));
+    })
+    .sort((a, b) => {
+      const da = a.b.serviceDate || a.b.serviceDateRaw || '';
+      const db = b.b.serviceDate || b.b.serviceDateRaw || '';
+      return db.localeCompare(da);
+    });
+
+  if (countEl) countEl.textContent = jobs.length + ' completed job' + (jobs.length !== 1 ? 's' : '');
+
+  if (!jobs.length) {
+    listEl.innerHTML = '<div class="hist-empty">No completed jobs found.</div>';
+    return;
+  }
+
+  listEl.innerHTML = jobs.map(({ b, i }) => {
+    const status = _histStatusLabel(b);
+    const badge  = status === 'issue'
+      ? '<span class="hist-status-issue">⚠️ Issue</span>'
+      : '<span class="hist-status-done">✓ Done</span>';
+    const photos = (b.photos || '').split(',').filter(u => u.trim()).length;
+    const photoChip = photos ? '<div class="hist-photo-count">📷 ' + photos + ' photo' + (photos > 1 ? 's' : '') + '</div>' : '';
+    const crewBadge = b.crew ? crewBadgeHTML(b.crew) : '';
+    const zoneBadge = zoneBadgeHTML(b.zip, b.zone);
+    const dateStr = displayDate(b.serviceDate || b.serviceDateRaw) || '—';
+    const svc    = esc(b.service || '—');
+    return '<div class="hist-item" onclick="openHistoryDetail(' + i + ')">' +
+      '<div class="hist-item-avatar">🌿</div>' +
+      '<div class="hist-item-main">' +
+        '<div class="hist-item-name">' + esc(b.name || 'Unknown') + '</div>' +
+        '<div class="hist-item-meta">' + dateStr + ' &nbsp;&middot;&nbsp; ' + svc +
+          (b.address ? ' &nbsp;&middot;&nbsp; ' + esc(b.address) : '') + '</div>' +
+        '<div style="display:flex;gap:6px;margin-top:5px;flex-wrap:wrap;">' + crewBadge + zoneBadge + '</div>' +
+      '</div>' +
+      '<div class="hist-item-right">' + badge + photoChip + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function openHistoryDetail(rowIdx) {
+  const b = allBookings[rowIdx];
+  if (!b) return;
+  const overlay = document.getElementById('histDetailOverlay');
+  document.getElementById('histDetailTitle').textContent = b.name || 'Job Detail';
+  const status = _histStatusLabel(b);
+  document.getElementById('histDetailStatus').innerHTML = status === 'issue'
+    ? '<span class="hist-status-issue">⚠️ Issue</span>'
+    : '<span class="hist-status-done">✓ Done</span>';
+  document.getElementById('histDetailBody').innerHTML = buildHistDetailHTML(b);
+  overlay.classList.add('open');
+  overlay.scrollTop = 0;
+}
+
+function closeHistoryDetail() {
+  document.getElementById('histDetailOverlay').classList.remove('open');
+}
+
+function buildHistDetailHTML(b) {
+  function row(label, val) {
+    if (!val) return '';
+    return '<div class="hist-row"><div class="hist-row-label">' + label + '</div><div class="hist-row-val">' + val + '</div></div>';
+  }
+  function card(title, content) {
+    return '<div class="hist-card"><div class="hist-card-title">' + title + '</div>' + content + '</div>';
+  }
+
+  const doneRaw   = String(b.done || '');
+  const doneClean = doneRaw.replace(/^[✓✔]\s*Done\s*[—\-]?\s*/i, '').trim();
+  const cashFlag  = isCash(b);
+  const payLabel  = cashFlag ? '💵 Cash' : '💳 Card';
+
+  const photoUrls = (b.photos || '').split(',').map(u => u.trim()).filter(Boolean);
+  let photosHTML;
+  if (photoUrls.length) {
+    photosHTML = '<div class="hist-photo-grid">' + photoUrls.map(url => {
+      const m = url.match(/\/d\/([^\/\?]+)/);
+      const thumb = m ? 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w400' : url;
+      return '<a href="' + url + '" target="_blank" class="hist-photo-thumb">' +
+        '<img src="' + thumb + '" onerror="this.parentElement.innerHTML=\'<span style=\\\"font-size:28px\\\">&#128247;</span>\'">' +
+        '</a>';
+    }).join('') + '</div>';
+  } else {
+    photosHTML = '<div style="color:var(--text-muted);font-size:13px;">No photos attached to this job.</div>';
+  }
+
+  const crewName = !b.crew ? '' :
+    b.crew === 'A' ? ((cfgData && cfgData.crewNames && cfgData.crewNames.A) || 'Crew A') :
+    b.crew === 'B' ? ((cfgData && cfgData.crewNames && cfgData.crewNames.B) || 'Crew B') : b.crew;
+
+  return [
+    card('👤 Customer', [
+      row('Name',    esc(b.name || '')),
+      row('Phone',   b.phone ? '<a href="tel:' + esc(b.phone) + '">' + esc(b.phone) + '</a>' : ''),
+      row('Email',   b.email ? '<a href="mailto:' + esc(b.email) + '">' + esc(b.email) + '</a>' : ''),
+      row('Address', esc(b.address || '')),
+    ].join('')),
+    card('🛠️ Job Details', [
+      row('Service',   esc(b.service || '')),
+      row('Date',      esc(displayDate(b.serviceDate || b.serviceDateRaw) || '')),
+      row('Time',      esc(b.jobTime || '')),
+      row('Frequency', esc(b.frequency || '')),
+      row('Price',     esc(String(b.price || ''))),
+      row('Zone',      esc(b.zone || getZoneFromZip(b.zip) || '')),
+      row('Crew',      esc(crewName)),
+      row('Payment',   payLabel),
+    ].join('')),
+    b.notes && b.notes !== '(none)'
+      ? card('📝 Customer Notes', '<div class="hist-notes-box">' + esc(b.notes) + '</div>')
+      : '',
+    card('✓ Completion', [
+      row('Completed',  esc(doneClean || doneRaw)),
+      row('Marked by',  esc(b.markedBy || '')),
+    ].join('')),
+    card('📷 Photos', photosHTML),
+  ].join('');
+}
+
+// =======================================================
+// PHOTO UPLOAD
+// =======================================================
 let photoTargetRowIdx = null;
 let photoSelectedFile = null;
 
 function openPhotoUpload(rowIdx) {
   photoTargetRowIdx = rowIdx;
   photoSelectedFile = null;
-  document.getElementById('photoFileInput').value = '';
+  const inp = document.getElementById('photoFileInput');
+  if (inp) inp.value = '';
   document.getElementById('photoPreview').innerHTML = '';
   document.getElementById('photoUploadBtn').disabled = true;
   document.getElementById('photoError').style.display = 'none';
   document.getElementById('photoSuccess').style.display = 'none';
   const b = allBookings[rowIdx];
   document.getElementById('photoModalSub').textContent =
-    (b ? (b.name || '—') + ' · ' + (displayDate(b.serviceDate || b.serviceDateRaw) || '—') : '');
+    b ? (b.name || '—') + ' · ' + (displayDate(b.serviceDate || b.serviceDateRaw) || '—') : '';
   document.getElementById('photoModal').classList.add('open');
 }
 
 function closePhotoModal() {
   document.getElementById('photoModal').classList.remove('open');
+  photoTargetRowIdx = null;
+  photoSelectedFile = null;
 }
 
-function handlePhotoSelected() {
-  const file = document.getElementById('photoFileInput').files[0];
+function handlePhotoSelected(input) {
+  const file = input.files[0];
   if (!file) return;
   photoSelectedFile = file;
   const reader = new FileReader();
   reader.onload = e => {
     document.getElementById('photoPreview').innerHTML =
-      `<img src="${e.target.result}" style="max-width:100%;border-radius:8px;margin-top:12px;box-shadow:0 2px 8px rgba(0,0,0,.12);">`;
+      '<img src="' + e.target.result + '" style="max-width:100%;max-height:200px;border-radius:10px;margin-top:10px;">';
   };
   reader.readAsDataURL(file);
   document.getElementById('photoUploadBtn').disabled = false;
@@ -6352,51 +6618,62 @@ function handlePhotoSelected() {
 
 async function uploadPhoto() {
   if (!photoSelectedFile || photoTargetRowIdx === null) return;
-  const btn = document.getElementById('photoUploadBtn');
-  btn.disabled = true; btn.textContent = '⏳ Uploading…';
-  document.getElementById('photoError').style.display = 'none';
-  try {
-    const b = allBookings[photoTargetRowIdx];
-    const reader = new FileReader();
-    reader.onload = async e => {
-      try {
-        const base64 = e.target.result.split(',')[1];
-        const body = JSON.stringify({
-          action:   'upload_job_photo',
-          adminToken,
-          rowIndex: b._rowIndex || (photoTargetRowIdx + 2),
-          fileName: photoSelectedFile.name,
-          mimeType: photoSelectedFile.type || 'image/jpeg',
-          base64Data: base64,
-          jobLabel: (b.name || '') + ' — ' + (displayDate(b.serviceDate || b.serviceDateRaw) || ''),
-          markedBy: adminName || adminEmail || 'Staff',
-        });
-        const res  = await fetch(SCRIPT_URL, { method: 'POST', body });
-        const data = await res.json();
-        if (data.success) {
-          document.getElementById('photoSuccess').style.display = 'block';
-          btn.textContent = '✅ Uploaded!';
-          setTimeout(() => closePhotoModal(), 2000);
-        } else {
-          throw new Error(data.error || 'Upload failed');
+  const btn   = document.getElementById('photoUploadBtn');
+  const errEl = document.getElementById('photoError');
+  const sucEl = document.getElementById('photoSuccess');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+  errEl.style.display = 'none'; sucEl.style.display = 'none';
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const base64 = e.target.result.split(',')[1];
+      const b      = allBookings[photoTargetRowIdx];
+      const body   = JSON.stringify({
+        action:     'upload_job_photo',
+        base64Data: base64,
+        fileName:   photoSelectedFile.name,
+        mimeType:   photoSelectedFile.type,
+        rowIndex:   (photoTargetRowIdx + 2),
+        jobLabel:   b ? (b.name || '') + ' — ' + (displayDate(b.serviceDate || b.serviceDateRaw) || '') : '',
+        markedBy:   adminName || adminEmail || 'Staff',
+        adminToken,
+      });
+      const res  = await fetch(SCRIPT_URL, { method: 'POST', body });
+      const data = await res.json();
+      if (data.success) {
+        if (data.fileUrl && b) {
+          b.photos = [b.photos, data.fileUrl].filter(Boolean).join(',');
         }
-      } catch(err) {
-        document.getElementById('photoError').textContent = 'Error: ' + err.message;
-        document.getElementById('photoError').style.display = 'block';
-        btn.disabled = false; btn.textContent = '📤 Upload Photo';
+        sucEl.textContent = '✅ Photo uploaded!';
+        sucEl.style.display = 'block';
+        btn.textContent = '✅ Done';
+        setTimeout(() => closePhotoModal(), 2000);
+      } else {
+        errEl.textContent = '❌ ' + (data.error || 'Upload failed');
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = '📷 Upload Photo';
       }
-    };
-    reader.readAsDataURL(photoSelectedFile);
-  } catch(err) {
-    document.getElementById('photoError').textContent = 'Error: ' + err.message;
-    document.getElementById('photoError').style.display = 'block';
-    btn.disabled = false; btn.textContent = '📤 Upload Photo';
-  }
+    } catch(err2) {
+      errEl.textContent = '❌ ' + err2.message;
+      errEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = '📷 Upload Photo';
+    }
+  };
+  reader.readAsDataURL(photoSelectedFile);
 }
 
 </script>
 
-<!-- ══ PHOTO UPLOAD MODAL ══ -->
+<!-- NOTES POPUP -->
+<div id="notesOverlay" class="notes-overlay" onclick="if(event.target===this)closeNotesPopup()">
+  <div class="notes-popup">
+    <div class="notes-popup-title" id="notesPopupTitle">Notes</div>
+    <div class="notes-popup-body"  id="notesPopupBody"></div>
+    <button class="notes-popup-close" onclick="closeNotesPopup()">Close</button>
+  </div>
+</div>
+
+<!-- PHOTO UPLOAD MODAL -->
 <div class="modal-overlay" id="photoModal" onclick="if(event.target===this)closePhotoModal()">
   <div class="modal" style="max-width:420px;">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
@@ -6406,7 +6683,6 @@ async function uploadPhoto() {
       </div>
       <button onclick="closePhotoModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-muted);line-height:1;padding:0;">✕</button>
     </div>
-
     <div style="border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center;background:#f8faf8;cursor:pointer;margin-bottom:10px;"
          onclick="document.getElementById('photoFileInput').click()">
       <input type="file" id="photoFileInput" accept="image/*"
@@ -6415,15 +6691,9 @@ async function uploadPhoto() {
       <div style="font-size:14px;font-weight:600;color:var(--green-deep);margin-bottom:4px;">Tap to choose or take a photo</div>
       <div style="font-size:12px;color:var(--text-muted);">JPG, PNG, HEIC — max 10 MB</div>
     </div>
-
     <div id="photoPreview" style="margin-bottom:8px;"></div>
-
-    <div id="photoSuccess" style="display:none;background:#f0fdf4;border:1.5px solid #86efac;
-         border-radius:10px;padding:12px 16px;font-size:14px;color:#15803d;font-weight:600;margin-top:10px;">
-      ✅ Photo uploaded and sent to owner!
-    </div>
+    <div id="photoSuccess" style="display:none;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:12px 16px;font-size:14px;color:#15803d;font-weight:600;margin-top:10px;"></div>
     <div id="photoError" style="display:none;color:#dc2626;font-size:13px;font-weight:600;margin-top:10px;"></div>
-
     <div style="display:flex;gap:10px;margin-top:16px;">
       <button id="photoUploadBtn" class="btn-action btn-done" style="flex:1;"
               onclick="uploadPhoto()" disabled>📷 Upload Photo</button>
