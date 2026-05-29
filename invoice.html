@@ -1933,6 +1933,19 @@ let confirmCallback = null;
 // ═══════════════════════════════════════════════════════
 // STARTUP — restore session from localStorage
 // ═══════════════════════════════════════════════════════
+// Fire API fetches AFTER the browser marks page fully loaded.
+// This stops the tab spinner before any network requests start.
+window.addEventListener('load', () => {
+  const saved = loadSavedSession();
+  if (saved) {
+    adminToken = adminToken || saved.token;
+    adminName  = adminName  || saved.name;
+    adminEmail = adminEmail || saved.email;
+    adminRole  = adminRole  || saved.role || 'employee';
+    if (adminToken) loadBookings(); // customers load lazily
+  }
+});
+
 window.addEventListener('DOMContentLoaded', () => {
   const saved = loadSavedSession();
   if (saved) {
@@ -1941,8 +1954,11 @@ window.addEventListener('DOMContentLoaded', () => {
     adminEmail = saved.email;
     adminRole  = saved.role || 'employee';
     showApp();
-    // Load bookings first, then customers in background so notes show on job cards
-    loadBookings(); // customers load lazily when Customers tab is opened
+    // Show cached data instantly — real data fetches fire after window.load
+    const _bkCachedEarly = sessionStorage.getItem('evg_bookings_cache');
+    if (_bkCachedEarly) {
+      try { allBookings = JSON.parse(_bkCachedEarly); renderBookings(); } catch(e) {}
+    }
   }
 
   // Pre-fill add-client date to today
@@ -6550,7 +6566,7 @@ const ZONE_CITIES = {
   'Z7': { label:'Zone 7', cities:'Spring Hill / Pasco County',        zips:['34653','34654','34655','34667','34668','34669'] },
   'Z8': { label:'Zone 8', cities:'The Villages / Sumter County',      zips:['34785','34788','34762','32162','34737'] },
 };
-const DAYS_OF_WEEK = ['Mon','Tue','Wed','Thu','Fri','Sat'];
+const DAYS_OF_WEEK = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 let cfgData = null; // in-memory config; source of truth is Google Sheet "Schedule Config"
 
