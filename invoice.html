@@ -5969,28 +5969,18 @@ let _routeViewDates  = [];        // ordered list of dates in current saved/buil
 
 // ── Zip → Zone mapping for Citrus County service area ───────────────────
 const ZIP_ZONE = {
-  // Zone 1 — Crystal River / Yankeetown / Inglis (coast)
-  '34428':'Z1','34429':'Z1','34449':'Z1','34498':'Z1','34423':'Z1',
+  // Zone 1 — Crystal River
+  '34428':'Z1','34429':'Z1','34423':'Z1',
   // Zone 2 — Inverness / Floral City / Hernando
   '34450':'Z2','34451':'Z2','34452':'Z2','34453':'Z2','34436':'Z2','34442':'Z2',
-  // Zone 3 — Lecanto / Beverly Hills / Citrus Hills
-  '34460':'Z3','34461':'Z3','34464':'Z3','34465':'Z3','34446':'Z3',
-  // Zone 4 — Dunnellon / Holder / Rainbow Lakes / Citrus Springs
+  // Zone 3 — Lecanto / Beverly Hills / Homosassa
+  '34460':'Z3','34461':'Z3','34464':'Z3','34465':'Z3','34446':'Z3','34447':'Z3','34448':'Z3',
+  // Zone 4 — Dunnellon / Citrus Springs
   '34431':'Z4','34432':'Z4','34433':'Z4','34434':'Z4',
-  // Zone 4b — Chiefland / Morriston / Levy County (adjacent to Z4)
-  '32626':'Z4','32668':'Z4','32621':'Z4','32693':'Z4',
   // Zone 5 — Ocala / Marion County
   '34470':'Z5','34471':'Z5','34472':'Z5','34473':'Z5','34474':'Z5',
   '34475':'Z5','34476':'Z5','34479':'Z5','34480':'Z5','34481':'Z5',
-  '34482':'Z5','34491':'Z5','34488':'Z5','34489':'Z5','34492':'Z5',
-  '34478':'Z5','34483':'Z5',
-  // Zone 7 — Spring Hill / New Port Richey / Pasco County
-  '34653':'Z7','34654':'Z7','34655':'Z7','34667':'Z7','34668':'Z7',
-  '34669':'Z7','34690':'Z7','34691':'Z7',
-  '34638':'Z7','34639':'Z7','34610':'Z7',
-  // Zone 8 — Brooksville / Hernando County
-  '34601':'Z8','34602':'Z8','34604':'Z8','34606':'Z8','34608':'Z8','34609':'Z8',
-  '34613':'Z8','34614':'Z8',
+  '34482':'Z5','34491':'Z5','34488':'Z5','34489':'Z5',
 };
 
 function getZoneFromZip(zip) {
@@ -6902,13 +6892,11 @@ async function geocodeAddr(addr) {
 // CONFIG TAB — Zone/Crew/Day schedule settings
 // ═══════════════════════════════════════════════════════
 const ZONE_CITIES = {
-  'Z1': { label:'Zone 1', cities:'Crystal River, Inglis, Yankeetown', zips:['34428','34429','34449','34498','34423'] },
-  'Z2': { label:'Zone 2', cities:'Inverness, Floral City, Hernando',  zips:['34450','34451','34452','34453','34436','34442','34484'] },
-  'Z3': { label:'Zone 3', cities:'Lecanto, Beverly Hills, Citrus Hills', zips:['34460','34461','34464','34465','34446'] },
-  'Z4': { label:'Zone 4', cities:'Dunnellon, Holder, Citrus Springs, Chiefland', zips:['34431','34432','34433','34434','32626','32668','32621','32693'] },
-  'Z5': { label:'Zone 5', cities:'Ocala / Marion County',             zips:['34470','34471','34472','34473','34474','34475','34476','34479','34480','34481','34482','34491'] },
-  'Z7': { label:'Zone 7', cities:'Spring Hill / Pasco County',        zips:['34653','34654','34655','34667','34668','34669','34638','34639','34610'] },
-  'Z8': { label:'Zone 8', cities:'Brooksville / Hernando County',     zips:['34601','34602','34604','34606','34608','34609','34613','34614'] },
+  'Z1': { label:'Zone 1', cities:'Crystal River',                     zips:['34428','34429','34423'] },
+  'Z2': { label:'Zone 2', cities:'Inverness · Floral City · Hernando',zips:['34450','34451','34452','34453','34436','34442'] },
+  'Z3': { label:'Zone 3', cities:'Lecanto · Beverly Hills · Homosassa',zips:['34460','34461','34464','34465','34446','34447','34448'] },
+  'Z4': { label:'Zone 4', cities:'Dunnellon · Citrus Springs',        zips:['34431','34432','34433','34434'] },
+  'Z5': { label:'Zone 5', cities:'Ocala / Marion County',             zips:['34470','34471','34472','34473','34474','34475','34476','34479','34480','34481','34482','34491','34488','34489'] },
 };
 const DAYS_OF_WEEK = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
@@ -8362,20 +8350,20 @@ function _fillDispatchDetail(b, rowIdx) {
 
 // ── Zone Guide ────────────────────────────────────────────────────────────
 const ZONE_PAIRS = [
-  { day:'MON', dayFull:'Monday',    z1:{zone:'Z1',name:'Crystal River',   cities:'Inglis · Yankeetown'},               z2:{zone:'Z2',name:'Inverness',              cities:'Floral City · Hernando'},      drive:'~15 min between zones' },
-  { day:'TUE', dayFull:'Tuesday',   z1:{zone:'Z3',name:'Lecanto',         cities:'Beverly Hills · Homosassa'},         z2:{zone:'Z4',name:'Dunnellon / Citrus Springs', cities:'Holder · Chiefland', big:true}, drive:'~20 min between zones · Z4 is biggest' },
+  { day:'MON', dayFull:'Monday',    z1:{zone:'Z1',name:'Crystal River',   cities:''},                                  z2:{zone:'Z2',name:'Inverness',              cities:'Floral City · Hernando'},      drive:'~15 min between zones' },
+  { day:'TUE', dayFull:'Tuesday',   z1:{zone:'Z3',name:'Lecanto',         cities:'Beverly Hills · Homosassa'},         z2:{zone:'Z4',name:'Dunnellon',              cities:'Citrus Springs'},              drive:'~20 min between zones' },
   { day:'WED', dayFull:'Wednesday', z1:{zone:'Z5',name:'Ocala',           cities:'Marion County'},                     z2:null },
-  { day:'THU', dayFull:'Thursday',  z1:{zone:'Z7',name:'Spring Hill',     cities:'Pasco County'},                      z2:{zone:'Z8',name:'Brooksville',            cities:'Hernando County'},             drive:'~20 min between zones' },
+  { day:'THU', dayFull:'Thursday',  flex:true },
   { day:'FRI', dayFull:'Friday',    flex:true },
 ];
 const ZONE_SCHEDULE = [
-  { day:'MON', dayFull:'Monday',    crewA:{zone:'Z1',name:'Crystal River',         cities:'Inglis · Yankeetown'},         crewB:{zone:'Z5',name:'Ocala',             cities:'Marion County'} },
-  { day:'TUE', dayFull:'Tuesday',   crewA:{zone:'Z2',name:'Inverness',             cities:'Floral City · Hernando'},       crewB:{zone:'Z5',name:'Ocala',             cities:'Marion County'} },
-  { day:'WED', dayFull:'Wednesday', crewA:{zone:'Z3',name:'Lecanto',               cities:'Beverly Hills · Homosassa'},    crewB:{zone:'Z7',name:'Spring Hill',       cities:'Pasco County'} },
-  { day:'THU', dayFull:'Thursday',  crewA:{zone:'Z4 ⭐',name:'Dunnellon / Citrus Springs',cities:'Holder · Chiefland — day 1',big:true}, crewB:{zone:'Z8',name:'Brooksville',cities:'Hernando County'} },
-  { day:'FRI', dayFull:'Friday',    crewA:{zone:'Z4 ⭐',name:'Dunnellon / Citrus Springs',cities:'Holder · Chiefland — day 2',big:true}, crewB:null },
+  { day:'MON', dayFull:'Monday',    crewA:{zone:'Z1',name:'Crystal River',  cities:''},                                  crewB:{zone:'Z5',name:'Ocala',        cities:'Marion County'} },
+  { day:'TUE', dayFull:'Tuesday',   crewA:{zone:'Z2',name:'Inverness',      cities:'Floral City · Hernando'},            crewB:{zone:'Z5',name:'Ocala',        cities:'Marion County — cont.'} },
+  { day:'WED', dayFull:'Wednesday', crewA:{zone:'Z3',name:'Lecanto',        cities:'Beverly Hills · Homosassa'},         crewB:null },
+  { day:'THU', dayFull:'Thursday',  crewA:{zone:'Z4',name:'Dunnellon',      cities:'Citrus Springs'},                    crewB:null },
+  { day:'FRI', dayFull:'Friday',    crewA:{zone:'Overflow',name:'Catch-up', cities:'Biweeklies + any zone overflow'},    crewB:null },
   { day:'SAT', dayFull:'Saturday',  crewA:null, crewB:{zone:'Overflow',name:'Catch-up / Biweeklies',cities:'Any zone with pending work',weekend:true} },
-  { day:'SUN', dayFull:'Sunday',    crewA:null, crewB:{zone:'Buffer',name:'Catch-up / Rest',cities:'Finish anything outstanding',weekend:true} },
+  { day:'SUN', dayFull:'Sunday',    crewA:null, crewB:{zone:'Buffer',name:'Rest / Buffer',cities:'Finish anything outstanding',weekend:true} },
 ];
 let _zgTab = 'current';
 
