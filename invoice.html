@@ -8350,11 +8350,13 @@ function _fillDispatchDetail(b, rowIdx) {
 
 // ── Zone Guide ────────────────────────────────────────────────────────────
 const ZONE_PAIRS = [
-  { day:'MON', dayFull:'Monday',    z1:{zone:'Z1',name:'Crystal River',   cities:''},                                  z2:{zone:'Z2',name:'Inverness',              cities:'Floral City · Hernando'},      drive:'~15 min between zones' },
-  { day:'TUE', dayFull:'Tuesday',   z1:{zone:'Z3',name:'Lecanto',         cities:'Beverly Hills · Homosassa'},         z2:{zone:'Z4',name:'Dunnellon',              cities:'Citrus Springs'},              drive:'~20 min between zones' },
-  { day:'WED', dayFull:'Wednesday', z1:{zone:'Z5',name:'Ocala',           cities:'Marion County'},                     z2:null },
-  { day:'THU', dayFull:'Thursday',  flex:true },
-  { day:'FRI', dayFull:'Friday',    flex:true },
+  { day:'MON', dayFull:'Monday',    z1:{zone:'Z1',name:'Crystal River',                    cities:''},                                    backup:{zone:'Z2',name:'Inverness',              cities:'Floral City · Hernando',   note:'~15 min away'} },
+  { day:'TUE', dayFull:'Tuesday',   z1:{zone:'Z3',name:'Lecanto · Beverly Hills · Homosassa', cities:''},                                 backup:{zone:'Z4',name:'Dunnellon',              cities:'Citrus Springs',           note:'~10 min away'} },
+  { day:'WED', dayFull:'Wednesday', z1:{zone:'Z5',name:'Ocala',                            cities:'Marion County'},                        backup:{zone:'Z4',name:'Dunnellon',              cities:'Citrus Springs',           note:'~30 min away'} },
+  { day:'THU', dayFull:'Thursday',  z1:{zone:'Z2',name:'Inverness · Floral City · Hernando', cities:''},                                  backup:{zone:'Z3',name:'Lecanto',                cities:'Beverly Hills · Homosassa', note:'~15 min away'} },
+  { day:'FRI', dayFull:'Friday',    z1:{zone:'Z4',name:'Dunnellon · Citrus Springs',       cities:''},                                    backup:{zone:'Z5',name:'Ocala',                  cities:'Marion County',            note:'~30 min away'} },
+  { day:'SAT', dayFull:'Saturday',  catchup:true },
+  { day:'SUN', dayFull:'Sunday',    holy:true },
 ];
 const ZONE_SCHEDULE = [
   { day:'MON', dayFull:'Monday',    crewA:{zone:'Z1',name:'Crystal River',  cities:''},                                  crewB:{zone:'Z5',name:'Ocala',        cities:'Marion County'} },
@@ -8417,32 +8419,37 @@ function renderZoneGuide() {
   if (isCurrent) {
     body.innerHTML = `<thead><tr>
       <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;width:70px;">Day</th>
-      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">Zone 1 — Start here</th>
-      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">Zone 2 — Roll into next</th>
+      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">Primary Zone</th>
+      <th style="background:#4a6741;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">Backup Zone <span style="font-weight:400;font-size:10px;opacity:.8;">(overflow only)</span></th>
     </tr></thead><tbody>${ZONE_PAIRS.map(row => {
-      if (row.flex) return `<tr>
-        <td style="padding:10px 12px;background:#f0f6ff;border:1px solid #e2e8f0;text-align:center;font-size:12px;font-weight:700;color:#2a50a0;">FRI<br><span style="font-size:10px;font-weight:400;color:#9ca3af;">Friday</span></td>
-        <td colspan="2" style="padding:12px 16px;background:#f0f6ff;border:1px solid #e2e8f0;color:#374151;font-size:13px;"><strong>Flex / Overflow day</strong> — all 8 zones done Mon–Thu. Use for biweekly customers, Z4 overflow, or any zone that ran long.</td>
+      if (row.catchup) return `<tr>
+        <td style="padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;text-align:center;font-size:12px;font-weight:700;color:#92400e;">SAT<br><span style="font-size:10px;font-weight:400;color:#b45309;">Saturday</span></td>
+        <td colspan="2" style="padding:13px 16px;background:#fffbeb;border:1px solid #fde68a;font-size:13px;color:#78350f;">
+          🔄 <strong>Catch-up day</strong> — biweekly customers, anything that ran long during the week, overflow from any zone.
+        </td>
       </tr>`;
-      const z2Cell = row.z2
-        ? `<td style="padding:10px 14px;background:${row.z2.big?'#fff7f0':'#f8fbff'};border:1px solid #e2e8f0;text-align:center;">
-             <div style="display:inline-block;background:${row.z2.big?'#fde8d0':'#d0e8ff'};color:${row.z2.big?'#a04010':'#1a4080'};font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:4px;">${row.z2.zone}${row.z2.big?' ⭐':''}</div>
-             <div style="font-size:12px;font-weight:600;color:#1e293b;">${row.z2.name}</div>
-             <div style="font-size:10px;color:#64748b;margin-top:2px;">${row.z2.cities}</div>
-             <div style="font-size:10px;color:#2d6a2d;background:#e8f5e8;border-radius:20px;padding:1px 7px;margin-top:4px;display:inline-block;">${row.drive}</div>
-           </td>`
-        : `<td style="padding:10px 14px;background:#fafafa;border:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:12px;font-style:italic;">Full day — Z5 is large</td>`;
+      if (row.holy) return `<tr>
+        <td style="padding:10px 12px;background:#f5f3ff;border:1px solid #ddd6fe;text-align:center;font-size:12px;font-weight:700;color:#5b21b6;">SUN<br><span style="font-size:10px;font-weight:400;color:#7c3aed;">Sunday</span></td>
+        <td colspan="2" style="padding:13px 16px;background:#f5f3ff;border:1px solid #ddd6fe;font-size:13px;color:#4c1d95;">
+          🙏 <strong>Holy day — emergencies only.</strong> Do not schedule regular jobs on Sunday.
+        </td>
+      </tr>`;
       return `<tr>
         <td style="padding:10px 12px;background:#f8faf6;border:1px solid #e2e8f0;text-align:center;font-size:12px;font-weight:700;color:#374151;">${row.day}<br><span style="font-size:10px;font-weight:400;color:#9ca3af;">${row.dayFull}</span></td>
-        <td style="padding:10px 14px;background:#f8fbff;border:1px solid #e2e8f0;text-align:center;">
-          <div style="display:inline-block;background:#d0e8ff;color:#1a4080;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:4px;">${row.z1.zone}</div>
-          <div style="font-size:12px;font-weight:600;color:#1e293b;">${row.z1.name}</div>
-          <div style="font-size:10px;color:#64748b;margin-top:2px;">${row.z1.cities}</div>
+        <td style="padding:10px 14px;background:#f0f7f0;border:1px solid #e2e8f0;text-align:center;">
+          <div style="display:inline-block;background:#c8e6c9;color:#1b5e20;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:5px;">${row.z1.zone}</div>
+          <div style="font-size:13px;font-weight:700;color:#1e293b;">${row.z1.name}</div>
+          ${row.z1.cities ? `<div style="font-size:11px;font-weight:600;color:#2d6a2d;margin-top:3px;">${row.z1.cities}</div>` : ''}
         </td>
-        ${z2Cell}
+        <td style="padding:10px 14px;background:#fafafa;border:1px solid #e2e8f0;text-align:center;border-left:2px dashed #d1d5db;">
+          <div style="display:inline-block;background:#e5e7eb;color:#6b7280;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:4px;">${row.backup.zone}</div>
+          <div style="font-size:12px;font-weight:600;color:#6b7280;">${row.backup.name}</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:2px;">${row.backup.cities}</div>
+          <div style="font-size:10px;color:#6b7280;background:#f3f4f6;border-radius:20px;padding:1px 7px;margin-top:4px;display:inline-block;">${row.backup.note}</div>
+        </td>
       </tr>`;
     }).join('')}</tbody>`;
-    note.innerHTML = '<strong>How it works:</strong> Start the morning in Zone 1, knock out all jobs there, then drive to Zone 2 and finish the day. Each pair is chosen so Zone 2 is the closest neighbor — no criss-crossing the map.';
+    note.innerHTML = '<strong>Primary zone</strong> is the plan for each day. <strong>Backup zone</strong> is the closest neighbor — only use it if you genuinely need to overflow jobs onto that day. Saturday = catch-up. Sunday = emergencies only.';
   } else {
     body.innerHTML = `<thead><tr>
       <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;width:70px;">Day</th>
