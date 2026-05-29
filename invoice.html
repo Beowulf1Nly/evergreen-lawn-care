@@ -6012,12 +6012,16 @@ function saveRouteToStorage(customOrder, stats, dates) {
     const startTime = document.getElementById('routeStartTime')?.value || '08:00';
     const startAddr = (document.getElementById('routeStartAddr')?.value || '').trim();
     const serializable = {};
-    for (const [date, stops] of Object.entries(customOrder)) {
-      serializable[date] = (stops || []).map(s => ({
-        rowIndex: (allBookings || []).indexOf(s.bk),
-        distFromPrev: s.distFromPrev || 0,
-        geocodeFailed: !!s.geocodeFailed,
-      }));
+    for (const [date, crewStops] of Object.entries(customOrder)) {
+      // crewStops is either { A:[...], B:[...] } or legacy flat array
+      if (Array.isArray(crewStops)) {
+        serializable[date] = { _legacy: crewStops.map(s => ({ rowIndex:(allBookings||[]).indexOf(s.bk), distFromPrev:s.distFromPrev||0, geocodeFailed:!!s.geocodeFailed })) };
+      } else {
+        serializable[date] = {};
+        for (const [crew, stops] of Object.entries(crewStops)) {
+          serializable[date][crew] = (stops||[]).map(s => ({ rowIndex:(allBookings||[]).indexOf(s.bk), distFromPrev:s.distFromPrev||0, geocodeFailed:!!s.geocodeFailed }));
+        }
+      }
     }
     localStorage.setItem('eg_savedRoute', JSON.stringify({ serializable, stats, dates, startTime, startAddr, savedAt: Date.now() }));
     _savedRoute = { customOrder, stats, dates, startTime, startAddr };
@@ -6034,12 +6038,16 @@ function loadRouteFromStorage() {
     if (!data?.serializable || !data?.dates) return null;
     // Reconstruct customOrder using rowIndex pointers into allBookings
     const customOrder = {};
-    for (const [date, stops] of Object.entries(data.serializable)) {
-      customOrder[date] = stops.map(s => {
-        const bk = allBookings[s.rowIndex];
-        if (!bk) return null;
-        return { bk, distFromPrev: s.distFromPrev, geocodeFailed: !!s.geocodeFailed };
-      }).filter(Boolean);
+    for (const [date, crewData] of Object.entries(data.serializable)) {
+      customOrder[date] = {};
+      for (const [crew, stops] of Object.entries(crewData)) {
+        const realCrew = crew === '_legacy' ? 'all' : crew;
+        customOrder[date][realCrew] = (stops||[]).map(s => {
+          const bk = allBookings[s.rowIndex];
+          if (!bk) return null;
+          return { bk, distFromPrev: s.distFromPrev, geocodeFailed: !!s.geocodeFailed };
+        }).filter(Boolean);
+      }
     }
     return { customOrder, stats: data.stats, dates: data.dates, startTime: data.startTime, startAddr: data.startAddr, savedAt: data.savedAt };
   } catch(e) { return null; }
@@ -6191,29 +6199,27 @@ function matchesCrewFilter(b) {
 }
 
 // ── Reorder helpers ───────────────────────────────────────────────────────
-function moveRouteStop(dateStr, fromIdx, dir) {
-  const order = _routeCustomOrder[dateStr];
+function moveRouteStop(dateStr, crew, fromIdx, dir) {
+  const dayOrder = _routeCustomOrder[dateStr];
+  if (!dayOrder) return;
+  const order = Array.isArray(dayOrder) ? dayOrder : dayOrder[crew];
   if (!order) return;
   const toIdx = fromIdx + dir;
   if (toIdx < 0 || toIdx >= order.length) return;
   [order[fromIdx], order[toIdx]] = [order[toIdx], order[fromIdx]];
-  renderRouteDay(dateStr, order);
+  renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
 }
 
-function renderRouteDay(dateStr, orderedStops) {
-  const container = document.getElementById('routeDay_' + dateStr);
-  if (!container) return;
-  const startTime  = (document.getElementById('routeStartTime')?.value || '08:00');
-  const startVal   = (document.getElementById('routeStartAddr')?.value || '').trim();
-  const [startH, startM] = startTime.split(':').map(Number);
-  const [y, mo, d]   = dateStr.split('-').map(Number);
+// Build a single crew's stop list HTML
+function buildCrewStopsHtml(dateStr, crew, orderedStops, startTimeStr, startVal) {
+  const [startH, startM] = startTimeStr.split(':').map(Number);
+  const [y, mo, d] = dateStr.split('-').map(Number);
   const AVG_SPEED_MPH = 25;
   let cursor = new Date(y, mo - 1, d, startH, startM, 0, 0);
-
-  // Re-compute arrival times from scratch
   let html = '';
+
   if (startVal) {
-    html += `<div class="route-stop" style="margin-bottom:16px;">
+    html += `<div class="route-stop" style="margin-bottom:12px;">
       <div class="route-stop-controls"></div>
       <div class="route-stop-badge" style="background:#374151;">🏠</div>
       <div class="route-stop-card" style="border-color:#e2e8f0;">
@@ -6230,10 +6236,10 @@ function renderRouteDay(dateStr, orderedStops) {
     const stop = orderedStops[i];
     const { bk, distFromPrev } = stop;
     const noGeo = !!stop.geocodeFailed;
-    const driveMin  = noGeo ? 0 : Math.round((distFromPrev / AVG_SPEED_MPH) * 60);
+    const driveMin = noGeo ? 0 : Math.round((distFromPrev / AVG_SPEED_MPH) * 60);
     if (!noGeo) cursor = new Date(cursor.getTime() + driveMin * 60000);
     const arrivalTime = noGeo ? '—' : cursor.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
-    const mowMin    = mowMinutes(bk);
+    const mowMin = mowMinutes(bk);
     if (!noGeo) cursor = new Date(cursor.getTime() + mowMin * 60000);
 
     const done   = isDone(bk);
@@ -6244,80 +6250,129 @@ function renderRouteDay(dateStr, orderedStops) {
     const _custNotes = _custRec ? String(_custRec.Notes||'').trim() : '';
     const notesBtn = _custNotes ? `<button class="route-notes-btn" onclick="openNotesPopup('📝 ${esc(bk.name||'Notes')}', ${JSON.stringify(_custNotes)})" title="View notes">💬</button>` : '';
     const drivePill = noGeo
-      ? `<span class="route-stop-pill" style="background:#fef9c3;color:#92400e;border:1px solid #fde68a;">⚠️ Address not mapped</span>`
-      : `<span class="route-stop-pill time-pill">🚗 ${driveMin}m drive</span>`;
-    const mowPill   = `<span class="route-stop-pill time-pill">⏱ ~${mowMin}m mow</span>`;
-    const planPill  = bk.frequency ? `<span class="route-stop-pill">${esc(bk.frequency)}</span>` : '';
-    const donePill  = done ? `<span class="route-stop-pill" style="background:#f1f5f9;color:#64748b;">✓ Done</span>` : '';
-    const zBadge    = zoneBadgeHTML(bk.zip, bk.zone);
-    const cBadge    = crewBadgeHTML(bk.crew);
+      ? `<span class="route-stop-pill" style="background:#fef9c3;color:#92400e;border:1px solid #fde68a;">⚠️ Not mapped</span>`
+      : `<span class="route-stop-pill time-pill">🚗 ${driveMin}m</span>`;
+    const mowPill  = `<span class="route-stop-pill time-pill">⏱ ~${mowMin}m</span>`;
+    const planPill = bk.frequency ? `<span class="route-stop-pill">${esc(bk.frequency)}</span>` : '';
+    const donePill = done ? `<span class="route-stop-pill" style="background:#f1f5f9;color:#64748b;">✓ Done</span>` : '';
+    const zBadge   = zoneBadgeHTML(bk.zip, bk.zone);
+    const crewKey  = JSON.stringify(crew);
 
     html += `
-      <div class="route-stop" style="margin-bottom:16px;" id="routeStop_${dateStr}_${i}" draggable="true"
-           ondragstart="routeDragStart(event,'${dateStr}',${i})"
-           ondragover="routeDragOver(event,'${dateStr}',${i})"
-           ondrop="routeDrop(event,'${dateStr}',${i})"
+      <div class="route-stop" style="margin-bottom:12px;" id="routeStop_${dateStr}_${crew}_${i}" draggable="true"
+           ondragstart="routeDragStart(event,'${dateStr}',${crewKey},${i})"
+           ondragover="routeDragOver(event,'${dateStr}',${crewKey},${i})"
+           ondrop="routeDrop(event,'${dateStr}',${crewKey},${i})"
            ondragend="routeDragEnd(event)">
         <div class="route-stop-controls">
-          <button class="route-reorder-btn" title="Move up" onclick="moveRouteStop('${dateStr}',${i},-1)" ${i===0?'disabled':''}>↑</button>
-          <button class="route-reorder-btn" title="Move down" onclick="moveRouteStop('${dateStr}',${i},1)" ${i===orderedStops.length-1?'disabled':''}>↓</button>
+          <button class="route-reorder-btn" title="Move up"   onclick="moveRouteStop('${dateStr}',${crewKey},${i},-1)" ${i===0?'disabled':''}>↑</button>
+          <button class="route-reorder-btn" title="Move down" onclick="moveRouteStop('${dateStr}',${crewKey},${i},1)"  ${i===orderedStops.length-1?'disabled':''}>↓</button>
         </div>
-        <div class="route-stop-badge ${done ? 'done-badge' : noGeo ? 'done-badge' : ''}" style="${noGeo ? 'background:#f59e0b;' : ''}">${done ? '✓' : noGeo ? '⚠' : i+1}</div>
-        <div class="route-stop-card ${done ? '' : 'active-stop'}" style="flex:1;${noGeo ? 'border-color:#fde68a;' : ''}">
+        <div class="route-stop-badge ${done?'done-badge':noGeo?'done-badge':''}" style="${noGeo?'background:#f59e0b;':''}">${done?'✓':noGeo?'⚠':i+1}</div>
+        <div class="route-stop-card ${done?'':'active-stop'}" style="flex:1;${noGeo?'border-color:#fde68a;':''}">
           <div class="route-stop-header">
             <div>
-              <div class="route-stop-name">${esc(bk.name||'—')} ${notesBtn} ${zBadge} ${cBadge}</div>
-              <div class="route-stop-addr">${esc(bk.address||'—')}${bk.zip ? ', '+esc(bk.zip) : ''}${bk.jobTime ? ' · ⏰ '+esc(bk.jobTime) : ''}</div>
+              <div class="route-stop-name">${esc(bk.name||'—')} ${notesBtn} ${zBadge}</div>
+              <div class="route-stop-addr">${esc(bk.address||'—')}${bk.zip?', '+esc(bk.zip):''}${bk.jobTime?' · ⏰ '+esc(bk.jobTime):''}</div>
             </div>
             <div class="route-stop-time">${arrivalTime}</div>
           </div>
           <div class="route-stop-meta">${drivePill}${mowPill}${planPill}${donePill}</div>
-          ${_custNotes ? `<div style="font-size:12px;color:#6b7280;margin-bottom:10px;padding:6px 10px;background:#f8faf6;border-radius:6px;">💬 ${esc(_custNotes)}</div>` : ''}
+          ${_custNotes?`<div style="font-size:12px;color:#6b7280;margin-bottom:8px;padding:5px 8px;background:#f8faf6;border-radius:6px;">💬 ${esc(_custNotes)}</div>`:''}
           <div class="route-stop-footer">
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <a class="route-nav-btn" href="${mapsUrl}" target="_blank" rel="noopener">🗺 Navigate</a>
-              ${bk.phone ? `<a class="route-call-btn" href="tel:${esc(bk.phone)}">📞 Call</a>` : ''}
+              ${bk.phone?`<a class="route-call-btn" href="tel:${esc(bk.phone)}">📞 Call</a>`:''}
             </div>
-            ${rowIdx >= 0 && !done ? `<button class="route-done-btn" onclick="triggerMarkDone(${rowIdx});this.disabled=true;this.textContent='Marking…'">✓ Mark Done</button>` : ''}
+            ${rowIdx>=0&&!done?`<button class="route-done-btn" onclick="triggerMarkDone(${rowIdx});this.disabled=true;this.textContent='Marking…'">✓ Mark Done</button>`:''}
           </div>
         </div>
       </div>`;
   }
-  // "Done by" chip
-  const [y2, mo2, d2] = dateStr.split('-').map(Number);
-  const dayLabelFin = new Date(y2, mo2 - 1, d2).toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric' });
-  html += `
-    <div class="route-finish" style="margin-bottom:28px;margin-top:4px;">
-      <div class="route-finish-badge">✓</div>
-      <div class="route-finish-card">
-        <div class="route-finish-label">Done for ${dayLabelFin}</div>
-        <div class="route-finish-time">${cursor.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</div>
-      </div>
-    </div>`;
 
-  container.innerHTML = html;
+  // Finish chip
+  const [y2,mo2,d2] = dateStr.split('-').map(Number);
+  const dayLabelFin = new Date(y2,mo2-1,d2).toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+  html += `<div class="route-finish" style="margin-bottom:20px;margin-top:4px;">
+    <div class="route-finish-badge">✓</div>
+    <div class="route-finish-card">
+      <div class="route-finish-label">Done by</div>
+      <div class="route-finish-time">${cursor.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</div>
+    </div>
+  </div>`;
+  return html;
 }
 
-// Drag-and-drop support for route stops
+function renderRouteDay(dateStr, crewStopsObj) {
+  const container = document.getElementById('routeDay_' + dateStr);
+  if (!container) return;
+
+  // Support legacy flat array (backward compat with old saved routes)
+  if (Array.isArray(crewStopsObj)) {
+    crewStopsObj = { all: crewStopsObj };
+  }
+
+  const startTime = document.getElementById('routeStartTime')?.value || '08:00';
+  const startVal  = (document.getElementById('routeStartAddr')?.value || '').trim();
+  const crews     = Object.keys(crewStopsObj).sort();
+
+  const crewLabels = { A: '🔵 Crew A', B: '🩷 Crew B', unassigned: '⬜ Unassigned', all: '📋 All Stops' };
+  const crewColors = { A: '#eff6ff', B: '#fff0f6', unassigned: '#f9fafb', all: '#f9fafb' };
+  const crewBorder = { A: '#bfdbfe', B: '#fbcfe8', unassigned: '#e5e7eb', all: '#e5e7eb' };
+
+  if (crews.length === 1) {
+    // Single crew — render full width
+    const crew = crews[0];
+    container.innerHTML = buildCrewStopsHtml(dateStr, crew, crewStopsObj[crew], startTime, startVal);
+  } else {
+    // Multiple crews — side-by-side columns
+    let colsHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:start;">';
+    for (const crew of crews) {
+      const stops = crewStopsObj[crew] || [];
+      const label = crewLabels[crew] || ('Crew ' + crew);
+      const bg    = crewColors[crew] || '#f9fafb';
+      const bdr   = crewBorder[crew] || '#e5e7eb';
+      colsHtml += `<div style="background:${bg};border:2px solid ${bdr};border-radius:14px;padding:14px 12px;">
+        <div style="font-size:13px;font-weight:800;color:var(--green-deep);margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid ${bdr};display:flex;justify-content:space-between;align-items:center;">
+          <span>${label}</span>
+          <span style="font-size:12px;font-weight:500;color:var(--text-muted);">${stops.length} stop${stops.length!==1?'s':''}</span>
+        </div>
+        <div id="routeCrewCol_${dateStr}_${crew}"></div>
+      </div>`;
+    }
+    colsHtml += '</div>';
+    container.innerHTML = colsHtml;
+
+    // Fill each crew column
+    for (const crew of crews) {
+      const colEl = document.getElementById(`routeCrewCol_${dateStr}_${crew}`);
+      if (colEl) colEl.innerHTML = buildCrewStopsHtml(dateStr, crew, crewStopsObj[crew] || [], startTime, startVal);
+    }
+  }
+}
+
+// Drag-and-drop support for route stops (crew-aware)
 let _dragSrc = null;
-function routeDragStart(ev, dateStr, idx) {
-  _dragSrc = { dateStr, idx };
+function routeDragStart(ev, dateStr, crew, idx) {
+  _dragSrc = { dateStr, crew, idx };
   ev.currentTarget.classList.add('dragging');
   ev.dataTransfer.effectAllowed = 'move';
 }
-function routeDragOver(ev, dateStr, idx) {
+function routeDragOver(ev, dateStr, crew, idx) {
   ev.preventDefault();
   ev.dataTransfer.dropEffect = 'move';
 }
-function routeDrop(ev, dateStr, idx) {
+function routeDrop(ev, dateStr, crew, idx) {
   ev.preventDefault();
-  if (!_dragSrc || _dragSrc.dateStr !== dateStr || _dragSrc.idx === idx) return;
-  const order = _routeCustomOrder[dateStr];
+  if (!_dragSrc || _dragSrc.dateStr !== dateStr || _dragSrc.crew !== crew || _dragSrc.idx === idx) return;
+  const dayOrder = _routeCustomOrder[dateStr];
+  if (!dayOrder) return;
+  const order = Array.isArray(dayOrder) ? dayOrder : dayOrder[crew];
   if (!order) return;
   const [moved] = order.splice(_dragSrc.idx, 1);
   order.splice(idx, 0, moved);
   _dragSrc = null;
-  renderRouteDay(dateStr, order);
+  renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
 }
 function routeDragEnd(ev) {
   ev.currentTarget.classList.remove('dragging');
@@ -6511,115 +6566,123 @@ async function buildRoute() {
     let outerHtml = '';
 
     // Reset custom order for this run
+    // Structure: _routeCustomOrder[dateStr] = { A: [stops], B: [stops], unassigned: [stops] }
     _routeCustomOrder = {};
 
-    for (const dateStr of sortedDates) {
-      const dayJobs = byDate[dateStr];
-
-      const geocoded    = dayJobs.map(bk => {
+    // Helper: optimize one crew's stops for a day
+    function optimizeCrewStops(crewJobs, geocodedMap) {
+      const geocoded    = crewJobs.map(bk => {
         const fullAddr = (bk.address || '') + (bk.zip ? ', ' + bk.zip : '') + ', FL';
-        const coord    = geoCache[fullAddr];
+        const coord    = geocodedMap[fullAddr];
         return { bk, lat: coord?.lat, lon: coord?.lon, failed: !coord };
       });
       const validStops  = geocoded.filter(s => !s.failed);
       const failedStops = geocoded.filter(s => s.failed);
-      allFailedStops.push(...failedStops);
 
-      // Need at least something to show
-      if (!validStops.length && !failedStops.length) continue;
+      const anchored = validStops.filter(s => s.bk.jobTime);
+      const floating = validStops.filter(s => !s.bk.jobTime);
 
-      // Separate anchored stops (fixed time) from free-floating ones
-      const anchored  = validStops.filter(s => s.bk.jobTime);
-      const floating  = validStops.filter(s => !s.bk.jobTime);
-
-      // Sort anchored stops by their set time
       anchored.sort((a, b) => {
         const [ah, am] = (a.bk.jobTime||'00:00').split(':').map(Number);
         const [bh, bm] = (b.bk.jobTime||'00:00').split(':').map(Number);
         return (ah*60+am) - (bh*60+bm);
       });
 
-      // Nearest-neighbour optimization on free-floating stops only
       const freeOrdered = floating.length
         ? nearestNeighbour(startCoord || (floating[0] || anchored[0] || {}), floating)
         : [];
 
-      // Merge: insert free stops into the gaps between anchored stops
       let ordered = [];
       let freeIdx = 0;
-      const [startH2, startM2] = startTime.split(':').map(Number);
-      let cursorMin = startH2 * 60 + startM2;
-      const AVG_SPEED_MPH2 = 25;
+      const [sH, sM] = startTime.split(':').map(Number);
+      let cursorMin = sH * 60 + sM;
 
       for (const anch of anchored) {
         const [ah, am] = (anch.bk.jobTime||'00:00').split(':').map(Number);
         const anchMin  = ah * 60 + am;
-        // Fill in free stops that would finish before this anchor starts
         while (freeIdx < freeOrdered.length) {
           const dur = mowMinutes(freeOrdered[freeIdx].bk);
           if (cursorMin + dur + 15 <= anchMin) {
-            ordered.push(freeOrdered[freeIdx]);
-            cursorMin += dur + 20;
-            freeIdx++;
+            ordered.push(freeOrdered[freeIdx]); cursorMin += dur + 20; freeIdx++;
           } else break;
         }
         ordered.push(anch);
         cursorMin = anchMin + mowMinutes(anch.bk);
       }
-      // Append remaining free stops after all anchored ones
-      while (freeIdx < freeOrdered.length) {
-        ordered.push(freeOrdered[freeIdx]);
-        freeIdx++;
-      }
-      if (!ordered.length) ordered = freeOrdered; // no anchored stops at all
+      while (freeIdx < freeOrdered.length) { ordered.push(freeOrdered[freeIdx]); freeIdx++; }
+      if (!ordered.length) ordered = freeOrdered;
 
-      // Append failed stops at end with distFromPrev=0 so they still show on the day's route
       for (const fs of failedStops) {
         ordered.push({ bk: fs.bk, lat: null, lon: null, distFromPrev: 0, geocodeFailed: true });
+        allFailedStops.push(fs);
       }
+      return ordered;
+    }
 
-      // Store as custom order so user can reorder with ↑↓ buttons
-      _routeCustomOrder[dateStr] = ordered;
-
-      // Accumulate stats
-      for (const stop of ordered) {
-        totalMiles    += stop.distFromPrev;
-        totalDriveMin += (stop.distFromPrev / AVG_SPEED_MPH) * 60;
-        totalMowMin   += mowMinutes(stop.bk);
-        totalJobs++;
-      }
-
-      // Build calendar update list (using optimized order + times)
+    for (const dateStr of sortedDates) {
+      const dayJobs = byDate[dateStr];
       const [y, mo, d] = dateStr.split('-').map(Number);
-      let cursor = new Date(y, mo - 1, d, startH, startM, 0, 0);
-      for (const stop of ordered) {
-        const driveMin = Math.round((stop.distFromPrev / AVG_SPEED_MPH) * 60);
-        cursor = new Date(cursor.getTime() + driveMin * 60000);
-        const mowMin = mowMinutes(stop.bk);
-        const doneAt = new Date(cursor.getTime() + mowMin * 60000);
-        calendarUpdates.push({
-          eventId:   stop.bk.eventId   || '',
-          rowIndex:  stop.bk._rowIndex || 0,
-          name:      stop.bk.name      || '',
-          address:   (stop.bk.address || '') + (stop.bk.zip ? ', ' + stop.bk.zip : '') + ', FL',
-          service:   stop.bk.service   || stop.bk.frequency || 'Lawn Service',
-          frequency: stop.bk.frequency || '',
-          startIso:  cursor.toISOString(),
-          endIso:    doneAt.toISOString(),
-        });
-        // ── Sync optimized arrival time into booking for Dispatch Board ──
-        const bkIdx = allBookings.indexOf(stop.bk);
-        if (bkIdx >= 0) {
-          allBookings[bkIdx].jobTime = cursor.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', hour12:false });
-        }
-        cursor = doneAt;
+
+      // Split jobs by crew
+      const crewGroups = {};
+      for (const bk of dayJobs) {
+        const crew = String(bk.crew || '').trim() || 'unassigned';
+        const key  = (crew === 'A' || crew === 'B') ? crew : 'unassigned';
+        if (!crewGroups[key]) crewGroups[key] = [];
+        crewGroups[key].push(bk);
       }
 
-      // Day header + empty container (renderRouteDay fills it in)
+      // Optimize each crew independently
+      const crewOrders = {};
+      const crewKeys   = Object.keys(crewGroups).sort(); // A, B, unassigned
+      for (const crew of crewKeys) {
+        crewOrders[crew] = optimizeCrewStops(crewGroups[crew], geoCache);
+      }
+
+      _routeCustomOrder[dateStr] = crewOrders;
+
+      // Accumulate stats across all crews
+      for (const stops of Object.values(crewOrders)) {
+        for (const stop of stops) {
+          totalMiles    += stop.distFromPrev || 0;
+          totalDriveMin += ((stop.distFromPrev || 0) / AVG_SPEED_MPH) * 60;
+          totalMowMin   += mowMinutes(stop.bk);
+          totalJobs++;
+        }
+      }
+
+      // Calendar updates + dispatch time sync per crew
+      for (const [crew, stops] of Object.entries(crewOrders)) {
+        let cursor = new Date(y, mo - 1, d, startH, startM, 0, 0);
+        for (const stop of stops) {
+          const driveMin = Math.round((stop.distFromPrev || 0) / AVG_SPEED_MPH * 60);
+          cursor = new Date(cursor.getTime() + driveMin * 60000);
+          const mowMin = mowMinutes(stop.bk);
+          const doneAt = new Date(cursor.getTime() + mowMin * 60000);
+          calendarUpdates.push({
+            eventId:   stop.bk.eventId   || '',
+            rowIndex:  stop.bk._rowIndex || 0,
+            name:      stop.bk.name      || '',
+            address:   (stop.bk.address || '') + (stop.bk.zip ? ', ' + stop.bk.zip : '') + ', FL',
+            service:   stop.bk.service   || stop.bk.frequency || 'Lawn Service',
+            frequency: stop.bk.frequency || '',
+            startIso:  cursor.toISOString(),
+            endIso:    doneAt.toISOString(),
+          });
+          const bkIdx = allBookings.indexOf(stop.bk);
+          if (bkIdx >= 0) {
+            allBookings[bkIdx].jobTime = cursor.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', hour12:false });
+          }
+          cursor = doneAt;
+        }
+      }
+
+      // Day header — total stops across all crews
+      const totalDayStops = Object.values(crewOrders).reduce((n, s) => n + s.length, 0);
       const dayLabel = new Date(y, mo - 1, d).toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric' });
       outerHtml += `<div style="font-size:13px;font-weight:700;color:var(--text-muted);text-transform:uppercase;
                letter-spacing:.08em;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);">
-               ${dayLabel} &nbsp;·&nbsp; ${ordered.length} stop${ordered.length!==1?'s':''}</div>
+               ${dayLabel} &nbsp;·&nbsp; ${totalDayStops} stop${totalDayStops!==1?'s':''}</div>
         <div id="routeDay_${dateStr}"></div>`;
     }
 
