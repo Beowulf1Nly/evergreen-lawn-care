@@ -6110,19 +6110,43 @@ const ZONE_CITIES = {
 };
 const DAYS_OF_WEEK = ['Mon','Tue','Wed','Thu','Fri','Sat'];
 
-let cfgData = null; // loaded from localStorage
+let cfgData = null; // in-memory config; source of truth is Google Sheet "Schedule Config"
+
+function _cfgDefaults(obj) {
+  obj = obj || {};
+  obj.zoneDays  = obj.zoneDays  || {};
+  obj.zoneCrew  = obj.zoneCrew  || {};
+  obj.crewNames = obj.crewNames || { A: '', B: '' };
+  return obj;
+}
 
 function loadCfgData() {
+  // Warm the in-memory cache from localStorage so sync callers never get null
+  if (cfgData) return;
+  try { cfgData = _cfgDefaults(JSON.parse(localStorage.getItem('eg_schedule_config') || 'null')); }
+  catch(e) { cfgData = _cfgDefaults({}); }
+}
+
+// Fetch latest config from Google Sheet and refresh in-memory + localStorage cache
+async function fetchCfgFromSheet() {
   try {
-    cfgData = JSON.parse(localStorage.getItem('eg_schedule_config') || 'null') || {};
-  } catch(e) { cfgData = {}; }
-  cfgData.zoneDays  = cfgData.zoneDays  || {};
-  cfgData.zoneCrew  = cfgData.zoneCrew  || {};
-  cfgData.crewNames = cfgData.crewNames || { A: '', B: '' };
+    const params = new URLSearchParams({ action: 'get_schedule_config', adminToken });
+    const res  = await fetch(SCRIPT_URL + '?' + params);
+    const data = await res.json();
+    if (data.success && data.config) {
+      cfgData = _cfgDefaults(data.config);
+      localStorage.setItem('eg_schedule_config', JSON.stringify(cfgData));
+    }
+  } catch(e) { /* fall back to localStorage cache */ }
 }
 
 function saveCfgData() {
+  // Write to localStorage immediately, then fire-and-forget to Sheet
   localStorage.setItem('eg_schedule_config', JSON.stringify(cfgData));
+  fetch(SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'set_schedule_config', adminToken, config: cfgData }),
+  }).catch(() => {});
 }
 
 function saveCrewNames() {
@@ -6150,8 +6174,9 @@ function getCrewDisplayName(crew) {
   return crew;
 }
 
-function initConfigTab() {
-  loadCfgData();
+async function initConfigTab() {
+  loadCfgData();               // warm cache so sync accessors work while sheet loads
+  await fetchCfgFromSheet();   // pull latest from Google Sheet, then re-render
 
   // Zone map
   const mapEl = document.getElementById('cfgZoneMap');
