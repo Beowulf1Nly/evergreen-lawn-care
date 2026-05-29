@@ -5933,12 +5933,14 @@ function renderRouteDay(dateStr, orderedStops) {
   }
 
   for (let i = 0; i < orderedStops.length; i++) {
-    const { bk, distFromPrev } = orderedStops[i];
-    const driveMin  = Math.round((distFromPrev / AVG_SPEED_MPH) * 60);
-    cursor          = new Date(cursor.getTime() + driveMin * 60000);
-    const arrivalTime = cursor.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+    const stop = orderedStops[i];
+    const { bk, distFromPrev } = stop;
+    const noGeo = !!stop.geocodeFailed;
+    const driveMin  = noGeo ? 0 : Math.round((distFromPrev / AVG_SPEED_MPH) * 60);
+    if (!noGeo) cursor = new Date(cursor.getTime() + driveMin * 60000);
+    const arrivalTime = noGeo ? '—' : cursor.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
     const mowMin    = mowMinutes(bk);
-    cursor          = new Date(cursor.getTime() + mowMin * 60000);
+    if (!noGeo) cursor = new Date(cursor.getTime() + mowMin * 60000);
 
     const done   = isDone(bk);
     const rowIdx = allBookings.indexOf(bk);
@@ -5947,7 +5949,9 @@ function renderRouteDay(dateStr, orderedStops) {
     const _custRec = allCustomers.find(c => String(c.Email||'').toLowerCase().trim() === _em);
     const _custNotes = _custRec ? String(_custRec.Notes||'').trim() : '';
     const notesBtn = _custNotes ? `<button class="route-notes-btn" onclick="openNotesPopup('📝 ${esc(bk.name||'Notes')}', ${JSON.stringify(_custNotes)})" title="View notes">💬</button>` : '';
-    const drivePill = `<span class="route-stop-pill time-pill">🚗 ${driveMin}m drive</span>`;
+    const drivePill = noGeo
+      ? `<span class="route-stop-pill" style="background:#fef9c3;color:#92400e;border:1px solid #fde68a;">⚠️ Address not mapped</span>`
+      : `<span class="route-stop-pill time-pill">🚗 ${driveMin}m drive</span>`;
     const mowPill   = `<span class="route-stop-pill time-pill">⏱ ~${mowMin}m mow</span>`;
     const planPill  = bk.frequency ? `<span class="route-stop-pill">${esc(bk.frequency)}</span>` : '';
     const donePill  = done ? `<span class="route-stop-pill" style="background:#f1f5f9;color:#64748b;">✓ Done</span>` : '';
@@ -5964,8 +5968,8 @@ function renderRouteDay(dateStr, orderedStops) {
           <button class="route-reorder-btn" title="Move up" onclick="moveRouteStop('${dateStr}',${i},-1)" ${i===0?'disabled':''}>↑</button>
           <button class="route-reorder-btn" title="Move down" onclick="moveRouteStop('${dateStr}',${i},1)" ${i===orderedStops.length-1?'disabled':''}>↓</button>
         </div>
-        <div class="route-stop-badge ${done ? 'done-badge' : ''}">${done ? '✓' : i+1}</div>
-        <div class="route-stop-card ${done ? '' : 'active-stop'}" style="flex:1;">
+        <div class="route-stop-badge ${done ? 'done-badge' : noGeo ? 'done-badge' : ''}" style="${noGeo ? 'background:#f59e0b;' : ''}">${done ? '✓' : noGeo ? '⚠' : i+1}</div>
+        <div class="route-stop-card ${done ? '' : 'active-stop'}" style="flex:1;${noGeo ? 'border-color:#fde68a;' : ''}">
           <div class="route-stop-header">
             <div>
               <div class="route-stop-name">${esc(bk.name||'—')} ${notesBtn} ${zBadge} ${cBadge}</div>
@@ -6227,11 +6231,18 @@ async function buildRoute() {
       const failedStops = geocoded.filter(s => s.failed);
       allFailedStops.push(...failedStops);
 
-      if (!validStops.length) continue;
+      // Need at least something to show
+      if (!validStops.length && !failedStops.length) continue;
 
-      // Nearest-neighbour optimization
-      const anchor  = startCoord || { lat: validStops[0].lat, lon: validStops[0].lon };
-      const ordered = nearestNeighbour(anchor, validStops);
+      // Nearest-neighbour optimization on geocoded stops
+      let ordered = validStops.length
+        ? nearestNeighbour(startCoord || { lat: validStops[0].lat, lon: validStops[0].lon }, validStops)
+        : [];
+
+      // Append failed stops at end with distFromPrev=0 so they still show on the day's route
+      for (const fs of failedStops) {
+        ordered.push({ bk: fs.bk, lat: null, lon: null, distFromPrev: 0, geocodeFailed: true });
+      }
 
       // Store as custom order so user can reorder with ↑↓ buttons
       _routeCustomOrder[dateStr] = ordered;
@@ -6323,7 +6334,7 @@ async function buildRoute() {
     if (allFailedStops.length) {
       const warn = document.createElement('div');
       warn.style.cssText = 'margin-top:12px;padding:12px 16px;background:#fef9c3;border:1.5px solid #fde047;border-radius:10px;font-size:13px;color:#854d0e;';
-      warn.innerHTML = '⚠️ Could not geocode ' + allFailedStops.length + ' address' + (allFailedStops.length > 1 ? 'es' : '') + ' — not included in route:<br>' +
+      warn.innerHTML = '⚠️ Could not geocode ' + allFailedStops.length + ' address' + (allFailedStops.length > 1 ? 'es' : '') + ' — shown at end of each day's route without drive time:<br>' +
         allFailedStops.map(s => '<strong>' + esc(s.bk.name||'?') + '</strong> — ' + esc(s.bk.address||'no address')).join('<br>');
       if (tl) tl.appendChild(warn);
     }
@@ -6341,50 +6352,66 @@ const ZIP_CITY = {
   '34428': 'Crystal River', '34429': 'Crystal River',
   '34450': 'Inverness',     '34451': 'Inverness', '34452': 'Inverness', '34453': 'Inverness',
   '34460': 'Lecanto',       '34461': 'Lecanto',
-  '34433': 'Dunnellon',     '34434': 'Dunnellon',
-  '34436': 'Floral City',   '34442': 'Hernando',
+  '34431': 'Dunnellon',     '34432': 'Dunnellon', '34433': 'Dunnellon', '34434': 'Citrus Springs',
+  '34436': 'Floral City',   '34442': 'Hernando',  '34423': 'Crystal River',
   '34464': 'Beverly Hills', '34465': 'Beverly Hills',
   '34449': 'Inglis',        '34498': 'Yankeetown',
+  '34480': 'Ocala',         '34481': 'Ocala',     '34482': 'Ocala',
+  '34476': 'Ocala',         '34474': 'Ocala',     '34472': 'Ocala',
+  '34470': 'Ocala',         '34471': 'Ocala',     '34479': 'Ocala',
+  '34475': 'Ocala',         '34478': 'Ocala',
+  '34491': 'Summerfield',   '34488': 'Silver Springs',
+  '32626': 'Chiefland',     '32668': 'Morriston',
+  '34601': 'Brooksville',   '34602': 'Brooksville', '34604': 'Brooksville',
 };
 
 // ── Geocode a US address → { lat, lon }
-// Tries four sources in order: Photon → Nominatim (zip) → Nominatim (city) → US Census Bureau
-// The Census Bureau geocoder is free, no API key, and has excellent rural FL coverage.
+// Tries multiple sources + fallback strategies for rural FL addresses
 async function geocodeAddr(addr) {
-  // Derive a city-name version of the address as a fallback
-  // e.g. "802 W Walkertown Dr, 34428, FL" → "802 W Walkertown Dr, Crystal River, FL"
   const zipMatch   = addr.match(/,\s*(\d{5})/);
   const zip        = zipMatch ? zipMatch[1] : '';
   const city       = ZIP_CITY[zip] || '';
+  // Street-only version (no zip), e.g. "22 W Golfstream Place, Dunnellon, FL"
+  const streetOnly = addr.replace(/,\s*\d{5}/, '');
   const addrByCity = city
-    ? addr.replace(/,\s*\d{5}/, '').replace(/, FL$/i, '') + ', ' + city + ', FL'
+    ? streetOnly.replace(/, FL$/i, '') + ', ' + city + ', FL'
     : '';
+  // Bare street + Florida (widest net)
+  const streetFL   = streetOnly.replace(/, FL$/i, '').trim() + ', Florida';
 
-  // 1. Photon (komoot) — fast, CORS-safe
-  try {
-    const res  = await fetch('https://photon.komoot.io/api/?q=' + encodeURIComponent(addr) + '&limit=1&countrycode=us');
-    const data = await res.json();
-    const f    = data?.features?.[0];
+  async function tryPhoton(q) {
+    const r = await fetch('https://photon.komoot.io/api/?q=' + encodeURIComponent(q) + '&limit=1&countrycode=us');
+    const d = await r.json();
+    const f = d?.features?.[0];
     if (f) return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] };
-  } catch(e) {}
-
-  // 2. Nominatim with original address (zip-based)
-  try {
-    const res  = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=' + encodeURIComponent(addr), { headers: { 'Accept-Language': 'en' } });
-    const data = await res.json();
-    if (data?.[0]) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-  } catch(e) {}
-
-  // 3. Nominatim with city name (better for rural roads)
-  if (addrByCity) {
-    try {
-      const res  = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=' + encodeURIComponent(addrByCity), { headers: { 'Accept-Language': 'en' } });
-      const data = await res.json();
-      if (data?.[0]) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-    } catch(e) {}
+    return null;
+  }
+  async function tryNominatim(q) {
+    const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=' + encodeURIComponent(q), { headers: { 'Accept-Language': 'en' } });
+    const d = await r.json();
+    if (d?.[0]) return { lat: parseFloat(d[0].lat), lon: parseFloat(d[0].lon) };
+    return null;
   }
 
-  // 4. (Census geocoder removed — CORS not supported from browser)
+  // 1. Photon with full address (zip)
+  try { const r = await tryPhoton(addr);        if (r) return r; } catch(e) {}
+  // 2. Nominatim with full address (zip)
+  try { const r = await tryNominatim(addr);     if (r) return r; } catch(e) {}
+  // 3. Photon with city name (no zip) — best for rural FL roads
+  if (addrByCity) {
+    try { const r = await tryPhoton(addrByCity);    if (r) return r; } catch(e) {}
+    try { const r = await tryNominatim(addrByCity); if (r) return r; } catch(e) {}
+  }
+  // 4. Nominatim street-only + FL (widest net — catches county roads without city match)
+  try { const r = await tryNominatim(streetFL); if (r) return r; } catch(e) {}
+  // 5. Photon street + FL
+  try { const r = await tryPhoton(streetFL);    if (r) return r; } catch(e) {}
+  // 6. Try with "Citrus County, FL" appended (helps for unincorporated addresses)
+  if (zip && !city) {
+    const withCounty = streetOnly.replace(/, FL$/i, '').trim() + ', Citrus County, FL';
+    try { const r = await tryNominatim(withCounty); if (r) return r; } catch(e) {}
+    try { const r = await tryPhoton(withCounty);    if (r) return r; } catch(e) {}
+  }
   return null;
 }
 
