@@ -777,6 +777,39 @@
   .dispatch-action-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:20px; padding-top:16px; border-top:1.5px solid var(--border); }
   .dispatch-action-btn { padding:10px 18px; border-radius:10px; border:none; font-size:13px; font-weight:700; font-family:inherit; cursor:pointer; transition:opacity .15s; }
   .dispatch-action-btn:hover { opacity:.85; }
+
+  /* ── Dispatch week view ── */
+  .dispatch-week-grid { display:grid; gap:0; overflow-x:auto; }
+  .dispatch-week-header { display:contents; }
+  .dispatch-week-day-col { display:flex; flex-direction:column; min-width:140px; border-right:1px solid var(--border); }
+  .dispatch-week-day-col:last-child { border-right:none; }
+  .dispatch-week-day-hdr {
+    padding:10px 12px; background:#f8faf6; border-bottom:2px solid var(--border);
+    font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--text-muted); position:sticky; top:0; z-index:5;
+  }
+  .dispatch-week-day-hdr.today-col { color:var(--green-mid); border-bottom-color:var(--green-mid); }
+  .dispatch-week-day-body {
+    flex:1; padding:8px; display:flex; flex-direction:column; gap:6px;
+    min-height:120px; transition:background .15s;
+  }
+  .dispatch-week-day-body.drag-target { background:#f0fdf4; }
+  .dispatch-week-card {
+    background:#1a73e8; color:#fff; border-radius:8px; padding:7px 9px;
+    font-size:12px; cursor:grab; transition:transform .15s, box-shadow .15s;
+    box-shadow:0 1px 4px rgba(0,0,0,.12); user-select:none;
+  }
+  .dispatch-week-card:hover { transform:translateY(-1px); box-shadow:0 3px 10px rgba(0,0,0,.2); }
+  .dispatch-week-card.dragging { opacity:.5; cursor:grabbing; }
+  .dispatch-week-card.status-done      { background:#34a853; }
+  .dispatch-week-card.status-cash      { background:#f9ab00; color:#1a1a1a; }
+  .dispatch-week-card.status-invoiced  { background:#24c1e0; color:#1a1a1a; }
+  .dispatch-week-card.status-paid      { background:#0f9d58; }
+  .dispatch-week-card.status-completed { background:#5f6368; }
+  .dispatch-week-card-name { font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dispatch-week-card-meta { font-size:10px; opacity:.85; margin-top:1px; }
+  .dispatch-week-card-hint { font-size:10px; margin-top:3px; padding:2px 5px; background:rgba(255,255,255,.25); border-radius:4px; display:inline-block; }
+  .dispatch-week-empty { font-size:12px; color:var(--text-muted); font-style:italic; padding:8px 4px; }
 </style>
 </head>
 <body>
@@ -934,7 +967,8 @@
           </div>
           <div class="form-field">
             <label for="ac-zip">Zip Code *</label>
-            <input type="text" id="ac-zip" placeholder="34450" maxlength="5"/>
+            <input type="text" id="ac-zip" placeholder="34450" maxlength="5" oninput="showZoneHint('ac-zip','ac-zone-hint')"/>
+            <div id="ac-zone-hint" style="margin-top:5px;font-size:12px;font-weight:600;color:var(--green-mid);min-height:16px;"></div>
           </div>
           <div class="form-field full">
             <label for="ac-address">Street Address *</label>
@@ -1207,32 +1241,31 @@
     <div class="dispatch-wrap">
       <!-- Controls -->
       <div class="dispatch-controls">
-        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-          <div>
-            <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;">Date</label>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div style="display:flex;gap:6px;">
+            <button class="dispatch-nav-btn" id="dViewDay"  onclick="setDispatchView('day')"  style="font-weight:700;">Day</button>
+            <button class="dispatch-nav-btn" id="dViewWeek" onclick="setDispatchView('week')" style="">Week</button>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="dispatch-nav-btn" onclick="dispatchShiftDate(-1)">◀</button>
             <input type="date" id="dispatchDate" class="dispatch-date-input" onchange="renderDispatchBoard()">
+            <button class="dispatch-nav-btn" onclick="dispatchGoToday()" style="font-weight:600;">Today</button>
+            <button class="dispatch-nav-btn" onclick="dispatchShiftDate(1)">▶</button>
           </div>
-          <div>
-            <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;">Crew</label>
-            <select id="dispatchCrewFilter" class="route-crew-select" onchange="renderDispatchBoard()">
-              <option value="all">👥 All Crews</option>
-              <option value="A">🔵 Crew A</option>
-              <option value="B">🩷 Crew B</option>
-              <option value="unassigned">⬜ Unassigned</option>
-            </select>
-          </div>
-          <div style="display:flex;gap:8px;align-items:flex-end;padding-bottom:2px;">
-            <button class="dispatch-nav-btn" onclick="dispatchShiftDate(-1)">◀ Prev</button>
-            <button class="dispatch-nav-btn" onclick="dispatchGoToday()">Today</button>
-            <button class="dispatch-nav-btn" onclick="dispatchShiftDate(1)">Next ▶</button>
-          </div>
+          <select id="dispatchCrewFilter" class="route-crew-select" onchange="renderDispatchBoard()">
+            <option value="all">👥 All Crews</option>
+            <option value="A">🔵 Crew A</option>
+            <option value="B">🩷 Crew B</option>
+            <option value="unassigned">⬜ Unassigned</option>
+          </select>
         </div>
         <div class="dispatch-legend">
-          <span class="dispatch-legend-dot" style="background:#16a34a;"></span>Upcoming
-          <span class="dispatch-legend-dot" style="background:#64748b;margin-left:10px;"></span>Done
-          <span class="dispatch-legend-dot" style="background:#b45309;margin-left:10px;"></span>Cash Pending
-          <span class="dispatch-legend-dot" style="background:#1d4ed8;margin-left:10px;"></span>Invoiced
-          <span class="dispatch-legend-dot" style="background:#7c3aed;margin-left:10px;"></span>Paid
+          <span class="dispatch-legend-dot" style="background:#1a73e8;"></span>Upcoming
+          <span class="dispatch-legend-dot" style="background:#34a853;margin-left:8px;"></span>Done
+          <span class="dispatch-legend-dot" style="background:#f9ab00;margin-left:8px;"></span>Cash
+          <span class="dispatch-legend-dot" style="background:#24c1e0;margin-left:8px;"></span>Invoiced
+          <span class="dispatch-legend-dot" style="background:#0f9d58;margin-left:8px;"></span>Paid
+          <span class="dispatch-legend-dot" style="background:#5f6368;margin-left:8px;"></span>Completed
         </div>
       </div>
 
@@ -1265,6 +1298,26 @@
         <div id="dispatch-tab-notes"   class="dispatch-tab-content"></div>
         <div id="dispatch-tab-photos"  class="dispatch-tab-content"></div>
         <div id="dispatch-tab-history" class="dispatch-tab-content"></div>
+      </div>
+    </div>
+    <!-- Reschedule Modal -->
+    <div class="confirm-overlay" id="dispatchReschedOverlay" onclick="if(event.target===this)closeDispatchResched()">
+      <div class="confirm-box" style="max-width:420px;width:94%;">
+        <h4 style="margin:0 0 10px;font-family:'Playfair Display',serif;color:var(--green-deep);">📅 Reschedule Job</h4>
+        <div id="dispReschedInfo" style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.5;"></div>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:5px;">New Date</label>
+          <input type="date" id="dispReschedDate" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;">
+        </div>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:18px;font-size:14px;">
+          <input type="checkbox" id="dispReschedNotify" checked style="width:16px;height:16px;accent-color:var(--green-mid);">
+          <span>📧 Notify customer via email</span>
+        </label>
+        <div id="dispReschedError" style="color:var(--red);font-size:13px;margin-bottom:10px;display:none;"></div>
+        <div class="confirm-actions">
+          <button class="btn-confirm-no" onclick="closeDispatchResched()">Cancel</button>
+          <button class="btn-confirm-yes" id="dispReschedConfirmBtn" onclick="submitDispatchResched()">Reschedule</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1433,7 +1486,8 @@
           </div>
           <div>
             <label for="job-zip" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Zip Code</label>
-            <input id="job-zip" type="text" class="login-input" style="margin-bottom:0;" placeholder="34450" maxlength="5"/>
+            <input id="job-zip" type="text" class="login-input" style="margin-bottom:0;" placeholder="34450" maxlength="5" oninput="showZoneHint('job-zip','job-zone-hint')"/>
+            <div id="job-zone-hint" style="margin-top:5px;font-size:12px;font-weight:600;color:var(--green-mid);min-height:16px;"></div>
           </div>
           <div style="grid-column:1/-1;">
             <label for="job-address" style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Service Address *</label>
@@ -5791,20 +5845,29 @@ let _routeCustomOrder = {};
 // ── Zip → Zone mapping for Citrus County service area ───────────────────
 const ZIP_ZONE = {
   // Zone 1 — Crystal River / Yankeetown / Inglis (coast)
-  '34428':'Z1','34429':'Z1','34449':'Z1','34498':'Z1',
+  '34428':'Z1','34429':'Z1','34449':'Z1','34498':'Z1','34423':'Z1',
   // Zone 2 — Inverness / Floral City / Hernando
   '34450':'Z2','34451':'Z2','34452':'Z2','34453':'Z2','34436':'Z2','34442':'Z2',
-  // Zone 3 — Lecanto / Beverly Hills
-  '34460':'Z3','34461':'Z3','34464':'Z3','34465':'Z3',
-  // Zone 4 — Dunnellon / Holder / Rainbow Lakes
-  '34431':'Z4','34432':'Z4','34433':'Z4','34434':'Z4',
+  '34484':'Z2',
+  // Zone 3 — Lecanto / Beverly Hills / Citrus Hills
+  '34460':'Z3','34461':'Z3','34464':'Z3','34465':'Z3','34446':'Z3',
+  // Zone 4 — Dunnellon / Holder / Rainbow Lakes / Citrus Springs
+  '34431':'Z4','34432':'Z4','34433':'Z4','34434':'Z4','34430':'Z4',
+  // Zone 4b — Chiefland / Morriston / Levy County (adjacent to Z4)
+  '32626':'Z4','32668':'Z4','32621':'Z4','32693':'Z4',
   // Zone 5 — Ocala / Marion County
   '34470':'Z5','34471':'Z5','34472':'Z5','34473':'Z5','34474':'Z5',
   '34475':'Z5','34476':'Z5','34479':'Z5','34480':'Z5','34481':'Z5',
-  '34482':'Z5','34491':'Z5',
-  // Zone 6 — Brooksville / Hernando County
-  '34601':'Z6','34602':'Z6','34604':'Z6','34606':'Z6','34609':'Z6',
-  '34613':'Z6','34614':'Z6','34638':'Z6','34639':'Z6',
+  '34482':'Z5','34491':'Z5','34488':'Z5','34489':'Z5','34492':'Z5',
+  '34478':'Z5','34483':'Z5',
+  // Zone 6 — Brooksville / Hernando County / Spring Hill
+  '34601':'Z6','34602':'Z6','34604':'Z6','34606':'Z6','34608':'Z6','34609':'Z6',
+  '34613':'Z6','34614':'Z6','34638':'Z6','34639':'Z6','34610':'Z6',
+  // Zone 7 — Spring Hill / New Port Richey / Pasco County
+  '34653':'Z7','34654':'Z7','34655':'Z7','34667':'Z7','34668':'Z7',
+  '34669':'Z7','34690':'Z7','34691':'Z7',
+  // Zone 8 — The Villages / Sumter County
+  '34785':'Z8','34788':'Z8','34762':'Z8','32162':'Z8','34737':'Z8',
 };
 
 function getZoneFromZip(zip) {
@@ -6419,12 +6482,14 @@ async function geocodeAddr(addr) {
 // CONFIG TAB — Zone/Crew/Day schedule settings
 // ═══════════════════════════════════════════════════════
 const ZONE_CITIES = {
-  'Z1': { label:'Zone 1', cities:'Crystal River, Inglis, Yankeetown', zips:['34428','34429','34449','34498'] },
-  'Z2': { label:'Zone 2', cities:'Inverness, Floral City, Hernando', zips:['34450','34451','34452','34453','34436','34442'] },
-  'Z3': { label:'Zone 3', cities:'Lecanto, Beverly Hills',            zips:['34460','34461','34464','34465'] },
-  'Z4': { label:'Zone 4', cities:'Dunnellon, Holder',                 zips:['34431','34432','34433','34434'] },
-  'Z5': { label:'Zone 5', cities:'Ocala / Marion County',             zips:['34470','34471','34472','34473','34474','34475'] },
-  'Z6': { label:'Zone 6', cities:'Brooksville / Hernando County',     zips:['34601','34604','34609','34613'] },
+  'Z1': { label:'Zone 1', cities:'Crystal River, Inglis, Yankeetown', zips:['34428','34429','34449','34498','34423'] },
+  'Z2': { label:'Zone 2', cities:'Inverness, Floral City, Hernando',  zips:['34450','34451','34452','34453','34436','34442','34484'] },
+  'Z3': { label:'Zone 3', cities:'Lecanto, Beverly Hills, Citrus Hills', zips:['34460','34461','34464','34465','34446'] },
+  'Z4': { label:'Zone 4', cities:'Dunnellon, Holder, Citrus Springs, Chiefland', zips:['34431','34432','34433','34434','34430','32626','32668','32621'] },
+  'Z5': { label:'Zone 5', cities:'Ocala / Marion County',             zips:['34470','34471','34472','34473','34474','34475','34476','34479','34480','34481','34482','34491'] },
+  'Z6': { label:'Zone 6', cities:'Brooksville / Hernando County',     zips:['34601','34602','34604','34606','34608','34609','34613','34614'] },
+  'Z7': { label:'Zone 7', cities:'Spring Hill / Pasco County',        zips:['34653','34654','34655','34667','34668','34669'] },
+  'Z8': { label:'Zone 8', cities:'The Villages / Sumter County',      zips:['34785','34788','34762','32162','34737'] },
 };
 const DAYS_OF_WEEK = ['Mon','Tue','Wed','Thu','Fri','Sat'];
 
@@ -7146,17 +7211,44 @@ const DISPATCH_TOTAL_MINS = (DISPATCH_END_HOUR - DISPATCH_START_HOUR) * 60;
 let   _dispatchJobIdx     = -1;
 let   _dispatchPhotoUrls  = [];
 
+// ── Zone hint helper (used by Add Client + Add Job zip fields) ────────────
+function showZoneHint(inputId, hintId) {
+  if (!cfgData) loadCfgData();
+  const zip   = (document.getElementById(inputId)?.value || '').trim();
+  const hint  = document.getElementById(hintId);
+  if (!hint) return;
+  const zone  = getZoneFromZip(zip);
+  if (!zone) { hint.textContent = zip.length === 5 ? '⚠️ Zip not in a zone — check Config tab' : ''; return; }
+  const days  = getCfgZoneDays(zone);
+  const info  = ZONE_CITIES[zone];
+  const label = info ? info.label + ' · ' + info.cities : zone;
+  const dayStr = days.length ? ' · Typically: ' + days.join('/') : '';
+  hint.textContent = '📍 ' + label + dayStr;
+}
+
+// ── Dispatch view mode ───────────────────────────────────────────────────
+let _dispatchView = 'week'; // 'day' or 'week'
+
+function setDispatchView(mode) {
+  _dispatchView = mode;
+  document.getElementById('dViewDay').style.fontWeight  = mode === 'day'  ? '800' : '500';
+  document.getElementById('dViewWeek').style.fontWeight = mode === 'week' ? '800' : '500';
+  document.getElementById('dViewDay').style.borderColor  = mode === 'day'  ? 'var(--green-mid)' : '';
+  document.getElementById('dViewWeek').style.borderColor = mode === 'week' ? 'var(--green-mid)' : '';
+  renderDispatchBoard();
+}
 function initDispatchTab() {
   const today = new Date().toISOString().slice(0, 10);
   const el = document.getElementById('dispatchDate');
   if (el && !el.value) el.value = today;
-  renderDispatchBoard();
+  setDispatchView('week');
 }
 function dispatchShiftDate(delta) {
   const el = document.getElementById('dispatchDate');
   if (!el || !el.value) return;
+  const amt = _dispatchView === 'week' ? 7 * delta : delta;
   const d = new Date(el.value + 'T12:00:00');
-  d.setDate(d.getDate() + delta);
+  d.setDate(d.getDate() + amt);
   el.value = d.toISOString().slice(0, 10);
   renderDispatchBoard();
 }
@@ -7167,18 +7259,135 @@ function dispatchGoToday() {
 }
 
 function renderDispatchBoard() {
-  const dateStr  = document.getElementById('dispatchDate')?.value;
-  const crewFilt = document.getElementById('dispatchCrewFilter')?.value || 'all';
-  if (!dateStr) return;
+  if (_dispatchView === 'week') { renderDispatchWeek(); return; }
+  renderDispatchDay();
+}
 
-  let dayJobs = (allBookings || []).filter(b => dateOf(b) === dateStr && !b.rowCancelled);
+function _filterJobs(dateStr) {
+  const crewFilt = document.getElementById('dispatchCrewFilter')?.value || 'all';
+  let jobs = (allBookings || []).filter(b => dateOf(b) === dateStr && !b.rowCancelled);
   if (crewFilt !== 'all') {
-    dayJobs = dayJobs.filter(b => {
+    jobs = jobs.filter(b => {
       const crew = (b.crew || '').trim();
       return crewFilt === 'unassigned' ? !crew : crew === crewFilt;
     });
   }
+  return jobs;
+}
 
+// ── Week view ─────────────────────────────────────────────────────────────
+function renderDispatchWeek() {
+  const anchor = document.getElementById('dispatchDate')?.value;
+  if (!anchor) return;
+  const emptyEl = document.getElementById('dispatchEmpty');
+  const axisEl  = document.getElementById('dispatchTimeAxis');
+  const rowsEl  = document.getElementById('dispatchBoardRows');
+  if (!rowsEl) return;
+
+  // Build 7-day range starting from anchor
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(anchor + 'T12:00:00');
+    d.setDate(d.getDate() + i);
+    dates.push(d.toISOString().slice(0, 10));
+  }
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  // Collect all jobs across the week
+  const crewFilt = document.getElementById('dispatchCrewFilter')?.value || 'all';
+  const allWeekJobs = (allBookings || []).filter(b => {
+    if (b.rowCancelled) return false;
+    if (!dates.includes(dateOf(b))) return false;
+    if (crewFilt !== 'all') {
+      const c = (b.crew||'').trim();
+      if (crewFilt === 'unassigned') return !c;
+      return c === crewFilt;
+    }
+    return true;
+  });
+
+  if (axisEl) axisEl.innerHTML = '';
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  // Build route-optimization hints: for each job, count how many other jobs
+  // are on the same date and in the same zone — higher = well-clustered
+  function clusterScore(b) {
+    const zone = b.zone || getZoneFromZip(b.zip) || '';
+    const d    = dateOf(b);
+    return allWeekJobs.filter(j => dateOf(j) === d && (j.zone || getZoneFromZip(j.zip) || '') === zone && j !== b).length;
+  }
+  // Lone jobs (score=0, has a zone) could be moved to a better day
+  function isolatedHint(b) {
+    const zone = b.zone || getZoneFromZip(b.zip) || '';
+    if (!zone) return '';
+    const score = clusterScore(b);
+    if (score > 0) return ''; // already clustered
+    // Find a day this week with more same-zone jobs
+    let bestDay = '', bestCount = 0;
+    for (const d of dates) {
+      if (d === dateOf(b)) continue;
+      const cnt = allWeekJobs.filter(j => dateOf(j) === d && (j.zone || getZoneFromZip(j.zip) || '') === zone).length;
+      if (cnt > bestCount) { bestCount = cnt; bestDay = d; }
+    }
+    if (bestDay && bestCount > 0) {
+      const bd = new Date(bestDay + 'T12:00'); 
+      return `💡 ${bestCount} ${zone} job${bestCount>1?'s':''} on ${dayNames[bd.getDay()]}`;
+    }
+    return '';
+  }
+
+  // Build grid HTML
+  let gridHtml = `<div class="dispatch-week-grid" style="display:grid;grid-template-columns:repeat(${dates.length},minmax(150px,1fr));border:1.5px solid var(--border);border-radius:14px;overflow:hidden;">`;
+  for (const dateStr of dates) {
+    const d   = new Date(dateStr + 'T12:00');
+    const isT = dateStr === todayStr;
+    const lbl = `${dayNames[d.getDay()]} ${d.getMonth()+1}/${d.getDate()}`;
+    const dayJobs = allWeekJobs.filter(b => dateOf(b) === dateStr);
+    const jobCount = dayJobs.length;
+
+    gridHtml += `<div class="dispatch-week-day-col">
+      <div class="dispatch-week-day-hdr ${isT?'today-col':''}"
+           style="${isT?'border-bottom-color:var(--green-mid);color:var(--green-mid);':''}"
+           ondragover="dispatchWeekDragOver(event,'${dateStr}')"
+           ondrop="dispatchWeekDrop(event,'${dateStr}')">
+        ${lbl}${jobCount ? ` <span style="background:var(--green-mid);color:#fff;border-radius:20px;padding:1px 7px;font-size:10px;font-weight:800;">${jobCount}</span>` : ''}
+      </div>
+      <div class="dispatch-week-day-body" id="weekCol_${dateStr}"
+           ondragover="dispatchWeekDragOver(event,'${dateStr}')"
+           ondrop="dispatchWeekDrop(event,'${dateStr}')">`;
+
+    if (!dayJobs.length) {
+      gridHtml += `<div class="dispatch-week-empty">No jobs</div>`;
+    } else {
+      for (const b of dayJobs) {
+        const ri   = allBookings.indexOf(b);
+        const cls  = dispatchJobClass(b);
+        const hint = isolatedHint(b);
+        gridHtml += `<div class="dispatch-week-card ${cls}" draggable="true"
+            ondragstart="dispatchWeekDragStart(event,${ri})"
+            ondragend="dispatchWeekDragEnd(event)"
+            onclick="openDispatchDetail(${ri})">
+          <div class="dispatch-week-card-name">${esc(b.name||'—')}</div>
+          <div class="dispatch-week-card-meta">${esc(b.address||'—')}${b.zip?' · '+esc(b.zip):''}</div>
+          <div class="dispatch-week-card-meta">${esc(b.frequency||'')}${b.jobTime?' · ⏰'+esc(b.jobTime):''}</div>
+          ${hint ? `<div class="dispatch-week-card-hint">${hint}</div>` : ''}
+        </div>`;
+      }
+    }
+    gridHtml += `</div></div>`;
+  }
+  gridHtml += '</div>';
+
+  rowsEl.innerHTML = gridHtml;
+}
+
+// ── Day view (timeline) ───────────────────────────────────────────────────
+function renderDispatchDay() {
+  const dateStr  = document.getElementById('dispatchDate')?.value;
+  if (!dateStr) return;
+
+  const dayJobs = _filterJobs(dateStr);
   const emptyEl = document.getElementById('dispatchEmpty');
   const axisEl  = document.getElementById('dispatchTimeAxis');
   const rowsEl  = document.getElementById('dispatchBoardRows');
@@ -7277,6 +7486,103 @@ function closeDispatchDetail() {
   document.getElementById('dispatchDetailOverlay').classList.remove('open');
   _dispatchJobIdx = -1;
 }
+// ── Week view drag-to-reschedule ─────────────────────────────────────────
+let _dragRowIdx  = -1;
+let _dragOldDate = '';
+
+function dispatchWeekDragStart(ev, rowIdx) {
+  _dragRowIdx  = rowIdx;
+  _dragOldDate = dateOf(allBookings[rowIdx] || {});
+  ev.currentTarget.classList.add('dragging');
+  ev.dataTransfer.effectAllowed = 'move';
+}
+function dispatchWeekDragEnd(ev) {
+  ev.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('.dispatch-week-day-body').forEach(el => el.classList.remove('drag-target'));
+}
+function dispatchWeekDragOver(ev, dateStr) {
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.dispatch-week-day-body').forEach(el => el.classList.remove('drag-target'));
+  const col = document.getElementById('weekCol_' + dateStr);
+  if (col) col.classList.add('drag-target');
+}
+function dispatchWeekDrop(ev, newDateStr) {
+  ev.preventDefault();
+  document.querySelectorAll('.dispatch-week-day-body').forEach(el => el.classList.remove('drag-target'));
+  if (_dragRowIdx < 0) return;
+  const b = allBookings[_dragRowIdx];
+  if (!b) return;
+  const oldDate = dateOf(b);
+  if (newDateStr === oldDate) return; // dropped on same day
+  // Open reschedule confirm modal
+  openDispatchResched(_dragRowIdx, newDateStr);
+  _dragRowIdx = -1;
+}
+
+// ── Dispatch reschedule modal ─────────────────────────────────────────────
+let _reschedRowIdx  = -1;
+let _reschedNewDate = '';
+
+function openDispatchResched(rowIdx, newDate) {
+  const b = allBookings[rowIdx];
+  if (!b) return;
+  _reschedRowIdx  = rowIdx;
+  _reschedNewDate = newDate;
+  const oldDate = dateOf(b) || '—';
+  const fmtDate = s => { if (!s||s==='—') return s; const d=new Date(s+'T12:00'); return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); };
+  document.getElementById('dispReschedInfo').innerHTML =
+    `<strong>${esc(b.name||'—')}</strong><br>` +
+    `Moving from <strong>${fmtDate(oldDate)}</strong> → <strong>${fmtDate(newDate)}</strong>`;
+  document.getElementById('dispReschedDate').value = newDate;
+  document.getElementById('dispReschedError').style.display = 'none';
+  const btn = document.getElementById('dispReschedConfirmBtn');
+  btn.disabled = false; btn.textContent = 'Reschedule';
+  document.getElementById('dispatchReschedOverlay').classList.add('open');
+}
+function closeDispatchResched() {
+  document.getElementById('dispatchReschedOverlay').classList.remove('open');
+  _reschedRowIdx = -1; _reschedNewDate = '';
+}
+async function submitDispatchResched() {
+  const b = allBookings[_reschedRowIdx];
+  if (!b) return;
+  const newDate  = document.getElementById('dispReschedDate').value || _reschedNewDate;
+  const notify   = document.getElementById('dispReschedNotify').checked;
+  const btn      = document.getElementById('dispReschedConfirmBtn');
+  const errEl    = document.getElementById('dispReschedError');
+  if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = 'Saving…'; errEl.style.display = 'none';
+  try {
+    const params = new URLSearchParams({
+      action:        'owner_reschedule',
+      rowIndex:      b._rowIndex || (_reschedRowIdx + 2),
+      newDate,
+      scope:         'single',
+      sendEmail:     notify ? 'true' : 'false',
+      expectedEmail: b.email || '',
+      adminToken,
+    });
+    const res  = await fetch(SCRIPT_URL + '?' + params.toString());
+    const data = await res.json();
+    if (data.success) {
+      allBookings[_reschedRowIdx].serviceDate    = newDate;
+      allBookings[_reschedRowIdx].serviceDateRaw = newDate;
+      closeDispatchResched();
+      renderDispatchBoard();
+      showToast(`📅 ${b.name||'Job'} moved to ${newDate}${notify?' · Customer notified':''}`);
+    } else {
+      errEl.textContent = data.error || 'Could not reschedule.';
+      errEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Reschedule';
+    }
+  } catch(err) {
+    errEl.textContent = 'Network error.';
+    errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Reschedule';
+  }
+}
+
 async function dispatchAssignCrew(rowIdx, crew) {
   const b = allBookings[rowIdx]; if (!b) return;
   try {
