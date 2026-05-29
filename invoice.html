@@ -6,14 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Evergreen — Staff Portal</title>
 <meta name="robots" content="noindex, nofollow"/>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<!-- Non-blocking font load — page renders immediately in system font, swaps when ready -->
-<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@300;400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'"/>
-<noscript><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/></noscript>
-<!-- DNS prefetch for backend API -->
-<link rel="dns-prefetch" href="https://script.google.com"/>
-<link rel="preconnect" href="https://script.google.com"/>
+<!-- Fonts loaded synchronously so browser marks page done after load, not after font swap -->
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
   :root {
     --green-deep: #1a3a1a; --green-mid: #2d6a2d; --green-bright:#4caf50;
@@ -1945,7 +1939,7 @@ window.addEventListener('DOMContentLoaded', () => {
     adminRole  = saved.role || 'employee';
     showApp();
     // Load bookings first, then customers in background so notes show on job cards
-    loadBookings().then(() => loadCustomers());
+    loadBookings(); // customers load lazily when Customers tab is opened
   }
 
   // Pre-fill add-client date to today
@@ -3619,7 +3613,17 @@ async function executeApproveEstimate(rowNum, name) {
 }
 
 async function loadBookings() {
-  document.getElementById('lastRefresh').textContent = 'Loading…';
+  // Show cached bookings immediately so the page isn't blank while fetching
+  const _bkCached = sessionStorage.getItem('evg_bookings_cache');
+  if (_bkCached) {
+    try {
+      allBookings = JSON.parse(_bkCached);
+      renderBookings();
+      document.getElementById('lastRefresh').textContent = 'Refreshing…';
+    } catch(e) {}
+  } else {
+    document.getElementById('lastRefresh').textContent = 'Loading…';
+  }
   try {
     const _lbCtrl = new AbortController();
     const _lbTimer = setTimeout(() => _lbCtrl.abort(), 30000); // 30-second hard timeout
@@ -3641,6 +3645,7 @@ async function loadBookings() {
     }
 
     allBookings = data.bookings || [];
+    try { sessionStorage.setItem('evg_bookings_cache', JSON.stringify(allBookings)); } catch(e) {}
     renderBookings();
     // Refresh pending estimates for owner (fire-and-forget)
     if (adminRole === 'owner') loadPendingEstimates();
@@ -7414,6 +7419,20 @@ function renderDispatchWeek() {
   }
   if (emptyEl) emptyEl.style.display = 'none';
 
+  // Get configured zone(s) for a crew on a day-of-week label e.g. "Mon"
+  function crewDayZones(crew, dayLabel) {
+    if (!cfgData) loadCfgData();
+    const zones = [];
+    for (const [zone, days] of Object.entries(cfgData.zoneDays || {})) {
+      if (!days || !days.includes(dayLabel)) continue;
+      const assignedCrew = (cfgData.zoneCrew || {})[zone] || '';
+      // Match crew: if crew filter is specific, match it; if unassigned show zones with no crew
+      if (crew === 'Unassigned' && !assignedCrew) zones.push(zone);
+      else if (assignedCrew === crew) zones.push(zone);
+    }
+    return zones;
+  }
+
   // Cluster hint: show if a job is the only one of its zone on its day
   function isolatedHint(b) {
     const zone = b.zone || getZoneFromZip(b.zip) || '';
@@ -7475,10 +7494,14 @@ function renderDispatchWeek() {
         <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${crewTotal} job${crewTotal!==1?'s':''}</div>
       </td>`;
     for (const ds of dates) {
-      const cellJobs = crewJobs[crew][ds] || [];
+      const cellJobs  = crewJobs[crew][ds] || [];
+      const _dow      = new Date(ds + 'T12:00').toLocaleDateString('en-US',{weekday:'short'}); // "Mon"
+      const _czones   = crewDayZones(crew, _dow);
+      const _czLabel  = _czones.length ? `<div style="font-size:9px;font-weight:700;color:var(--green-mid);letter-spacing:.05em;margin-bottom:4px;">${_czones.join(' · ')}</div>` : '';
       html += `<td style="padding:6px;border-right:1px solid var(--border);vertical-align:top;min-width:130px;"
                ondragover="dispatchWeekDragOver(event,'${ds}')"
-               ondrop="dispatchWeekDrop(event,'${ds}')">`;
+               ondrop="dispatchWeekDrop(event,'${ds}')">
+        ${_czLabel}`;
       if (!cellJobs.length) {
         html += `<div style="font-size:11px;color:#e2e8f0;font-style:italic;padding:4px 2px;">—</div>`;
       } else {
