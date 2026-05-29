@@ -7109,244 +7109,11 @@ async function saveEmployeeNote() {
   </div>
 </div>
 
-</body>
-</html>
 
-      ? `<span class="hist-status-issue">⚠ Issue</span>`
-      : `<span class="hist-status-done">✓ Done</span>`;
-    const dateLabel  = b.serviceDate || b.serviceDateRaw || '—';
-    const priceLabel = b.price ? String(b.price).replace(/^\$?/,'$') : '—';
-    const photoCount = b.photos ? b.photos.split(',').filter(Boolean).length : 0;
-    return `<div class="hist-item" onclick="openHistoryDetail(${i})">
-      <div class="hist-item-avatar">🌿</div>
-      <div class="hist-item-main">
-        <div class="hist-item-name">${esc(b.name||'—')}</div>
-        <div class="hist-item-meta">${esc(dateLabel)} · ${esc(b.address||'—')}</div>
-      </div>
-      <div class="hist-item-right">
-        ${badge}
-        <span style="font-size:13px;font-weight:700;color:var(--green-deep);">${esc(priceLabel)}</span>
-        ${photoCount ? `<span class="hist-photo-count">📷 ${photoCount}</span>` : ''}
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ── History Detail ────────────────────────────────────────────────────────
-function openHistoryDetail(rowIdx) {
-  const b = allBookings[rowIdx];
-  if (!b) return;
-  const ov = document.getElementById('histDetailOverlay');
-  if (!ov) return;
-
-  document.getElementById('histDetailTitle').textContent = b.name || '—';
-  const status = _histStatusLabel(b);
-  document.getElementById('histDetailStatus').innerHTML = status === 'issue'
-    ? '<span class="hist-status-issue">⚠ Issue</span>'
-    : '<span class="hist-status-done">✓ Done</span>';
-
-  function row(label, val) {
-    if (!val || val === '(none)' || val === '—') return '';
-    return `<div class="hist-row"><span class="hist-row-label">${label}</span><span class="hist-row-val">${esc(String(val))}</span></div>`;
-  }
-  function card(title, body) {
-    return `<div class="hist-card"><div class="hist-card-title">${title}</div>${body}</div>`;
-  }
-
-  let html = '';
-  html += card('📋 Job Details',
-    row('Date',    b.serviceDate || b.serviceDateRaw)
-    + row('Address', b.address)
-    + row('Service', b.service || 'Lawn Mow & Blow')
-    + row('Plan',    b.frequency)
-    + row('Price',   b.price)
-    + row('Payment', b.payMethod || b.calendarEvent)
-    + row('Crew',    b.crew)
-    + row('Done by', b.markedBy)
-  );
-  if (b.notes && b.notes !== '(none)') {
-    html += card('📝 Customer Notes', `<div class="hist-notes-box">${esc(b.notes)}</div>`);
-  }
-  if (b.employeeNotes) {
-    html += card('🗒️ Employee Note', `<div class="hist-notes-box">${esc(b.employeeNotes)}</div>`);
-  }
-  // Photos
-  const photoUrls = (b.photos || '').split(',').map(s => s.trim()).filter(Boolean);
-  if (photoUrls.length) {
-    const thumbs = photoUrls.map(url =>
-      `<div class="hist-photo-thumb" onclick="openPhotoLightbox('${esc(url)}')">
-         <img src="${esc(url)}" alt="Job photo" onerror="this.parentElement.style.display='none'">
-       </div>`
-    ).join('');
-    html += card('📷 Photos', `<div class="hist-photo-grid">${thumbs}</div>`);
-  }
-  // Actions on historical jobs
-  html += `<div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;">
-    <button class="btn-action" style="background:#7c3aed;color:#fff;" onclick="openPhotoUpload(${rowIdx})">📷 Add Photo</button>
-    <button class="btn-action" style="background:#0369a1;color:#fff;" onclick="openNoteModal(${rowIdx})">📝 ${b.employeeNotes ? 'Edit Note' : 'Add Note'}</button>
-  </div>`;
-
-  document.getElementById('histDetailBody').innerHTML = html;
-  ov.classList.add('open');
-}
-function closeHistoryDetail() {
-  const ov = document.getElementById('histDetailOverlay');
-  if (ov) ov.classList.remove('open');
-}
-
-// ── Photo lightbox ────────────────────────────────────────────────────────
-function openPhotoLightbox(url) {
-  let lb = document.getElementById('photoLightbox');
-  if (!lb) {
-    lb = document.createElement('div');
-    lb.id = 'photoLightbox';
-    lb.className = 'photo-lightbox';
-    lb.innerHTML = `<button onclick="document.getElementById('photoLightbox').classList.remove('open')" style="position:fixed;top:20px;right:24px;background:none;border:none;color:#fff;font-size:32px;cursor:pointer;z-index:9001;">✕</button>
-      <img id="photoLightboxImg" style="max-width:92vw;max-height:88vh;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.5);" alt="Job photo">`;
-    lb.onclick = (e) => { if (e.target === lb) lb.classList.remove('open'); };
-    document.body.appendChild(lb);
-  }
-  document.getElementById('photoLightboxImg').src = url;
-  lb.classList.add('open');
-}
-
-// ── Photo Upload Modal ────────────────────────────────────────────────────
-let _photoUploadRowIdx = -1;
-function openPhotoUpload(rowIdx) {
-  _photoUploadRowIdx = rowIdx;
-  let modal = document.getElementById('photoUploadModal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'photoUploadModal';
-    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;';
-    modal.innerHTML = `
-      <div style="background:#fff;border-radius:18px;padding:28px;max-width:400px;width:92%;box-shadow:0 8px 40px rgba(0,0,0,.18);">
-        <h3 style="font-family:Playfair Display,serif;color:var(--green-deep);margin-bottom:6px;">📷 Add Job Photo</h3>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:18px;">Attach a photo to this job. It will appear in the History tab.</p>
-        <input type="file" id="photoFileInput" accept="image/*" capture="environment" style="margin-bottom:14px;font-size:14px;width:100%;">
-        <div id="photoPreviewWrap" style="display:none;margin-bottom:14px;">
-          <img id="photoPreviewImg" style="width:100%;border-radius:10px;max-height:200px;object-fit:cover;" alt="preview">
-        </div>
-        <div style="display:flex;gap:10px;margin-top:4px;">
-          <button onclick="document.getElementById('photoUploadModal').style.display='none'" style="flex:1;padding:11px;border:1.5px solid var(--border);border-radius:10px;background:#fff;font-family:inherit;font-size:14px;cursor:pointer;">Cancel</button>
-          <button id="photoUploadBtn" onclick="submitPhotoUpload()" style="flex:1;padding:11px;background:var(--green-mid);color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;">Upload</button>
-        </div>
-        <div id="photoUploadStatus" style="font-size:13px;margin-top:10px;text-align:center;"></div>
-      </div>`;
-    modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
-    document.body.appendChild(modal);
-    document.getElementById('photoFileInput').addEventListener('change', function() {
-      const file = this.files[0]; if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (e2) => {
-        document.getElementById('photoPreviewImg').src = e2.target.result;
-        document.getElementById('photoPreviewWrap').style.display = 'block';
-      };
-      reader.readAsDataURL(file);
-    });
-  }
-  document.getElementById('photoUploadStatus').textContent = '';
-  document.getElementById('photoPreviewWrap').style.display = 'none';
-  document.getElementById('photoFileInput').value = '';
-  modal.style.display = 'flex';
-}
-async function submitPhotoUpload() {
-  const input = document.getElementById('photoFileInput');
-  const file  = input?.files?.[0];
-  if (!file) { showToast('Please select a photo.'); return; }
-  const btn = document.getElementById('photoUploadBtn');
-  const status = document.getElementById('photoUploadStatus');
-  if (btn.disabled) return;
-  btn.disabled = true; btn.textContent = 'Uploading…'; status.textContent = '';
-  const reader = new FileReader();
-  reader.onload = async (ev) => {
-    const base64Data = ev.target.result.split(',')[1];
-    const b = allBookings[_photoUploadRowIdx];
-    const payload = {
-      action:    'upload_job_photo',
-      base64Data,
-      fileName:  file.name,
-      mimeType:  file.type,
-      rowIndex:  b ? (b._rowIndex || (_photoUploadRowIdx + 2)) : 0,
-      jobLabel:  b ? (b.name + ' — ' + (b.serviceDate || '')) : '',
-      markedBy:  adminName || adminEmail || 'Staff',
-      adminToken,
-    };
-    try {
-      const res  = await fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(payload) });
-      const data = await res.json();
-      if (data.success) {
-        status.style.color = '#15803d'; status.textContent = '✅ Photo uploaded!';
-        if (b && data.fileUrl) {
-          allBookings[_photoUploadRowIdx].photos = b.photos ? b.photos + ',' + data.fileUrl : data.fileUrl;
-        }
-        setTimeout(() => { document.getElementById('photoUploadModal').style.display = 'none'; renderBookings(); }, 1400);
-      } else {
-        status.style.color = '#dc2626'; status.textContent = '❌ ' + (data.error || 'Upload failed');
-        btn.disabled = false; btn.textContent = 'Upload';
-      }
-    } catch(err) { status.style.color = '#dc2626'; status.textContent = '❌ Network error'; btn.disabled = false; btn.textContent = 'Upload'; }
-  };
-  reader.readAsDataURL(file);
-}
-
-// ── Employee Note Modal ───────────────────────────────────────────────────
-let _noteModalRowIdx = -1;
-function openNoteModal(rowIdx) {
-  _noteModalRowIdx = rowIdx;
-  const b = allBookings[rowIdx] || {};
-  let modal = document.getElementById('noteModal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'noteModal';
-    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;';
-    modal.innerHTML = `
-      <div style="background:#fff;border-radius:18px;padding:28px;max-width:400px;width:92%;box-shadow:0 8px 40px rgba(0,0,0,.18);">
-        <h3 style="font-family:Playfair Display,serif;color:var(--green-deep);margin-bottom:6px;">📝 Job Note</h3>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">Add a crew note for this job. Visible in the History tab.</p>
-        <textarea id="noteModalInput" rows="4" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="e.g. Trimmed hedges, gate code is 1234…"></textarea>
-        <div style="display:flex;gap:10px;margin-top:14px;">
-          <button onclick="document.getElementById('noteModal').style.display='none'" style="flex:1;padding:11px;border:1.5px solid var(--border);border-radius:10px;background:#fff;font-family:inherit;font-size:14px;cursor:pointer;">Cancel</button>
-          <button id="noteModalSaveBtn" onclick="submitNoteModal()" style="flex:1;padding:11px;background:#0369a1;color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;">Save Note</button>
-        </div>
-      </div>`;
-    modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
-    document.body.appendChild(modal);
-  }
-  document.getElementById('noteModalInput').value = b.employeeNotes || '';
-  modal.style.display = 'flex';
-  setTimeout(() => document.getElementById('noteModalInput')?.focus(), 50);
-}
-async function submitNoteModal() {
-  const note = document.getElementById('noteModalInput').value.trim();
-  const btn  = document.getElementById('noteModalSaveBtn');
-  if (btn.disabled) return;
-  btn.disabled = true; btn.textContent = 'Saving…';
-  const b = allBookings[_noteModalRowIdx];
-  if (!b) { btn.disabled = false; btn.textContent = 'Save Note'; return; }
-  try {
-    const params = new URLSearchParams({ action:'set_employee_note', rowIndex: b._rowIndex || (_noteModalRowIdx+2), note, adminToken });
-    const res  = await fetch(SCRIPT_URL + '?' + params.toString());
-    const data = await res.json();
-    if (data.success) {
-      allBookings[_noteModalRowIdx].employeeNotes = note;
-      document.getElementById('noteModal').style.display = 'none';
-      renderBookings();
-      showToast('📝 Note saved.');
-    } else { showToast('Error: ' + (data.error||'Failed')); btn.disabled=false; btn.textContent='Save Note'; }
-  } catch(err) { showToast('Network error'); btn.disabled=false; btn.textContent='Save Note'; }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// DISPATCH BOARD
-// ═══════════════════════════════════════════════════════════════════════
-const DISPATCH_START_HOUR = 7;
-const DISPATCH_END_HOUR   = 19;
-const DISPATCH_TOTAL_MINS = (DISPATCH_END_HOUR - DISPATCH_START_HOUR) * 60;
-let   _dispatchJobIdx     = -1;
+<script>
 
 function initDispatchTab() {
-  const today = new Date().toISOString().slice(0,10);
+  const today = new Date().toISOString().slice(0, 10);
   const el = document.getElementById('dispatchDate');
   if (el && !el.value) el.value = today;
   renderDispatchBoard();
@@ -7356,30 +7123,33 @@ function dispatchShiftDate(delta) {
   if (!el || !el.value) return;
   const d = new Date(el.value + 'T12:00:00');
   d.setDate(d.getDate() + delta);
-  el.value = d.toISOString().slice(0,10);
+  el.value = d.toISOString().slice(0, 10);
   renderDispatchBoard();
 }
 function dispatchGoToday() {
   const el = document.getElementById('dispatchDate');
-  if (el) el.value = new Date().toISOString().slice(0,10);
+  if (el) el.value = new Date().toISOString().slice(0, 10);
   renderDispatchBoard();
 }
+
 function renderDispatchBoard() {
   const dateStr  = document.getElementById('dispatchDate')?.value;
   const crewFilt = document.getElementById('dispatchCrewFilter')?.value || 'all';
   if (!dateStr) return;
-  let dayJobs = (allBookings||[]).filter(b => dateOf(b) === dateStr && !b.rowCancelled);
+
+  let dayJobs = (allBookings || []).filter(b => dateOf(b) === dateStr && !b.rowCancelled);
   if (crewFilt !== 'all') {
     dayJobs = dayJobs.filter(b => {
-      const crew = (b.crew||'').trim();
-      if (crewFilt === 'unassigned') return !crew;
-      return crew === crewFilt;
+      const crew = (b.crew || '').trim();
+      return crewFilt === 'unassigned' ? !crew : crew === crewFilt;
     });
   }
+
   const emptyEl = document.getElementById('dispatchEmpty');
   const axisEl  = document.getElementById('dispatchTimeAxis');
   const rowsEl  = document.getElementById('dispatchBoardRows');
   if (!axisEl || !rowsEl) return;
+
   if (!dayJobs.length) {
     if (emptyEl) emptyEl.style.display = 'block';
     axisEl.innerHTML = ''; rowsEl.innerHTML = '';
@@ -7388,77 +7158,85 @@ function renderDispatchBoard() {
   if (emptyEl) emptyEl.style.display = 'none';
 
   // Time axis
-  let axisHtml = '<div class="dispatch-time-axis-label-col">Crew</div><div class="dispatch-time-slots">';
+  let axHtml = '<div class="dispatch-time-axis-label-col">Crew</div><div class="dispatch-time-slots">';
   for (let h = DISPATCH_START_HOUR; h < DISPATCH_END_HOUR; h++) {
-    const lbl = h < 12 ? h+' AM' : h===12 ? '12 PM' : (h-12)+' PM';
-    axisHtml += `<div class="dispatch-time-slot">${lbl}</div>`;
+    const lbl = h < 12 ? h + ' AM' : h === 12 ? '12 PM' : (h - 12) + ' PM';
+    axHtml += `<div class="dispatch-time-slot">${lbl}</div>`;
   }
-  axisHtml += '</div>';
-  axisEl.innerHTML = axisHtml;
+  axHtml += '</div>';
+  axisEl.innerHTML = axHtml;
 
   // Group by crew
   const crews = {};
-  dayJobs.forEach(b => { const k=b.crew||'Unassigned'; if(!crews[k]) crews[k]=[]; crews[k].push(b); });
+  dayJobs.forEach(b => { const k = b.crew || 'Unassigned'; if (!crews[k]) crews[k] = []; crews[k].push(b); });
 
-  function estimateJobTimes(jobs) {
-    let curMin = 60;
+  function estimateTimes(jobs) {
+    let cur = 60;
     return jobs.map(b => {
-      let startMin = curMin;
+      let start = cur;
       if (b.jobTime) {
-        const [hh,mm] = b.jobTime.split(':').map(Number);
-        startMin = (hh - DISPATCH_START_HOUR)*60 + (mm||0);
-        if (startMin < 0) startMin = 0;
+        const [hh, mm] = b.jobTime.split(':').map(Number);
+        start = (hh - DISPATCH_START_HOUR) * 60 + (mm || 0);
+        if (start < 0) start = 0;
       }
       const dur = mowMinutes(b);
-      curMin = startMin + dur + 20;
-      return { b, startMin, dur };
+      cur = start + dur + 20;
+      return { b, start, dur };
     });
   }
-  function jobStatusClass(b) {
+  function dispatchJobClass(b) {
+    if (b.rowCompleted) return 'status-completed';
     if (isDone(b)) return 'status-done';
-    const cal=String(b.calendarEvent||'').toLowerCase(), pm=String(b.payMethod||'').toLowerCase();
-    if (cal.includes('cash')||pm.includes('cash')) return 'status-cash';
-    if (String(b.invoiced||'').length>2) return 'status-invoiced';
-    if (cal.includes('✅')||pm.includes('autopay')) return 'status-paid';
+    const cash = isCash(b), inv = String(b.invoiced || '').length > 2;
+    if (cash && !isCashPaid(b)) return 'status-cash';
+    if (inv) return 'status-invoiced';
+    const cal = String(b.calendarEvent || '').toLowerCase(), pm = String(b.payMethod || '').toLowerCase();
+    if (cal.includes('✅') || pm.includes('autopay')) return 'status-paid';
     return 'status-upcoming';
   }
+  function isCashPaid(b) {
+    const cal = String(b.calendarEvent || '').toLowerCase();
+    return cal.includes('✅') || cal.includes('paid');
+  }
   function fmtDispatchTime(startMin) {
-    const absMin = DISPATCH_START_HOUR*60+startMin;
-    const h=Math.floor(absMin/60), m=absMin%60;
-    const ap=h>=12?'PM':'AM', hd=h>12?h-12:h===0?12:h;
-    return hd+':'+String(m).padStart(2,'0')+' '+ap;
+    const abs = DISPATCH_START_HOUR * 60 + startMin;
+    const h = Math.floor(abs / 60), m = abs % 60;
+    const ap = h >= 12 ? 'PM' : 'AM', hd = h > 12 ? h - 12 : h === 0 ? 12 : h;
+    return hd + ':' + String(m).padStart(2, '0') + ' ' + ap;
   }
 
   let rowsHtml = '';
-  for (const [crewName, jobs] of Object.entries(crews)) {
-    const timed = estimateJobTimes(jobs);
-    let blocksHtml = '';
-    timed.forEach(({b, startMin, dur}) => {
-      const left  = Math.max(0, (startMin/DISPATCH_TOTAL_MINS)*100);
-      const width = Math.min(100-left, Math.max(2, (dur/DISPATCH_TOTAL_MINS)*100));
-      const cls   = jobStatusClass(b);
-      const rowIdx = allBookings.indexOf(b);
-      blocksHtml += `<div class="dispatch-job-block ${cls}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%;" onclick="openDispatchDetail(${rowIdx})" title="${esc(b.name||'')}">
-        <div class="dispatch-job-name">${esc(b.name||'—')}</div>
-        <div class="dispatch-job-time">${fmtDispatchTime(startMin)} · ${dur}m</div>
-        <div class="dispatch-job-plan">${esc(b.frequency||'')}</div>
+  const crewOrder = ['A', 'B', ...Object.keys(crews).filter(k => k !== 'A' && k !== 'B')];
+  for (const k of crewOrder) {
+    if (!crews[k]) continue;
+    const timed = estimateTimes(crews[k]);
+    let blocks = '';
+    timed.forEach(({ b, start, dur }) => {
+      const left  = Math.max(0, (start / DISPATCH_TOTAL_MINS) * 100);
+      const width = Math.min(100 - left, Math.max(1.8, (dur / DISPATCH_TOTAL_MINS) * 100));
+      const cls   = dispatchJobClass(b);
+      const ri    = allBookings.indexOf(b);
+      blocks += `<div class="dispatch-job-block ${cls}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%;" onclick="openDispatchDetail(${ri})" title="${esc(b.name || '')}">
+        <div class="dispatch-job-name">${esc(b.name || '—')}</div>
+        <div class="dispatch-job-time">${fmtDispatchTime(start)} · ${dur}m</div>
+        <div class="dispatch-job-plan">${esc(b.frequency || '')}</div>
       </div>`;
     });
-    const crewLabel = crewName==='A'?'🔵 Crew A':crewName==='B'?'🩷 Crew B':crewName==='Unassigned'?'⬜ Unassigned':esc(crewName);
+    const lbl = k === 'A' ? '🔵 Crew A' : k === 'B' ? '🩷 Crew B' : k === 'Unassigned' ? '⬜ Unassigned' : esc(k);
     rowsHtml += `<div class="dispatch-crew-row">
-      <div class="dispatch-crew-label"><div class="dispatch-crew-name">${crewLabel}</div><div class="dispatch-crew-count">${jobs.length} job${jobs.length!==1?'s':''}</div></div>
-      <div class="dispatch-job-track">${blocksHtml}</div>
+      <div class="dispatch-crew-label"><div class="dispatch-crew-name">${lbl}</div><div class="dispatch-crew-count">${crews[k].length} job${crews[k].length !== 1 ? 's' : ''}</div></div>
+      <div class="dispatch-job-track">${blocks}</div>
     </div>`;
   }
   rowsEl.innerHTML = rowsHtml;
 }
 
-// ── Dispatch detail panel ─────────────────────────────────────────────────
+// Dispatch detail panel
 function openDispatchDetail(rowIdx) {
   _dispatchJobIdx = rowIdx;
   const b = allBookings[rowIdx];
   if (!b) return;
-  _populateDispatchDetail(b, rowIdx);
+  _fillDispatchDetail(b, rowIdx);
   document.getElementById('dispatchDetailOverlay').classList.add('open');
 }
 function closeDispatchDetail() {
@@ -7466,54 +7244,70 @@ function closeDispatchDetail() {
   _dispatchJobIdx = -1;
 }
 function showDispatchTab(tab) {
-  ['info','notes','photos','history'].forEach(t => {
-    const btn=document.getElementById('dTab-'+t), pane=document.getElementById('dispatch-tab-'+t);
-    if (btn)  btn.classList.toggle('active', t===tab);
-    if (pane) pane.classList.toggle('active', t===tab);
+  ['info', 'notes', 'photos', 'history'].forEach(t => {
+    document.getElementById('dTab-' + t)?.classList.toggle('active', t === tab);
+    document.getElementById('dispatch-tab-' + t)?.classList.toggle('active', t === tab);
   });
 }
-function _populateDispatchDetail(b, rowIdx) {
-  function dRow(label,val) { if (!val||val==='(none)') return ''; return `<div class="dispatch-info-row"><div class="dispatch-info-label">${label}</div><div class="dispatch-info-val">${esc(String(val))}</div></div>`; }
-  const cash=isCash(b), done=isDone(b), inv=String(b.invoiced||'').length>2;
-  const isPaid=(()=>{ const c=String(b.calendarEvent||'').toLowerCase(),p=String(b.payMethod||'').toLowerCase(); return c.includes('✅')||p.includes('autopay')||c.includes('autopay'); })();
+function _fillDispatchDetail(b, rowIdx) {
+  function dRow(label, val) {
+    if (!val || val === '(none)') return '';
+    return `<div class="dispatch-info-row"><div class="dispatch-info-label">${label}</div><div class="dispatch-info-val">${esc(String(val))}</div></div>`;
+  }
+  const cash = isCash(b), done = isDone(b);
+  const calStr = String(b.calendarEvent || '').toLowerCase(), pmStr = String(b.payMethod || '').toLowerCase();
+  const paid = calStr.includes('✅') || pmStr.includes('autopay');
 
-  // Info
-  let info = `<div style="margin-bottom:16px;">${done?`<span style="background:#dcfce7;color:#15803d;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">✓ Done</span>`:`<span style="background:#fef9c3;color:#92400e;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">Upcoming</span>`}</div>`;
-  info += dRow('Customer',b.name)+dRow('Address',(b.address||'')+(b.zip?', '+b.zip:''))+dRow('Phone',b.phone)+dRow('Email',b.email)+dRow('Date',b.serviceDate||b.serviceDateRaw)+dRow('Plan',b.frequency)+dRow('Price',b.price)+dRow('Payment',cash?'💵 Cash':(b.payMethod||b.calendarEvent))+dRow('Crew',b.crew)+dRow('Done by',b.markedBy);
+  // Info tab
+  let info = `<div style="margin-bottom:16px;">
+    ${done ? `<span style="background:#dcfce7;color:#15803d;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">✓ Done</span>`
+           : `<span style="background:#fef9c3;color:#92400e;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">Upcoming</span>`}
+  </div>`;
+  info += dRow('Customer', b.name) + dRow('Address', (b.address || '') + (b.zip ? ', ' + b.zip : ''))
+       + dRow('Phone', b.phone) + dRow('Email', b.email)
+       + dRow('Date', b.serviceDate || b.serviceDateRaw) + dRow('Plan', b.frequency)
+       + dRow('Price', b.price) + dRow('Payment', cash ? '💵 Cash' : (b.payMethod || b.calendarEvent))
+       + dRow('Crew', b.crew) + dRow('Done by', b.markedBy);
   info += `<div class="dispatch-action-row">`;
   if (b.phone) info += `<a href="tel:${esc(b.phone)}" class="dispatch-action-btn" style="background:var(--green-mid);color:#fff;text-decoration:none;">📞 Call</a>`;
-  info += `<a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent((b.address||'')+(b.zip?', '+b.zip:'')+', FL')}" target="_blank" rel="noopener" class="dispatch-action-btn" style="background:#1d4ed8;color:#fff;text-decoration:none;">🗺 Navigate</a>`;
+  info += `<a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent((b.address || '') + (b.zip ? ', ' + b.zip : '') + ', FL')}" target="_blank" rel="noopener" class="dispatch-action-btn" style="background:#1d4ed8;color:#fff;text-decoration:none;">🗺 Navigate</a>`;
   if (!done) info += `<button class="dispatch-action-btn" style="background:#15803d;color:#fff;" onclick="closeDispatchDetail();triggerMarkDone(${rowIdx})">✓ Mark Job Done</button>`;
-  if (cash&&!isPaid) info += `<button class="dispatch-action-btn" style="background:#b45309;color:#fff;" onclick="closeDispatchDetail();triggerCashPaid(${rowIdx})">💵 Cash Collected</button>`;
+  if (cash && !paid) info += `<button class="dispatch-action-btn" style="background:#b45309;color:#fff;" onclick="closeDispatchDetail();triggerCashPaid(${rowIdx})">💵 Cash Collected</button>`;
   info += `</div>`;
   document.getElementById('dispatch-tab-info').innerHTML = info;
 
-  // Notes
-  const custRec = allCustomers.find(c => String(c.Email||'').toLowerCase().trim()===String(b.email||'').toLowerCase().trim());
-  const custNotes = custRec ? String(custRec.Notes||'').trim() : '';
+  // Notes tab
+  const custRec = allCustomers.find(c => String(c.Email || '').toLowerCase().trim() === String(b.email || '').toLowerCase().trim());
+  const custNotes = custRec ? String(custRec.Notes || '').trim() : '';
   let notes = '';
-  if (custNotes) notes += `<div style="margin-bottom:16px;"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:8px;">Customer Notes</div><div class="hist-notes-box">${esc(custNotes)}</div></div>`;
-  if (b.employeeNotes) notes += `<div style="margin-bottom:16px;"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:8px;">Crew Note</div><div class="hist-notes-box">${esc(b.employeeNotes)}</div></div>`;
-  if (!custNotes&&!b.employeeNotes) notes = `<div style="color:var(--text-muted);font-size:14px;padding:20px 0;">No notes on file.</div>`;
-  notes += `<button class="dispatch-action-btn" style="background:#0369a1;color:#fff;margin-top:12px;" onclick="closeDispatchDetail();openNoteModal(${rowIdx})">📝 ${b.employeeNotes?'Edit Crew Note':'Add Crew Note'}</button>`;
+  if (custNotes) notes += `<div style="margin-bottom:14px;"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:8px;">Customer Notes</div><div class="hist-notes-box">${esc(custNotes)}</div></div>`;
+  if (b.employeeNotes) notes += `<div style="margin-bottom:14px;"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:8px;">Crew Note</div><div class="hist-notes-box">${esc(b.employeeNotes)}</div></div>`;
+  if (!custNotes && !b.employeeNotes) notes = `<div style="color:var(--text-muted);font-size:14px;padding:16px 0;">No notes on file.</div>`;
+  notes += `<button class="dispatch-action-btn" style="background:#0369a1;color:#fff;margin-top:12px;" onclick="closeDispatchDetail();openNoteModal(${rowIdx})">📝 ${b.employeeNotes ? 'Edit Crew Note' : 'Add Crew Note'}</button>`;
   document.getElementById('dispatch-tab-notes').innerHTML = notes;
 
-  // Photos
-  const photoUrls = (b.photos||'').split(',').map(s=>s.trim()).filter(Boolean);
-  let photos = photoUrls.length ? `<div class="hist-photo-grid">${photoUrls.map(url=>`<div class="hist-photo-thumb" onclick="openPhotoLightbox('${esc(url)}')"><img src="${esc(url)}" alt="Job photo" onerror="this.parentElement.style.display='none'"></div>`).join('')}</div>` : `<div style="color:var(--text-muted);font-size:14px;padding:20px 0;">No photos yet.</div>`;
+  // Photos tab
+  const photoUrls = (b.photos || '').split(',').map(s => s.trim()).filter(Boolean);
+  let photos = photoUrls.length
+    ? `<div class="hist-photo-grid">${photoUrls.map((url, pi) => `<div class="hist-photo-thumb" onclick="openPhotoLightbox(${pi}, _dispatchPhotoUrls)"><img src="${esc(url)}" alt="Job photo" onerror="this.parentElement.style.display='none'"></div>`).join('')}</div>`
+    : `<div style="color:var(--text-muted);font-size:14px;padding:16px 0;">No photos yet.</div>`;
+  window._dispatchPhotoUrls = photoUrls;
   photos += `<button class="dispatch-action-btn" style="background:#7c3aed;color:#fff;margin-top:16px;" onclick="closeDispatchDetail();openPhotoUpload(${rowIdx})">📷 Add Photo</button>`;
   document.getElementById('dispatch-tab-photos').innerHTML = photos;
 
-  // History
-  const em = String(b.email||'').toLowerCase().trim();
-  const hist = (allBookings||[]).filter(j=>String(j.email||'').toLowerCase().trim()===em).sort((a,z)=>(z.serviceDate||'').localeCompare(a.serviceDate||''));
-  document.getElementById('dispatch-tab-history').innerHTML = hist.length ? hist.map(j=>{
-    const jd=isDone(j);
-    return `<div style="padding:12px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
-      <div><div style="font-size:14px;font-weight:600;color:var(--green-deep);">${esc(j.serviceDate||j.serviceDateRaw||'—')}</div><div style="font-size:12px;color:var(--text-muted);">${esc(j.frequency||'')}</div></div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">${jd?`<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">✓ Done</span>`:`<span style="background:#fef9c3;color:#92400e;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">Upcoming</span>`}<span style="font-size:13px;font-weight:700;color:var(--green-deep);">${esc(j.price||'')}</span></div>
-    </div>`;
-  }).join('') : `<div style="color:var(--text-muted);font-size:14px;padding:20px 0;">No history found.</div>`;
+  // History tab
+  const em = String(b.email || '').toLowerCase().trim();
+  const hist = (allBookings || []).filter(j => String(j.email || '').toLowerCase().trim() === em)
+    .sort((a, z) => (z.serviceDate || '').localeCompare(a.serviceDate || ''));
+  document.getElementById('dispatch-tab-history').innerHTML = hist.length
+    ? hist.map(j => `<div style="padding:12px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+        <div><div style="font-size:14px;font-weight:600;color:var(--green-deep);">${esc(j.serviceDate || j.serviceDateRaw || '—')}</div><div style="font-size:12px;color:var(--text-muted);">${esc(j.frequency || '')}</div></div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+          ${isDone(j) ? `<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">✓ Done</span>` : `<span style="background:#fef9c3;color:#92400e;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">Upcoming</span>`}
+          <span style="font-size:13px;font-weight:700;color:var(--green-deep);">${esc(j.price || '')}</span>
+        </div>
+      </div>`).join('')
+    : `<div style="color:var(--text-muted);font-size:14px;padding:16px 0;">No history found.</div>`;
 
   showDispatchTab('info');
 }
