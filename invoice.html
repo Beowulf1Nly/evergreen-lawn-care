@@ -722,6 +722,60 @@
     background:#fff; transition:border .2s;
   }
   .hist-search-input:focus { border-color:var(--green-mid); }
+
+  /* ── Dispatch Board ─────────────────────────────────────────────── */
+  .dispatch-wrap { padding:20px 16px 60px; max-width:1400px; margin:0 auto; }
+  .dispatch-controls { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:14px; margin-bottom:20px; background:#fff; border:1.5px solid var(--border); border-radius:14px; padding:18px 20px; }
+  .dispatch-date-input { padding:9px 13px; border:1.5px solid var(--border); border-radius:10px; font-size:14px; font-family:inherit; outline:none; background:#fff; }
+  .dispatch-date-input:focus { border-color:var(--green-mid); }
+  .dispatch-nav-btn { padding:8px 14px; border:1.5px solid var(--border); border-radius:8px; background:#fff; font-size:13px; font-family:inherit; cursor:pointer; transition:all .15s; }
+  .dispatch-nav-btn:hover { border-color:var(--green-mid); color:var(--green-mid); }
+  .dispatch-legend { display:flex; align-items:center; gap:4px; font-size:12px; color:var(--text-muted); font-weight:500; flex-wrap:wrap; }
+  .dispatch-legend-dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+
+  .dispatch-board-outer { background:#fff; border:1.5px solid var(--border); border-radius:14px; overflow:hidden; overflow-x:auto; }
+  .dispatch-time-axis { display:flex; border-bottom:2px solid var(--border); background:#f8faf6; position:sticky; top:0; z-index:10; }
+  .dispatch-time-axis-label-col { width:160px; min-width:160px; flex-shrink:0; padding:10px 14px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); border-right:1.5px solid var(--border); }
+  .dispatch-time-slots { flex:1; display:flex; position:relative; min-width:800px; }
+  .dispatch-time-slot { flex:1; text-align:center; font-size:11px; color:var(--text-muted); font-weight:600; padding:10px 0; border-right:1px solid var(--border); }
+  .dispatch-time-slot:last-child { border-right:none; }
+
+  .dispatch-crew-row { display:flex; border-bottom:1.5px solid var(--border); min-height:80px; }
+  .dispatch-crew-row:last-child { border-bottom:none; }
+  .dispatch-crew-label { width:160px; min-width:160px; flex-shrink:0; padding:14px; border-right:1.5px solid var(--border); background:#f8faf6; display:flex; flex-direction:column; justify-content:center; gap:4px; }
+  .dispatch-crew-name { font-size:14px; font-weight:700; color:var(--green-deep); }
+  .dispatch-crew-count { font-size:11px; color:var(--text-muted); }
+  .dispatch-job-track { flex:1; position:relative; min-width:800px; min-height:80px; background:repeating-linear-gradient(90deg, transparent, transparent calc(100%/12 - 1px), var(--border) calc(100%/12 - 1px), var(--border) calc(100%/12)); }
+
+  .dispatch-job-block { position:absolute; top:8px; height:calc(100% - 16px); border-radius:8px; cursor:pointer; display:flex; flex-direction:column; justify-content:center; padding:6px 10px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,.12); transition:transform .15s, box-shadow .15s; min-width:90px; }
+  .dispatch-job-block:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.18); z-index:5; }
+  .dispatch-job-block.status-upcoming  { background:#16a34a; color:#fff; }
+  .dispatch-job-block.status-done      { background:#64748b; color:#fff; }
+  .dispatch-job-block.status-cash      { background:#b45309; color:#fff; }
+  .dispatch-job-block.status-invoiced  { background:#1d4ed8; color:#fff; }
+  .dispatch-job-block.status-paid      { background:#7c3aed; color:#fff; }
+  .dispatch-job-name { font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dispatch-job-time { font-size:10px; opacity:.8; white-space:nowrap; }
+  .dispatch-job-plan { font-size:10px; opacity:.75; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* Job detail panel */
+  .dispatch-detail-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1100; align-items:flex-end; justify-content:center; }
+  .dispatch-detail-overlay.open { display:flex; }
+  .dispatch-detail-panel { background:#fff; border-radius:20px 20px 0 0; width:100%; max-width:640px; max-height:85vh; overflow-y:auto; box-shadow:0 -8px 40px rgba(0,0,0,.18); animation:slideInUp .22s ease; }
+  .dispatch-detail-topbar { display:flex; align-items:center; justify-content:space-between; padding:16px 20px 0; position:sticky; top:0; background:#fff; z-index:2; border-bottom:1.5px solid var(--border); padding-bottom:12px; }
+  .dispatch-detail-tabs { display:flex; gap:4px; flex-wrap:wrap; }
+  .dispatch-tab-btn { padding:7px 14px; border:1.5px solid var(--border); border-radius:8px; background:#fff; font-size:13px; font-family:inherit; cursor:pointer; transition:all .15s; font-weight:500; color:var(--text-muted); }
+  .dispatch-tab-btn.active { background:var(--green-mid); border-color:var(--green-mid); color:#fff; font-weight:700; }
+  .dispatch-close-btn { width:34px; height:34px; border-radius:50%; border:1.5px solid var(--border); background:#fff; font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .15s; flex-shrink:0; }
+  .dispatch-close-btn:hover { background:#fee2e2; border-color:#fca5a5; color:#dc2626; }
+  .dispatch-tab-content { display:none; padding:20px; }
+  .dispatch-tab-content.active { display:block; }
+  .dispatch-info-row { display:flex; gap:8px; margin-bottom:10px; font-size:14px; }
+  .dispatch-info-label { width:110px; font-weight:600; color:var(--text-muted); font-size:13px; flex-shrink:0; }
+  .dispatch-info-val { color:var(--text); flex:1; word-break:break-word; }
+  .dispatch-action-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:20px; padding-top:16px; border-top:1.5px solid var(--border); }
+  .dispatch-action-btn { padding:10px 18px; border-radius:10px; border:none; font-size:13px; font-weight:700; font-family:inherit; cursor:pointer; transition:opacity .15s; }
+  .dispatch-action-btn:hover { opacity:.85; }
 </style>
 </head>
 <body>
@@ -767,6 +821,7 @@
   <div class="tab-bar" id="ownerTabs" style="display:none;">
     <button class="tab-btn active" onclick="showTab('jobs')"  data-tab="jobs">📋 Jobs</button>
     <button class="tab-btn" onclick="showTab('route')" data-tab="route">🗺️ Route</button>
+    <button class="tab-btn owner-only" onclick="showTab('dispatch')" data-tab="dispatch">📅 Dispatch</button>
     <button class="tab-btn owner-only" onclick="showTab('add')"   data-tab="add">➕ Add Client</button>
     <button class="tab-btn" onclick="showTab('quote')" data-tab="quote">📋 Estimate</button>
     <button class="tab-btn owner-only" onclick="showTab('job')" data-tab="job">📅 Add Job</button>
@@ -1103,12 +1158,8 @@
           <button id="routeDateWeek"  class="route-range-btn"        onclick="setRouteRange('week')">📆 Next 7 days</button>
         </div>
 
-        <!-- Crew filter + calendar sync -->
+        <!-- Crew filter + dispatch link -->
         <div class="route-sync-row">
-          <label class="route-sync-label" title="Push optimized arrival times to Google Calendar after each route build">
-            <input type="checkbox" id="routeSyncCalendar" checked>
-            📅 Sync to Google Calendar
-          </label>
           <select id="routeCrewFilter" class="route-crew-select" onchange="setRouteCrew(this.value)">
             <option value="all">👥 All crews</option>
             <option value="A">🔵 Crew A</option>
@@ -1147,6 +1198,73 @@
       <!-- Timeline renders here -->
       <div id="routeTimeline"></div>
 
+    </div>
+  </div>
+
+  <!-- ── DISPATCH BOARD TAB (owner only) ── -->
+  <div id="pane-dispatch" class="tab-pane">
+    <div class="dispatch-wrap">
+      <!-- Controls -->
+      <div class="dispatch-controls">
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;">Date</label>
+            <input type="date" id="dispatchDate" class="dispatch-date-input" onchange="renderDispatchBoard()">
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;">Crew</label>
+            <select id="dispatchCrewFilter" class="route-crew-select" onchange="renderDispatchBoard()">
+              <option value="all">👥 All Crews</option>
+              <option value="A">🔵 Crew A</option>
+              <option value="B">🩷 Crew B</option>
+              <option value="unassigned">⬜ Unassigned</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:8px;align-items:flex-end;padding-bottom:2px;">
+            <button class="dispatch-nav-btn" onclick="dispatchShiftDate(-1)">◀ Prev</button>
+            <button class="dispatch-nav-btn" onclick="dispatchGoToday()">Today</button>
+            <button class="dispatch-nav-btn" onclick="dispatchShiftDate(1)">Next ▶</button>
+          </div>
+        </div>
+        <div class="dispatch-legend">
+          <span class="dispatch-legend-dot" style="background:#16a34a;"></span>Upcoming
+          <span class="dispatch-legend-dot" style="background:#64748b;margin-left:10px;"></span>Done
+          <span class="dispatch-legend-dot" style="background:#b45309;margin-left:10px;"></span>Cash Pending
+          <span class="dispatch-legend-dot" style="background:#1d4ed8;margin-left:10px;"></span>Invoiced
+          <span class="dispatch-legend-dot" style="background:#7c3aed;margin-left:10px;"></span>Paid
+        </div>
+      </div>
+
+      <!-- Board -->
+      <div class="dispatch-board-outer">
+        <!-- Time axis header -->
+        <div class="dispatch-time-axis" id="dispatchTimeAxis"></div>
+        <!-- Crew rows -->
+        <div id="dispatchBoardRows"></div>
+      </div>
+
+      <div id="dispatchEmpty" style="display:none;text-align:center;padding:48px 20px;color:var(--text-muted);font-size:15px;">
+        📭 No jobs scheduled for this date.
+      </div>
+    </div>
+
+    <!-- Job Detail Panel -->
+    <div class="dispatch-detail-overlay" id="dispatchDetailOverlay" onclick="if(event.target===this)closeDispatchDetail()">
+      <div class="dispatch-detail-panel" id="dispatchDetailPanel">
+        <div class="dispatch-detail-topbar">
+          <div class="dispatch-detail-tabs">
+            <button class="dispatch-tab-btn active" id="dTab-info"    onclick="showDispatchTab('info')">📋 Info</button>
+            <button class="dispatch-tab-btn"        id="dTab-notes"   onclick="showDispatchTab('notes')">📝 Notes</button>
+            <button class="dispatch-tab-btn"        id="dTab-photos"  onclick="showDispatchTab('photos')">📷 Photos</button>
+            <button class="dispatch-tab-btn"        id="dTab-history" onclick="showDispatchTab('history')">🗂 History</button>
+          </div>
+          <button class="dispatch-close-btn" onclick="closeDispatchDetail()">✕</button>
+        </div>
+        <div id="dispatch-tab-info"    class="dispatch-tab-content active"></div>
+        <div id="dispatch-tab-notes"   class="dispatch-tab-content"></div>
+        <div id="dispatch-tab-photos"  class="dispatch-tab-content"></div>
+        <div id="dispatch-tab-history" class="dispatch-tab-content"></div>
+      </div>
     </div>
   </div>
 
@@ -1936,6 +2054,7 @@ function showTab(tab) {
   if (tab === 'job')       { jobInit(); }
   if (tab === 'config')    { initConfigTab(); }
   if (tab === 'history')   { initHistoryTab(); }
+  if (tab === 'dispatch')  { initDispatchTab(); }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3048,15 +3167,18 @@ function closeScheduleModal() {
 async function submitSchedule() {
   const c = _schedCustomer;
   if (!c) return;
+  // ── Disable button immediately to prevent double-submit ──
+  const btn = document.getElementById('schedSubmitBtn');
+  if (btn.disabled) return; // already in-flight
+  btn.disabled = true; btn.textContent = 'Scheduling…';
+
   const plan  = document.getElementById('schedPlan').value;
   const date  = document.getElementById('schedDate').value;
   const notes = document.getElementById('schedNotes').value.trim();
-  if (!date) { showToast('Pick a date.'); return; }
+  if (!date) { showToast('Pick a date.'); btn.disabled = false; btn.textContent = 'Schedule'; return; }
 
   // ── Quote Visit path ──
   if (plan === 'Quote Visit') {
-    const btn = document.getElementById('schedSubmitBtn');
-    btn.disabled = true; btn.textContent = 'Scheduling…';
     try {
       const params = new URLSearchParams({
         action: 'quote_visit',
@@ -3083,10 +3205,8 @@ async function submitSchedule() {
   const price = document.getElementById('schedPrice').value.trim();
   const firstMowPromo = !!(document.getElementById('sched-promo')?.checked);
   const customDays = plan === 'Custom Plan' ? (parseInt(document.getElementById('schedCustomDays')?.value || '') || 0) : 0;
-  if (plan === 'Custom Plan' && !customDays) { showToast('Enter the number of days for this custom plan.'); return; }
-  if (!price) { showToast('Enter a price.'); return; }
-  const btn = document.getElementById('schedSubmitBtn');
-  btn.disabled = true; btn.textContent = 'Scheduling…';
+  if (plan === 'Custom Plan' && !customDays) { showToast('Enter the number of days for this custom plan.'); btn.disabled = false; btn.textContent = 'Schedule'; return; }
+  if (!price) { showToast('Enter a price.'); btn.disabled = false; btn.textContent = 'Schedule'; return; }
   try {
     const params = new URLSearchParams({
       action: 'manual_schedule',
@@ -3207,9 +3327,10 @@ function custViewNotes(custIdx) {
     'Notes are appended — existing notes are never overwritten.',
     `${existingBlock}<input type="text" id="custEditNotes" placeholder="Add a new note…" style="width:100%;padding:10px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;"/>`,
     async () => {
+      const btn = document.getElementById('custEditSaveBtn');
+      if (btn.disabled) return; // prevent double-save
       const newNote = document.getElementById('custEditNotes').value.trim();
       if (!newNote) { closeCustEdit(); return; }
-      const btn = document.getElementById('custEditSaveBtn');
       btn.disabled = true; btn.textContent = 'Saving…';
       try {
         const params = new URLSearchParams({ action: 'owner_update_notes', email: c.email || '', notes: newNote });
@@ -3222,11 +3343,12 @@ function custViewNotes(custIdx) {
           c.notes = combined;
           closeCustEdit();
           showToast('Note added.');
+          return; // button stays disabled after close — overlay is hidden anyway
         } else {
           showToast('Error: ' + (data.error || 'Failed'));
+          btn.disabled = false; btn.textContent = 'Save';
         }
-      } catch(e) { showToast('Network error'); }
-      btn.disabled = false; btn.textContent = 'Save';
+      } catch(e) { showToast('Network error'); btn.disabled = false; btn.textContent = 'Save'; }
     }
   );
 }
@@ -3657,67 +3779,64 @@ function cardHTML(b, rowIdx, isToday, tomorrowStr) {
   // ── Action buttons ──
   let actions = '';
 
-  // Mark Done button — employees can only mark today's jobs; owners can mark any upcoming job
-  // Quote visits: show "Mark Visited" when pending; after visited show Schedule Plan + Cancel
+  // ── Quote visit actions ──
   if (isQuote && done && adminRole === 'owner') {
     actions += `<button class="btn-action btn-schedule-plan" onclick="openSchedulePlan(${rowIdx})">📅 Schedule Plan</button>`;
     actions += `<button class="btn-action btn-cancel-quote" onclick="triggerCancelJob(${rowIdx})">✗ Remove</button>`;
-  } else if (!done && (adminRole === 'owner' || isToday)) {
-    const doneLabel = isQuote ? '✓ Mark Visited' : '✓ Mark Done';
-    actions += `<button class="btn-action btn-done" onclick="triggerMarkDone(${rowIdx})">${doneLabel}</button>`;
+  } else if (isQuote && !done && (adminRole === 'owner' || isToday)) {
+    actions += `<button class="btn-action btn-done" onclick="triggerMarkDone(${rowIdx})">✓ Mark Visited</button>`;
   }
 
-  // 💵 Cash Collected — visible to ALL roles on any non-paid, non-free, non-quote job
-  if (!isFree && !isQuote && !isPaid) {
-    actions += `<button class="btn-action btn-charge" style="background:#854d0e;margin-top:4px;" onclick="triggerCashPaid(${rowIdx})">💵 Cash Collected</button>`;
-  }
+  if (!isQuote) {
+    // ── Step 1: Mark Cash Collected — ALL roles, cash jobs, not yet paid ──
+    if (cash && !isPaid) {
+      actions += `<button class="btn-action btn-charge" style="background:#854d0e;margin-top:4px;" onclick="triggerCashPaid(${rowIdx})">💵 Mark Cash Collected</button>`;
+    }
 
-  // Owner-only: card billing options (invoice / charge card / autopay)
-  if (adminRole === 'owner' && !isFree && !isQuote && !isPaid && !cash) {
-    const subscribed  = isSubscribed(b);
-    const autopayOn   = b.portalAutopay === true; // driven purely by AutopayEnabled in Customers sheet
-    if (subscribed || auto) {
-      const hasCard = !!(b.cardLast4);
-      if (done && hasCard && autopayOn) {
-        // Autopay is active — charge the card directly
-        actions += `<button class="btn-action btn-charge" onclick="triggerAutoCharge(${rowIdx})">💳 Charge Card</button>`;
-      } else if (done) {
-        // Has card but autopay is off (or no card) — send invoice instead
-        if (invoiced) {
-          actions += `<button class="btn-action btn-disabled" disabled>📧 Sent ✓</button>`;
-        } else {
-          actions += `<button class="btn-action btn-invoice" onclick="openInvoiceModal(${rowIdx})">📧 Invoice $${price.toFixed(0)}</button>`;
-        }
-      }
-    } else {
-      if (invoiced) {
-        actions += `<button class="btn-action btn-disabled" disabled>📧 Sent ✓</button>`;
-      } else if (done) {
-        actions += `<button class="btn-action btn-invoice" onclick="openInvoiceModal(${rowIdx})">📧 Invoice $${price.toFixed(0)}</button>`;
+    // ── Step 2: Mark Job Done — employees (today only) + owners (any upcoming) ──
+    if (!done && (adminRole === 'owner' || isToday)) {
+      actions += `<button class="btn-action btn-done" onclick="triggerMarkDone(${rowIdx})" style="margin-top:4px;">✓ Mark Job Done</button>`;
+    }
+
+    // ── Owner-only billing (after job is done) ──
+    if (adminRole === 'owner' && done && !isPaid && !cash) {
+      const subscribed = isSubscribed(b);
+      const autopayOn  = b.portalAutopay === true;
+      const hasCard    = !!(b.cardLast4);
+      if ((subscribed || auto) && hasCard && autopayOn) {
+        actions += `<button class="btn-action btn-charge" onclick="triggerAutoCharge(${rowIdx})" style="margin-top:4px;">💳 Charge Card</button>`;
+      } else if (invoiced) {
+        actions += `<button class="btn-action btn-disabled" disabled style="margin-top:4px;">📧 Invoice Sent ✓</button>`;
+      } else {
+        actions += `<button class="btn-action btn-invoice" onclick="openInvoiceModal(${rowIdx})" style="margin-top:4px;">📧 Invoice $${price.toFixed(0)}</button>`;
       }
     }
-  }
 
-  // Reschedule — owner only, undone non-quote jobs only
-  if (adminRole === 'owner' && !done && !isQuote) {
-    actions += `<button class="btn-action btn-invoice" onclick="openOwnerResched(${rowIdx})" style="margin-top:4px;">📅 Reschedule</button>`;
-  }
+    // ── Step 3: Complete Job — owners only, after job done AND (cash paid OR invoiced/charged OR free) ──
+    const jobReadyToComplete = done && !b.rowCompleted &&
+      (isFree || isPaid || invoiced || (cash && isPaid));
+    if (adminRole === 'owner' && jobReadyToComplete) {
+      actions += `<button class="btn-action" style="background:#15803d;color:#fff;font-weight:700;margin-top:4px;border-color:#15803d;" onclick="triggerCompleteJob(${rowIdx})">✅ Complete Job</button>`;
+    }
 
-  // Cancel Job — owner only; free mows always cancellable, paid jobs only if not yet paid
-  // Quote visits use the dedicated "✗ Remove" button instead
-  if (adminRole === 'owner' && !isQuote && (isFree || !isPaid)) {
-    actions += `<button class="btn-action btn-cancel-job" onclick="triggerCancelJob(${rowIdx})" style="margin-top:4px;">✕ Cancel Job</button>`;
-  }
+    // ── Reschedule — owner only, undone jobs ──
+    if (adminRole === 'owner' && !done) {
+      actions += `<button class="btn-action btn-invoice" onclick="openOwnerResched(${rowIdx})" style="margin-top:4px;">📅 Reschedule</button>`;
+    }
 
-  // Cancel Plan (subscription) — owner only
-  if (adminRole === 'owner' && isSubscribed(b) && b.email) {
-    const _email = String(b.email || '').toLowerCase().trim();
-    const _name  = String(b.name  || '');
-    actions += `<button class="btn-action btn-cancel-job" onclick="custCancelPlan('${esc(_email)}','${esc(_name)}')" style="margin-top:4px;background:#7f1d1d;border-color:#7f1d1d;">✕ Cancel Plan</button>`;
-  }
+    // ── Cancel Job — owner only; free mows always cancellable, paid jobs only if not yet paid ──
+    if (adminRole === 'owner' && (isFree || !isPaid)) {
+      actions += `<button class="btn-action btn-cancel-job" onclick="triggerCancelJob(${rowIdx})" style="margin-top:4px;">✕ Cancel Job</button>`;
+    }
 
-  // 📷 Photo + 📝 Note — visible to all roles on any job
-  if (!isQuote) {
+    // ── Cancel Plan — owner only ──
+    if (adminRole === 'owner' && isSubscribed(b) && b.email) {
+      const _email = String(b.email || '').toLowerCase().trim();
+      const _name  = String(b.name  || '');
+      actions += `<button class="btn-action btn-cancel-job" onclick="custCancelPlan('${esc(_email)}','${esc(_name)}')" style="margin-top:4px;background:#7f1d1d;border-color:#7f1d1d;">✕ Cancel Plan</button>`;
+    }
+
+    // ── Photo + Note — visible to all roles ──
     actions += `<button class="btn-action" style="background:#7c3aed;color:#fff;margin-top:4px;" onclick="openPhotoUpload(${rowIdx})">📷 Add Photo</button>`;
     actions += `<button class="btn-action" style="background:#0369a1;color:#fff;margin-top:4px;" onclick="openNoteModal(${rowIdx})">📝 ${b.employeeNotes ? 'Edit Note' : 'Add Note'}</button>`;
   }
@@ -4118,6 +4237,46 @@ async function executeCashPaid(rowIdx) {
       showToast('💵 Cash payment recorded for ' + (b.name || 'customer'));
     } else {
       alert('Error: ' + (data.error || 'Could not record payment.'));
+    }
+  } catch(err) { alert('Network error: ' + err.message); }
+}
+
+// ═══════════════════════════════════════════════════════
+// COMPLETE JOB (owner only — final archive step)
+// ═══════════════════════════════════════════════════════
+function triggerCompleteJob(rowIdx) {
+  const b = allBookings[rowIdx];
+  if (!b) return;
+  // Hide crew/reason rows — not needed for completion
+  const crewRow   = document.getElementById('confirmCrewRow');
+  const reasonRow = document.getElementById('confirmReasonRow');
+  if (crewRow)   crewRow.style.display   = 'none';
+  if (reasonRow) reasonRow.style.display = 'none';
+  openConfirm(
+    `Complete job for "${b.name || 'customer'}"?`,
+    'This marks the job as fully complete and archives it. You can still add notes or photos first.',
+    () => executeCompleteJob(rowIdx)
+  );
+}
+
+async function executeCompleteJob(rowIdx) {
+  const b = allBookings[rowIdx];
+  if (!b) return;
+  try {
+    const params = new URLSearchParams({
+      action:    'owner_complete_job',
+      rowIndex:  b._rowIndex || (rowIdx + 2),
+      adminToken,
+    });
+    const res  = await fetch(SCRIPT_URL + '?' + params.toString());
+    const data = await res.json();
+    if (data.success) {
+      allBookings[rowIdx].rowCompleted = true;
+      allBookings[rowIdx].done = allBookings[rowIdx].done || ('✓ Done — ' + new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}));
+      renderBookings();
+      showToast('✅ Job completed and archived for ' + (b.name || 'customer'));
+    } else {
+      alert('Error: ' + (data.error || 'Could not complete job.'));
     }
   } catch(err) { alert('Network error: ' + err.message); }
 }
@@ -5991,7 +6150,7 @@ function nearestNeighbour(startCoord, stops) {
 async function buildRoute() {
   const startVal  = (document.getElementById('routeStartAddr')?.value || '').trim();
   const startTime = (document.getElementById('routeStartTime')?.value || '08:00');
-  const syncCal   = document.getElementById('routeSyncCalendar')?.checked !== false;
+  const syncCal   = false; // Calendar sync removed — use Dispatch Board tab instead
   const errEl     = document.getElementById('routeError');
   const btn       = document.getElementById('routeOptBtn');
   const tl        = document.getElementById('routeTimeline');
@@ -6839,7 +6998,10 @@ async function saveEmployeeNote() {
       markedBy:  adminName || adminEmail || 'Staff',
       adminToken,
     });
-    const res  = await fetch(SCRIPT_URL + '?' + params);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    const res  = await fetch(SCRIPT_URL + '?' + params, { signal: controller.signal });
+    clearTimeout(timeout);
     const data = await res.json();
     if (data.success) {
       if (allBookings[_noteTargetRowIdx]) {
@@ -6855,7 +7017,8 @@ async function saveEmployeeNote() {
       btn.textContent = '💾 Save Note';
     }
   } catch(e) {
-    errEl.textContent = '❌ Network error';
+    const msg = e.name === 'AbortError' ? '❌ Timed out — check your connection' : '❌ Network error: ' + e.message;
+    errEl.textContent = msg;
     errEl.style.display = 'block';
     btn.disabled = false;
     btn.textContent = '💾 Save Note';
@@ -6946,5 +7109,414 @@ async function saveEmployeeNote() {
   </div>
 </div>
 
+</body>
+</html>
+
+      ? `<span class="hist-status-issue">⚠ Issue</span>`
+      : `<span class="hist-status-done">✓ Done</span>`;
+    const dateLabel  = b.serviceDate || b.serviceDateRaw || '—';
+    const priceLabel = b.price ? String(b.price).replace(/^\$?/,'$') : '—';
+    const photoCount = b.photos ? b.photos.split(',').filter(Boolean).length : 0;
+    return `<div class="hist-item" onclick="openHistoryDetail(${i})">
+      <div class="hist-item-avatar">🌿</div>
+      <div class="hist-item-main">
+        <div class="hist-item-name">${esc(b.name||'—')}</div>
+        <div class="hist-item-meta">${esc(dateLabel)} · ${esc(b.address||'—')}</div>
+      </div>
+      <div class="hist-item-right">
+        ${badge}
+        <span style="font-size:13px;font-weight:700;color:var(--green-deep);">${esc(priceLabel)}</span>
+        ${photoCount ? `<span class="hist-photo-count">📷 ${photoCount}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── History Detail ────────────────────────────────────────────────────────
+function openHistoryDetail(rowIdx) {
+  const b = allBookings[rowIdx];
+  if (!b) return;
+  const ov = document.getElementById('histDetailOverlay');
+  if (!ov) return;
+
+  document.getElementById('histDetailTitle').textContent = b.name || '—';
+  const status = _histStatusLabel(b);
+  document.getElementById('histDetailStatus').innerHTML = status === 'issue'
+    ? '<span class="hist-status-issue">⚠ Issue</span>'
+    : '<span class="hist-status-done">✓ Done</span>';
+
+  function row(label, val) {
+    if (!val || val === '(none)' || val === '—') return '';
+    return `<div class="hist-row"><span class="hist-row-label">${label}</span><span class="hist-row-val">${esc(String(val))}</span></div>`;
+  }
+  function card(title, body) {
+    return `<div class="hist-card"><div class="hist-card-title">${title}</div>${body}</div>`;
+  }
+
+  let html = '';
+  html += card('📋 Job Details',
+    row('Date',    b.serviceDate || b.serviceDateRaw)
+    + row('Address', b.address)
+    + row('Service', b.service || 'Lawn Mow & Blow')
+    + row('Plan',    b.frequency)
+    + row('Price',   b.price)
+    + row('Payment', b.payMethod || b.calendarEvent)
+    + row('Crew',    b.crew)
+    + row('Done by', b.markedBy)
+  );
+  if (b.notes && b.notes !== '(none)') {
+    html += card('📝 Customer Notes', `<div class="hist-notes-box">${esc(b.notes)}</div>`);
+  }
+  if (b.employeeNotes) {
+    html += card('🗒️ Employee Note', `<div class="hist-notes-box">${esc(b.employeeNotes)}</div>`);
+  }
+  // Photos
+  const photoUrls = (b.photos || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (photoUrls.length) {
+    const thumbs = photoUrls.map(url =>
+      `<div class="hist-photo-thumb" onclick="openPhotoLightbox('${esc(url)}')">
+         <img src="${esc(url)}" alt="Job photo" onerror="this.parentElement.style.display='none'">
+       </div>`
+    ).join('');
+    html += card('📷 Photos', `<div class="hist-photo-grid">${thumbs}</div>`);
+  }
+  // Actions on historical jobs
+  html += `<div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;">
+    <button class="btn-action" style="background:#7c3aed;color:#fff;" onclick="openPhotoUpload(${rowIdx})">📷 Add Photo</button>
+    <button class="btn-action" style="background:#0369a1;color:#fff;" onclick="openNoteModal(${rowIdx})">📝 ${b.employeeNotes ? 'Edit Note' : 'Add Note'}</button>
+  </div>`;
+
+  document.getElementById('histDetailBody').innerHTML = html;
+  ov.classList.add('open');
+}
+function closeHistoryDetail() {
+  const ov = document.getElementById('histDetailOverlay');
+  if (ov) ov.classList.remove('open');
+}
+
+// ── Photo lightbox ────────────────────────────────────────────────────────
+function openPhotoLightbox(url) {
+  let lb = document.getElementById('photoLightbox');
+  if (!lb) {
+    lb = document.createElement('div');
+    lb.id = 'photoLightbox';
+    lb.className = 'photo-lightbox';
+    lb.innerHTML = `<button onclick="document.getElementById('photoLightbox').classList.remove('open')" style="position:fixed;top:20px;right:24px;background:none;border:none;color:#fff;font-size:32px;cursor:pointer;z-index:9001;">✕</button>
+      <img id="photoLightboxImg" style="max-width:92vw;max-height:88vh;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.5);" alt="Job photo">`;
+    lb.onclick = (e) => { if (e.target === lb) lb.classList.remove('open'); };
+    document.body.appendChild(lb);
+  }
+  document.getElementById('photoLightboxImg').src = url;
+  lb.classList.add('open');
+}
+
+// ── Photo Upload Modal ────────────────────────────────────────────────────
+let _photoUploadRowIdx = -1;
+function openPhotoUpload(rowIdx) {
+  _photoUploadRowIdx = rowIdx;
+  let modal = document.getElementById('photoUploadModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'photoUploadModal';
+    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;';
+    modal.innerHTML = `
+      <div style="background:#fff;border-radius:18px;padding:28px;max-width:400px;width:92%;box-shadow:0 8px 40px rgba(0,0,0,.18);">
+        <h3 style="font-family:Playfair Display,serif;color:var(--green-deep);margin-bottom:6px;">📷 Add Job Photo</h3>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:18px;">Attach a photo to this job. It will appear in the History tab.</p>
+        <input type="file" id="photoFileInput" accept="image/*" capture="environment" style="margin-bottom:14px;font-size:14px;width:100%;">
+        <div id="photoPreviewWrap" style="display:none;margin-bottom:14px;">
+          <img id="photoPreviewImg" style="width:100%;border-radius:10px;max-height:200px;object-fit:cover;" alt="preview">
+        </div>
+        <div style="display:flex;gap:10px;margin-top:4px;">
+          <button onclick="document.getElementById('photoUploadModal').style.display='none'" style="flex:1;padding:11px;border:1.5px solid var(--border);border-radius:10px;background:#fff;font-family:inherit;font-size:14px;cursor:pointer;">Cancel</button>
+          <button id="photoUploadBtn" onclick="submitPhotoUpload()" style="flex:1;padding:11px;background:var(--green-mid);color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;">Upload</button>
+        </div>
+        <div id="photoUploadStatus" style="font-size:13px;margin-top:10px;text-align:center;"></div>
+      </div>`;
+    modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+    document.body.appendChild(modal);
+    document.getElementById('photoFileInput').addEventListener('change', function() {
+      const file = this.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e2) => {
+        document.getElementById('photoPreviewImg').src = e2.target.result;
+        document.getElementById('photoPreviewWrap').style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  document.getElementById('photoUploadStatus').textContent = '';
+  document.getElementById('photoPreviewWrap').style.display = 'none';
+  document.getElementById('photoFileInput').value = '';
+  modal.style.display = 'flex';
+}
+async function submitPhotoUpload() {
+  const input = document.getElementById('photoFileInput');
+  const file  = input?.files?.[0];
+  if (!file) { showToast('Please select a photo.'); return; }
+  const btn = document.getElementById('photoUploadBtn');
+  const status = document.getElementById('photoUploadStatus');
+  if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = 'Uploading…'; status.textContent = '';
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    const base64Data = ev.target.result.split(',')[1];
+    const b = allBookings[_photoUploadRowIdx];
+    const payload = {
+      action:    'upload_job_photo',
+      base64Data,
+      fileName:  file.name,
+      mimeType:  file.type,
+      rowIndex:  b ? (b._rowIndex || (_photoUploadRowIdx + 2)) : 0,
+      jobLabel:  b ? (b.name + ' — ' + (b.serviceDate || '')) : '',
+      markedBy:  adminName || adminEmail || 'Staff',
+      adminToken,
+    };
+    try {
+      const res  = await fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (data.success) {
+        status.style.color = '#15803d'; status.textContent = '✅ Photo uploaded!';
+        if (b && data.fileUrl) {
+          allBookings[_photoUploadRowIdx].photos = b.photos ? b.photos + ',' + data.fileUrl : data.fileUrl;
+        }
+        setTimeout(() => { document.getElementById('photoUploadModal').style.display = 'none'; renderBookings(); }, 1400);
+      } else {
+        status.style.color = '#dc2626'; status.textContent = '❌ ' + (data.error || 'Upload failed');
+        btn.disabled = false; btn.textContent = 'Upload';
+      }
+    } catch(err) { status.style.color = '#dc2626'; status.textContent = '❌ Network error'; btn.disabled = false; btn.textContent = 'Upload'; }
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── Employee Note Modal ───────────────────────────────────────────────────
+let _noteModalRowIdx = -1;
+function openNoteModal(rowIdx) {
+  _noteModalRowIdx = rowIdx;
+  const b = allBookings[rowIdx] || {};
+  let modal = document.getElementById('noteModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'noteModal';
+    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;';
+    modal.innerHTML = `
+      <div style="background:#fff;border-radius:18px;padding:28px;max-width:400px;width:92%;box-shadow:0 8px 40px rgba(0,0,0,.18);">
+        <h3 style="font-family:Playfair Display,serif;color:var(--green-deep);margin-bottom:6px;">📝 Job Note</h3>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">Add a crew note for this job. Visible in the History tab.</p>
+        <textarea id="noteModalInput" rows="4" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="e.g. Trimmed hedges, gate code is 1234…"></textarea>
+        <div style="display:flex;gap:10px;margin-top:14px;">
+          <button onclick="document.getElementById('noteModal').style.display='none'" style="flex:1;padding:11px;border:1.5px solid var(--border);border-radius:10px;background:#fff;font-family:inherit;font-size:14px;cursor:pointer;">Cancel</button>
+          <button id="noteModalSaveBtn" onclick="submitNoteModal()" style="flex:1;padding:11px;background:#0369a1;color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;">Save Note</button>
+        </div>
+      </div>`;
+    modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+    document.body.appendChild(modal);
+  }
+  document.getElementById('noteModalInput').value = b.employeeNotes || '';
+  modal.style.display = 'flex';
+  setTimeout(() => document.getElementById('noteModalInput')?.focus(), 50);
+}
+async function submitNoteModal() {
+  const note = document.getElementById('noteModalInput').value.trim();
+  const btn  = document.getElementById('noteModalSaveBtn');
+  if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const b = allBookings[_noteModalRowIdx];
+  if (!b) { btn.disabled = false; btn.textContent = 'Save Note'; return; }
+  try {
+    const params = new URLSearchParams({ action:'set_employee_note', rowIndex: b._rowIndex || (_noteModalRowIdx+2), note, adminToken });
+    const res  = await fetch(SCRIPT_URL + '?' + params.toString());
+    const data = await res.json();
+    if (data.success) {
+      allBookings[_noteModalRowIdx].employeeNotes = note;
+      document.getElementById('noteModal').style.display = 'none';
+      renderBookings();
+      showToast('📝 Note saved.');
+    } else { showToast('Error: ' + (data.error||'Failed')); btn.disabled=false; btn.textContent='Save Note'; }
+  } catch(err) { showToast('Network error'); btn.disabled=false; btn.textContent='Save Note'; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// DISPATCH BOARD
+// ═══════════════════════════════════════════════════════════════════════
+const DISPATCH_START_HOUR = 7;
+const DISPATCH_END_HOUR   = 19;
+const DISPATCH_TOTAL_MINS = (DISPATCH_END_HOUR - DISPATCH_START_HOUR) * 60;
+let   _dispatchJobIdx     = -1;
+
+function initDispatchTab() {
+  const today = new Date().toISOString().slice(0,10);
+  const el = document.getElementById('dispatchDate');
+  if (el && !el.value) el.value = today;
+  renderDispatchBoard();
+}
+function dispatchShiftDate(delta) {
+  const el = document.getElementById('dispatchDate');
+  if (!el || !el.value) return;
+  const d = new Date(el.value + 'T12:00:00');
+  d.setDate(d.getDate() + delta);
+  el.value = d.toISOString().slice(0,10);
+  renderDispatchBoard();
+}
+function dispatchGoToday() {
+  const el = document.getElementById('dispatchDate');
+  if (el) el.value = new Date().toISOString().slice(0,10);
+  renderDispatchBoard();
+}
+function renderDispatchBoard() {
+  const dateStr  = document.getElementById('dispatchDate')?.value;
+  const crewFilt = document.getElementById('dispatchCrewFilter')?.value || 'all';
+  if (!dateStr) return;
+  let dayJobs = (allBookings||[]).filter(b => dateOf(b) === dateStr && !b.rowCancelled);
+  if (crewFilt !== 'all') {
+    dayJobs = dayJobs.filter(b => {
+      const crew = (b.crew||'').trim();
+      if (crewFilt === 'unassigned') return !crew;
+      return crew === crewFilt;
+    });
+  }
+  const emptyEl = document.getElementById('dispatchEmpty');
+  const axisEl  = document.getElementById('dispatchTimeAxis');
+  const rowsEl  = document.getElementById('dispatchBoardRows');
+  if (!axisEl || !rowsEl) return;
+  if (!dayJobs.length) {
+    if (emptyEl) emptyEl.style.display = 'block';
+    axisEl.innerHTML = ''; rowsEl.innerHTML = '';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  // Time axis
+  let axisHtml = '<div class="dispatch-time-axis-label-col">Crew</div><div class="dispatch-time-slots">';
+  for (let h = DISPATCH_START_HOUR; h < DISPATCH_END_HOUR; h++) {
+    const lbl = h < 12 ? h+' AM' : h===12 ? '12 PM' : (h-12)+' PM';
+    axisHtml += `<div class="dispatch-time-slot">${lbl}</div>`;
+  }
+  axisHtml += '</div>';
+  axisEl.innerHTML = axisHtml;
+
+  // Group by crew
+  const crews = {};
+  dayJobs.forEach(b => { const k=b.crew||'Unassigned'; if(!crews[k]) crews[k]=[]; crews[k].push(b); });
+
+  function estimateJobTimes(jobs) {
+    let curMin = 60;
+    return jobs.map(b => {
+      let startMin = curMin;
+      if (b.jobTime) {
+        const [hh,mm] = b.jobTime.split(':').map(Number);
+        startMin = (hh - DISPATCH_START_HOUR)*60 + (mm||0);
+        if (startMin < 0) startMin = 0;
+      }
+      const dur = mowMinutes(b);
+      curMin = startMin + dur + 20;
+      return { b, startMin, dur };
+    });
+  }
+  function jobStatusClass(b) {
+    if (isDone(b)) return 'status-done';
+    const cal=String(b.calendarEvent||'').toLowerCase(), pm=String(b.payMethod||'').toLowerCase();
+    if (cal.includes('cash')||pm.includes('cash')) return 'status-cash';
+    if (String(b.invoiced||'').length>2) return 'status-invoiced';
+    if (cal.includes('✅')||pm.includes('autopay')) return 'status-paid';
+    return 'status-upcoming';
+  }
+  function fmtDispatchTime(startMin) {
+    const absMin = DISPATCH_START_HOUR*60+startMin;
+    const h=Math.floor(absMin/60), m=absMin%60;
+    const ap=h>=12?'PM':'AM', hd=h>12?h-12:h===0?12:h;
+    return hd+':'+String(m).padStart(2,'0')+' '+ap;
+  }
+
+  let rowsHtml = '';
+  for (const [crewName, jobs] of Object.entries(crews)) {
+    const timed = estimateJobTimes(jobs);
+    let blocksHtml = '';
+    timed.forEach(({b, startMin, dur}) => {
+      const left  = Math.max(0, (startMin/DISPATCH_TOTAL_MINS)*100);
+      const width = Math.min(100-left, Math.max(2, (dur/DISPATCH_TOTAL_MINS)*100));
+      const cls   = jobStatusClass(b);
+      const rowIdx = allBookings.indexOf(b);
+      blocksHtml += `<div class="dispatch-job-block ${cls}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%;" onclick="openDispatchDetail(${rowIdx})" title="${esc(b.name||'')}">
+        <div class="dispatch-job-name">${esc(b.name||'—')}</div>
+        <div class="dispatch-job-time">${fmtDispatchTime(startMin)} · ${dur}m</div>
+        <div class="dispatch-job-plan">${esc(b.frequency||'')}</div>
+      </div>`;
+    });
+    const crewLabel = crewName==='A'?'🔵 Crew A':crewName==='B'?'🩷 Crew B':crewName==='Unassigned'?'⬜ Unassigned':esc(crewName);
+    rowsHtml += `<div class="dispatch-crew-row">
+      <div class="dispatch-crew-label"><div class="dispatch-crew-name">${crewLabel}</div><div class="dispatch-crew-count">${jobs.length} job${jobs.length!==1?'s':''}</div></div>
+      <div class="dispatch-job-track">${blocksHtml}</div>
+    </div>`;
+  }
+  rowsEl.innerHTML = rowsHtml;
+}
+
+// ── Dispatch detail panel ─────────────────────────────────────────────────
+function openDispatchDetail(rowIdx) {
+  _dispatchJobIdx = rowIdx;
+  const b = allBookings[rowIdx];
+  if (!b) return;
+  _populateDispatchDetail(b, rowIdx);
+  document.getElementById('dispatchDetailOverlay').classList.add('open');
+}
+function closeDispatchDetail() {
+  document.getElementById('dispatchDetailOverlay').classList.remove('open');
+  _dispatchJobIdx = -1;
+}
+function showDispatchTab(tab) {
+  ['info','notes','photos','history'].forEach(t => {
+    const btn=document.getElementById('dTab-'+t), pane=document.getElementById('dispatch-tab-'+t);
+    if (btn)  btn.classList.toggle('active', t===tab);
+    if (pane) pane.classList.toggle('active', t===tab);
+  });
+}
+function _populateDispatchDetail(b, rowIdx) {
+  function dRow(label,val) { if (!val||val==='(none)') return ''; return `<div class="dispatch-info-row"><div class="dispatch-info-label">${label}</div><div class="dispatch-info-val">${esc(String(val))}</div></div>`; }
+  const cash=isCash(b), done=isDone(b), inv=String(b.invoiced||'').length>2;
+  const isPaid=(()=>{ const c=String(b.calendarEvent||'').toLowerCase(),p=String(b.payMethod||'').toLowerCase(); return c.includes('✅')||p.includes('autopay')||c.includes('autopay'); })();
+
+  // Info
+  let info = `<div style="margin-bottom:16px;">${done?`<span style="background:#dcfce7;color:#15803d;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">✓ Done</span>`:`<span style="background:#fef9c3;color:#92400e;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">Upcoming</span>`}</div>`;
+  info += dRow('Customer',b.name)+dRow('Address',(b.address||'')+(b.zip?', '+b.zip:''))+dRow('Phone',b.phone)+dRow('Email',b.email)+dRow('Date',b.serviceDate||b.serviceDateRaw)+dRow('Plan',b.frequency)+dRow('Price',b.price)+dRow('Payment',cash?'💵 Cash':(b.payMethod||b.calendarEvent))+dRow('Crew',b.crew)+dRow('Done by',b.markedBy);
+  info += `<div class="dispatch-action-row">`;
+  if (b.phone) info += `<a href="tel:${esc(b.phone)}" class="dispatch-action-btn" style="background:var(--green-mid);color:#fff;text-decoration:none;">📞 Call</a>`;
+  info += `<a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent((b.address||'')+(b.zip?', '+b.zip:'')+', FL')}" target="_blank" rel="noopener" class="dispatch-action-btn" style="background:#1d4ed8;color:#fff;text-decoration:none;">🗺 Navigate</a>`;
+  if (!done) info += `<button class="dispatch-action-btn" style="background:#15803d;color:#fff;" onclick="closeDispatchDetail();triggerMarkDone(${rowIdx})">✓ Mark Job Done</button>`;
+  if (cash&&!isPaid) info += `<button class="dispatch-action-btn" style="background:#b45309;color:#fff;" onclick="closeDispatchDetail();triggerCashPaid(${rowIdx})">💵 Cash Collected</button>`;
+  info += `</div>`;
+  document.getElementById('dispatch-tab-info').innerHTML = info;
+
+  // Notes
+  const custRec = allCustomers.find(c => String(c.Email||'').toLowerCase().trim()===String(b.email||'').toLowerCase().trim());
+  const custNotes = custRec ? String(custRec.Notes||'').trim() : '';
+  let notes = '';
+  if (custNotes) notes += `<div style="margin-bottom:16px;"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:8px;">Customer Notes</div><div class="hist-notes-box">${esc(custNotes)}</div></div>`;
+  if (b.employeeNotes) notes += `<div style="margin-bottom:16px;"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:8px;">Crew Note</div><div class="hist-notes-box">${esc(b.employeeNotes)}</div></div>`;
+  if (!custNotes&&!b.employeeNotes) notes = `<div style="color:var(--text-muted);font-size:14px;padding:20px 0;">No notes on file.</div>`;
+  notes += `<button class="dispatch-action-btn" style="background:#0369a1;color:#fff;margin-top:12px;" onclick="closeDispatchDetail();openNoteModal(${rowIdx})">📝 ${b.employeeNotes?'Edit Crew Note':'Add Crew Note'}</button>`;
+  document.getElementById('dispatch-tab-notes').innerHTML = notes;
+
+  // Photos
+  const photoUrls = (b.photos||'').split(',').map(s=>s.trim()).filter(Boolean);
+  let photos = photoUrls.length ? `<div class="hist-photo-grid">${photoUrls.map(url=>`<div class="hist-photo-thumb" onclick="openPhotoLightbox('${esc(url)}')"><img src="${esc(url)}" alt="Job photo" onerror="this.parentElement.style.display='none'"></div>`).join('')}</div>` : `<div style="color:var(--text-muted);font-size:14px;padding:20px 0;">No photos yet.</div>`;
+  photos += `<button class="dispatch-action-btn" style="background:#7c3aed;color:#fff;margin-top:16px;" onclick="closeDispatchDetail();openPhotoUpload(${rowIdx})">📷 Add Photo</button>`;
+  document.getElementById('dispatch-tab-photos').innerHTML = photos;
+
+  // History
+  const em = String(b.email||'').toLowerCase().trim();
+  const hist = (allBookings||[]).filter(j=>String(j.email||'').toLowerCase().trim()===em).sort((a,z)=>(z.serviceDate||'').localeCompare(a.serviceDate||''));
+  document.getElementById('dispatch-tab-history').innerHTML = hist.length ? hist.map(j=>{
+    const jd=isDone(j);
+    return `<div style="padding:12px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+      <div><div style="font-size:14px;font-weight:600;color:var(--green-deep);">${esc(j.serviceDate||j.serviceDateRaw||'—')}</div><div style="font-size:12px;color:var(--text-muted);">${esc(j.frequency||'')}</div></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">${jd?`<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">✓ Done</span>`:`<span style="background:#fef9c3;color:#92400e;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">Upcoming</span>`}<span style="font-size:13px;font-weight:700;color:var(--green-deep);">${esc(j.price||'')}</span></div>
+    </div>`;
+  }).join('') : `<div style="color:var(--text-muted);font-size:14px;padding:20px 0;">No history found.</div>`;
+
+  showDispatchTab('info');
+}
+</script>
 </body>
 </html>
