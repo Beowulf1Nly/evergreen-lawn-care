@@ -5525,7 +5525,10 @@ function getZoneFromZip(zip) {
 function zoneBadgeHTML(zip, manualZone) {
   const zone = manualZone || getZoneFromZip(zip);
   if (!zone) return '';
-  return `<span class="zone-badge" title="Service zone">${zone}</span>`;
+  const days = getZoneDayHint(zip, zone);
+  const dayStr = days ? ' · ' + days : '';
+  const title  = days ? `Zone ${zone} — serviced ${days}` : `Service zone ${zone}`;
+  return `<span class="zone-badge" title="${title}">${zone}${dayStr}</span>`;
 }
 
 function crewBadgeHTML(crew) {
@@ -6219,9 +6222,10 @@ function cfgSetZoneCrew(zone, crew) {
 }
 
 // Show zone schedule hint on job cards (used in route stops + cards)
-function getZoneDayHint(zip) {
+// Accepts an already-resolved zone as second arg to skip the zip lookup
+function getZoneDayHint(zip, resolvedZone) {
   if (!cfgData) loadCfgData();
-  const zone = getZoneFromZip(zip);
+  const zone = resolvedZone || getZoneFromZip(zip);
   if (!zone) return '';
   const days = getCfgZoneDays(zone);
   return days.length ? days.join('/') : '';
