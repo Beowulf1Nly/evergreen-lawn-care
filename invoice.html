@@ -1974,16 +1974,9 @@ let confirmCallback = null;
 // ═══════════════════════════════════════════════════════
 // Fire API fetches AFTER the browser marks page fully loaded.
 // This stops the tab spinner before any network requests start.
-window.addEventListener('load', () => {
-  const saved = loadSavedSession();
-  if (saved) {
-    adminToken = adminToken || saved.token;
-    adminName  = adminName  || saved.name;
-    adminEmail = adminEmail || saved.email;
-    adminRole  = adminRole  || saved.role || 'employee';
-    if (adminToken) loadBookings(); // customers load lazily
-  }
-});
+// NOTE: loadBookings is intentionally NOT tied to window.load —
+// a broken resource (e.g. an img that never resolves) can block window.load
+// indefinitely. We call loadBookings from DOMContentLoaded instead.
 
 window.addEventListener('DOMContentLoaded', () => {
   const saved = loadSavedSession();
@@ -1993,11 +1986,13 @@ window.addEventListener('DOMContentLoaded', () => {
     adminEmail = saved.email;
     adminRole  = saved.role || 'employee';
     showApp();
-    // Show cached data instantly — real data fetches fire after window.load
+    // Show any cached data immediately so the page isn't blank
     const _bkCachedEarly = sessionStorage.getItem('evg_bookings_cache');
     if (_bkCachedEarly) {
       try { allBookings = JSON.parse(_bkCachedEarly); renderBookings(); } catch(e) {}
     }
+    // Kick off the real fetch right away — don't wait for window.load
+    setTimeout(loadBookings, 0);
   }
 
   // Pre-fill add-client date to today
@@ -7596,7 +7591,7 @@ async function saveEmployeeNote() {
   <button class="photo-lightbox-close" onclick="closePhotoLightbox()">✕</button>
   <button id="lightboxPrev" onclick="lightboxNav(-1)"
     style="position:fixed;left:14px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:50%;width:44px;height:44px;font-size:22px;cursor:pointer;">‹</button>
-  <img id="lightboxImg" src="" alt="Job photo" onerror="this.src=''">
+  <img id="lightboxImg" src="data:," alt="Job photo" onerror="this.onerror=null;this.src='data:,'">
   <button id="lightboxNext" onclick="lightboxNav(1)"
     style="position:fixed;right:14px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:50%;width:44px;height:44px;font-size:22px;cursor:pointer;">›</button>
   <a id="lightboxDriveLink" href="#" target="_blank" class="photo-lightbox-drive">Open in Drive ↗</a>
