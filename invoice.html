@@ -2826,7 +2826,11 @@ async function loadCustomers() {
 
   // Fetch fresh data in background
   try {
-    const res  = await fetch(SCRIPT_URL + '?action=customers_list&' + authParam());
+    const _lcCtrl = new AbortController();
+    const _lcTimer = setTimeout(() => _lcCtrl.abort(), 20000);
+    let res;
+    try { res = await fetch(SCRIPT_URL + '?action=customers_list&' + authParam(), { signal: _lcCtrl.signal }); }
+    finally { clearTimeout(_lcTimer); }
     const data = await res.json();
     if (data.success && Array.isArray(data.customers)) {
       allCustomers = data.customers;
@@ -3492,7 +3496,11 @@ async function loadPendingEstimates() {
   if (!section || !list) return;
 
   try {
-    const res  = await fetch(SCRIPT_URL + '?action=get_pending_estimates&' + authParam());
+    const _lpCtrl = new AbortController();
+    const _lpTimer = setTimeout(() => _lpCtrl.abort(), 15000);
+    let res;
+    try { res = await fetch(SCRIPT_URL + '?action=get_pending_estimates&' + authParam(), { signal: _lpCtrl.signal }); }
+    finally { clearTimeout(_lpTimer); }
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'Failed');
 
@@ -3620,7 +3628,11 @@ async function executeApproveEstimate(rowNum, name) {
 async function loadBookings() {
   document.getElementById('lastRefresh').textContent = 'Loading…';
   try {
-    const res  = await fetch(SCRIPT_URL + '?action=bookings&' + authParam());
+    const _lbCtrl = new AbortController();
+    const _lbTimer = setTimeout(() => _lbCtrl.abort(), 30000); // 30-second hard timeout
+    let res;
+    try { res = await fetch(SCRIPT_URL + '?action=bookings&' + authParam(), { signal: _lbCtrl.signal }); }
+    finally { clearTimeout(_lbTimer); }
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'Unauthorized');
 
@@ -6442,15 +6454,21 @@ async function geocodeAddr(addr) {
   // Bare street + Florida (widest net)
   const streetFL   = streetOnly.replace(/, FL$/i, '').trim() + ', Florida';
 
+  // fetchWithTimeout: abort after ms milliseconds so a hanging API never stalls the route build
+  function fetchWithTimeout(url, opts, ms = 4000) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), ms);
+    return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+  }
   async function tryPhoton(q) {
-    const r = await fetch('https://photon.komoot.io/api/?q=' + encodeURIComponent(q) + '&limit=1&countrycode=us');
+    const r = await fetchWithTimeout('https://photon.komoot.io/api/?q=' + encodeURIComponent(q) + '&limit=1&countrycode=us', {}, 4000);
     const d = await r.json();
     const f = d?.features?.[0];
     if (f) return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] };
     return null;
   }
   async function tryNominatim(q) {
-    const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=' + encodeURIComponent(q), { headers: { 'Accept-Language': 'en' } });
+    const r = await fetchWithTimeout('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=' + encodeURIComponent(q), { headers: { 'Accept-Language': 'en' } }, 4000);
     const d = await r.json();
     if (d?.[0]) return { lat: parseFloat(d[0].lat), lon: parseFloat(d[0].lon) };
     return null;
