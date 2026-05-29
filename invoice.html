@@ -1,14 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=AW-18107107722"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'AW-18107107722');
-</script>
+<!-- Google Ads tracking removed from admin page (causes infinite tab spinner) -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Evergreen — Staff Portal</title>
@@ -6309,10 +6302,50 @@ async function buildRoute() {
       // Need at least something to show
       if (!validStops.length && !failedStops.length) continue;
 
-      // Nearest-neighbour optimization on geocoded stops
-      let ordered = validStops.length
-        ? nearestNeighbour(startCoord || { lat: validStops[0].lat, lon: validStops[0].lon }, validStops)
+      // Separate anchored stops (fixed time) from free-floating ones
+      const anchored  = validStops.filter(s => s.bk.jobTime);
+      const floating  = validStops.filter(s => !s.bk.jobTime);
+
+      // Sort anchored stops by their set time
+      anchored.sort((a, b) => {
+        const [ah, am] = (a.bk.jobTime||'00:00').split(':').map(Number);
+        const [bh, bm] = (b.bk.jobTime||'00:00').split(':').map(Number);
+        return (ah*60+am) - (bh*60+bm);
+      });
+
+      // Nearest-neighbour optimization on free-floating stops only
+      const freeOrdered = floating.length
+        ? nearestNeighbour(startCoord || (floating[0] || anchored[0] || {}), floating)
         : [];
+
+      // Merge: insert free stops into the gaps between anchored stops
+      let ordered = [];
+      let freeIdx = 0;
+      const [startH2, startM2] = startTime.split(':').map(Number);
+      let cursorMin = startH2 * 60 + startM2;
+      const AVG_SPEED_MPH2 = 25;
+
+      for (const anch of anchored) {
+        const [ah, am] = (anch.bk.jobTime||'00:00').split(':').map(Number);
+        const anchMin  = ah * 60 + am;
+        // Fill in free stops that would finish before this anchor starts
+        while (freeIdx < freeOrdered.length) {
+          const dur = mowMinutes(freeOrdered[freeIdx].bk);
+          if (cursorMin + dur + 15 <= anchMin) {
+            ordered.push(freeOrdered[freeIdx]);
+            cursorMin += dur + 20;
+            freeIdx++;
+          } else break;
+        }
+        ordered.push(anch);
+        cursorMin = anchMin + mowMinutes(anch.bk);
+      }
+      // Append remaining free stops after all anchored ones
+      while (freeIdx < freeOrdered.length) {
+        ordered.push(freeOrdered[freeIdx]);
+        freeIdx++;
+      }
+      if (!ordered.length) ordered = freeOrdered; // no anchored stops at all
 
       // Append failed stops at end with distFromPrev=0 so they still show on the day's route
       for (const fs of failedStops) {
@@ -7258,6 +7291,18 @@ function dispatchPayIcon(b) {
   if (hasCard || cal.includes('autopay') || pm.includes('autopay') || pm.includes('card') || cal.includes('✅')) return ' 💳';
   return '';
 }
+function dispatchServiceType(b) {
+  const svc = String(b.service || b.frequency || '').toLowerCase();
+  if (/pressure.?wash|washing/i.test(svc))              return '🚿 Pressure Wash';
+  if (/landscap|mulch|bed|trim|shrub|bush|hedge/i.test(svc)) return '🌳 Landscape';
+  if (/mow|lawn|grass|blow|edge/i.test(svc) || svc.includes('plan')) return '🌿 Mow';
+  if (/quote|estimate|visit/i.test(svc))                return '📋 Quote Visit';
+  return '🔧 Other';
+}
+function dispatchZoneBadge(b) {
+  const zone = b.zone || getZoneFromZip(b.zip) || '';
+  return zone ? `<span style="font-size:9px;background:rgba(255,255,255,.25);border-radius:4px;padding:1px 5px;font-weight:700;">${zone}</span>` : '';
+}
 function fmtDispatchTime(startMin) {
   const abs = DISPATCH_START_HOUR * 60 + startMin;
   const h = Math.floor(abs / 60), m = abs % 60;
@@ -7445,14 +7490,17 @@ function renderDispatchWeek() {
           const timeStr = b.jobTime ? fmtDispatchTime(
             (() => { const [hh,mm]=b.jobTime.split(':').map(Number); return (hh-DISPATCH_START_HOUR)*60+(mm||0); })()
           ) : '';
+          const _zone = dispatchZoneBadge(b);
+          const _svc  = dispatchServiceType(b);
           html += `<div class="dispatch-week-card ${cls}" draggable="true"
               ondragstart="dispatchWeekDragStart(event,${ri})"
               ondragend="dispatchWeekDragEnd(event)"
               onclick="openDispatchDetail(${ri})"
               id="wkcard_${ri}">
-            <div class="dispatch-week-card-name">${esc(b.name||'—')}${pay}</div>
+            <div class="dispatch-week-card-name">${esc(b.name||'—')}${pay} ${_zone}</div>
+            <div class="dispatch-week-card-meta" style="font-size:10px;opacity:.8;">${_svc}</div>
             <div class="dispatch-week-card-meta">${esc(b.address||'—')}</div>
-            <div class="dispatch-week-card-meta">${esc(b.frequency||'')}${timeStr?' · '+timeStr:''}</div>
+            <div class="dispatch-week-card-meta">${timeStr?'⏰ '+timeStr:''}</div>
             ${hint ? `<div class="dispatch-week-card-hint">${hint}</div>` : ''}
           </div>`;
         }
@@ -7524,10 +7572,12 @@ function renderDispatchDay() {
       const cls   = dispatchJobClass(b);
       const ri    = allBookings.indexOf(b);
       const _payIco = dispatchPayIcon(b);
+      const _zonD   = b.zone || getZoneFromZip(b.zip) || '';
+      const _svcD   = dispatchServiceType(b);
       blocks += `<div class="dispatch-job-block ${cls}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%;" onclick="openDispatchDetail(${ri})" title="${esc(b.name || '')}">
-        <div class="dispatch-job-name">${esc(b.name || '—')}${_payIco}</div>
+        <div class="dispatch-job-name">${esc(b.name || '—')}${_payIco}${_zonD ? ' <span style=\'font-size:9px;background:rgba(255,255,255,.3);border-radius:3px;padding:1px 4px;\'>' + _zonD + '</span>' : ''}</div>
         <div class="dispatch-job-time">${fmtDispatchTime(start)} · ${dur}m</div>
-        <div class="dispatch-job-plan">${esc(b.frequency || '')}</div>
+        <div class="dispatch-job-plan">${_svcD}</div>
       </div>`;
     });
     const lbl = k === 'A' ? '🔵 Crew A' : k === 'B' ? '🩷 Crew B' : k === 'Unassigned' ? '⬜ Unassigned' : esc(k);
@@ -7648,6 +7698,141 @@ async function submitDispatchResched() {
   }
 }
 
+// ── Dispatch Job Edit Panel ───────────────────────────────────────────────
+let _editRowIdx = -1;
+function openDispatchEditPanel(rowIdx) {
+  _editRowIdx = rowIdx;
+  const b = allBookings[rowIdx] || {};
+  let modal = document.getElementById('dispatchEditModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'dispatchEditModal';
+    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1200;align-items:flex-end;justify-content:center;';
+    modal.innerHTML = `
+      <div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;padding:0 0 20px;box-shadow:0 -8px 40px rgba(0,0,0,.2);animation:slideInUp .22s ease;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px 12px;border-bottom:1.5px solid var(--border);position:sticky;top:0;background:#fff;z-index:2;">
+          <div style="font-family:Playfair Display,serif;font-size:18px;font-weight:700;color:var(--green-deep);">✏️ Edit Job</div>
+          <button onclick="document.getElementById('dispatchEditModal').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-muted);">✕</button>
+        </div>
+        <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            ${_editField('Name',    'deName',  'text',  b.name||'')}
+            ${_editField('Phone',   'dePhone', 'tel',   b.phone||'')}
+            ${_editField('Email',   'deEmail', 'email', b.email||'')}
+            ${_editField('Price',   'dePrice', 'text',  b.price||'')}
+          </div>
+          ${_editField('Street Address', 'deAddress', 'text', b.address||'', true)}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            ${_editField('Zip',  'deZip',  'text', b.zip||'')}
+            ${_editField('Time (HH:MM)', 'deTime', 'time', b.jobTime||'')}
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:5px;">Service Type</label>
+            <select id="deService" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;">
+              <option value="Lawn Mow &amp; Blow">🌿 Lawn Mow &amp; Blow</option>
+              <option value="Landscape">🌳 Landscape</option>
+              <option value="Pressure Wash">🚿 Pressure Wash</option>
+              <option value="Lawn Mow &amp; Landscape">🌿🌳 Mow &amp; Landscape</option>
+              <option value="Other">🔧 Other</option>
+            </select>
+          </div>
+          <div id="deEditStatus" style="font-size:13px;text-align:center;min-height:16px;"></div>
+          <button id="deEditSaveBtn" onclick="saveDispatchEdit()" style="width:100%;padding:13px;background:var(--green-mid);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;">💾 Save Changes</button>
+        </div>
+      </div>`;
+    modal.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
+    document.body.appendChild(modal);
+  }
+  // Pre-fill
+  document.getElementById('deName').value    = b.name    || '';
+  document.getElementById('dePhone').value   = b.phone   || '';
+  document.getElementById('deEmail').value   = b.email   || '';
+  document.getElementById('dePrice').value   = b.price   || '';
+  document.getElementById('deAddress').value = b.address || '';
+  document.getElementById('deZip').value     = b.zip     || '';
+  document.getElementById('deTime').value    = b.jobTime || '';
+  // Service type
+  const svc = document.getElementById('deService');
+  const curSvc = b.service || 'Lawn Mow & Blow';
+  [...svc.options].forEach(o => o.selected = (o.value === curSvc));
+  document.getElementById('deEditStatus').textContent = '';
+  const btn = document.getElementById('deEditSaveBtn');
+  btn.disabled = false; btn.textContent = '💾 Save Changes';
+  modal.style.display = 'flex';
+}
+function _editField(label, id, type, val, fullWidth) {
+  return `<div${fullWidth ? ' style="grid-column:1/-1;"' : ''}>
+    <label for="${id}" style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">${label}</label>
+    <input id="${id}" type="${type}" value="" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;outline:none;">
+  </div>`;
+}
+async function saveDispatchEdit() {
+  const btn    = document.getElementById('deEditSaveBtn');
+  const status = document.getElementById('deEditStatus');
+  if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = 'Saving…'; status.textContent = '';
+
+  const b       = allBookings[_editRowIdx];
+  if (!b) { btn.disabled=false; btn.textContent='💾 Save Changes'; return; }
+  const rowIndex = b._rowIndex || (_editRowIdx + 2);
+
+  const name    = document.getElementById('deName').value.trim();
+  const phone   = document.getElementById('dePhone').value.trim();
+  const email   = document.getElementById('deEmail').value.trim();
+  const price   = document.getElementById('dePrice').value.trim();
+  const address = document.getElementById('deAddress').value.trim();
+  const zip     = document.getElementById('deZip').value.trim();
+  const jobTime = document.getElementById('deTime').value.trim();
+  const service = document.getElementById('deService').value;
+
+  try {
+    // Save time separately (has its own column handler)
+    if (jobTime !== (b.jobTime || '')) {
+      const tp = new URLSearchParams({ action:'set_job_time', rowIndex, jobTime, adminToken });
+      const tr = await fetch(SCRIPT_URL + '?' + tp.toString());
+      const td = await tr.json();
+      if (td.success) { allBookings[_editRowIdx].jobTime = jobTime; }
+    }
+    // Save all other fields
+    const params = new URLSearchParams({ action:'owner_update_booking', rowIndex, adminToken });
+    if (name    !== (b.name||''))    params.set('name',    name);
+    if (phone   !== (b.phone||''))   params.set('phone',   phone);
+    if (email   !== (b.email||''))   params.set('email',   email);
+    if (price   !== (b.price||''))   params.set('price',   price);
+    if (address !== (b.address||'')) params.set('address', address);
+    if (zip     !== (b.zip||''))     params.set('zip',     zip);
+    if (service !== (b.service||'')) params.set('service', service);
+
+    const res  = await fetch(SCRIPT_URL + '?' + params.toString());
+    const data = await res.json();
+    if (data.success) {
+      // Update local booking record
+      if (name)    allBookings[_editRowIdx].name    = name;
+      if (phone)   allBookings[_editRowIdx].phone   = phone;
+      if (email)   allBookings[_editRowIdx].email   = email;
+      if (price)   allBookings[_editRowIdx].price   = price;
+      if (address) allBookings[_editRowIdx].address = address;
+      if (zip)     allBookings[_editRowIdx].zip     = zip;
+      if (service) allBookings[_editRowIdx].service = service;
+      status.style.color = '#15803d'; status.textContent = '✅ Saved!';
+      setTimeout(() => {
+        document.getElementById('dispatchEditModal').style.display = 'none';
+        renderDispatchBoard();
+        // Refresh the detail panel if it's open
+        if (_dispatchJobIdx === _editRowIdx) {
+          _fillDispatchDetail(allBookings[_editRowIdx], _editRowIdx);
+        }
+      }, 800);
+    } else {
+      status.style.color = '#dc2626'; status.textContent = '❌ ' + (data.error || 'Save failed');
+      btn.disabled = false; btn.textContent = '💾 Save Changes';
+    }
+  } catch(err) {
+    status.style.color = '#dc2626'; status.textContent = '❌ Network error';
+    btn.disabled = false; btn.textContent = '💾 Save Changes';
+  }
+}
+
 async function dispatchAssignCrew(rowIdx, crew) {
   const b = allBookings[rowIdx]; if (!b) return;
   try {
@@ -7717,6 +7902,7 @@ function _fillDispatchDetail(b, rowIdx) {
   info += `<a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent((b.address || '') + (b.zip ? ', ' + b.zip : '') + ', FL')}" target="_blank" rel="noopener" class="dispatch-action-btn" style="background:#1d4ed8;color:#fff;text-decoration:none;">🗺 Navigate</a>`;
   if (!done) info += `<button class="dispatch-action-btn" style="background:#15803d;color:#fff;" onclick="closeDispatchDetail();triggerMarkDone(${rowIdx})">✓ Mark Job Done</button>`;
   if (cash && !paid) info += `<button class="dispatch-action-btn" style="background:#b45309;color:#fff;" onclick="closeDispatchDetail();triggerCashPaid(${rowIdx})">💵 Cash Collected</button>`;
+  info += `<button class="dispatch-action-btn" style="background:#374151;color:#fff;" onclick="openDispatchEditPanel(${rowIdx})">✏️ Edit Job</button>`;
   info += `</div>`;
   document.getElementById('dispatch-tab-info').innerHTML = info;
 
