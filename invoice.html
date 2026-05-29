@@ -6387,6 +6387,10 @@ async function assignCrew(rowIdx, crew) {
   }
 }
 
+
+// =======================================================
+// JOB TIME SETTING
+// =======================================================
 let _jobTimeSaveTimer = null;
 async function setJobTime(rowIdx, time) {
   const b = allBookings[rowIdx];
@@ -6422,8 +6426,7 @@ function initHistoryTab() {
 }
 
 function _histIsDone(b) {
-  const d = String(b.done || '');
-  return d.length > 0;
+  return String(b.done || '').length > 0;
 }
 
 function _histStatusLabel(b) {
@@ -6489,13 +6492,13 @@ function renderHistoryList() {
 function openHistoryDetail(rowIdx) {
   const b = allBookings[rowIdx];
   if (!b) return;
-  const overlay = document.getElementById('histDetailOverlay');
   document.getElementById('histDetailTitle').textContent = b.name || 'Job Detail';
   const status = _histStatusLabel(b);
   document.getElementById('histDetailStatus').innerHTML = status === 'issue'
     ? '<span class="hist-status-issue">⚠️ Issue</span>'
     : '<span class="hist-status-done">✓ Done</span>';
   document.getElementById('histDetailBody').innerHTML = buildHistDetailHTML(b);
+  const overlay = document.getElementById('histDetailOverlay');
   overlay.classList.add('open');
   overlay.scrollTop = 0;
 }
@@ -6525,7 +6528,7 @@ function buildHistDetailHTML(b) {
       const m = url.match(/\/d\/([^\/\?]+)/);
       const thumb = m ? 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w400' : url;
       return '<a href="' + url + '" target="_blank" class="hist-photo-thumb">' +
-        '<img src="' + thumb + '" onerror="this.parentElement.innerHTML=\'<span style=\\\"font-size:28px\\\">&#128247;</span>\'">' +
+        '<img src="' + thumb + '" onerror="this.parentElement.innerHTML=\'<span style=\\\"font-size:28px;color:#9ca3af\\\">📷</span>\'">' +
         '</a>';
     }).join('') + '</div>';
   } else {
@@ -6557,27 +6560,27 @@ function buildHistDetailHTML(b) {
       ? card('📝 Customer Notes', '<div class="hist-notes-box">' + esc(b.notes) + '</div>')
       : '',
     card('✓ Completion', [
-      row('Completed',  esc(doneClean || doneRaw)),
-      row('Marked by',  esc(b.markedBy || '')),
+      row('Completed', esc(doneClean || doneRaw)),
+      row('Marked by', esc(b.markedBy || '')),
     ].join('')),
     card('📷 Photos', photosHTML),
   ].join('');
 }
 
 // =======================================================
-// PHOTO UPLOAD
+// PHOTO UPLOAD  (multi-select with removable previews)
 // =======================================================
 let photoTargetRowIdx = null;
-let photoSelectedFile = null;
+let photoSelectedFiles = [];   // array of File objects
 
 function openPhotoUpload(rowIdx) {
   photoTargetRowIdx = rowIdx;
-  photoSelectedFile = null;
+  photoSelectedFiles = [];
   const inp = document.getElementById('photoFileInput');
   if (inp) inp.value = '';
-  document.getElementById('photoPreview').innerHTML = '';
+  _renderPhotoGrid();
   document.getElementById('photoUploadBtn').disabled = true;
-  document.getElementById('photoError').style.display = 'none';
+  document.getElementById('photoError').style.display   = 'none';
   document.getElementById('photoSuccess').style.display = 'none';
   const b = allBookings[rowIdx];
   document.getElementById('photoModalSub').textContent =
@@ -6588,39 +6591,82 @@ function openPhotoUpload(rowIdx) {
 function closePhotoModal() {
   document.getElementById('photoModal').classList.remove('open');
   photoTargetRowIdx = null;
-  photoSelectedFile = null;
+  photoSelectedFiles = [];
 }
 
 function handlePhotoSelected(input) {
-  const file = input.files[0];
-  if (!file) return;
-  photoSelectedFile = file;
-  const reader = new FileReader();
-  reader.onload = e => {
-    document.getElementById('photoPreview').innerHTML =
-      '<img src="' + e.target.result + '" style="max-width:100%;max-height:200px;border-radius:10px;margin-top:10px;">';
-  };
-  reader.readAsDataURL(file);
+  const files = Array.from(input.files || []);
+  if (!files.length) return;
+  photoSelectedFiles = photoSelectedFiles.concat(files);
+  input.value = '';   // reset so same file can be re-added if needed
+  _renderPhotoGrid();
   document.getElementById('photoUploadBtn').disabled = false;
+  _updateUploadBtnLabel();
+}
+
+function removePhotoFromSelection(idx) {
+  photoSelectedFiles.splice(idx, 1);
+  _renderPhotoGrid();
+  document.getElementById('photoUploadBtn').disabled = photoSelectedFiles.length === 0;
+  _updateUploadBtnLabel();
+}
+
+function _updateUploadBtnLabel() {
+  const n   = photoSelectedFiles.length;
+  const btn = document.getElementById('photoUploadBtn');
+  if (!btn) return;
+  btn.textContent = n > 1 ? '📷 Upload ' + n + ' Photos' : '📷 Upload Photo';
+}
+
+function _renderPhotoGrid() {
+  const grid = document.getElementById('photoPreview');
+  if (!grid) return;
+  if (!photoSelectedFiles.length) { grid.innerHTML = ''; return; }
+
+  grid.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-top:10px;">' +
+    photoSelectedFiles.map((file, idx) => {
+      const url = URL.createObjectURL(file);
+      return '<div style="position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;border:1.5px solid var(--border);background:#f1f5f9;">' +
+        '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover;" onload="URL.revokeObjectURL(this.src)">' +
+        '<button onclick="removePhotoFromSelection(' + idx + ')" ' +
+          'style="position:absolute;top:4px;left:4px;width:22px;height:22px;border-radius:50%;' +
+          'background:rgba(0,0,0,.65);color:#fff;border:none;font-size:13px;cursor:pointer;' +
+          'display:flex;align-items:center;justify-content:center;line-height:1;padding:0;" ' +
+          'title="Remove">✕</button>' +
+        '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.4);' +
+          'color:#fff;font-size:9px;padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+          file.name +
+        '</div>' +
+      '</div>';
+    }).join('') +
+  '</div>';
 }
 
 async function uploadPhoto() {
-  if (!photoSelectedFile || photoTargetRowIdx === null) return;
+  if (!photoSelectedFiles.length || photoTargetRowIdx === null) return;
   const btn   = document.getElementById('photoUploadBtn');
   const errEl = document.getElementById('photoError');
   const sucEl = document.getElementById('photoSuccess');
-  btn.disabled = true; btn.textContent = 'Uploading…';
-  errEl.style.display = 'none'; sucEl.style.display = 'none';
-  const reader = new FileReader();
-  reader.onload = async e => {
+  errEl.style.display = 'none';
+  sucEl.style.display = 'none';
+  btn.disabled = true;
+
+  const total = photoSelectedFiles.length;
+  let uploaded = 0;
+  const errors = [];
+
+  for (let fi = 0; fi < total; fi++) {
+    const file = photoSelectedFiles[fi];
+    btn.textContent = 'Uploading ' + (fi + 1) + ' of ' + total + '…';
+
     try {
-      const base64 = e.target.result.split(',')[1];
+      const base64 = await _fileToBase64(file);
       const b      = allBookings[photoTargetRowIdx];
       const body   = JSON.stringify({
         action:     'upload_job_photo',
         base64Data: base64,
-        fileName:   photoSelectedFile.name,
-        mimeType:   photoSelectedFile.type,
+        fileName:   file.name,
+        mimeType:   file.type,
         rowIndex:   (photoTargetRowIdx + 2),
         jobLabel:   b ? (b.name || '') + ' — ' + (displayDate(b.serviceDate || b.serviceDateRaw) || '') : '',
         markedBy:   adminName || adminEmail || 'Staff',
@@ -6629,25 +6675,59 @@ async function uploadPhoto() {
       const res  = await fetch(SCRIPT_URL, { method: 'POST', body });
       const data = await res.json();
       if (data.success) {
+        uploaded++;
         if (data.fileUrl && b) {
           b.photos = [b.photos, data.fileUrl].filter(Boolean).join(',');
         }
-        sucEl.textContent = '✅ Photo uploaded!';
-        sucEl.style.display = 'block';
-        btn.textContent = '✅ Done';
-        setTimeout(() => closePhotoModal(), 2000);
       } else {
-        errEl.textContent = '❌ ' + (data.error || 'Upload failed');
-        errEl.style.display = 'block';
-        btn.disabled = false; btn.textContent = '📷 Upload Photo';
+        errors.push(file.name + ': ' + (data.error || 'failed'));
       }
-    } catch(err2) {
-      errEl.textContent = '❌ ' + err2.message;
-      errEl.style.display = 'block';
-      btn.disabled = false; btn.textContent = '📷 Upload Photo';
+    } catch(e) {
+      errors.push(file.name + ': ' + e.message);
     }
-  };
-  reader.readAsDataURL(photoSelectedFile);
+  }
+
+  if (errors.length) {
+    errEl.textContent = '❌ ' + errors.join(' | ');
+    errEl.style.display = 'block';
+  }
+  if (uploaded > 0) {
+    sucEl.textContent = '✅ ' + uploaded + ' photo' + (uploaded > 1 ? 's' : '') + ' uploaded!';
+    sucEl.style.display = 'block';
+    btn.textContent = '✅ Done';
+    setTimeout(() => closePhotoModal(), 2000);
+  } else {
+    btn.disabled = false;
+    _updateUploadBtnLabel();
+  }
+}
+
+// Compress image to max 1600px / 0.82 quality before base64-encoding
+// Cuts upload size ~70-80% for typical phone photos
+function _fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = e => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const MAX = 1600;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else        { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        resolve(dataUrl.split(',')[1]);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 </script>
@@ -6663,31 +6743,42 @@ async function uploadPhoto() {
 
 <!-- PHOTO UPLOAD MODAL -->
 <div class="modal-overlay" id="photoModal" onclick="if(event.target===this)closePhotoModal()">
-  <div class="modal" style="max-width:420px;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+  <div class="modal" style="max-width:480px;">
+
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
       <div>
-        <div style="font-size:18px;font-weight:700;color:var(--green-deep);">📷 Add Job Photo</div>
+        <div style="font-size:18px;font-weight:700;color:var(--green-deep);">📷 Add Job Photos</div>
         <div id="photoModalSub" style="font-size:13px;color:var(--text-muted);margin-top:3px;"></div>
       </div>
       <button onclick="closePhotoModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-muted);line-height:1;padding:0;">✕</button>
     </div>
-    <div style="border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center;background:#f8faf8;cursor:pointer;margin-bottom:10px;"
+
+    <!-- Drop zone / picker -->
+    <div style="border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;background:#f8faf8;cursor:pointer;"
          onclick="document.getElementById('photoFileInput').click()">
-      <input type="file" id="photoFileInput" accept="image/*"
+      <input type="file" id="photoFileInput" accept="image/*" multiple
              style="display:none;" onchange="handlePhotoSelected(this)">
-      <div style="font-size:32px;margin-bottom:8px;">📷</div>
-      <div style="font-size:14px;font-weight:600;color:var(--green-deep);margin-bottom:4px;">Tap to choose or take a photo</div>
-      <div style="font-size:12px;color:var(--text-muted);">JPG, PNG, HEIC — max 10 MB</div>
+      <div style="font-size:28px;margin-bottom:6px;">📷</div>
+      <div style="font-size:14px;font-weight:600;color:var(--green-deep);margin-bottom:2px;">Tap to choose photos</div>
+      <div style="font-size:12px;color:var(--text-muted);">Select one or many · JPG, PNG, HEIC · max 10 MB each</div>
     </div>
-    <div id="photoPreview" style="margin-bottom:8px;"></div>
-    <div id="photoSuccess" style="display:none;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:12px 16px;font-size:14px;color:#15803d;font-weight:600;margin-top:10px;"></div>
-    <div id="photoError" style="display:none;color:#dc2626;font-size:13px;font-weight:600;margin-top:10px;"></div>
-    <div style="display:flex;gap:10px;margin-top:16px;">
+
+    <!-- Preview grid (thumbnails with X buttons rendered by JS) -->
+    <div id="photoPreview"></div>
+
+    <!-- Status messages -->
+    <div id="photoSuccess" style="display:none;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:11px 14px;font-size:14px;color:#15803d;font-weight:600;margin-top:10px;"></div>
+    <div id="photoError"   style="display:none;color:#dc2626;font-size:13px;font-weight:600;margin-top:8px;"></div>
+
+    <!-- Action buttons -->
+    <div style="display:flex;gap:10px;margin-top:14px;">
       <button id="photoUploadBtn" class="btn-action btn-done" style="flex:1;"
               onclick="uploadPhoto()" disabled>📷 Upload Photo</button>
       <button class="btn-action" onclick="closePhotoModal()"
               style="background:#f1f5f9;color:var(--text);border-color:#e2e8f0;">Cancel</button>
     </div>
+
   </div>
 </div>
 
