@@ -577,17 +577,40 @@
     font-size:13px; outline:none; background:#fff; transition:border .2s;
   }
   .config-input:focus { border-color:var(--green-mid); }
+  /* ── Config zone rows ── */
   .config-zone-row {
-    display:flex; align-items:center; gap:12px; padding:10px 0;
+    display:flex; align-items:center; gap:12px; padding:12px 0;
     border-bottom:1px solid var(--border); flex-wrap:wrap;
   }
   .config-zone-row:last-child { border-bottom:none; }
-  .config-zone-label { font-size:13px; font-weight:700; color:var(--text); min-width:80px; }
-  .config-zone-info  { font-size:12px; color:var(--text-muted); flex:1; min-width:100px; }
-  .config-day-checks { display:flex; gap:6px; flex-wrap:wrap; }
-  .config-day-check  { display:flex; align-items:center; gap:4px; }
-  .config-day-check label { font-size:12px; color:var(--text); cursor:pointer; user-select:none; }
-  .config-day-check input { accent-color:var(--green-mid); cursor:pointer; }
+  .config-zone-label { font-size:13px; font-weight:700; color:var(--text); min-width:36px; }
+  .config-zone-info  { font-size:12px; font-weight:600; color:var(--text); flex:1; min-width:140px; }
+
+  /* Day pills */
+  .config-day-pills { display:flex; gap:4px; flex-wrap:wrap; }
+  .cfg-day-pill {
+    padding:5px 9px; border-radius:20px; font-size:11px; font-weight:700;
+    cursor:pointer; border:1.5px solid transparent; transition:all .15s;
+    user-select:none; font-family:inherit;
+  }
+  .cfg-day-pill.off     { background:#f1f5f9; color:#94a3b8; border-color:#e2e8f0; }
+  .cfg-day-pill.off:hover { background:#e2e8f0; color:#64748b; }
+  .cfg-day-pill.primary { background:var(--green-mid); color:#fff; border-color:var(--green-mid); }
+  .cfg-day-pill.backup  { background:#fff; color:var(--green-mid); border-color:var(--green-mid); border-style:dashed; }
+  .cfg-day-pill-legend  { display:flex; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+  .cfg-legend-item      { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text-muted); }
+
+  /* Crew pills */
+  .config-crew-pills { display:flex; gap:6px; flex-wrap:wrap; }
+  .cfg-crew-pill {
+    padding:6px 14px; border-radius:20px; font-size:12px; font-weight:700;
+    cursor:pointer; border:1.5px solid var(--border); transition:all .15s;
+    user-select:none; font-family:inherit; background:#f8faf8; color:#94a3b8;
+  }
+  .cfg-crew-pill:hover { border-color:#9ca3af; color:#374151; }
+  .cfg-crew-pill.active-a { background:#dbeafe; color:#1d4ed8; border-color:#93c5fd; }
+  .cfg-crew-pill.active-b { background:#fce7f3; color:#be185d; border-color:#f9a8d4; }
+
   .config-crew-sel {
     padding:6px 10px; border:1.5px solid var(--border); border-radius:8px;
     font-family:inherit; font-size:13px; background:#fff; outline:none;
@@ -6948,7 +6971,11 @@ function saveCrewNames() {
 
 function getCfgZoneDays(zone) {
   if (!cfgData) loadCfgData();
-  return cfgData.zoneDays[zone] || [];
+  const saved = cfgData.zoneDays[zone];
+  if (!saved) return [];
+  if (Array.isArray(saved)) return saved; // legacy format
+  // New {primary, backup} format — return primary first for hints
+  return [saved.primary, saved.backup].filter(Boolean);
 }
 
 function getCfgZoneCrew(zone) {
@@ -6981,34 +7008,69 @@ async function initConfigTab() {
   // Zone → Days
   const daysEl = document.getElementById('cfgZoneDays');
   if (daysEl) {
-    daysEl.innerHTML = Object.entries(ZONE_CITIES).map(([z, info]) => {
-      const checked = getCfgZoneDays(z);
-      const dayChecks = DAYS_OF_WEEK.map(d => `
-        <div class="config-day-check">
-          <input type="checkbox" id="cfgDay_${z}_${d}" ${checked.includes(d)?'checked':''} onchange="cfgToggleDay('${z}','${d}',this.checked)">
-          <label for="cfgDay_${z}_${d}">${d}</label>
-        </div>`).join('');
+    // Auto-populate days from ZONE_PAIRS if nothing saved yet
+    const hasAnySaved = Object.values(cfgData.zoneDays).some(v => v && (v.primary || (Array.isArray(v) && v.length)));
+    if (!hasAnySaved) {
+      ZONE_PAIRS.forEach(row => {
+        if (row.catchup || row.holy) return;
+        if (row.z1) cfgData.zoneDays[row.z1.zone] = { primary: row.day, backup: row.backup?.zone ? row.day : null };
+      });
+      // Build proper primary/backup per zone from ZONE_PAIRS
+      const zoneSchedule = {};
+      ZONE_PAIRS.forEach(row => {
+        if (row.catchup || row.holy || !row.z1) return;
+        zoneSchedule[row.z1.zone] = zoneSchedule[row.z1.zone] || {};
+        zoneSchedule[row.z1.zone].primary = row.day;
+        if (row.backup) {
+          zoneSchedule[row.backup.zone] = zoneSchedule[row.backup.zone] || {};
+          zoneSchedule[row.backup.zone].backup = row.day;
+        }
+      });
+      Object.entries(zoneSchedule).forEach(([z, val]) => { cfgData.zoneDays[z] = val; });
+      saveCfgData();
+    }
+
+    const WORK_DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat'];
+    daysEl.innerHTML = `
+      <div class="cfg-day-pill-legend" style="margin-bottom:14px;">
+        <div class="cfg-legend-item"><span class="cfg-day-pill primary" style="cursor:default;pointer-events:none;">Mon</span> Primary day</div>
+        <div class="cfg-legend-item"><span class="cfg-day-pill backup" style="cursor:default;pointer-events:none;">Mon</span> Backup day</div>
+        <div class="cfg-legend-item"><span class="cfg-day-pill off" style="cursor:default;pointer-events:none;">Mon</span> Not scheduled</div>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:16px;">Click a day to cycle: off → primary → backup → off</div>
+    ` + Object.entries(ZONE_CITIES).map(([z, info]) => {
+      const saved = cfgData.zoneDays[z] || {};
+      // Support both old array format and new {primary,backup} format
+      const primaryDay = saved.primary || (Array.isArray(saved) ? saved[0] : null);
+      const backupDay  = saved.backup  || (Array.isArray(saved) ? saved[1] : null);
+      const pills = WORK_DAYS.map(d => {
+        const state = d === primaryDay ? 'primary' : d === backupDay ? 'backup' : 'off';
+        return `<button class="cfg-day-pill ${state}" onclick="cfgCycleDay('${z}','${d}')" title="${state==='primary'?'Primary day':state==='backup'?'Backup day':'Not scheduled'}">${d}</button>`;
+      }).join('');
       return `<div class="config-zone-row">
         <div class="config-zone-label"><span class="zone-badge">${z}</span></div>
         <div class="config-zone-info">${info.cities}</div>
-        <div class="config-day-checks">${dayChecks}</div>
+        <div class="config-day-pills">${pills}</div>
       </div>`;
     }).join('');
   }
 
-  // Zone → Crew
+  // Zone → Crew (visual pills)
   const crewEl = document.getElementById('cfgZoneCrew');
   if (crewEl) {
     crewEl.innerHTML = Object.entries(ZONE_CITIES).map(([z, info]) => {
       const cur = getCfgZoneCrew(z);
+      const nameA = cfgData.crewNames.A || 'Crew A';
+      const nameB = cfgData.crewNames.B || 'Crew B';
       return `<div class="config-zone-row">
         <div class="config-zone-label"><span class="zone-badge">${z}</span></div>
         <div class="config-zone-info">${info.cities}</div>
-        <select class="config-crew-sel" onchange="cfgSetZoneCrew('${z}',this.value)">
-          <option value="" ${!cur?'selected':''}>⬜ Unassigned</option>
-          <option value="A" ${cur==='A'?'selected':''}>🔵 ${cfgData.crewNames.A||'Crew A'}</option>
-          <option value="B" ${cur==='B'?'selected':''}>🩷 ${cfgData.crewNames.B||'Crew B'}</option>
-        </select>
+        <div class="config-crew-pills">
+          <button class="cfg-crew-pill ${cur===''?'':''}${cur===''?'active-none':''}" onclick="cfgSetZoneCrew('${z}','')"
+            style="${!cur?'background:#f1f5f9;color:#374151;border-color:#cbd5e1;':''}" title="Unassigned">⬜ None</button>
+          <button class="cfg-crew-pill ${cur==='A'?'active-a':''}" onclick="cfgSetZoneCrew('${z}','A')" title="Assign ${nameA}">💗 ${nameA}</button>
+          <button class="cfg-crew-pill ${cur==='B'?'active-b':''}" onclick="cfgSetZoneCrew('${z}','B')" title="Assign ${nameB}">🔵 ${nameB}</button>
+        </div>
       </div>`;
     }).join('');
   }
@@ -7020,12 +7082,23 @@ async function initConfigTab() {
   if (bEl) bEl.value = cfgData.crewNames.B || '';
 }
 
+// Cycle a day pill: off → primary → backup → off
+function cfgCycleDay(zone, day) {
+  if (!cfgData) loadCfgData();
+  const saved = cfgData.zoneDays[zone] || {};
+  const cur = saved.primary === day ? 'primary' : saved.backup === day ? 'backup' : 'off';
+  if (cur === 'off')     { cfgData.zoneDays[zone] = { ...saved, primary: day }; }
+  else if (cur === 'primary') { cfgData.zoneDays[zone] = { ...saved, primary: null, backup: day }; }
+  else                   { const s = {...saved}; delete s.backup; cfgData.zoneDays[zone] = s; }
+  saveCfgData();
+  initConfigTab(); // re-render to reflect new state
+}
+// Legacy toggle kept for backward compat
 function cfgToggleDay(zone, day, on) {
   if (!cfgData) loadCfgData();
-  const days = cfgData.zoneDays[zone] || [];
-  if (on && !days.includes(day)) days.push(day);
-  if (!on) cfgData.zoneDays[zone] = days.filter(d => d !== day);
-  else cfgData.zoneDays[zone] = days;
+  const saved = cfgData.zoneDays[zone] || {};
+  if (on) cfgData.zoneDays[zone] = { ...saved, primary: day };
+  else { const s={...saved}; if(s.primary===day) delete s.primary; if(s.backup===day) delete s.backup; cfgData.zoneDays[zone]=s; }
   saveCfgData();
 }
 
@@ -7033,6 +7106,7 @@ function cfgSetZoneCrew(zone, crew) {
   if (!cfgData) loadCfgData();
   cfgData.zoneCrew[zone] = crew;
   saveCfgData();
+  initConfigTab(); // re-render to update pill highlights
   showToast(crew ? 'Zone ' + zone + ' → ' + (crew === 'A' ? (cfgData.crewNames.A||'Crew A') : (cfgData.crewNames.B||'Crew B')) : 'Zone ' + zone + ' crew cleared');
 }
 
@@ -8353,7 +8427,7 @@ const ZONE_PAIRS = [
   { day:'MON', dayFull:'Monday',    z1:{zone:'Z1',name:'Crystal River',                    cities:''},                                    backup:{zone:'Z2',name:'Inverness',              cities:'Floral City · Hernando',   note:'~15 min away'} },
   { day:'TUE', dayFull:'Tuesday',   z1:{zone:'Z3',name:'Lecanto · Beverly Hills · Homosassa', cities:''},                                 backup:{zone:'Z4',name:'Dunnellon',              cities:'Citrus Springs',           note:'~10 min away'} },
   { day:'WED', dayFull:'Wednesday', z1:{zone:'Z5',name:'Ocala',                            cities:'Marion County'},                        backup:{zone:'Z4',name:'Dunnellon',              cities:'Citrus Springs',           note:'~30 min away'} },
-  { day:'THU', dayFull:'Thursday',  z1:{zone:'Z2',name:'Inverness · Floral City · Hernando', cities:''},                                  backup:{zone:'Z3',name:'Lecanto',                cities:'Beverly Hills · Homosassa', note:'~15 min away'} },
+  { day:'THU', dayFull:'Thursday',  z1:{zone:'Z2',name:'Inverness · Floral City · Hernando', cities:''},                                  backup:{zone:'Z1',name:'Crystal River',          cities:'',                          note:'~15 min away'} },
   { day:'FRI', dayFull:'Friday',    z1:{zone:'Z4',name:'Dunnellon · Citrus Springs',       cities:''},                                    backup:{zone:'Z5',name:'Ocala',                  cities:'Marion County',            note:'~30 min away'} },
   { day:'SAT', dayFull:'Saturday',  catchup:true },
   { day:'SUN', dayFull:'Sunday',    holy:true },
@@ -8370,7 +8444,7 @@ const ZONE_SCHEDULE = [
     crewB:{zone:'Z5', name:'Ocala',                              cities:'Marion County — cont.'} },
   { day:'THU', dayFull:'Thursday',
     crewA:{zone:'Overflow', name:'Catch-up / Biweeklies',        cities:'Any Citrus County zone'},
-    crewB:{zone:'Z4',       name:'Dunnellon · Citrus Springs',   cities:'cont. or biweeklies'} },
+    crewB:null },
   { day:'FRI', dayFull:'Friday',
     crewA:{zone:'Overflow', name:'Catch-up / Biweeklies',        cities:'Any Citrus County zone'},
     crewB:{zone:'Overflow', name:'Catch-up / Biweeklies',        cities:'Any Marion zone'} },
