@@ -6344,7 +6344,8 @@ function buildCrewStopsHtml(dateStr, crew, orderedStops, startTimeStr, startVal)
     const planPill = bk.frequency ? `<span class="route-stop-pill">${esc(bk.frequency)}</span>` : '';
     const donePill = done ? `<span class="route-stop-pill" style="background:#f1f5f9;color:#64748b;">✓ Done</span>` : '';
     const zBadge   = zoneBadgeHTML(bk.zip, bk.zone);
-    const crewKey  = JSON.stringify(crew);
+    // Use single-quoted JS string so it's safe inside double-quoted HTML attributes
+    const crewKey  = typeof crew === 'string' ? `'${crew}'` : crew;
 
     html += `
       <div class="route-stop" style="margin-bottom:12px;" id="routeStop_${dateStr}_${crew}_${i}" draggable="true"
