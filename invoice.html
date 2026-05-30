@@ -6282,19 +6282,41 @@ function moveRouteStop(dateStr, crew, fromIdx, dir) {
     _tl.prepend(_b);
   }
 
-  // Persist new order
-  saveRouteToStorage(_routeCustomOrder,
-    (_savedRoute || {}).stats || {},
-    (_savedRoute || {}).dates || [dateStr]);
-
-  // Sync to dispatch board (times already written by buildCrewStopsHtml above)
+  // Sync times to dispatch board then update bookings
   _syncRouteOrderToDispatch(dateStr);
 
   showToast('↕ Stop moved · Times recalculated · ⚡ Re-optimize for exact times');
 }
 
 function _syncRouteOrderToDispatch(dateStr) {
-  // jobTimes are already written by buildCrewStopsHtml — just re-render dispatch if it's open
+  const dayOrder = _routeCustomOrder[dateStr];
+  if (!dayOrder || !allBookings) return;
+  const AVG_SPEED_MPH = 25;
+  const startTimeStr  = document.getElementById('routeStartTime')?.value || '08:00';
+  const [startH, startM] = startTimeStr.split(':').map(Number);
+  const [y, mo, d] = dateStr.split('-').map(Number);
+
+  const processStops = (stops) => {
+    if (!stops || !stops.length) return;
+    let cursor = new Date(y, mo - 1, d, startH || 8, startM || 0, 0, 0);
+    if (isNaN(cursor.getTime())) return; // safety guard
+    stops.forEach(s => {
+      const b = s.bk; // only use bk — don't fall back to rowIndex which could be stale
+      const dist = typeof s.distFromPrev === 'number' && !isNaN(s.distFromPrev) ? s.distFromPrev : 0;
+      const driveMins = Math.round((dist / AVG_SPEED_MPH) * 60);
+      cursor = new Date(cursor.getTime() + driveMins * 60000);
+      if (b && !isNaN(cursor.getTime())) {
+        b.jobTime = String(cursor.getHours()).padStart(2,'0') + ':' + String(cursor.getMinutes()).padStart(2,'0');
+      }
+      const jobMins = (b && mowMinutes) ? mowMinutes(b) : 40;
+      cursor = new Date(cursor.getTime() + (isNaN(jobMins) ? 40 : jobMins) * 60000);
+    });
+  };
+
+  if (Array.isArray(dayOrder)) processStops(dayOrder);
+  else Object.values(dayOrder).forEach(processStops);
+
+  // Re-render dispatch if open on this date
   const dispPane = document.getElementById('pane-dispatch');
   if (dispPane && dispPane.classList.contains('active')) {
     const el = document.getElementById('dispatchDate');
@@ -6332,8 +6354,6 @@ function buildCrewStopsHtml(dateStr, crew, orderedStops, startTimeStr, startVal)
     if (!noGeo) cursor = new Date(cursor.getTime() + driveMin * 60000);
     const arrivalTime = noGeo ? '—' : cursor.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
     const mowMin = mowMinutes(bk);
-    // Write jobTime back to the booking so dispatch always matches route
-    if (!noGeo) bk.jobTime = String(cursor.getHours()).padStart(2,'0') + ':' + String(cursor.getMinutes()).padStart(2,'0');
     if (!noGeo) cursor = new Date(cursor.getTime() + mowMin * 60000);
 
     const done   = isDone(bk);
