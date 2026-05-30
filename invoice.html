@@ -6267,18 +6267,21 @@ function moveRouteStop(dateStr, crew, fromIdx, dir) {
   const toIdx = fromIdx + dir;
   if (toIdx < 0 || toIdx >= order.length) return;
 
-  // Swap the stops — leave distFromPrev as-is (cached distances are close enough
-  // for same-area stops). User can hit ⚡ Optimize to get exact times.
+  // Swap the stops
   [order[fromIdx], order[toIdx]] = [order[toIdx], order[fromIdx]];
 
-  // Re-render route — show estimated-times banner
+  // Mark the moved stop as pinned so re-optimize keeps it in this position
+  const movedStop = order[toIdx];
+  if (movedStop && movedStop.bk) movedStop.bk._routePinned = true;
+
+  // Re-render route — show banner with pin info
   renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
   const _tl = document.getElementById('routeTimeline');
   if (_tl && !document.getElementById('routeReorderBanner')) {
     const _b = document.createElement('div');
     _b.id = 'routeReorderBanner';
     _b.style.cssText = 'background:#fff8e1;border:1.5px solid #fde047;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#78350f;display:flex;align-items:center;justify-content:space-between;gap:12px;';
-    _b.innerHTML = '<span>⏱ Drive times are estimated after manual reorder.</span><button onclick="buildRoute()" style="background:#1a3a1a;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;">⚡ Re-optimize</button>';
+    _b.innerHTML = '<span>📌 Pinned stops stay fixed. ⚡ Re-optimize fills the rest around them.</span><button onclick="buildRoute()" style="background:#1a3a1a;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;">⚡ Re-optimize</button>';
     _tl.prepend(_b);
   }
 
@@ -6387,7 +6390,7 @@ function buildCrewStopsHtml(dateStr, crew, orderedStops, startTimeStr, startVal)
         <div class="route-stop-card ${done?'':'active-stop'}" style="flex:1;${noGeo?'border-color:#fde68a;':''}">
           <div class="route-stop-header">
             <div>
-              <div class="route-stop-name">${esc(bk.name||'—')} ${notesBtn} ${zBadge}</div>
+              <div class="route-stop-name">${bk._routePinned?'📌 ':''}${esc(bk.name||'—')} ${notesBtn} ${zBadge}</div>
               <div class="route-stop-addr">${esc(bk.address||'—')}${bk.zip?', '+esc(bk.zip):''}${bk.jobTime?' · ⏰ '+esc(bk.jobTime):''}</div>
             </div>
             <div class="route-stop-time">${arrivalTime}</div>
@@ -6647,8 +6650,28 @@ async function buildRoute() {
   }
   const sortedDates = Object.keys(byDate).sort();
 
-  // Clear jobTime so no stops are treated as "anchored" on this fresh optimize run
-  allUpcoming.forEach(b => { delete b.jobTime; });
+  // Clear jobTime for unpinned stops only.
+  // Pinned stops (_routePinned=true) keep their position as anchors.
+  // We assign them a synthetic jobTime based on their index in the saved order
+  // so the optimizer respects their relative sequence.
+  const startTimeParts = (document.getElementById('routeStartTime')?.value || '08:00').split(':').map(Number);
+  const [sH0, sM0] = startTimeParts;
+  allUpcoming.forEach(b => {
+    if (!b._routePinned) { delete b.jobTime; }
+  });
+  // Give pinned stops a time slot based on their order in _routeCustomOrder
+  for (const dateStr of Object.keys(_routeCustomOrder)) {
+    const dayOrder = _routeCustomOrder[dateStr];
+    const allStops = Array.isArray(dayOrder) ? dayOrder : Object.values(dayOrder).flat();
+    let slotMin = sH0 * 60 + sM0;
+    allStops.forEach(s => {
+      if (s.bk && s.bk._routePinned) {
+        const h = Math.floor(slotMin / 60), m = slotMin % 60;
+        s.bk.jobTime = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+      }
+      slotMin += (mowMinutes ? mowMinutes(s.bk) : 40) + 20;
+    });
+  }
 
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Optimizing…'; }
   if (tl) tl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:14px;">Geocoding addresses…</div>';
@@ -6801,6 +6824,7 @@ async function buildRoute() {
           const bkIdx = allBookings.indexOf(stop.bk);
           if (bkIdx >= 0) {
             allBookings[bkIdx].jobTime = cursor.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', hour12:false });
+            delete allBookings[bkIdx]._routePinned; // clear pin after optimization
           }
           cursor = doneAt;
         }
