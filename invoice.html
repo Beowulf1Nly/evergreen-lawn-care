@@ -6979,17 +6979,23 @@ function _sqftToAcres(a) {
   return 0;
 }
 
-// Pick best parcel — same logic as index.html's pickBestParcel()
-// Road strips / easements are always smaller than the residential lot, so pick largest.
+// Pick best parcel — same core logic as index.html, but flags unverified results
+// so the caller can apply a sanity cap on them (avoids picking neighboring farms).
 function _pickBestParcel(features, houseNum) {
   if (!features?.length) return null;
   const attrs = features.map(f => f.attributes);
-  if (attrs.length === 1) return attrs[0];
+  if (attrs.length === 1) return attrs[0]; // only one — trust it
+
+  // Address match: confirmed result, no cap needed
   if (houseNum) {
     const match = attrs.filter(a => String(a.PHY_ADDR1||a.SITE_ADDR||'').trim().startsWith(houseNum));
     if (match.length > 0) return match.reduce((b,a) => _sqftToAcres(a)>_sqftToAcres(b)?a:b, match[0]);
   }
-  return attrs.reduce((b,a) => _sqftToAcres(a)>_sqftToAcres(b)?a:b, attrs[0]);
+
+  // No address match — road strips are smaller so pick largest, but flag as unverified
+  const best = {...attrs.reduce((b,a) => _sqftToAcres(a)>_sqftToAcres(b)?a:b, attrs[0])};
+  best._unverified = true; // caller will cap at 5ac to block stray farm parcels
+  return best;
 }
 
 async function _cadastralQuery(params) {
@@ -7051,13 +7057,20 @@ async function scanPropertyAcres(lat, lon, address, zip) {
     const base = { where:'1=1', geometryType:'esriGeometryPoint', inSR:'4326',
                    spatialRel:'esriSpatialRelIntersects', outFields:'*', returnGeometry:'false', f:'json' };
 
+    function _accept(attrs) {
+      const ac = _sqftToAcres(attrs);
+      // Address-confirmed: trust fully. Unverified: cap at 5ac to block stray farm parcels.
+      if (ac > 0 && (ac <= 5 || !attrs._unverified)) return ac;
+      return 0;
+    }
+
     // 100m buffer
     let attrs = _pickBestParcel(await _cadastralQuery({...base, geometry:geoParam, distance:'100', units:'esriSRUnit_Meter'}), houseNum);
-    if (attrs) { const ac = _sqftToAcres(attrs); if (ac > 0) return {acres:Math.round(ac*100)/100, source:'FL parcel record', sqft:Math.round(ac*43560)}; }
+    if (attrs) { const ac = _accept(attrs); if (ac > 0) return {acres:Math.round(ac*100)/100, source:'FL parcel record', sqft:Math.round(ac*43560)}; }
 
     // 250m buffer (rural / large lots)
     attrs = _pickBestParcel(await _cadastralQuery({...base, geometry:geoParam, distance:'250', units:'esriSRUnit_Meter'}), houseNum);
-    if (attrs) { const ac = _sqftToAcres(attrs); if (ac > 0) return {acres:Math.round(ac*100)/100, source:'FL parcel record', sqft:Math.round(ac*43560)}; }
+    if (attrs) { const ac = _accept(attrs); if (ac > 0) return {acres:Math.round(ac*100)/100, source:'FL parcel record', sqft:Math.round(ac*43560)}; }
 
     // Address text fallback
     try {
@@ -7065,7 +7078,7 @@ async function scanPropertyAcres(lat, lon, address, zip) {
       const parts  = clean.split(/\s+/), hn = parts[0], st = parts.slice(1).join(' ');
       for (const where of [`PHY_ADDR1 LIKE '${hn}%${st}%'`, `PHY_ADDR1 LIKE '%${st}%'`]) {
         attrs = _pickBestParcel(await _cadastralQuery({where, outFields:'*', returnGeometry:'false', f:'json'}), houseNum);
-        if (attrs) { const ac = _sqftToAcres(attrs); if (ac > 0) return {acres:Math.round(ac*100)/100, source:'FL parcel record', sqft:Math.round(ac*43560)}; }
+        if (attrs) { const ac = _accept(attrs); if (ac > 0) return {acres:Math.round(ac*100)/100, source:'FL parcel record', sqft:Math.round(ac*43560)}; }
       }
     } catch(e) {}
   }
