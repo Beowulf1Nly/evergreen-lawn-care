@@ -6979,11 +6979,28 @@ function _pickBestParcel(features, houseNum) {
   if (!features?.length) return null;
   const attrs = features.map(f => f.attributes);
   if (attrs.length === 1) return attrs[0];
+
+  // Address match always wins (most accurate)
   if (houseNum) {
     const m = attrs.filter(a => String(a.PHY_ADDR1||a.SITE_ADDR||'').trim().startsWith(houseNum));
-    if (m.length) return m.reduce((b,a) => _sqftToAcres(a)>_sqftToAcres(b)?a:b, m[0]);
+    if (m.length) {
+      // Among address matches, prefer residential-sized (0.05–5 ac)
+      const res = m.filter(a => { const ac = _sqftToAcres(a); return ac >= 0.05 && ac <= 5; });
+      if (res.length) return res.reduce((b,a) => _sqftToAcres(a)>_sqftToAcres(b)?a:b, res[0]);
+      return m[0];
+    }
   }
-  return attrs.reduce((b,a) => _sqftToAcres(a)>_sqftToAcres(b)?a:b, attrs[0]);
+
+  // No address match — prefer parcels in a residential size range (0.05–5 ac).
+  // This avoids picking huge neighbouring farm/forest parcels.
+  const res = attrs.filter(a => { const ac = _sqftToAcres(a); return ac >= 0.05 && ac <= 5; });
+  if (res.length) return res.reduce((b,a) => _sqftToAcres(a)>_sqftToAcres(b)?a:b, res[0]);
+
+  // All parcels are tiny (road strips) or huge — pick smallest non-zero
+  const nonZero = attrs.filter(a => _sqftToAcres(a) > 0);
+  if (nonZero.length) return nonZero.reduce((b,a) => _sqftToAcres(a)<_sqftToAcres(b)?a:b, nonZero[0]);
+
+  return attrs[0];
 }
 async function _cadastralQuery(params) {
   try {
@@ -7021,7 +7038,8 @@ async function scanPropertyAcres(lat, lon, address, zip) {
       const attrs = feats ? _pickBestParcel(feats, houseNum) : null;
       if (attrs) {
         const acres = _sqftToAcres(attrs);
-        if (acres > 0) return {acres:Math.round(acres*100)/100, source:'FL parcel record', sqft:Math.round(acres*43560)};
+        // Cap at 5ac — anything larger is a wrong parcel (farm/forest), fall through
+        if (acres > 0 && acres <= 5) return {acres:Math.round(acres*100)/100, source:'FL parcel record', sqft:Math.round(acres*43560)};
       }
     }
     try {
@@ -7032,7 +7050,7 @@ async function scanPropertyAcres(lat, lon, address, zip) {
         const attrs = feats ? _pickBestParcel(feats, houseNum) : null;
         if (attrs) {
           const acres = _sqftToAcres(attrs);
-          if (acres > 0) return {acres:Math.round(acres*100)/100, source:'FL parcel record', sqft:Math.round(acres*43560)};
+          if (acres > 0 && acres <= 5) return {acres:Math.round(acres*100)/100, source:'FL parcel record', sqft:Math.round(acres*43560)};
         }
       }
     } catch(e) {}
