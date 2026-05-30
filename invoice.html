@@ -7122,7 +7122,7 @@ function editLotSize(rowIdx, badgeEl) {
     const cleaned = String(bk.notes||'').replace(/\bLot:\s*[\d.]+ac\b/gi,'').replace(/\s*\|\s*$/,'').trim();
     bk.notes = cleaned ? cleaned + ' | ' + tag : tag;
     try {
-      const p = new URLSearchParams({action:'owner_update_booking', rowIndex:bk._rowIndex||(rowIdx+2), notes:bk.notes, adminToken});
+      const p = new URLSearchParams({action:'owner_update_booking', rowIndex:bk._rowIndex||(rowIdx+2), notes:bk.notes, address:bk.address||'', zip:bk.zip||'', email:bk.email||'', name:bk.name||'', adminToken});
       await fetch(SCRIPT_URL+'?'+p);
     } catch(e) {}
     inp.remove();
@@ -7168,6 +7168,10 @@ async function scanAndSaveLotSize(rowIdx, lat, lon, btnEl) {
       action:    'owner_update_booking',
       rowIndex:  bk._rowIndex || (rowIdx + 2),
       notes:     newNotes,
+      address:   bk.address || '',
+      zip:       bk.zip || '',
+      email:     bk.email || '',
+      name:      bk.name || '',
       adminToken,
     });
     await fetch(SCRIPT_URL + '?' + params);
@@ -7195,14 +7199,20 @@ async function devScanAllLots(btnEl) {
   await Promise.all(stops.map(async s => {
     const bk = s.bk;
     const rowIdx = allBookings.indexOf(bk);
-    if (rowIdx < 0) return;
-    const addr = (bk.address||'') + (bk.zip?', '+(ZIP_CITY[bk.zip]||bk.zip):'') + ', FL';
-    const result = await scanPropertyAcres(s.lat ?? null, s.lon ?? null, bk.address, bk.zip);
+    if (rowIdx < 0 || !bk) return;
+    const city     = ZIP_CITY[bk.zip] || '';
+    const fullAddr = (bk.address||'') + (bk.zip?', '+bk.zip:'') + (city?', '+city:'') + ', FL';
+    const coord    = geoCache ? geoCache[fullAddr] : null;
+    const result   = await scanPropertyAcres(coord?.lat ?? null, coord?.lon ?? null, bk.address, bk.zip);
     const tag = `Lot: ${result.acres}ac`;
     const cleaned = String(bk.notes||'').replace(/\bLot:\s*[\d.]+ac\b/gi,'').replace(/\s*\|\s*$/,'').trim();
     bk.notes = cleaned ? cleaned + ' | ' + tag : tag;
     try {
-      const p = new URLSearchParams({action:'owner_update_booking',rowIndex:bk._rowIndex||(rowIdx+2),notes:bk.notes,adminToken});
+      const p = new URLSearchParams({
+        action:'owner_update_booking', rowIndex:bk._rowIndex||(rowIdx+2),
+        notes:bk.notes, address:bk.address||'', zip:bk.zip||'',
+        email:bk.email||'', name:bk.name||'', adminToken
+      });
       await fetch(SCRIPT_URL+'?'+p);
     } catch(e) {}
     done++;
@@ -7332,27 +7342,39 @@ async function buildRoute() {
       try { localStorage.setItem(_GEO_CACHE_KEY, JSON.stringify(geoCache)); } catch(e) {}
     }
 
-    // ── Auto-scan lot sizes for any stop that doesn't have one yet ────────
-    // Runs in parallel — each result is saved to bk.notes so mowMinutes() uses it
-    btn.textContent = '⏳ Scanning lot sizes…';
-    const _scanPromises = allUpcoming
-      .filter(bk => !/lot:\s*[\d.]+ac/i.test(String(bk.notes||'')))
-      .map(async bk => {
-        const city     = ZIP_CITY[bk.zip] || '';
-        const fullAddr = (bk.address||'') + (bk.zip?', '+bk.zip:'') + (city?', '+city:'') + ', FL';
-        const coord    = geoCache[fullAddr];
-        const result   = await scanPropertyAcres(coord?.lat ?? null, coord?.lon ?? null, bk.address, bk.zip);
-        const tag      = `Lot: ${result.acres}ac`;
-        const cleaned  = String(bk.notes||'').replace(/\bLot:\s*[\d.]+ac\b/gi,'').replace(/\s*\|\s*$/,'').trim();
-        bk.notes = cleaned ? cleaned + ' | ' + tag : tag;
-        // Persist to server silently
-        try {
-          const p = new URLSearchParams({action:'owner_update_booking',rowIndex:bk._rowIndex||(allBookings.indexOf(bk)+2),notes:bk.notes,adminToken});
-          fetch(SCRIPT_URL+'?'+p);
-        } catch(e) {}
-      });
-    await Promise.all(_scanPromises);
+    // ── Background lot-size scan: only jobs that don't have one yet ──────
+    // Fire-and-forget so it doesn't block route building
     btn.textContent = '⏳ Optimizing…';
+    const _toScan = allUpcoming.filter(bk => !/lot:\s*[\d.]+ac/i.test(String(bk.notes||'')));
+    if (_toScan.length) {
+      (async () => {
+        for (const bk of _toScan) {
+          try {
+            const city     = ZIP_CITY[bk.zip] || '';
+            const fullAddr = (bk.address||'') + (bk.zip?', '+bk.zip:'') + (city?', '+city:'') + ', FL';
+            const coord    = geoCache[fullAddr];
+            const result   = await scanPropertyAcres(coord?.lat ?? null, coord?.lon ?? null, bk.address, bk.zip);
+            const tag      = `Lot: ${result.acres}ac`;
+            const cleaned  = String(bk.notes||'').replace(/\bLot:\s*[\d.]+ac\b/gi,'').replace(/\s*\|\s*$/,'').trim();
+            bk.notes       = cleaned ? cleaned + ' | ' + tag : tag;
+            const ri = allBookings.indexOf(bk);
+            const p = new URLSearchParams({
+              action:'owner_update_booking', rowIndex:bk._rowIndex||(ri+2),
+              notes:bk.notes, address:bk.address||'', zip:bk.zip||'', email:bk.email||'',
+              name:bk.name||'', adminToken
+            });
+            fetch(SCRIPT_URL+'?'+p).catch(()=>{});
+          } catch(e) {}
+        }
+        // Re-render route stops with updated lot sizes
+        const _curDate = _routeViewDates[_routeViewDayIdx] || _routeViewDates[0];
+        if (_curDate && _routeCustomOrder[_curDate]) {
+          renderRouteDay(_curDate, _routeCustomOrder[_curDate]);
+          _reinjectRouteAllBtns(_curDate);
+        }
+        showToast(`📐 Lot sizes updated for ${_toScan.length} propert${_toScan.length===1?'y':'ies'}`);
+      })();
+    }
 
     const [startH, startM] = startTime.split(':').map(Number);
     const AVG_SPEED_MPH = 25;
@@ -7838,6 +7860,8 @@ function saveCfgData() {
     method: 'POST',
     body: JSON.stringify({ action: 'set_schedule_config', adminToken, config: cfgData }),
   }).catch(() => {});
+  // Live-update Zone Guide if it is currently open
+  try { if (document.getElementById('zoneGuideOverlay')?.style.display === 'flex') _renderZoneGuide(); } catch(e) {}
 }
 
 function saveCrewNames() {
@@ -8235,7 +8259,7 @@ function _getCrewDayZones(crew, dayLabel) {
   Object.keys(ZONE_CITIES).forEach(function(z) {
     var entries = sched[z] || [];
     entries.forEach(function(e) {
-      if (e.day === dayLabel && (e.crew === crew || (!e.crew && crew === 'Unassigned'))) {
+      if (e.day === dayLabel && (e.crew === crew || !e.crew)) {
         result.push({ zone: z, type: e.type || 'primary', cities: ZONE_CITIES[z].cities });
       }
     });
@@ -8684,28 +8708,6 @@ function closeZoneGuide(){var el=document.getElementById('zoneGuideOverlay');if(
 function switchZgTab(t){_zgTab=t;_renderZoneGuide();}
 
 
-function _getCrewDayZones(crew, dayLabel) {
-  if(!cfgData) loadCfgData();
-  var sched=cfgData.zoneSchedule||{}, result=[];
-  Object.keys(ZONE_CITIES).forEach(function(z){
-    (sched[z]||[]).forEach(function(e){
-      if(e.day===dayLabel&&(e.crew===crew||(!e.crew&&crew==='Unassigned')))
-        result.push({zone:z,type:e.type||'primary',cities:ZONE_CITIES[z].cities});
-    });
-  });
-  result.sort(function(a,b){ return a.type==='primary'&&b.type!=='primary'?-1:a.type!=='primary'&&b.type==='primary'?1:a.zone.localeCompare(b.zone); });
-  return result;
-}
-
-function _zoneHeaderBadges(zones) {
-  if(!zones.length) return '';
-  return '<div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:5px;padding-bottom:5px;border-bottom:1px dashed var(--border);">'
-    +zones.map(function(z){
-      var p=z.type==='primary';
-      return '<span title="'+esc(z.cities)+'" style="font-size:10px;font-weight:'+(p?'800':'500')+';background:'+(p?'var(--green-light)':'#f1f5f9')+';color:'+(p?'var(--green-deep)':'#64748b')+';border:1.5px '+(p?'solid':'dashed')+' '+(p?'var(--green-mid)':'#cbd5e1')+';border-radius:6px;padding:2px 5px;white-space:nowrap;cursor:default;">'+esc(z.zone)+(p?'':' <span style="font-size:8px;opacity:.7;">2°</span>')+'</span>';
-    }).join('')
-    +'</div>';
-}
 
 function _renderZoneGuide() {
   if(!cfgData) loadCfgData();
