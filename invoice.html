@@ -8226,6 +8226,48 @@ function renderDispatchBoard() {
   if (rowsEl) rowsEl.innerHTML = rowsHtml;
 }
 
+function _getCrewDayZones(crew, dayLabel) {
+  // Returns [{zone, type, cities}] for a given crew + day label (e.g. 'Mon')
+  // Reads from cfgData.zoneSchedule which is keyed by zone
+  if (!cfgData) loadCfgData();
+  var sched = cfgData.zoneSchedule || {};
+  var result = [];
+  Object.keys(ZONE_CITIES).forEach(function(z) {
+    var entries = sched[z] || [];
+    entries.forEach(function(e) {
+      if (e.day === dayLabel && (e.crew === crew || (!e.crew && crew === 'Unassigned'))) {
+        result.push({ zone: z, type: e.type || 'primary', cities: ZONE_CITIES[z].cities });
+      }
+    });
+  });
+  // Sort: primary first, then by zone name
+  result.sort(function(a, b) {
+    if (a.type === 'primary' && b.type !== 'primary') return -1;
+    if (a.type !== 'primary' && b.type === 'primary') return 1;
+    return a.zone.localeCompare(b.zone);
+  });
+  return result;
+}
+
+function _zoneHeaderBadges(zones) {
+  if (!zones.length) return '';
+  return '<div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:5px;padding-bottom:5px;border-bottom:1px dashed var(--border);">'
+    + zones.map(function(z) {
+        var isPrimary = z.type === 'primary';
+        return '<span title="' + esc(z.cities) + '" style="'
+          + 'display:inline-flex;align-items:center;gap:2px;'
+          + 'font-size:10px;font-weight:' + (isPrimary ? '800' : '500') + ';'
+          + 'background:' + (isPrimary ? 'var(--green-light)' : '#f1f5f9') + ';'
+          + 'color:' + (isPrimary ? 'var(--green-deep)' : '#64748b') + ';'
+          + 'border:1.5px ' + (isPrimary ? 'solid' : 'dashed') + ' ' + (isPrimary ? 'var(--green-mid)' : '#cbd5e1') + ';'
+          + 'border-radius:6px;padding:2px 5px;white-space:nowrap;cursor:default;">'
+          + esc(z.zone)
+          + (isPrimary ? '' : '<span style="font-size:8px;opacity:.7;margin-left:1px;">2°</span>')
+          + '</span>';
+      }).join('')
+    + '</div>';
+}
+
 function renderDispatchWeek(anchorDate, crewFilt) {
   var anchor = new Date(anchorDate+'T12:00'), dow=anchor.getDay(), monOff=dow===0?-6:1-dow;
   var monday = new Date(anchor); monday.setDate(anchor.getDate()+monOff);
@@ -8246,13 +8288,21 @@ function renderDispatchWeek(anchorDate, crewFilt) {
     if (crewFilt!=='all') jobs=jobs.filter(function(b){var c=(b.crew||'').trim();return crewFilt==='unassigned'?!c:c===crewFilt;});
     jobs.forEach(function(b){var k=b.crew||'Unassigned';allCrews.add(k);var key=k+'|'+ds;if(!jobsByCrewDay[key])jobsByCrewDay[key]=[];jobsByCrewDay[key].push(b);});
   });
+  // Always show A and B rows even with no jobs so zone headers are visible
+  ['A','B'].forEach(function(k){ allCrews.add(k); });
   var crewOrder=['A','B'].concat(Array.from(allCrews).filter(function(k){return k!=='A'&&k!=='B';}));
   var rowsHtml='';
   crewOrder.forEach(function(k) {
     if (!allCrews.has(k)) return;
     var cells='';
-    days.forEach(function(ds) {
+    days.forEach(function(ds, di) {
       var jobs=jobsByCrewDay[k+'|'+ds]||[], isToday=ds===today;
+      var dayLabel=dayLabels[di];
+
+      // Zone header badges from config
+      var zones = (k==='A'||k==='B') ? _getCrewDayZones(k, dayLabel) : [];
+      var zoneHeader = _zoneHeaderBadges(zones);
+
       var cards=jobs.map(function(b){
         var ri=allBookings.indexOf(b);
         var price=parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))||0;
@@ -8274,8 +8324,8 @@ function renderDispatchWeek(anchorDate, crewFilt) {
           +(b.frequency?'<div style="font-size:9px;opacity:.75;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(b.frequency)+'</div>':'')
           +'</div>';
       }).join('');
-      if (!cards) cards='<div class="dispatch-week-empty">No jobs</div>';
-      cells+='<div style="flex:1;min-width:0;border-right:1px solid var(--border);padding:6px;background:'+(isToday?'#f0fdf4':'#fff')+';">'+cards+'</div>';
+      if (!cards) cards='<div class="dispatch-week-empty" style="font-size:11px;color:var(--text-muted);font-style:italic;padding:4px 2px;">No jobs</div>';
+      cells+='<div style="flex:1;min-width:0;border-right:1px solid var(--border);padding:6px;background:'+(isToday?'#f0fdf4':'#fff')+';min-height:60px;">'+zoneHeader+cards+'</div>';
     });
     var lbl=k==='A'?'🔵 Crew A':k==='B'?'🩷 Crew B':k==='Unassigned'?'⬜ Unassigned':esc(k);
     rowsHtml+='<div class="dispatch-crew-row" style="align-items:stretch;"><div class="dispatch-crew-label" style="min-height:60px;"><div class="dispatch-crew-name">'+lbl+'</div></div><div style="flex:1;display:flex;min-width:0;">'+cells+'</div></div>';
@@ -8304,30 +8354,99 @@ function showDispatchTab(tab) {
   });
 }
 
+
 function _populateDispatchDetail(b, rowIdx) {
   var done=isDone(b);
   var cal=String(b.calendarEvent||'').toLowerCase(), pm=String(b.payMethod||'').toLowerCase();
   var cash=cal.includes('cash')||pm.includes('cash');
   var paid=(!cal.includes('not paid')&&!cal.includes('pending'))&&(cal.includes('paid')||cal.includes('autopay')||cal.includes('auto-pay')||pm.includes('autopay')||pm.includes('auto-pay'));
+  var inv=String(b.invoiced||'').length>2;
 
   function drow(label,val){ if(!val) return ''; return '<div class="dispatch-info-row"><div class="dispatch-info-label">'+esc(label)+'</div><div class="dispatch-info-val">'+esc(String(val))+'</div></div>'; }
 
   var badge=done?'<span style="background:#dcfce7;color:#15803d;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">✓ Done</span>'
     :cash&&!paid?'<span style="background:#fff3e0;color:#e65100;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">💵 Cash Pending</span>'
+    :inv?'<span style="background:#eff6ff;color:#1d4ed8;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">📧 Invoiced</span>'
     :'<span style="background:#fef9c3;color:#92400e;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">Upcoming</span>';
   var price=parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))||0;
-  var info='<div style="margin-bottom:16px;">'+badge+'</div>';
-  info+=drow('Customer',b.name)+drow('Address',(b.address||'')+(b.zip?', '+b.zip:''))+drow('Phone',b.phone);
-  info+=drow('Date',b.serviceDate||b.serviceDateRaw)+drow('Plan',b.frequency)+drow('Price',price?'$'+price.toFixed(0):'')+drow('Crew',b.crew)+drow('Time',b.jobTime)+drow('Done by',b.markedBy);
+
+  // ── Info (view mode) ──────────────────────────────────
+  var info='<div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">'+badge;
+  if(adminRole==='owner') info+='<button onclick="toggleDispatchEdit('+rowIdx+')" id="dispEditToggle" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;background:#fff;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;">✏️ Edit</button>';
+  info+='</div>';
+  info+=drow('Customer',b.name)+drow('Address',(b.address||'')+(b.zip?', '+b.zip:''))+drow('Phone',b.phone)+drow('Email',b.email);
+  info+=drow('Date',b.serviceDate||b.serviceDateRaw)+drow('Service',b.service||'Lawn Mow & Blow')+drow('Plan',b.frequency)+drow('Price',price?'$'+price.toFixed(2):'')+drow('Crew',b.crew?'Crew '+b.crew:'Unassigned')+drow('Time',b.jobTime)+drow('Done by',b.markedBy);
+
+  // ── Edit form (owner only, hidden by default) ─────────
+  if(adminRole==='owner') {
+    var curCrew=String(b.crew||'');
+    info+='<div id="dispEditForm" style="display:none;margin-top:16px;padding:16px;background:#f8faf8;border:1.5px solid var(--border);border-radius:12px;">';
+    info+='<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:12px;">Edit Job Info</div>';
+    // Row 1: Crew + Time
+    info+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">';
+    info+='<div><label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">Crew</label>'
+      +'<select id="de_crew" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;">'
+      +'<option value="" '+(curCrew===''?'selected':'')+'>⬜ Unassigned</option>'
+      +'<option value="A" '+(curCrew==='A'?'selected':'')+'>🔵 Crew A</option>'
+      +'<option value="B" '+(curCrew==='B'?'selected':'')+'>🩷 Crew B</option>'
+      +'</select></div>';
+    info+='<div><label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">Job Time</label>'
+      +'<input id="de_time" type="text" placeholder="e.g. 8:00 AM" value="'+esc(b.jobTime||'')+'" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;box-sizing:border-box;">'
+      +'</div></div>';
+    // Row 2: Price + Service Date
+    info+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">';
+    info+='<div><label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">Price ($)</label>'
+      +'<input id="de_price" type="number" step="0.01" min="0" placeholder="0.00" value="'+esc(price?price.toFixed(2):'')+'" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;box-sizing:border-box;">'
+      +'</div>';
+    info+='<div><label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">Service Date</label>'
+      +'<input id="de_date" type="date" value="'+esc(b.serviceDate||b.serviceDateRaw||'')+'" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;box-sizing:border-box;">'
+      +'</div></div>';
+    // Row 3: Name + Phone
+    info+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">';
+    info+='<div><label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">Name</label>'
+      +'<input id="de_name" type="text" value="'+esc(b.name||'')+'" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;box-sizing:border-box;">'
+      +'</div>';
+    info+='<div><label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">Phone</label>'
+      +'<input id="de_phone" type="tel" value="'+esc(b.phone||'')+'" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;box-sizing:border-box;">'
+      +'</div></div>';
+    // Row 4: Address + Zip
+    info+='<div style="display:grid;grid-template-columns:1fr auto;gap:10px;margin-bottom:10px;">';
+    info+='<div><label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">Address</label>'
+      +'<input id="de_address" type="text" value="'+esc(b.address||'')+'" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;box-sizing:border-box;">'
+      +'</div>';
+    info+='<div><label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">Zip</label>'
+      +'<input id="de_zip" type="text" maxlength="5" value="'+esc(b.zip||'')+'" style="width:80px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;box-sizing:border-box;">'
+      +'</div></div>';
+    // Row 5: Email
+    info+='<div style="margin-bottom:10px;"><label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">Email</label>'
+      +'<input id="de_email" type="email" value="'+esc(b.email||'')+'" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;box-sizing:border-box;">'
+      +'</div>';
+    // Row 6: Notes
+    info+='<div style="margin-bottom:14px;"><label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">Notes</label>'
+      +'<textarea id="de_notes" rows="3" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;resize:vertical;box-sizing:border-box;">'+esc(b.notes||'')+'</textarea>'
+      +'</div>';
+    // Save/cancel
+    info+='<div style="display:flex;gap:8px;">'
+      +'<button onclick="saveDispatchEdit('+rowIdx+')" id="de_saveBtn" style="flex:1;padding:10px;background:var(--green-mid);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">💾 Save Changes</button>'
+      +'<button onclick="toggleDispatchEdit('+rowIdx+')" style="padding:10px 16px;border:1.5px solid var(--border);border-radius:10px;background:#fff;font-size:13px;font-family:inherit;cursor:pointer;">Cancel</button>'
+      +'</div>';
+    info+='<div id="de_error" style="color:var(--red);font-size:12px;margin-top:8px;display:none;"></div>';
+    info+='</div>';
+  }
+
+  // ── Action buttons ────────────────────────────────────
   info+='<div class="dispatch-action-row">';
   if(b.phone) info+='<a href="tel:'+esc(b.phone)+'" class="dispatch-action-btn" style="background:var(--green-mid);color:#fff;text-decoration:none;">📞 Call</a>';
-  info+='<a href="https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent((b.address||'')+(b.zip?', '+b.zip:'')+', FL')+'" target="_blank" rel="noopener" class="dispatch-action-btn" style="background:#1d4ed8;color:#fff;text-decoration:none;">🗺 Navigate</a>';
+  if(b.address) info+='<a href="https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent((b.address||'')+(b.zip?', '+b.zip:'')+', FL')+'" target="_blank" rel="noopener" class="dispatch-action-btn" style="background:#1d4ed8;color:#fff;text-decoration:none;">🗺 Navigate</a>';
   if(!done) info+='<button class="dispatch-action-btn" style="background:#15803d;color:#fff;" onclick="closeDispatchDetail();triggerMarkDone('+rowIdx+')">✓ Mark Done</button>';
   if(cash&&!paid) info+='<button class="dispatch-action-btn" style="background:#854d0e;color:#fff;" onclick="closeDispatchDetail();triggerCashPaid('+rowIdx+')">💵 Cash Collected</button>';
   if(adminRole==='owner'&&!done) info+='<button class="dispatch-action-btn" style="background:#f59e0b;color:#fff;" onclick="openDispatchResched('+rowIdx+')">📅 Reschedule</button>';
+  if(adminRole==='owner') info+='<button class="dispatch-action-btn" style="background:#dc2626;color:#fff;" onclick="if(confirm(\'Cancel this job?\'))closeDispatchDetail(),triggerCancelJob('+rowIdx+')">✕ Cancel</button>';
   info+='</div>';
+
   var infoEl=document.getElementById('dispatch-tab-info'); if(infoEl) infoEl.innerHTML=info;
 
+  // ── Notes tab ─────────────────────────────────────────
   var custNotes=String(b.notes||'').trim(), empNotes=String(b.employeeNotes||'').trim();
   var nh='';
   if(custNotes) nh+='<div style="margin-bottom:14px;"><div style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px;">Customer Notes</div><div style="background:#f8faf8;border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;font-size:13px;white-space:pre-wrap;">'+esc(custNotes)+'</div></div>';
@@ -8336,6 +8455,7 @@ function _populateDispatchDetail(b, rowIdx) {
   nh+='<button class="dispatch-action-btn" style="background:#0369a1;color:#fff;margin-top:12px;" onclick="closeDispatchDetail();openNoteModal('+rowIdx+')">'+(empNotes?'Edit':'Add')+' Crew Note</button>';
   var ne=document.getElementById('dispatch-tab-notes'); if(ne) ne.innerHTML=nh;
 
+  // ── Photos tab ────────────────────────────────────────
   var photos=(b.photos||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
   var ph=photos.length
     ?'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;">'+photos.map(function(u){return '<div style="aspect-ratio:1;border-radius:10px;overflow:hidden;border:1.5px solid var(--border);cursor:pointer;" onclick="openPhotoLightbox(\''+esc(u)+'\')"><img src="'+esc(u)+'" alt="" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.style.display=\'none\'"></div>';}).join('')+'</div>'
@@ -8343,13 +8463,72 @@ function _populateDispatchDetail(b, rowIdx) {
   ph+='<button class="dispatch-action-btn" style="background:#7c3aed;color:#fff;margin-top:16px;" onclick="closeDispatchDetail();openPhotoUpload('+rowIdx+')">📷 Add Photo</button>';
   var pe=document.getElementById('dispatch-tab-photos'); if(pe) pe.innerHTML=ph;
 
+  // ── History tab ───────────────────────────────────────
   var em=String(b.email||'').toLowerCase();
   var hist=allBookings.filter(function(j){return String(j.email||'').toLowerCase()===em&&!j.rowCancelled;}).sort(function(a,z){return(z.serviceDate||'').localeCompare(a.serviceDate||'');});
   var he=document.getElementById('dispatch-tab-history');
   if(he) he.innerHTML=hist.length
     ?hist.map(function(j){return '<div style="padding:12px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:14px;font-weight:600;color:var(--green-deep);">'+esc(j.serviceDate||j.serviceDateRaw||'--')+'</div><div style="font-size:12px;color:var(--text-muted);">'+esc(j.frequency||'')+'</div></div><div style="text-align:right;">'+(isDone(j)?'<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">✓ Done</span>':'<span style="background:#fef9c3;color:#92400e;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">Upcoming</span>')+'<div style="font-size:13px;font-weight:700;color:var(--green-deep);margin-top:4px;">'+esc(j.price||'')+'</div></div></div>';}).join('')
     :'<div style="color:var(--text-muted);font-size:14px;padding:16px 0;">No history found.</div>';
+
   showDispatchTab('info');
+}
+
+function toggleDispatchEdit(rowIdx) {
+  var form=document.getElementById('dispEditForm');
+  var btn=document.getElementById('dispEditToggle');
+  if(!form) return;
+  var showing=form.style.display!=='none';
+  form.style.display=showing?'none':'block';
+  if(btn) btn.textContent=showing?'✏️ Edit':'✕ Cancel Edit';
+}
+
+async function saveDispatchEdit(rowIdx) {
+  var b=allBookings[rowIdx]; if(!b) return;
+  var btn=document.getElementById('de_saveBtn'), errEl=document.getElementById('de_error');
+  if(btn) { btn.disabled=true; btn.textContent='Saving...'; }
+  if(errEl) errEl.style.display='none';
+  try {
+    var crew   = document.getElementById('de_crew').value;
+    var jtime  = document.getElementById('de_time').value.trim();
+    var price  = document.getElementById('de_price').value.trim();
+    var name   = document.getElementById('de_name').value.trim();
+    var phone  = document.getElementById('de_phone').value.trim();
+    var address= document.getElementById('de_address').value.trim();
+    var zip    = document.getElementById('de_zip').value.trim();
+    var email  = document.getElementById('de_email').value.trim();
+    var notes  = document.getElementById('de_notes').value.trim();
+    var newDate= document.getElementById('de_date').value;
+    var params = new URLSearchParams({ action:'owner_update_booking', rowIndex:b._rowIndex||(rowIdx+2), adminToken:adminToken });
+    if(crew!==undefined) params.set('crew', crew);
+    if(jtime) params.set('jobTime', jtime);
+    if(price) params.set('price', price);
+    if(name)  params.set('name', name);
+    if(phone) params.set('phone', phone);
+    if(address) params.set('address', address);
+    if(zip)   params.set('zip', zip);
+    if(email) params.set('email', email);
+    if(notes) params.set('notes', notes);
+    var res=await fetch(SCRIPT_URL+'?'+params), data=await res.json();
+    if(data.success) {
+      // Update local booking object
+      b.crew=crew; b.jobTime=jtime; b.price=price||b.price;
+      b.name=name||b.name; b.phone=phone||b.phone; b.address=address||b.address;
+      b.zip=zip||b.zip; b.email=email||b.email; b.notes=notes||b.notes;
+      if(newDate) b.serviceDate=newDate;
+      showToast('Saved!');
+      _populateDispatchDetail(b, rowIdx);
+      renderDispatchBoard();
+    } else {
+      if(errEl) { errEl.textContent=data.error||'Save failed'; errEl.style.display='block'; }
+      showToast('Save failed: '+(data.error||'Error'));
+    }
+  } catch(e) {
+    if(errEl) { errEl.textContent='Network error'; errEl.style.display='block'; }
+    showToast('Network error');
+  } finally {
+    if(btn) { btn.disabled=false; btn.textContent='💾 Save Changes'; }
+  }
 }
 
 function openDispatchResched(rowIdx) {
@@ -8504,75 +8683,96 @@ function openZoneGuide(){
 function closeZoneGuide(){var el=document.getElementById('zoneGuideOverlay');if(el) el.style.display='none';}
 function switchZgTab(t){_zgTab=t;_renderZoneGuide();}
 
-function _renderZoneGuide(){
-  // Config-driven: reads from cfgData.zoneSchedule + ZONE_CITIES
+
+function _getCrewDayZones(crew, dayLabel) {
+  if(!cfgData) loadCfgData();
+  var sched=cfgData.zoneSchedule||{}, result=[];
+  Object.keys(ZONE_CITIES).forEach(function(z){
+    (sched[z]||[]).forEach(function(e){
+      if(e.day===dayLabel&&(e.crew===crew||(!e.crew&&crew==='Unassigned')))
+        result.push({zone:z,type:e.type||'primary',cities:ZONE_CITIES[z].cities});
+    });
+  });
+  result.sort(function(a,b){ return a.type==='primary'&&b.type!=='primary'?-1:a.type!=='primary'&&b.type==='primary'?1:a.zone.localeCompare(b.zone); });
+  return result;
+}
+
+function _zoneHeaderBadges(zones) {
+  if(!zones.length) return '';
+  return '<div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:5px;padding-bottom:5px;border-bottom:1px dashed var(--border);">'
+    +zones.map(function(z){
+      var p=z.type==='primary';
+      return '<span title="'+esc(z.cities)+'" style="font-size:10px;font-weight:'+(p?'800':'500')+';background:'+(p?'var(--green-light)':'#f1f5f9')+';color:'+(p?'var(--green-deep)':'#64748b')+';border:1.5px '+(p?'solid':'dashed')+' '+(p?'var(--green-mid)':'#cbd5e1')+';border-radius:6px;padding:2px 5px;white-space:nowrap;cursor:default;">'+esc(z.zone)+(p?'':' <span style="font-size:8px;opacity:.7;">2°</span>')+'</span>';
+    }).join('')
+    +'</div>';
+}
+
+function _renderZoneGuide() {
   if(!cfgData) loadCfgData();
   var sched=cfgData.zoneSchedule||{};
-  var nameA=cfgData.crewNames&&cfgData.crewNames.A?cfgData.crewNames.A:'Crew A';
-  var nameB=cfgData.crewNames&&cfgData.crewNames.B?cfgData.crewNames.B:'Crew B';
+  var nameA=(cfgData.crewNames&&cfgData.crewNames.A)||'Crew A';
+  var nameB=(cfgData.crewNames&&cfgData.crewNames.B)||'Crew B';
   var sActive='padding:8px 18px;border:none;border-radius:8px;background:var(--green-deep);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;';
   var sIdle='padding:8px 18px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;color:#64748b;font-size:13px;cursor:pointer;font-family:inherit;';
-  var cb=document.getElementById('zgTabCurrent'),fb=document.getElementById('zgTabFuture');
+  var cb=document.getElementById('zgTabCurrent'), fb=document.getElementById('zgTabFuture');
   if(cb) cb.style.cssText=_zgTab==='current'?sActive:sIdle;
   if(fb) fb.style.cssText=_zgTab==='crew'?sActive:sIdle;
-  var body=document.getElementById('zoneGuideBody'),note=document.getElementById('zoneGuideNote');
+  var body=document.getElementById('zoneGuideBody'), note=document.getElementById('zoneGuideNote');
   if(!body||!note) return;
 
-  // Build day -> [{zone, type, crew}] map from cfgData
+  // Build day -> {primary:[], backup:[]} from cfgData
   var WORK_DAYS=['Mon','Tue','Wed','Thu','Fri','Sat'];
-  var dayMap={}; // day -> [{zone, type, crew, info}]
-  WORK_DAYS.forEach(function(d){dayMap[d]=[];});
+  var dayZones={};
+  WORK_DAYS.forEach(function(d){ dayZones[d]={primary:[],backup:[]}; });
   Object.keys(ZONE_CITIES).forEach(function(z){
-    var entries=sched[z]||[];
-    entries.forEach(function(e){
-      if(dayMap[e.day]) dayMap[e.day].push({zone:z,type:e.type||'primary',crew:e.crew||'',info:ZONE_CITIES[z]});
+    (sched[z]||[]).forEach(function(e){
+      if(!dayZones[e.day]) return;
+      var entry={zone:z,cities:ZONE_CITIES[z].cities,crew:e.crew||''};
+      if(e.type==='primary') dayZones[e.day].primary.push(entry);
+      else dayZones[e.day].backup.push(entry);
     });
   });
-  // Sort each day: primary first, then backup; within same type sort by zone
+  // Sort each list by zone name
   WORK_DAYS.forEach(function(d){
-    dayMap[d].sort(function(a,b){
-      if(a.type==='primary'&&b.type!=='primary') return -1;
-      if(a.type!=='primary'&&b.type==='primary') return 1;
-      return a.zone.localeCompare(b.zone);
-    });
+    dayZones[d].primary.sort(function(a,b){return a.zone.localeCompare(b.zone);});
+    dayZones[d].backup.sort(function(a,b){return a.zone.localeCompare(b.zone);});
   });
 
-  // Build zone pill HTML
-  function zonePill(entry){
-    var isPrimary=entry.type==='primary';
-    var crewColor=entry.crew==='A'?'#fbcfe8':entry.crew==='B'?'#bfdbfe':'#e5e7eb';
-    var crewLabel=entry.crew==='A'?nameA:entry.crew==='B'?nameB:'';
-    return '<div style="display:inline-flex;flex-direction:column;align-items:center;background:'+(isPrimary?'#f0fdf4':'#fafafa')+';border:1.5px '+(isPrimary?'solid':'dashed')+' '+(isPrimary?'var(--green-mid)':'#9ca3af')+';border-radius:10px;padding:6px 10px;min-width:90px;margin:3px;">'
-      +'<span style="font-size:13px;font-weight:'+(isPrimary?'900':'600')+';color:'+(isPrimary?'var(--green-deep)':'#6b7280')+';">'+entry.zone+'</span>'
-      +'<span style="font-size:10px;font-weight:'+(isPrimary?'600':'400')+';color:'+(isPrimary?'#374151':'#9ca3af')+';text-align:center;line-height:1.3;">'+esc(entry.info.cities)+'</span>'
-      +(isPrimary?'<span style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--green-mid);margin-top:2px;">PRIMARY</span>':'<span style="font-size:9px;color:#9ca3af;margin-top:2px;">backup</span>')
-      +(crewLabel?'<span style="font-size:9px;font-weight:600;background:'+crewColor+';border-radius:4px;padding:1px 5px;margin-top:3px;">'+esc(crewLabel)+'</span>':'')
-      +'</div>';
-  }
-
-  var activeDays=WORK_DAYS.filter(function(d){return dayMap[d].length>0;});
+  var activeDays=WORK_DAYS.filter(function(d){return dayZones[d].primary.length||dayZones[d].backup.length;});
   if(!activeDays.length){
     body.innerHTML='';
-    note.innerHTML='<strong>No schedule configured yet.</strong> Go to the <strong>Config</strong> tab to set which zones run on which days.';
+    note.innerHTML='<strong>No schedule configured yet.</strong> Go to the <strong>⚙️ Config</strong> tab to set which zones run on which days.';
     return;
   }
 
+  function zoneCard(entry, isPrimary) {
+    var crewLabel=entry.crew==='A'?nameA:entry.crew==='B'?nameB:'';
+    var crewBg=entry.crew==='A'?'#fbcfe8':entry.crew==='B'?'#bfdbfe':'#e5e7eb';
+    return '<div style="display:flex;flex-direction:column;align-items:center;background:'+(isPrimary?'#f0fdf4':'#fafafa')+';border:2px '+(isPrimary?'solid':'dashed')+' '+(isPrimary?'var(--green-mid)':'#cbd5e1')+';border-radius:12px;padding:10px 14px;min-width:110px;text-align:center;">'
+      +'<span style="font-size:16px;font-weight:'+(isPrimary?'900':'600')+';color:'+(isPrimary?'var(--green-deep)':'#64748b')+';letter-spacing:-.5px;">'+esc(entry.zone)+'</span>'
+      +'<span style="font-size:11px;font-weight:'+(isPrimary?'600':'400')+';color:'+(isPrimary?'#374151':'#94a3b8')+';margin-top:2px;line-height:1.3;">'+esc(entry.cities)+'</span>'
+      +(isPrimary?'<span style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--green-mid);margin-top:4px;background:#dcfce7;padding:2px 6px;border-radius:4px;">PRIMARY</span>':'<span style="font-size:9px;color:#94a3b8;margin-top:4px;">backup</span>')
+      +(crewLabel?'<span style="font-size:10px;font-weight:600;background:'+crewBg+';border-radius:6px;padding:2px 7px;margin-top:4px;">'+esc(crewLabel)+'</span>':'')
+      +'</div>';
+  }
+
   body.innerHTML='<thead><tr>'
-    +'<th style="background:#1a3a1a;color:#fff;padding:10px 14px;text-align:left;font-size:12px;font-weight:700;width:80px;">Day</th>'
-    +'<th style="background:#1a3a1a;color:#fff;padding:10px 14px;text-align:left;font-size:12px;font-weight:700;">Zones <span style="font-weight:400;opacity:.7;">(bold = primary · dashed = backup)</span></th>'
+    +'<th style="background:#1a3a1a;color:#fff;padding:12px 14px;text-align:center;font-size:12px;font-weight:700;width:65px;">Day</th>'
+    +'<th style="background:#1a3a1a;color:#fff;padding:12px 14px;text-align:center;font-size:12px;font-weight:700;">🟢 Primary Zones — Start here</th>'
+    +'<th style="background:#1a3a1a;color:#fff;padding:12px 14px;text-align:center;font-size:12px;font-weight:700;">⬜ Backup / Overflow — Roll into next</th>'
     +'</tr></thead><tbody>'
-    +WORK_DAYS.map(function(d){
-      var entries=dayMap[d];
-      if(!entries.length) return '';
-      var pills=entries.map(zonePill).join('');
+    +activeDays.map(function(d){
+      var primCards=dayZones[d].primary.map(function(e){return zoneCard(e,true);}).join('');
+      var backCards=dayZones[d].backup.map(function(e){return zoneCard(e,false);}).join('');
       var isWknd=d==='Sat'||d==='Sun';
       return '<tr>'
-        +'<td style="padding:10px 14px;background:'+(isWknd?'#f0fdf4':'#f8faf6')+';border:1px solid #e2e8f0;font-size:13px;font-weight:700;color:'+(isWknd?'var(--green-mid)':'#374151')+';white-space:nowrap;vertical-align:middle;">'+d+'</td>'
-        +'<td style="padding:8px 10px;background:#fff;border:1px solid #e2e8f0;"><div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center;">'+pills+'</div></td>'
+        +'<td style="padding:14px;background:'+(isWknd?'#f0fdf4':'#f8faf6')+';border:1px solid #e2e8f0;text-align:center;font-size:13px;font-weight:800;color:'+(isWknd?'var(--green-mid)':'#374151')+';vertical-align:middle;">'+d+'</td>'
+        +'<td style="padding:12px 14px;background:#fff;border:1px solid #e2e8f0;"><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">'+(primCards||'<span style="font-size:12px;color:#94a3b8;font-style:italic;">None set</span>')+'</div></td>'
+        +'<td style="padding:12px 14px;background:#fafafa;border:1px solid #e2e8f0;"><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">'+(backCards||'<span style="font-size:12px;color:#94a3b8;font-style:italic;">—</span>')+'</div></td>'
         +'</tr>';
     }).join('')
     +'</tbody>';
-  note.innerHTML='<strong>Bold border</strong> = primary zone for that day. <strong>Dashed border</strong> = backup / overflow. Crew labels show who handles that zone. Edit in the <strong>Config</strong> tab.';
+  note.innerHTML='<strong>Bold border</strong> = primary zone for that day. <strong>Dashed border</strong> = backup/overflow. Crew chips show assignment. Edit anytime in <strong>⚙️ Config</strong>.';
 }
 
 </script>
