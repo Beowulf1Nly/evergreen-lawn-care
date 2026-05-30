@@ -6986,9 +6986,13 @@ function _pickBestParcel(features, houseNum) {
   const attrs = features.map(f => f.attributes);
   if (attrs.length === 1) return attrs[0]; // only one — trust it
 
-  // Address match: confirmed result, no cap needed
+  // Address match: confirmed result, no cap needed.
+  // Must match "22 ..." exactly — startsWith("22") alone would also hit "2200 FARM RD"
   if (houseNum) {
-    const match = attrs.filter(a => String(a.PHY_ADDR1||a.SITE_ADDR||'').trim().startsWith(houseNum));
+    const match = attrs.filter(a => {
+      const addr = String(a.PHY_ADDR1||a.SITE_ADDR||'').trim();
+      return addr === houseNum || addr.startsWith(houseNum + ' ');
+    });
     if (match.length > 0) return match.reduce((b,a) => _sqftToAcres(a)>_sqftToAcres(b)?a:b, match[0]);
   }
 
