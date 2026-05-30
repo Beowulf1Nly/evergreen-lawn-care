@@ -6268,6 +6268,34 @@ function moveRouteStop(dateStr, crew, fromIdx, dir) {
   if (toIdx < 0 || toIdx >= order.length) return;
   [order[fromIdx], order[toIdx]] = [order[toIdx], order[fromIdx]];
   renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
+  // Sync reordered job times to the dispatch board
+  _syncRouteOrderToDispatch(dateStr, _routeCustomOrder[dateStr]);
+}
+
+function _syncRouteOrderToDispatch(dateStr, dayOrder) {
+  if (!dayOrder || !allBookings) return;
+  // Update jobTime on each booking so dispatch board reflects the new order
+  const startTimeStr = document.getElementById('routeStartTime')?.value || '08:00';
+  let [h, m] = startTimeStr.split(':').map(Number);
+  const processStops = (stops) => {
+    (stops || []).forEach(s => {
+      const b = s.bk || allBookings[s.rowIndex];
+      if (!b) return;
+      b.jobTime = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+      const dur = s.driveMins || 0;
+      const jobMins = 40; // default job duration
+      m += jobMins + dur;
+      if (m >= 60) { h += Math.floor(m/60); m = m % 60; }
+    });
+  };
+  if (Array.isArray(dayOrder)) { processStops(dayOrder); }
+  else { Object.values(dayOrder).forEach(processStops); }
+  // Re-render dispatch board if it's visible
+  const dispPane = document.getElementById('pane-dispatch');
+  if (dispPane && dispPane.classList.contains('active')) {
+    const el = document.getElementById('dispatchDate');
+    if (el && el.value === dateStr) renderDispatchBoard();
+  }
 }
 
 // Build a single crew's stop list HTML
@@ -7015,8 +7043,26 @@ async function initConfigTab() {
   if (bEl) bEl.value = cfgData.crewNames.B || '';
 }
 
+// One-time delegated listener — handles all zone schedule button clicks
+(function() {
+  let _bound = false;
+  window._bindZoneSched = function() {
+    if (_bound) return; _bound = true;
+    document.addEventListener('click', function(e) {
+      const btn = e.target.closest('[data-action]');
+      if (!btn || !btn.closest('#cfgZoneDays')) return;
+      e.stopPropagation();
+      const zone = btn.dataset.zone, day = btn.dataset.day, action = btn.dataset.action;
+      if (action === 'add')    cfgAddDay(zone, day);
+      if (action === 'remove') cfgRemoveDay(zone, day);
+      if (action === 'crew')   cfgSetDayCrew(zone, day, btn.dataset.crew);
+    });
+  };
+})();
+
 function renderZoneSchedule() {
   if (!cfgData) loadCfgData();
+  window._bindZoneSched();
   const daysEl = document.getElementById('cfgZoneDays');
   if (!daysEl) return;
 
@@ -7043,29 +7089,22 @@ function renderZoneSchedule() {
   }
 
   const WORK_DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat'];
-  const crewBtn = (zone, day, currentCrew) => {
-    const opts = [
-      { val:'',  label:'—',        cls:'' },
-      { val:'A', label:'💗 '+nameA, cls:'active-a' },
-      { val:'B', label:'🔵 '+nameB, cls:'active-b' },
-    ];
-    return opts.map(o => `<button class="cfg-crew-pill ${currentCrew===o.val?o.cls:''}"
-      onclick="cfgSetDayCrew('${zone}','${day}','${o.val}')"
-      style="padding:3px 10px;font-size:11px;">${o.label}</button>`).join('');
-  };
-
   daysEl.innerHTML = Object.entries(ZONE_CITIES).map(([z, info]) => {
     const entries = (cfgData.zoneSchedule || {})[z] || [];
     const items = WORK_DAYS.map(d => {
       const entry = entries.find(e => e.day === d);
-      if (!entry) return `<button class="cfg-day-pill off" onclick="cfgAddDay('${z}','${d}')">${d}</button>`;
-      return `<div style="display:inline-flex;align-items:center;gap:4px;background:${entry.type==='primary'?'#f0faf0':'#fafafa'};border:1.5px ${entry.type==='primary'?'solid':'dashed'} ${entry.type==='primary'?'var(--green-mid)':'#9ca3af'};border-radius:10px;padding:4px 8px;margin:2px;">
-        <button onclick="cfgAddDay('${z}','${d}')" style="background:none;border:none;cursor:pointer;padding:0;display:flex;flex-direction:column;align-items:center;" title="Click to cycle: primary → backup → remove">
-          <span style="font-size:11px;font-weight:800;color:${entry.type==='primary'?'var(--green-mid)':'#6b7280'};">${d}</span>
-          <span style="font-size:9px;color:${entry.type==='primary'?'#15803d':'#9ca3af'};text-transform:uppercase;letter-spacing:.04em;">${entry.type}</span>
+      if (!entry) return `<button class="cfg-day-pill off" data-zone="${z}" data-day="${d}" data-action="add">${d}</button>`;
+      const isPrimary = entry.type === 'primary';
+      const crew = entry.crew || '';
+      return `<div style="display:inline-flex;align-items:center;gap:4px;background:${isPrimary?'#f0faf0':'#fafafa'};border:1.5px ${isPrimary?'solid':'dashed'} ${isPrimary?'var(--green-mid)':'#9ca3af'};border-radius:10px;padding:4px 8px;margin:2px;">
+        <button data-zone="${z}" data-day="${d}" data-action="add" style="background:none;border:none;cursor:pointer;padding:0;display:flex;flex-direction:column;align-items:center;" title="Click to toggle primary/backup">
+          <span style="font-size:11px;font-weight:800;color:${isPrimary?'var(--green-mid)':'#6b7280'};">${d}</span>
+          <span style="font-size:9px;color:${isPrimary?'#15803d':'#9ca3af'};text-transform:uppercase;letter-spacing:.04em;">${entry.type}</span>
         </button>
-        <div style="display:flex;gap:2px;">${crewBtn(z, d, entry.crew||'')}</div>
-        <button onclick="cfgRemoveDay('${z}','${d}')" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:12px;padding:0 2px;line-height:1;">✕</button>
+        <button data-zone="${z}" data-day="${d}" data-action="crew" data-crew="" class="cfg-crew-pill${crew===''?' active-none':''}" style="padding:3px 8px;font-size:11px;">—</button>
+        <button data-zone="${z}" data-day="${d}" data-action="crew" data-crew="A" class="cfg-crew-pill${crew==='A'?' active-a':''}" style="padding:3px 8px;font-size:11px;">💗 ${nameA}</button>
+        <button data-zone="${z}" data-day="${d}" data-action="crew" data-crew="B" class="cfg-crew-pill${crew==='B'?' active-b':''}" style="padding:3px 8px;font-size:11px;">🔵 ${nameB}</button>
+        <button data-zone="${z}" data-day="${d}" data-action="remove" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:12px;padding:0 2px;line-height:1;">✕</button>
       </div>`;
     }).join('');
     return `<div style="padding:14px 0;border-bottom:1px solid var(--border);">
@@ -7089,9 +7128,8 @@ function cfgAddDay(zone, day) {
   const arr = _getZoneSched(zone);
   const existing = arr.find(e => e.day === day);
   if (existing) {
-    // Cycle: primary → backup → remove
-    if (existing.type === 'primary') { existing.type = 'backup'; }
-    else { cfgData.zoneSchedule[zone] = arr.filter(e => e.day !== day); }
+    // Cycle: primary ↔ backup (use ✕ to remove)
+    existing.type = existing.type === 'primary' ? 'backup' : 'primary';
   } else {
     const hasPrimary = arr.some(e => e.type === 'primary');
     arr.push({ day, type: hasPrimary ? 'backup' : 'primary', crew: '' });
