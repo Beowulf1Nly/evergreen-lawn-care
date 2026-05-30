@@ -375,9 +375,41 @@
   .route-done-btn:hover:not(:disabled) { background:var(--green-mid); color:#fff; }
   .route-done-btn:disabled { background:#f1f5f1; color:#94a3b8; border-color:#e2e8f0; cursor:not-allowed; }
   .route-notes-btn {
-    background:none; border:none; cursor:pointer; padding:0;
-    display:inline-flex; align-items:center;
+    background:#e0f2fe; border:1px solid #bae6fd; border-radius:7px; cursor:pointer; padding:3px 8px;
+    display:inline-flex; align-items:center; font-size:12px; font-weight:600; color:#0369a1;
   }
+  .route-contact-btn {
+    display:inline-flex; align-items:center; gap:5px; padding:8px 14px; border-radius:10px;
+    background:#1d4ed8; color:#fff; border:none; cursor:pointer; font-family:inherit; font-size:13px; font-weight:700; text-decoration:none;
+  }
+  .route-contact-btn:hover { background:#1e40af; }
+  .route-all-btn {
+    display:inline-flex; align-items:center; gap:6px; padding:9px 16px; border-radius:10px;
+    background:#15803d; color:#fff; border:none; cursor:pointer; font-family:inherit; font-size:13px; font-weight:700;
+    margin-bottom:12px; width:100%;
+  }
+  .route-all-btn:hover { background:#166534; }
+  .route-renav-btn {
+    display:inline-flex; align-items:center; gap:6px; padding:9px 16px; border-radius:10px;
+    background:#7c3aed; color:#fff; border:none; cursor:pointer; font-family:inherit; font-size:13px; font-weight:700;
+    margin-bottom:12px; width:100%;
+  }
+  .route-renav-btn:hover { background:#6d28d9; }
+  /* Contact popup */
+  .contact-popup-overlay {
+    position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1300;
+    display:none; align-items:flex-end; justify-content:center; padding:20px;
+  }
+  .contact-popup {
+    background:#fff; border-radius:16px; padding:20px; max-width:380px; width:100%;
+    box-shadow:0 20px 60px rgba(0,0,0,.25);
+  }
+  .contact-popup-name { font-size:15px; font-weight:700; color:var(--green-deep); margin-bottom:4px; }
+  .contact-popup-phone { font-size:13px; color:var(--text-muted); margin-bottom:16px; }
+  .contact-popup-btns { display:flex; gap:10px; }
+  .contact-popup-btns a { flex:1; padding:13px; border-radius:12px; font-family:inherit; font-size:15px; font-weight:700; text-align:center; text-decoration:none; cursor:pointer; }
+  .contact-call-btn { background:#15803d; color:#fff; }
+  .contact-text-btn { background:#1d4ed8; color:#fff; }
   /* Notes popup overlay */
   .notes-overlay {
     position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1200;
@@ -3756,6 +3788,18 @@ async function loadBookings() {
     if (adminRole === 'owner') loadPendingEstimates();
     const custPane = document.getElementById('pane-customers');
     if (custPane && custPane.classList.contains('active')) renderCustomers();
+    // Re-render route so done-job states reflect fresh data (fixes refresh flicker)
+    if (_routeViewDates && _routeViewDates.length) {
+      if (_routeViewDates.length <= 1) {
+        const _ds = _routeViewDates[0];
+        if (_ds && _routeCustomOrder[_ds]) {
+          renderRouteDay(_ds, _routeCustomOrder[_ds]);
+          _reinjectRouteAllBtns(_ds);
+        }
+      } else {
+        renderRouteDayNavView();
+      }
+    }
     const now = new Date();
     document.getElementById('lastRefresh').textContent =
       'Updated ' + now.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
@@ -6211,6 +6255,8 @@ function renderSavedRoute(saved) {
       const [y,mo,d] = dateStr.split('-').map(Number);
       const dayLabel = new Date(y,mo-1,d).toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
       const cnt = customOrder[dateStr]?.length || 0;
+      outerHtml += `<button class="route-all-btn" onclick="openRouteAllMaps('${dateStr}',false)">🗺 Route All — Open in Google Maps</button>`;
+      outerHtml += `<button class="route-renav-btn" onclick="openRouteAllMaps('${dateStr}',true)">🔄 Re-navigate (skip done jobs)</button>`;
       outerHtml += `<div style="font-size:13px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);">${dayLabel} &nbsp;·&nbsp; ${cnt} stop${cnt!==1?'s':''}</div><div id="routeDay_${dateStr}"></div>`;
     }
     if (tl) tl.innerHTML = outerHtml;
@@ -6244,6 +6290,13 @@ function renderRouteDayNavView() {
   const outerHtml = `<div style="font-size:13px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);">${dayLabel} &nbsp;·&nbsp; ${cnt} stop${cnt!==1?'s':''}</div><div id="routeDay_${dateStr}"></div>`;
   if (tl) tl.innerHTML = outerHtml;
   if (_routeCustomOrder[dateStr]) renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
+  // Inject Route All / Re-navigate for this day
+  if (tl) {
+    const _rafDiv = document.createElement('div');
+    _rafDiv.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-bottom:4px;';
+    _rafDiv.innerHTML = `<button class="route-all-btn" onclick="openRouteAllMaps('${dateStr}',false)">🗺 Route All — Open in Google Maps</button><button class="route-renav-btn" onclick="openRouteAllMaps('${dateStr}',true)">🔄 Re-navigate (skip done jobs)</button>`;
+    tl.prepend(_rafDiv);
+  }
 }
 
 function navRouteDay(dir) {
@@ -6365,16 +6418,52 @@ function buildCrewStopsHtml(dateStr, crew, orderedStops, startTimeStr, startVal)
     const _em = String(bk.email||'').toLowerCase().trim();
     const _custRec = allCustomers.find(c => String(c.Email||'').toLowerCase().trim() === _em);
     const _custNotes = _custRec ? String(_custRec.Notes||'').trim() : '';
-    const notesBtn = _custNotes ? `<button class="route-notes-btn" onclick="openNotesPopup('📝 ${esc(bk.name||'Notes')}', ${JSON.stringify(_custNotes)})" title="View notes">💬</button>` : '';
+    // Notes btn always visible
+    const notesBtn = `<button class="route-notes-btn" onclick="openNotesPopup('📝 ${esc(bk.name||'Notes')}', ${JSON.stringify(_custNotes||'No notes on file')})" title="View notes">💬 Notes</button>`;
     const drivePill = noGeo
       ? `<span class="route-stop-pill" style="background:#fef9c3;color:#92400e;border:1px solid #fde68a;">⚠️ Not mapped</span>`
       : `<span class="route-stop-pill time-pill">🚗 ${driveMin}m</span>`;
     const mowPill  = `<span class="route-stop-pill time-pill">⏱ ~${mowMin}m</span>`;
     const planPill = bk.frequency ? `<span class="route-stop-pill">${esc(bk.frequency)}</span>` : '';
-    const donePill = done ? `<span class="route-stop-pill" style="background:#f1f5f9;color:#64748b;">✓ Done</span>` : '';
+    const donePill = done ? `<span class="route-stop-pill" style="background:#dcfce7;color:#166534;border:1px solid #86efac;">✓ Done</span>` : '';
     const zBadge   = zoneBadgeHTML(bk.zip, bk.zone);
     // Use single-quoted JS string so it's safe inside double-quoted HTML attributes
     const crewKey  = typeof crew === 'string' ? `'${crew}'` : crew;
+
+    // Post-done billing actions (mirrors Jobs tab logic)
+    let postDoneActions = '';
+    if (done && rowIdx >= 0) {
+      const _cal  = String(bk.calendarEvent||'').toLowerCase();
+      const _pm   = String(bk.payMethod||'').toLowerCase();
+      const _inv  = String(bk.invoiced||'').toLowerCase();
+      const _paidChk = s => s.includes('✅')||s.includes('autopay')||s.includes('auto-pay')||s==='paid'||s.startsWith('paid');
+      const _isPaid = _paidChk(_cal)||_paidChk(_pm)||_paidChk(_inv);
+      const _cash = _cal.includes('cash')||_pm.includes('cash');
+      const _invoiced = !!bk.invoiced && String(bk.invoiced).length>2;
+      const _auto = _cal.includes('autopay')||_cal.includes('auto-pay')||_pm.includes('autopay')||_pm.includes('auto-pay');
+      const _isFree = String(bk.frequency||'').toLowerCase().includes('free');
+      const _price = parseFloat(String(bk.price||'').replace(/[^0-9.]/g,''))||0;
+      if (_cash && !_isPaid) {
+        postDoneActions += `<button class="btn-action btn-charge" style="background:#854d0e;margin-top:6px;font-size:12px;padding:7px 12px;" onclick="triggerCashPaid(${rowIdx})">💵 Mark Cash Collected</button>`;
+      }
+      if (adminRole==='owner' && !_isPaid && !_cash) {
+        const _hasCard = !!bk.cardLast4;
+        const _autopayOn = bk.portalAutopay===true;
+        if ((_auto||isSubscribed(bk)) && _hasCard && _autopayOn) {
+          postDoneActions += `<button class="btn-action btn-charge" style="margin-top:6px;font-size:12px;padding:7px 12px;" onclick="triggerAutoCharge(${rowIdx})">💳 Charge Card</button>`;
+        } else if (_invoiced) {
+          postDoneActions += `<button class="btn-action btn-disabled" disabled style="margin-top:6px;font-size:12px;padding:7px 12px;">📧 Invoice Sent ✓</button>`;
+        } else if (!_isFree) {
+          postDoneActions += `<button class="btn-action btn-invoice" style="margin-top:6px;font-size:12px;padding:7px 12px;" onclick="openInvoiceModal(${rowIdx})">📧 Invoice $${_price.toFixed(0)}</button>`;
+        }
+      }
+    }
+
+    // Photo + note buttons (always for all roles)
+    const photoNoteRow = rowIdx >= 0 ? `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+      <button class="btn-action" style="background:#7c3aed;color:#fff;font-size:12px;padding:7px 12px;" onclick="openPhotoUpload(${rowIdx})">📷 Photo</button>
+      <button class="btn-action" style="background:#0369a1;color:#fff;font-size:12px;padding:7px 12px;" onclick="openNoteModal(${rowIdx})">📝 ${bk.employeeNotes?'Edit Note':'Add Note'}</button>
+    </div>` : '';
 
     html += `
       <div class="route-stop" style="margin-bottom:12px;" id="routeStop_${dateStr}_${crew}_${i}" draggable="true"
@@ -6387,7 +6476,7 @@ function buildCrewStopsHtml(dateStr, crew, orderedStops, startTimeStr, startVal)
           <button class="route-reorder-btn" title="Move down" onclick="moveRouteStop('${dateStr}',${crewKey},${i},1)"  ${i===orderedStops.length-1?'disabled':''}>↓</button>
         </div>
         <div class="route-stop-badge ${done?'done-badge':noGeo?'done-badge':''}" style="${noGeo?'background:#f59e0b;':''}">${done?'✓':noGeo?'⚠':i+1}</div>
-        <div class="route-stop-card ${done?'':'active-stop'}" style="flex:1;${noGeo?'border-color:#fde68a;':''}">
+        <div class="route-stop-card ${done?'':'active-stop'}" style="flex:1;${done?'opacity:.85;':''};${noGeo?'border-color:#fde68a;':''}">
           <div class="route-stop-header">
             <div>
               <div class="route-stop-name">${bk._routePinned?'📌 ':''}${esc(bk.name||'—')} ${notesBtn} ${zBadge}</div>
@@ -6396,14 +6485,15 @@ function buildCrewStopsHtml(dateStr, crew, orderedStops, startTimeStr, startVal)
             <div class="route-stop-time">${arrivalTime}</div>
           </div>
           <div class="route-stop-meta">${drivePill}${mowPill}${planPill}${donePill}</div>
-          ${_custNotes?`<div style="font-size:12px;color:#6b7280;margin-bottom:8px;padding:5px 8px;background:#f8faf6;border-radius:6px;">💬 ${esc(_custNotes)}</div>`:''}
           <div class="route-stop-footer">
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <a class="route-nav-btn" href="${mapsUrl}" target="_blank" rel="noopener">🗺 Navigate</a>
-              ${bk.phone?`<a class="route-call-btn" href="tel:${esc(bk.phone)}">📞 Call</a>`:''}
+              ${bk.phone?`<button class="route-contact-btn" onclick="openContactPopup(${JSON.stringify(bk.name||'')},${JSON.stringify(bk.phone||'')})">📞 Contact</button>`:''}
             </div>
-            ${rowIdx>=0&&!done?`<button class="route-done-btn" onclick="triggerMarkDone(${rowIdx});this.disabled=true;this.textContent='Marking…'">✓ Mark Done</button>`:''}
+            ${rowIdx>=0&&!done?`<button class="route-done-btn" onclick="routeMarkDone(${rowIdx},this)">✓ Mark Done</button>`:''}
           </div>
+          ${postDoneActions ? `<div style="margin-top:4px;">${postDoneActions}</div>` : ''}
+          ${photoNoteRow}
         </div>
       </div>`;
   }
@@ -6567,6 +6657,85 @@ function openNotesPopup(title, body) {
 function closeNotesPopup() {
   const ov = document.getElementById('notesOverlay');
   if (ov) { ov.style.display = 'none'; }
+}
+
+// ── Contact popup (Text or Call) ─────────────────────────────────────────
+function openContactPopup(name, phone) {
+  document.getElementById('contactPopupName').textContent = name || 'Customer';
+  document.getElementById('contactPopupPhone').textContent = phone || '';
+  document.getElementById('contactCallLink').href = 'tel:' + (phone || '');
+  document.getElementById('contactTextLink').href = 'sms:' + (phone || '');
+  const ov = document.getElementById('routeContactOverlay');
+  if (ov) { ov.style.display = 'flex'; }
+}
+function closeContactPopup() {
+  const ov = document.getElementById('routeContactOverlay');
+  if (ov) { ov.style.display = 'none'; }
+}
+
+// ── Route All / Re-navigate → Google Maps multi-stop ────────────────────
+function openRouteAllMaps(dateStr, skipDone) {
+  const dayOrder = _routeCustomOrder[dateStr];
+  if (!dayOrder) return;
+  const stops = Array.isArray(dayOrder) ? dayOrder : Object.values(dayOrder).flat();
+  const filtered = skipDone ? stops.filter(s => !isDone(s.bk)) : stops;
+  if (!filtered.length) { showToast('No stops to navigate!'); return; }
+  const addrs = filtered.map(s => encodeURIComponent((s.bk.address||'') + (s.bk.zip?', '+s.bk.zip:'') + ', FL'));
+  const startAddr = (document.getElementById('routeStartAddr')?.value || '').trim();
+  let url = 'https://www.google.com/maps/dir/?api=1';
+  if (startAddr) url += '&origin=' + encodeURIComponent(startAddr);
+  url += '&destination=' + addrs[addrs.length - 1];
+  if (addrs.length > 1) url += '&waypoints=' + addrs.slice(0, -1).join('|');
+  url += '&travelmode=driving';
+  window.open(url, '_blank', 'noopener');
+}
+
+// ── Mark Done from route tab (then re-render stop with billing options) ──
+async function routeMarkDone(rowIdx, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Marking…'; }
+  const b = allBookings[rowIdx];
+  if (!b) return;
+  const isQuote = String(b.frequency||'').toLowerCase().includes('quote visit');
+  const crewVal = adminName || adminEmail || 'Staff';
+  const params = new URLSearchParams({
+    action:   'mark_done',
+    rowIndex: b._rowIndex || (rowIdx + 2),
+    markedBy: crewVal,
+    adminToken: adminToken,
+  });
+  try {
+    const res  = await fetch(SCRIPT_URL + '?' + params.toString());
+    const data = await res.json();
+    if (data.success) {
+      const todayLabel = new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+      allBookings[rowIdx].done     = '✓ Done — ' + todayLabel;
+      allBookings[rowIdx].markedBy = crewVal;
+      allBookings[rowIdx].doneDate = todayLabel;
+      // Re-render the route so billing buttons appear and Jobs tab also updates
+      const dateStr = _routeViewDates[_routeViewDayIdx] || _routeViewDates[0];
+      if (dateStr && _routeCustomOrder[dateStr]) renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
+      // Also inject Route All buttons (re-render clears them)
+      _reinjectRouteAllBtns(dateStr);
+      showToast('✓ ' + (b.name||'Job') + ' marked done!');
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = '✓ Mark Done'; }
+      alert('Error: ' + (data.error || 'Could not mark done.'));
+    }
+  } catch(err) {
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Mark Done'; }
+    alert('Network error: ' + err.message);
+  }
+}
+
+function _reinjectRouteAllBtns(dateStr) {
+  const tl = document.getElementById('routeTimeline');
+  if (!tl || !dateStr) return;
+  // Remove any existing route-all/renav buttons first
+  tl.querySelectorAll('.route-all-btn, .route-renav-btn').forEach(el => el.parentElement?.remove ? el.remove() : null);
+  const _rafDiv = document.createElement('div');
+  _rafDiv.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-bottom:4px;';
+  _rafDiv.innerHTML = `<button class="route-all-btn" onclick="openRouteAllMaps('${dateStr}',false)">🗺 Route All — Open in Google Maps</button><button class="route-renav-btn" onclick="openRouteAllMaps('${dateStr}',true)">🔄 Re-navigate (skip done jobs)</button>`;
+  tl.prepend(_rafDiv);
 }
 
 // ── Haversine distance in miles ──────────────────────────────────────────
@@ -7723,6 +7892,18 @@ async function saveEmployeeNote() {
 </script>
 
 <!-- NOTES POPUP -->
+<div id="routeContactOverlay" class="contact-popup-overlay" onclick="if(event.target===this)closeContactPopup()">
+  <div class="contact-popup">
+    <div class="contact-popup-name" id="contactPopupName"></div>
+    <div class="contact-popup-phone" id="contactPopupPhone"></div>
+    <div class="contact-popup-btns">
+      <a id="contactCallLink" class="contact-call-btn" href="#">📞 Call</a>
+      <a id="contactTextLink" class="contact-text-btn" href="#">💬 Text</a>
+    </div>
+    <button onclick="closeContactPopup()" style="margin-top:12px;width:100%;padding:10px;background:#f1f5f9;border:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;color:#64748b;">Cancel</button>
+  </div>
+</div>
+
 <div id="notesOverlay" class="notes-overlay" onclick="if(event.target===this)closeNotesPopup()">
   <div class="notes-popup">
     <div class="notes-popup-title" id="notesPopupTitle">Notes</div>
