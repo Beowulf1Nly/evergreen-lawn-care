@@ -1353,12 +1353,10 @@
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
           <button onclick="openZoneGuide()" style="padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;background:#fff;font-size:13px;font-family:inherit;cursor:pointer;font-weight:600;color:var(--green-deep);transition:all .15s;" onmouseover="this.style.borderColor='var(--green-mid)'" onmouseout="this.style.borderColor='var(--border)'">🗺 Zone Guide</button>
           <div class="dispatch-legend">
-            <span class="dispatch-legend-dot" style="background:#1a73e8;"></span>Upcoming
-            <span class="dispatch-legend-dot" style="background:#34a853;margin-left:8px;"></span>Done
-            <span class="dispatch-legend-dot" style="background:#f9ab00;margin-left:8px;"></span>Cash
-            <span class="dispatch-legend-dot" style="background:#24c1e0;margin-left:8px;"></span>Invoiced
-            <span class="dispatch-legend-dot" style="background:#0f9d58;margin-left:8px;"></span>Paid
-            <span class="dispatch-legend-dot" style="background:#5f6368;margin-left:8px;"></span>Completed
+            <span class="dispatch-legend-dot" style="background:#d32f2f;"></span>Upcoming
+            <span class="dispatch-legend-dot" style="background:#f9a825;margin-left:8px;"></span>Done / Invoiced / Cash
+            <span class="dispatch-legend-dot" style="background:#1565c0;margin-left:8px;"></span>Paid (not done)
+            <span class="dispatch-legend-dot" style="background:#2e7d32;margin-left:8px;"></span>Completed &amp; Archived
           </div>
         </div>
       </div>
@@ -6557,8 +6555,19 @@ function buildCrewStopsHtml(dateStr, crew, orderedStops, startTimeStr, startVal)
       }
     }
 
+    // Lot size scan (only show if no lot tag already in notes)
+    const _hasLot = /lot:\s*[\d.]+ac/i.test(String(bk.notes||''));
+    const _lotTag = _hasLot ? (() => {
+      const m = String(bk.notes||'').match(/lot:\s*([\d.]+)ac/i);
+      return m ? `<span style="font-size:11px;color:#166534;background:#dcfce7;border:1px solid #bbf7d0;border-radius:6px;padding:2px 8px;">📐 ${m[1]}ac · ~${mowMinsFromAcres(parseFloat(m[1]))}min</span>` : '';
+    })() : '';
+    const _scanBtn = (rowIdx >= 0 && stop.lat != null && !_hasLot)
+      ? `<button onclick="scanAndSaveLotSize(${rowIdx},${stop.lat},${stop.lon},this)" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:7px;padding:4px 9px;font-family:inherit;font-size:11px;font-weight:600;color:#475569;cursor:pointer;">📐 Scan lot size</button>`
+      : _lotTag;
+
     // Photo + note buttons (always for all roles)
     const photoNoteRow = rowIdx >= 0 ? `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+      ${_scanBtn}
       <button class="btn-action" style="background:#7c3aed;color:#fff;font-size:12px;padding:7px 12px;" onclick="openPhotoUpload(${rowIdx})">📷 Photo</button>
       <button class="btn-action" style="background:#0369a1;color:#fff;font-size:12px;padding:7px 12px;" onclick="openNoteModal(${rowIdx})">📝 ${bk.employeeNotes?'Edit Note':'Add Note'}</button>
     </div>` : '';
@@ -6897,7 +6906,14 @@ function mowMinutes(bk) {
     return 60;
   }
 
-  // 3. Explicit sq-ft mention: ~1 min per 1000 sqft + 15 min base
+  // 3. Scanned lot size: "Lot: 0.25ac" stored by property scanner
+  const lotMatch = n.match(/lot[:\s]+([\d.]+)\s*ac/i);
+  if (lotMatch) {
+    const acres = parseFloat(lotMatch[1]);
+    if (acres > 0) return mowMinsFromAcres(acres);
+  }
+
+  // 3b. Explicit sq-ft mention: ~1 min per 1000 sqft + 15 min base
   const sqftMatch = n.match(/(\d[\d,]*)\s*sq\.?\s*ft/i);
   if (sqftMatch) {
     const sqft = parseInt(sqftMatch[1].replace(/,/g, ''));
@@ -6918,6 +6934,125 @@ function mowMinutes(bk) {
   const hasEdgeTrim = /edg|trim|weed\s*eat|string\s*trim/.test(n);
   const baseFromFreq = /one.time|first/.test(freq) ? 50 : 40; // first mow often overgrown
   return baseFromFreq + (hasEdgeTrim ? 10 : 0);
+}
+
+// ── Acres → estimated mow minutes ───────────────────────────────────────
+// Assumes riding mower ~1.2 ac/hr on mowable area (≈50% of total lot)
+// + 15 min setup/edges/blowing
+function mowMinsFromAcres(acres) {
+  const mowable = acres * 0.50;          // ~50% of lot is actual grass
+  const mowHrs  = mowable / 1.2;         // riding mower speed: 1.2 ac/hr
+  const mins    = Math.round(mowHrs * 60) + 15;
+  return Math.min(150, Math.max(20, mins));
+}
+
+// ── Polygon area → acres (Shoelace formula on lat/lon nodes) ─────────────
+function polyAreaAcres(nodes) {
+  if (!nodes || nodes.length < 3) return 0;
+  const refLat = nodes[0].lat, refLon = nodes[0].lon;
+  // Project to approximate metres
+  const pts = nodes.map(n => ({
+    x: (n.lon - refLon) * Math.cos(refLat * Math.PI / 180) * 111320,
+    y: (n.lat - refLat) * 110540,
+  }));
+  let area = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const j = (i + 1) % pts.length;
+    area += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+  }
+  const sqMetres = Math.abs(area) / 2;
+  return (sqMetres * 10.764) / 43560; // → acres
+}
+
+// ── Scan property lot size via OSM Overpass + Nominatim polygon ──────────
+// Returns { acres, source, sqft } or null
+async function scanPropertyAcres(lat, lon, address) {
+  function ftTimeout(url, ms) {
+    const c = new AbortController();
+    const t = setTimeout(() => c.abort(), ms);
+    return fetch(url, { signal: c.signal, headers:{'Accept-Language':'en'} }).finally(() => clearTimeout(t));
+  }
+
+  // 1. Overpass: look for building footprint at coordinates
+  try {
+    const q   = `[out:json][timeout:8];(way["building"](around:35,${lat},${lon}););out geom;`;
+    const res = await ftTimeout('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q), 9000);
+    const d   = await res.json();
+    let best  = 0;
+    for (const el of d.elements || []) {
+      if (el.type === 'way' && el.geometry?.length >= 3) {
+        const a = polyAreaAcres(el.geometry);
+        if (a > best) best = a;
+      }
+    }
+    if (best > 0) {
+      // Building footprint found → estimate lot = building × 4 (typical FL residential)
+      const lotAcres = Math.round(best * 4 * 100) / 100;
+      return { acres: lotAcres, source: 'building footprint × 4', sqft: Math.round(lotAcres * 43560) };
+    }
+  } catch(e) {}
+
+  // 2. Nominatim polygon_geojson: get property boundary if OSM has it
+  try {
+    const addr = encodeURIComponent(address || '');
+    const url  = `https://nominatim.openstreetmap.org/search?format=json&polygon_geojson=1&limit=1&countrycodes=us&q=${addr}`;
+    const res  = await ftTimeout(url, 6000);
+    const d    = await res.json();
+    const geo  = d?.[0]?.geojson;
+    if (geo?.type === 'Polygon' && geo.coordinates?.[0]?.length >= 3) {
+      const nodes = geo.coordinates[0].map(([lon, lat]) => ({ lat, lon }));
+      const acres = Math.round(polyAreaAcres(nodes) * 100) / 100;
+      if (acres > 0.01) return { acres, source: 'OSM parcel boundary', sqft: Math.round(acres * 43560) };
+    }
+  } catch(e) {}
+
+  return null; // couldn't determine lot size
+}
+
+// ── Scan button handler — called from route stop card ────────────────────
+async function scanAndSaveLotSize(rowIdx, lat, lon, btnEl) {
+  const bk = allBookings[rowIdx];
+  if (!bk) return;
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = '🔍 Scanning…'; }
+
+  const addr = (bk.address || '') + (bk.zip ? ', ' + (ZIP_CITY[bk.zip] || bk.zip) : '') + ', FL';
+  const result = await scanPropertyAcres(lat, lon, addr);
+
+  if (!result) {
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = '📐 Scan lot'; }
+    showToast('⚠️ Lot size not found — enter manually in notes as "Lot: 0.25ac"');
+    return;
+  }
+
+  const { acres, source, sqft } = result;
+  const estMins = mowMinsFromAcres(acres);
+  const tag     = `Lot: ${acres}ac`;
+
+  // Store in booking notes (replace any previous Lot: tag)
+  const existingNotes = String(bk.notes || '');
+  const cleaned = existingNotes.replace(/\bLot:\s*[\d.]+ac\b/gi, '').replace(/\s*\|\s*$/, '').trim();
+  const newNotes = cleaned ? cleaned + ' | ' + tag : tag;
+  bk.notes = newNotes;
+
+  // Save to server (booking notes column)
+  try {
+    const params = new URLSearchParams({
+      action:     'owner_update_booking',
+      rowIndex:   bk._rowIndex || (rowIdx + 2),
+      notes:      newNotes,
+      adminToken,
+    });
+    await fetch(SCRIPT_URL + '?' + params);
+  } catch(e) {}
+
+  // Re-render route to show updated time estimate
+  const dateStr = _routeViewDates[_routeViewDayIdx] || _routeViewDates[0];
+  if (dateStr && _routeCustomOrder[dateStr]) {
+    renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
+    _reinjectRouteAllBtns(dateStr);
+  }
+
+  showToast(`📐 ${acres}ac (~${sqft.toLocaleString()} sqft) via ${source} → ~${estMins} min`);
 }
 
 // ── Format minutes → "1h 5m" ─────────────────────────────────────────────
