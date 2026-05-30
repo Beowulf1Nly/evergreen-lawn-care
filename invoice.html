@@ -6561,8 +6561,10 @@ function buildCrewStopsHtml(dateStr, crew, orderedStops, startTimeStr, startVal)
       const m = String(bk.notes||'').match(/lot:\s*([\d.]+)ac/i);
       return m ? `<span style="font-size:11px;color:#166534;background:#dcfce7;border:1px solid #bbf7d0;border-radius:6px;padding:2px 8px;">📐 ${m[1]}ac · ~${mowMinsFromAcres(parseFloat(m[1]))}min</span>` : '';
     })() : '';
-    const _scanBtn = (rowIdx >= 0 && stop.lat != null && !_hasLot)
-      ? `<button onclick="scanAndSaveLotSize(${rowIdx},${stop.lat},${stop.lon},this)" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:7px;padding:4px 9px;font-family:inherit;font-size:11px;font-weight:600;color:#475569;cursor:pointer;">📐 Scan lot size</button>`
+    const _stopLat = stop.lat != null ? stop.lat : 'null';
+    const _stopLon = stop.lon != null ? stop.lon : 'null';
+    const _scanBtn = (rowIdx >= 0 && !_hasLot)
+      ? `<button onclick="scanAndSaveLotSize(${rowIdx},${_stopLat},${_stopLon},this)" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:7px;padding:4px 9px;font-family:inherit;font-size:11px;font-weight:600;color:#475569;cursor:pointer;">📐 Scan lot size</button>`
       : _lotTag;
 
     // Photo + note buttons (always for all roles)
@@ -6964,49 +6966,84 @@ function polyAreaAcres(nodes) {
   return (sqMetres * 10.764) / 43560; // → acres
 }
 
-// ── Scan property lot size via OSM Overpass + Nominatim polygon ──────────
-// Returns { acres, source, sqft } or null
-async function scanPropertyAcres(lat, lon, address) {
-  function ftTimeout(url, ms) {
-    const c = new AbortController();
-    const t = setTimeout(() => c.abort(), ms);
-    return fetch(url, { signal: c.signal, headers:{'Accept-Language':'en'} }).finally(() => clearTimeout(t));
+// ── Typical lot sizes by zip for Citrus County + surrounding service area ─
+const ZIP_TYPICAL_ACRES = {
+  '34428':0.18,'34429':0.18,'34423':0.18,                              // Crystal River
+  '34450':0.20,'34451':0.20,'34452':0.20,'34453':0.20,                 // Inverness
+  '34460':0.28,'34461':0.28,                                           // Lecanto
+  '34431':0.30,'34432':0.30,'34433':0.22,'34434':0.22,                 // Dunnellon / Citrus Springs
+  '34436':0.25,'34442':0.25,                                           // Floral City / Hernando
+  '34464':0.20,'34465':0.20,                                           // Beverly Hills
+  '34446':0.22,'34447':0.22,'34448':0.22,                              // Homosassa
+  '34449':0.35,'34498':0.40,                                           // Inglis / Yankeetown
+  '34480':0.22,'34481':0.22,'34482':0.22,'34476':0.22,'34474':0.22,
+  '34472':0.22,'34470':0.22,'34471':0.22,'34479':0.22,
+  '34475':0.22,'34478':0.22,                                           // Ocala / Marion Co.
+  '34491':0.25,'34488':0.30,                                           // Summerfield / Silver Springs
+  '32626':0.40,'32668':0.40,                                           // Chiefland / Morriston
+  '34601':0.20,'34602':0.20,'34604':0.20,                              // Brooksville
+};
+
+// ── Scan property lot size — 4-strategy waterfall, always returns a result ─
+// Strategy 1: Overpass is_in  — finds the polygon that CONTAINS the point
+// Strategy 2: Overpass around — wider building footprint search (60 m)
+// Strategy 3: Nominatim reverse — polygon at zoom=18
+// Strategy 4: ZIP typical      — area average, always succeeds
+async function scanPropertyAcres(lat, lon, address, zip) {
+  function ft(url, ms = 7000) {
+    const c = new AbortController(), t = setTimeout(() => c.abort(), ms);
+    return fetch(url, { signal: c.signal, headers: { 'Accept-Language': 'en' } }).finally(() => clearTimeout(t));
   }
 
-  // 1. Overpass: look for building footprint at coordinates
+  // 1. Overpass is_in: all polygons that contain this exact point (most accurate for parcels)
   try {
-    const q   = `[out:json][timeout:8];(way["building"](around:35,${lat},${lon}););out geom;`;
-    const res = await ftTimeout('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q), 9000);
+    const q   = `[out:json][timeout:12];is_in(${lat},${lon})->.a;.a out geom;`;
+    const res = await ft('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q), 13000);
+    const d   = await res.json();
+    // Find the smallest polygon that looks like a residential lot (0.03–5 acres)
+    let best = 0;
+    for (const el of (d.elements || [])) {
+      if (el.geometry?.length >= 3) {
+        const a = polyAreaAcres(el.geometry);
+        if (a >= 0.03 && a <= 5 && a > best) best = a;
+      }
+    }
+    if (best > 0) return { acres: Math.round(best * 100) / 100, source: 'parcel boundary', sqft: Math.round(best * 43560) };
+  } catch(e) {}
+
+  // 2. Overpass around: building footprint within 60 m
+  try {
+    const q   = `[out:json][timeout:8];(way["building"](around:60,${lat},${lon}););out geom;`;
+    const res = await ft('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q), 9000);
     const d   = await res.json();
     let best  = 0;
-    for (const el of d.elements || []) {
+    for (const el of (d.elements || [])) {
       if (el.type === 'way' && el.geometry?.length >= 3) {
         const a = polyAreaAcres(el.geometry);
         if (a > best) best = a;
       }
     }
     if (best > 0) {
-      // Building footprint found → estimate lot = building × 4 (typical FL residential)
-      const lotAcres = Math.round(best * 4 * 100) / 100;
-      return { acres: lotAcres, source: 'building footprint × 4', sqft: Math.round(lotAcres * 43560) };
+      const lot = Math.round(best * 4 * 100) / 100; // building × 4 ≈ typical FL lot
+      return { acres: lot, source: 'building footprint estimate', sqft: Math.round(lot * 43560) };
     }
   } catch(e) {}
 
-  // 2. Nominatim polygon_geojson: get property boundary if OSM has it
+  // 3. Nominatim reverse geocode with polygon (zoom=18 = building level)
   try {
-    const addr = encodeURIComponent(address || '');
-    const url  = `https://nominatim.openstreetmap.org/search?format=json&polygon_geojson=1&limit=1&countrycodes=us&q=${addr}`;
-    const res  = await ftTimeout(url, 6000);
-    const d    = await res.json();
-    const geo  = d?.[0]?.geojson;
+    const res = await ft(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&zoom=18&polygon_geojson=1&format=json`, 7000);
+    const d   = await res.json();
+    const geo = d?.geojson;
     if (geo?.type === 'Polygon' && geo.coordinates?.[0]?.length >= 3) {
-      const nodes = geo.coordinates[0].map(([lon, lat]) => ({ lat, lon }));
+      const nodes = geo.coordinates[0].map(([ln, la]) => ({ lat: la, lon: ln }));
       const acres = Math.round(polyAreaAcres(nodes) * 100) / 100;
-      if (acres > 0.01) return { acres, source: 'OSM parcel boundary', sqft: Math.round(acres * 43560) };
+      if (acres >= 0.01 && acres <= 10) return { acres, source: 'address boundary', sqft: Math.round(acres * 43560) };
     }
   } catch(e) {}
 
-  return null; // couldn't determine lot size
+  // 4. ZIP code typical lot size — guaranteed fallback, never fails
+  const typical = ZIP_TYPICAL_ACRES[String(zip || '')] || 0.25;
+  return { acres: typical, source: 'typical for this area', sqft: Math.round(typical * 43560), isTypical: true };
 }
 
 // ── Scan button handler — called from route stop card ────────────────────
@@ -7015,44 +7052,43 @@ async function scanAndSaveLotSize(rowIdx, lat, lon, btnEl) {
   if (!bk) return;
   if (btnEl) { btnEl.disabled = true; btnEl.textContent = '🔍 Scanning…'; }
 
-  const addr = (bk.address || '') + (bk.zip ? ', ' + (ZIP_CITY[bk.zip] || bk.zip) : '') + ', FL';
-  const result = await scanPropertyAcres(lat, lon, addr);
+  const addr   = (bk.address || '') + (bk.zip ? ', ' + (ZIP_CITY[bk.zip] || bk.zip) : '') + ', FL';
+  // If no coordinates (geocode failed), skip straight to zip fallback
+  const hasCoords = lat != null && lon != null;
+  const result = hasCoords
+    ? await scanPropertyAcres(lat, lon, addr, bk.zip)
+    : { acres: ZIP_TYPICAL_ACRES[String(bk.zip||'')] || 0.25, source: 'typical for this area', sqft: Math.round((ZIP_TYPICAL_ACRES[String(bk.zip||'')] || 0.25) * 43560), isTypical: true };
 
-  if (!result) {
-    if (btnEl) { btnEl.disabled = false; btnEl.textContent = '📐 Scan lot'; }
-    showToast('⚠️ Lot size not found — enter manually in notes as "Lot: 0.25ac"');
-    return;
-  }
-
-  const { acres, source, sqft } = result;
+  const { acres, source, sqft, isTypical } = result;
   const estMins = mowMinsFromAcres(acres);
   const tag     = `Lot: ${acres}ac`;
 
-  // Store in booking notes (replace any previous Lot: tag)
+  // Replace any existing Lot: tag in notes
   const existingNotes = String(bk.notes || '');
-  const cleaned = existingNotes.replace(/\bLot:\s*[\d.]+ac\b/gi, '').replace(/\s*\|\s*$/, '').trim();
+  const cleaned  = existingNotes.replace(/\bLot:\s*[\d.]+ac\b/gi, '').replace(/\s*\|\s*$/, '').trim();
   const newNotes = cleaned ? cleaned + ' | ' + tag : tag;
   bk.notes = newNotes;
 
-  // Save to server (booking notes column)
+  // Save to server
   try {
     const params = new URLSearchParams({
-      action:     'owner_update_booking',
-      rowIndex:   bk._rowIndex || (rowIdx + 2),
-      notes:      newNotes,
+      action:    'owner_update_booking',
+      rowIndex:  bk._rowIndex || (rowIdx + 2),
+      notes:     newNotes,
       adminToken,
     });
     await fetch(SCRIPT_URL + '?' + params);
   } catch(e) {}
 
-  // Re-render route to show updated time estimate
+  // Re-render route stop with updated estimate
   const dateStr = _routeViewDates[_routeViewDayIdx] || _routeViewDates[0];
   if (dateStr && _routeCustomOrder[dateStr]) {
     renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
     _reinjectRouteAllBtns(dateStr);
   }
 
-  showToast(`📐 ${acres}ac (~${sqft.toLocaleString()} sqft) via ${source} → ~${estMins} min`);
+  const prefix = isTypical ? '📍 No parcel data found —' : '📐';
+  showToast(`${prefix} ${acres}ac (${sqft.toLocaleString()} sqft, ${source}) → ~${estMins} min. Tap 📝 to override.`);
 }
 
 // ── Format minutes → "1h 5m" ─────────────────────────────────────────────
