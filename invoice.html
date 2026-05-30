@@ -6266,31 +6266,62 @@ function moveRouteStop(dateStr, crew, fromIdx, dir) {
   if (!order) return;
   const toIdx = fromIdx + dir;
   if (toIdx < 0 || toIdx >= order.length) return;
+
+  // Swap the stops
   [order[fromIdx], order[toIdx]] = [order[toIdx], order[fromIdx]];
+
+  // Swap distFromPrev so the stop carries its approximate travel time into its new slot.
+  // Also clear distFromPrev on the stop right after the destination so it doesn't show
+  // a stale drive time from the old predecessor.
+  const avgDist = order.reduce((s, x) => s + (x.distFromPrev || 0), 0) / (order.length || 1);
+  [order[fromIdx].distFromPrev, order[toIdx].distFromPrev] =
+    [order[toIdx].distFromPrev, order[fromIdx].distFromPrev];
+  const afterIdx = Math.max(fromIdx, toIdx) + 1;
+  if (order[afterIdx]) order[afterIdx].distFromPrev = avgDist; // rough estimate for successor
+
+  // Re-render route with recalculated times
   renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
-  // Sync reordered job times to the dispatch board
+
+  // Persist new order
+  saveRouteToStorage(_routeCustomOrder,
+    (_savedRoute || {}).stats || {},
+    (_savedRoute || {}).dates || [dateStr]);
+
+  // Sync to dispatch board
   _syncRouteOrderToDispatch(dateStr, _routeCustomOrder[dateStr]);
+
+  showToast('↕ Stop moved · Times recalculated · ⚡ Re-optimize for exact times');
 }
 
 function _syncRouteOrderToDispatch(dateStr, dayOrder) {
   if (!dayOrder || !allBookings) return;
-  // Update jobTime on each booking so dispatch board reflects the new order
-  const startTimeStr = document.getElementById('routeStartTime')?.value || '08:00';
-  let [h, m] = startTimeStr.split(':').map(Number);
+  const AVG_SPEED_MPH = 25;
+  const startTimeStr  = document.getElementById('routeStartTime')?.value || '08:00';
+  const [startH, startM] = startTimeStr.split(':').map(Number);
+  const [y, mo, d] = dateStr.split('-').map(Number);
+
   const processStops = (stops) => {
-    (stops || []).forEach(s => {
+    if (!stops || !stops.length) return;
+    let cursor = new Date(y, mo - 1, d, startH, startM, 0, 0);
+    stops.forEach(s => {
       const b = s.bk || allBookings[s.rowIndex];
       if (!b) return;
-      b.jobTime = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
-      const dur = s.driveMins || 0;
-      const jobMins = 40; // default job duration
-      m += jobMins + dur;
-      if (m >= 60) { h += Math.floor(m/60); m = m % 60; }
+      // Advance by drive time from previous stop
+      const distMi  = s.distFromPrev || 0;
+      const driveMins = Math.round((distMi / AVG_SPEED_MPH) * 60);
+      cursor = new Date(cursor.getTime() + driveMins * 60000);
+      // Write arrival time back onto the booking
+      b.jobTime = String(cursor.getHours()).padStart(2,'0') + ':' + String(cursor.getMinutes()).padStart(2,'0');
+      // Advance by job duration
+      const jobMins = mowMinutes ? mowMinutes(b) : 40;
+      cursor = new Date(cursor.getTime() + jobMins * 60000);
     });
   };
+
   if (Array.isArray(dayOrder)) { processStops(dayOrder); }
   else { Object.values(dayOrder).forEach(processStops); }
-  // Re-render dispatch board if it's visible
+
+  // Re-render dispatch board if it's already open on this date
   const dispPane = document.getElementById('pane-dispatch');
   if (dispPane && dispPane.classList.contains('active')) {
     const el = document.getElementById('dispatchDate');
@@ -7070,10 +7101,13 @@ function renderZoneSchedule() {
   const nameA = cfgData.crewNames.A || 'Crew A';
   const nameB = cfgData.crewNames.B || 'Crew B';
 
-  // Auto-populate from ZONE_PAIRS on first load
-  const hasAnySaved = Object.values(cfgData.zoneSchedule || {}).some(v => v && v.length);
+  // Auto-populate from ZONE_PAIRS — bump SCHED_VERSION to force a refresh
+  const SCHED_VERSION = 2;
+  const hasAnySaved = cfgData._schedVersion >= SCHED_VERSION &&
+    Object.values(cfgData.zoneSchedule || {}).some(v => v && v.length);
   if (!hasAnySaved) {
-    if (!cfgData.zoneSchedule) cfgData.zoneSchedule = {};
+    cfgData._schedVersion = SCHED_VERSION;
+    cfgData.zoneSchedule = {};
     ZONE_PAIRS.forEach(row => {
       if (row.catchup || row.holy || !row.z1) return;
       const z1 = row.z1.zone;
@@ -8479,32 +8513,32 @@ function _fillDispatchDetail(b, rowIdx) {
 
 // ── Zone Guide ────────────────────────────────────────────────────────────
 const ZONE_PAIRS = [
-  { day:'MON', dayFull:'Monday',    z1:{zone:'Z1',name:'Crystal River',                       cities:''},              backup:{zone:'Z2',name:'Inverness',    cities:'Floral City · Hernando', note:'~15 min away'} },
-  { day:'TUE', dayFull:'Tuesday',   z1:{zone:'Z3',name:'Lecanto · Beverly Hills · Homosassa', cities:''},              backup:{zone:'Z4',name:'Dunnellon',    cities:'Citrus Springs',         note:'~10 min away'} },
-  { day:'WED', dayFull:'Wednesday', z1:{zone:'Z5',name:'Ocala',                               cities:'Marion County'}, backup:null },
-  { day:'THU', dayFull:'Thursday',  z1:{zone:'Z2',name:'Inverness · Floral City · Hernando',  cities:''},              backup:{zone:'Z1',name:'Crystal River',cities:'',                       note:'~15 min away'} },
-  { day:'FRI', dayFull:'Friday',    z1:{zone:'Z4',name:'Dunnellon · Citrus Springs',          cities:''},              backup:{zone:'Z3',name:'Lecanto',      cities:'Beverly Hills · Homosassa', note:'~10 min away'} },
+  { day:'MON', dayFull:'Monday',    z1:{zone:'Z1',name:'Crystal River',                       cities:''},              backup:{zone:'Z2',name:'Inverness',    cities:'Floral City · Hernando',    note:'~15 min — here Tuesday'} },
+  { day:'TUE', dayFull:'Tuesday',   z1:{zone:'Z2',name:'Inverness · Floral City · Hernando',  cities:''},              backup:{zone:'Z1',name:'Crystal River',cities:'',                          note:'~15 min — was here Monday'} },
+  { day:'WED', dayFull:'Wednesday', z1:{zone:'Z3',name:'Lecanto · Beverly Hills · Homosassa', cities:''},              backup:{zone:'Z4',name:'Dunnellon',    cities:'Citrus Springs',            note:'~10 min — here Thursday'} },
+  { day:'THU', dayFull:'Thursday',  z1:{zone:'Z4',name:'Dunnellon · Citrus Springs',          cities:''},              backup:{zone:'Z3',name:'Lecanto',      cities:'Beverly Hills · Homosassa', note:'~10 min — was here Wednesday'} },
+  { day:'FRI', dayFull:'Friday',    z1:{zone:'Z5',name:'Ocala',                               cities:'Marion County'}, backup:null },
   { day:'SAT', dayFull:'Saturday',  catchup:true },
   { day:'SUN', dayFull:'Sunday',    holy:true },
 ];
 const ZONE_SCHEDULE = [
   { day:'MON', dayFull:'Monday',
-    crewA:{zone:'Z1', name:'Crystal River',                      cities:''},
-    crewB:{zone:'Z4', name:'Dunnellon · Citrus Springs',         cities:''} },
+    crewA:{zone:'Z1', name:'Crystal River',                       cities:''},
+    crewB:{zone:'Z5', name:'Ocala',                               cities:'Marion County'} },
   { day:'TUE', dayFull:'Tuesday',
-    crewA:{zone:'Z3', name:'Lecanto · Beverly Hills · Homosassa',cities:''},
-    crewB:{zone:'Z5', name:'Ocala',                              cities:'Marion County'} },
+    crewA:{zone:'Z2', name:'Inverness · Floral City · Hernando',  cities:''},
+    crewB:{zone:'Z5', name:'Ocala',                               cities:'Marion County — cont.'} },
   { day:'WED', dayFull:'Wednesday',
-    crewA:{zone:'Z2', name:'Inverness · Floral City · Hernando', cities:''},
-    crewB:{zone:'Z5', name:'Ocala',                              cities:'Marion County — cont.'} },
+    crewA:{zone:'Z3', name:'Lecanto · Beverly Hills · Homosassa', cities:''},
+    crewB:null },
   { day:'THU', dayFull:'Thursday',
-    crewA:{zone:'Overflow', name:'Catch-up / Biweeklies',        cities:'Any Citrus County zone'},
+    crewA:{zone:'Z4', name:'Dunnellon · Citrus Springs',          cities:''},
     crewB:null },
   { day:'FRI', dayFull:'Friday',
-    crewA:{zone:'Overflow', name:'Catch-up / Biweeklies',        cities:'Any Citrus County zone'},
-    crewB:{zone:'Overflow', name:'Catch-up / Biweeklies',        cities:'Any Marion zone'} },
-  { day:'SAT', dayFull:'Saturday',  crewA:null, crewB:{zone:'Catch-up',name:'Catch-up day',cities:'Any zone with pending work',weekend:true} },
-  { day:'SUN', dayFull:'Sunday',    crewA:null, crewB:{zone:'🙏',name:'Holy day',cities:'Emergencies only',weekend:true} },
+    crewA:{zone:'Overflow', name:'Catch-up / Biweeklies',         cities:'Any zone'},
+    crewB:{zone:'Overflow', name:'Catch-up / Biweeklies',         cities:'Any zone'} },
+  { day:'SAT', dayFull:'Saturday',  crewA:null, crewB:{zone:'Catch-up', name:'Catch-up day',  cities:'Any zone with pending work', weekend:true} },
+  { day:'SUN', dayFull:'Sunday',    crewA:null, crewB:{zone:'🙏',       name:'Holy day',       cities:'Emergencies only',          weekend:true} },
 ];
 let _zgTab = 'current';
 
