@@ -7060,8 +7060,10 @@ function renderZoneSchedule() {
       const entry = entries.find(e => e.day === d);
       if (!entry) return `<button class="cfg-day-pill off" onclick="cfgAddDay('${z}','${d}')">${d}</button>`;
       return `<div style="display:inline-flex;align-items:center;gap:4px;background:${entry.type==='primary'?'#f0faf0':'#fafafa'};border:1.5px ${entry.type==='primary'?'solid':'dashed'} ${entry.type==='primary'?'var(--green-mid)':'#9ca3af'};border-radius:10px;padding:4px 8px;margin:2px;">
-        <span style="font-size:11px;font-weight:800;color:${entry.type==='primary'?'var(--green-mid)':'#6b7280'};">${d}</span>
-        <span style="font-size:9px;color:${entry.type==='primary'?'#15803d':'#9ca3af'};text-transform:uppercase;letter-spacing:.04em;">${entry.type}</span>
+        <button onclick="cfgAddDay('${z}','${d}')" style="background:none;border:none;cursor:pointer;padding:0;display:flex;flex-direction:column;align-items:center;" title="Click to cycle: primary → backup → remove">
+          <span style="font-size:11px;font-weight:800;color:${entry.type==='primary'?'var(--green-mid)':'#6b7280'};">${d}</span>
+          <span style="font-size:9px;color:${entry.type==='primary'?'#15803d':'#9ca3af'};text-transform:uppercase;letter-spacing:.04em;">${entry.type}</span>
+        </button>
         <div style="display:flex;gap:2px;">${crewBtn(z, d, entry.crew||'')}</div>
         <button onclick="cfgRemoveDay('${z}','${d}')" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:12px;padding:0 2px;line-height:1;">✕</button>
       </div>`;
@@ -7081,14 +7083,19 @@ function _getZoneSched(zone) {
   if (!cfgData.zoneSchedule[zone]) cfgData.zoneSchedule[zone] = [];
   return cfgData.zoneSchedule[zone];
 }
-// Add a day (cycles primary → backup on second click of same day)
+// Clicking a grey pill adds it; clicking an active pill cycles primary → backup → remove
 function cfgAddDay(zone, day) {
   if (!cfgData) loadCfgData();
   const arr = _getZoneSched(zone);
-  if (arr.find(e => e.day === day)) return; // already exists
-  // First added day = primary, subsequent = backup
-  const hasPrimary = arr.some(e => e.type === 'primary');
-  arr.push({ day, type: hasPrimary ? 'backup' : 'primary', crew: '' });
+  const existing = arr.find(e => e.day === day);
+  if (existing) {
+    // Cycle: primary → backup → remove
+    if (existing.type === 'primary') { existing.type = 'backup'; }
+    else { cfgData.zoneSchedule[zone] = arr.filter(e => e.day !== day); }
+  } else {
+    const hasPrimary = arr.some(e => e.type === 'primary');
+    arr.push({ day, type: hasPrimary ? 'backup' : 'primary', crew: '' });
+  }
   saveCfgData(); renderZoneSchedule();
 }
 function cfgRemoveDay(zone, day) {
@@ -7881,10 +7888,12 @@ function renderDispatchWeek() {
   function crewDayZones(crew, dayLabel) {
     if (!cfgData) loadCfgData();
     const zones = [];
-    for (const [zone, days] of Object.entries(cfgData.zoneDays || {})) {
-      if (!days || !days.includes(dayLabel)) continue;
-      const assignedCrew = (cfgData.zoneCrew || {})[zone] || '';
-      // Match crew: if crew filter is specific, match it; if unassigned show zones with no crew
+    // Read from new zoneSchedule format
+    for (const [zone, entries] of Object.entries(cfgData.zoneSchedule || {})) {
+      if (!Array.isArray(entries)) continue;
+      const entry = entries.find(e => e.day === dayLabel);
+      if (!entry) continue;
+      const assignedCrew = entry.crew || (cfgData.zoneCrew || {})[zone] || '';
       if (crew === 'Unassigned' && !assignedCrew) zones.push(zone);
       else if (assignedCrew === crew) zones.push(zone);
     }
