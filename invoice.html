@@ -1259,6 +1259,9 @@
 
         <button class="route-optimize-btn" id="routeOptBtn" onclick="buildRoute()">⚡ Optimize Route</button>
 
+        <!-- DEV: force re-scan all lot sizes on current route -->
+        <button id="devScanBtn" onclick="devScanAllLots(this)" style="margin-top:8px;width:100%;padding:10px;background:#1e293b;color:#94a3b8;border:1.5px dashed #475569;border-radius:10px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;">🔬 [DEV] Force scan all lot sizes</button>
+
         <!-- Calendar sync row -->
         <div style="display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap;">
           <button id="routeCalSyncBtn" onclick="syncRouteToCalendar(false)" style="display:none;padding:9px 16px;background:#4285f4;color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;">
@@ -6555,21 +6558,15 @@ function buildCrewStopsHtml(dateStr, crew, orderedStops, startTimeStr, startVal)
       }
     }
 
-    // Lot size scan (only show if no lot tag already in notes)
-    const _hasLot = /lot:\s*[\d.]+ac/i.test(String(bk.notes||''));
-    const _lotTag = _hasLot ? (() => {
-      const m = String(bk.notes||'').match(/lot:\s*([\d.]+)ac/i);
-      return m ? `<span style="font-size:11px;color:#166534;background:#dcfce7;border:1px solid #bbf7d0;border-radius:6px;padding:2px 8px;">📐 ${m[1]}ac · ~${mowMinsFromAcres(parseFloat(m[1]))}min</span>` : '';
-    })() : '';
-    const _stopLat = stop.lat != null ? stop.lat : 'null';
-    const _stopLon = stop.lon != null ? stop.lon : 'null';
-    const _scanBtn = (rowIdx >= 0 && !_hasLot)
-      ? `<button onclick="scanAndSaveLotSize(${rowIdx},${_stopLat},${_stopLon},this)" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:7px;padding:4px 9px;font-family:inherit;font-size:11px;font-weight:600;color:#475569;cursor:pointer;">📐 Scan lot size</button>`
-      : _lotTag;
+    // Show lot size badge if already scanned
+    const _lotM = String(bk.notes||'').match(/lot:\s*([\d.]+)ac/i);
+    const _lotBadge = _lotM
+      ? `<span style="font-size:11px;color:#166534;background:#dcfce7;border:1px solid #bbf7d0;border-radius:6px;padding:2px 8px;white-space:nowrap;">📐 ${_lotM[1]}ac</span>`
+      : '';
 
     // Photo + note buttons (always for all roles)
-    const photoNoteRow = rowIdx >= 0 ? `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
-      ${_scanBtn}
+    const photoNoteRow = rowIdx >= 0 ? `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;">
+      ${_lotBadge}
       <button class="btn-action" style="background:#7c3aed;color:#fff;font-size:12px;padding:7px 12px;" onclick="openPhotoUpload(${rowIdx})">📷 Photo</button>
       <button class="btn-action" style="background:#0369a1;color:#fff;font-size:12px;padding:7px 12px;" onclick="openNoteModal(${rowIdx})">📝 ${bk.employeeNotes?'Edit Note':'Add Note'}</button>
     </div>` : '';
@@ -6966,85 +6963,85 @@ function polyAreaAcres(nodes) {
   return (sqMetres * 10.764) / 43560; // → acres
 }
 
-// ── Typical lot sizes by zip for Citrus County + surrounding service area ─
-const ZIP_TYPICAL_ACRES = {
-  '34428':0.18,'34429':0.18,'34423':0.18,                              // Crystal River
-  '34450':0.20,'34451':0.20,'34452':0.20,'34453':0.20,                 // Inverness
-  '34460':0.28,'34461':0.28,                                           // Lecanto
-  '34431':0.30,'34432':0.30,'34433':0.22,'34434':0.22,                 // Dunnellon / Citrus Springs
-  '34436':0.25,'34442':0.25,                                           // Floral City / Hernando
-  '34464':0.20,'34465':0.20,                                           // Beverly Hills
-  '34446':0.22,'34447':0.22,'34448':0.22,                              // Homosassa
-  '34449':0.35,'34498':0.40,                                           // Inglis / Yankeetown
-  '34480':0.22,'34481':0.22,'34482':0.22,'34476':0.22,'34474':0.22,
-  '34472':0.22,'34470':0.22,'34471':0.22,'34479':0.22,
-  '34475':0.22,'34478':0.22,                                           // Ocala / Marion Co.
-  '34491':0.25,'34488':0.30,                                           // Summerfield / Silver Springs
-  '32626':0.40,'32668':0.40,                                           // Chiefland / Morriston
-  '34601':0.20,'34602':0.20,'34604':0.20,                              // Brooksville
-};
+// ── Florida Statewide Cadastral — same API used by the quote form ─────────
+const FL_CADASTRAL_URL = 'https://services9.arcgis.com/Gh9awoU677aKree0/arcgis/rest/services/Florida_Statewide_Cadastral/FeatureServer/0/query';
 
-// ── Scan property lot size — 4-strategy waterfall, always returns a result ─
-// Strategy 1: Overpass is_in  — finds the polygon that CONTAINS the point
-// Strategy 2: Overpass around — wider building footprint search (60 m)
-// Strategy 3: Nominatim reverse — polygon at zoom=18
-// Strategy 4: ZIP typical      — area average, always succeeds
-async function scanPropertyAcres(lat, lon, address, zip) {
-  function ft(url, ms = 7000) {
-    const c = new AbortController(), t = setTimeout(() => c.abort(), ms);
-    return fetch(url, { signal: c.signal, headers: { 'Accept-Language': 'en' } }).finally(() => clearTimeout(t));
-  }
-
-  // 1. Overpass is_in: all polygons that contain this exact point (most accurate for parcels)
-  try {
-    const q   = `[out:json][timeout:12];is_in(${lat},${lon})->.a;.a out geom;`;
-    const res = await ft('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q), 13000);
-    const d   = await res.json();
-    // Find the smallest polygon that looks like a residential lot (0.03–5 acres)
-    let best = 0;
-    for (const el of (d.elements || [])) {
-      if (el.geometry?.length >= 3) {
-        const a = polyAreaAcres(el.geometry);
-        if (a >= 0.03 && a <= 5 && a > best) best = a;
-      }
-    }
-    if (best > 0) return { acres: Math.round(best * 100) / 100, source: 'parcel boundary', sqft: Math.round(best * 43560) };
-  } catch(e) {}
-
-  // 2. Overpass around: building footprint within 60 m
-  try {
-    const q   = `[out:json][timeout:8];(way["building"](around:60,${lat},${lon}););out geom;`;
-    const res = await ft('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q), 9000);
-    const d   = await res.json();
-    let best  = 0;
-    for (const el of (d.elements || [])) {
-      if (el.type === 'way' && el.geometry?.length >= 3) {
-        const a = polyAreaAcres(el.geometry);
-        if (a > best) best = a;
-      }
-    }
-    if (best > 0) {
-      const lot = Math.round(best * 4 * 100) / 100; // building × 4 ≈ typical FL lot
-      return { acres: lot, source: 'building footprint estimate', sqft: Math.round(lot * 43560) };
-    }
-  } catch(e) {}
-
-  // 3. Nominatim reverse geocode with polygon (zoom=18 = building level)
-  try {
-    const res = await ft(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&zoom=18&polygon_geojson=1&format=json`, 7000);
-    const d   = await res.json();
-    const geo = d?.geojson;
-    if (geo?.type === 'Polygon' && geo.coordinates?.[0]?.length >= 3) {
-      const nodes = geo.coordinates[0].map(([ln, la]) => ({ lat: la, lon: ln }));
-      const acres = Math.round(polyAreaAcres(nodes) * 100) / 100;
-      if (acres >= 0.01 && acres <= 10) return { acres, source: 'address boundary', sqft: Math.round(acres * 43560) };
-    }
-  } catch(e) {}
-
-  // 4. ZIP code typical lot size — guaranteed fallback, never fails
-  const typical = ZIP_TYPICAL_ACRES[String(zip || '')] || 0.25;
-  return { acres: typical, source: 'typical for this area', sqft: Math.round(typical * 43560), isTypical: true };
+function _sqftToAcres(a) {
+  const ac = parseFloat(a.CALC_ACRES||a.GIS_ACRES||a.ACRES||a.ACREAGE||a.TOT_ACRES||a.PARCEL_ACRES||0);
+  if (ac > 0) return ac;
+  const sf = parseFloat(a.LND_SQFOOT||a.LAND_SQFOOT||a.CALC_SQFOOT||a.LAND_SF||a.LOT_SIZE||a.SQFOOTAGE||0);
+  if (sf > 100) return sf / 43560;
+  const shSf = parseFloat(a.Shape__Area||a.SHAPE_Area||0);
+  if (shSf > 100) return shSf / 43560;
+  return 0;
 }
+function _pickBestParcel(features, houseNum) {
+  if (!features?.length) return null;
+  const attrs = features.map(f => f.attributes);
+  if (attrs.length === 1) return attrs[0];
+  if (houseNum) {
+    const m = attrs.filter(a => String(a.PHY_ADDR1||a.SITE_ADDR||'').trim().startsWith(houseNum));
+    if (m.length) return m.reduce((b,a) => _sqftToAcres(a)>_sqftToAcres(b)?a:b, m[0]);
+  }
+  return attrs.reduce((b,a) => _sqftToAcres(a)>_sqftToAcres(b)?a:b, attrs[0]);
+}
+async function _cadastralQuery(params) {
+  try {
+    const qs  = Object.entries(params).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
+    const res = await fetch(FL_CADASTRAL_URL+'?'+qs);
+    const d   = await res.json();
+    return d.features?.length ? d.features : null;
+  } catch(e) { return null; }
+}
+const ZIP_TYPICAL_ACRES = {
+  '34428':0.18,'34429':0.18,'34423':0.18,
+  '34450':0.20,'34451':0.20,'34452':0.20,'34453':0.20,
+  '34446':0.30,'34447':0.30,'34448':0.30,
+  '34460':0.25,'34461':0.35,
+  '34431':0.35,'34432':0.35,'34433':0.30,'34434':0.20,
+  '34436':0.30,'34442':0.20,
+  '34449':0.35,'34498':0.35,
+  '34464':0.20,'34465':0.20,
+  '34470':0.20,'34471':0.20,'34472':0.20,'34473':0.30,
+  '34474':0.20,'34475':0.20,'34476':0.20,'34479':0.20,
+  '34480':0.20,'34481':0.30,'34482':0.30,
+  '34488':0.30,'34489':0.30,'34491':0.30,
+  '32621':0.30,'32626':0.30,'32668':0.30,'32693':0.30,
+  '34601':0.20,'34602':0.20,'34604':0.30,
+};
+// Always returns { acres, source, sqft, isTypical? }
+async function scanPropertyAcres(lat, lon, address, zip) {
+  const houseNum = String(address||'').trim().split(/\s+/)[0]||'';
+  if (lat != null && lon != null) {
+    const geoParam = JSON.stringify({x:lon,y:lat,spatialReference:{wkid:4326}});
+    const base = {where:'1=1',geometryType:'esriGeometryPoint',inSR:'4326',
+                  spatialRel:'esriSpatialRelIntersects',outFields:'*',returnGeometry:'false',f:'json'};
+    for (const dist of ['100','250']) {
+      const feats = await _cadastralQuery({...base,geometry:geoParam,distance:dist,units:'esriSRUnit_Meter'});
+      const attrs = feats ? _pickBestParcel(feats, houseNum) : null;
+      if (attrs) {
+        const acres = _sqftToAcres(attrs);
+        if (acres > 0) return {acres:Math.round(acres*100)/100, source:'FL parcel record', sqft:Math.round(acres*43560)};
+      }
+    }
+    try {
+      const clean = String(address).replace(/,.*/,'').trim().toUpperCase().replace(/'/g,"''");
+      const parts = clean.split(/\s+/), hn=parts[0], st=parts.slice(1).join(' ');
+      for (const where of [`PHY_ADDR1 LIKE '${hn}%${st}%'`,`PHY_ADDR1 LIKE '%${st}%'`]) {
+        const feats = await _cadastralQuery({where,outFields:'*',returnGeometry:'false',f:'json'});
+        const attrs = feats ? _pickBestParcel(feats, houseNum) : null;
+        if (attrs) {
+          const acres = _sqftToAcres(attrs);
+          if (acres > 0) return {acres:Math.round(acres*100)/100, source:'FL parcel record', sqft:Math.round(acres*43560)};
+        }
+      }
+    } catch(e) {}
+  }
+  const typical = ZIP_TYPICAL_ACRES[String(zip||'')] || 0.25;
+  return {acres:typical, source:'typical for zip', sqft:Math.round(typical*43560), isTypical:true};
+}
+
+
 
 // ── Scan button handler — called from route stop card ────────────────────
 async function scanAndSaveLotSize(rowIdx, lat, lon, btnEl) {
@@ -7089,6 +7086,34 @@ async function scanAndSaveLotSize(rowIdx, lat, lon, btnEl) {
 
   const prefix = isTypical ? '📍 No parcel data found —' : '📐';
   showToast(`${prefix} ${acres}ac (${sqft.toLocaleString()} sqft, ${source}) → ~${estMins} min. Tap 📝 to override.`);
+}
+
+// ── DEV: force re-scan ALL stops on current route (ignores existing lot tags) ─
+async function devScanAllLots(btnEl) {
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = '🔬 Scanning all…'; }
+  const dateStr = _routeViewDates[_routeViewDayIdx] || _routeViewDates[0];
+  const dayOrder = dateStr && _routeCustomOrder[dateStr];
+  if (!dayOrder) { showToast('Optimize route first'); if (btnEl) { btnEl.disabled=false; btnEl.textContent='🔬 [DEV] Force scan all lot sizes'; } return; }
+  const stops = (Array.isArray(dayOrder) ? dayOrder : Object.values(dayOrder).flat());
+  let done = 0;
+  await Promise.all(stops.map(async s => {
+    const bk = s.bk;
+    const rowIdx = allBookings.indexOf(bk);
+    if (rowIdx < 0) return;
+    const addr = (bk.address||'') + (bk.zip?', '+(ZIP_CITY[bk.zip]||bk.zip):'') + ', FL';
+    const result = await scanPropertyAcres(s.lat ?? null, s.lon ?? null, bk.address, bk.zip);
+    const tag = `Lot: ${result.acres}ac`;
+    const cleaned = String(bk.notes||'').replace(/\bLot:\s*[\d.]+ac\b/gi,'').replace(/\s*\|\s*$/,'').trim();
+    bk.notes = cleaned ? cleaned + ' | ' + tag : tag;
+    try {
+      const p = new URLSearchParams({action:'owner_update_booking',rowIndex:bk._rowIndex||(rowIdx+2),notes:bk.notes,adminToken});
+      await fetch(SCRIPT_URL+'?'+p);
+    } catch(e) {}
+    done++;
+  }));
+  if (dateStr && _routeCustomOrder[dateStr]) { renderRouteDay(dateStr, _routeCustomOrder[dateStr]); _reinjectRouteAllBtns(dateStr); }
+  showToast(`📐 Scanned ${done} properties — route times updated`);
+  if (btnEl) { btnEl.disabled=false; btnEl.textContent='🔬 [DEV] Force scan all lot sizes'; }
 }
 
 // ── Format minutes → "1h 5m" ─────────────────────────────────────────────
@@ -7210,6 +7235,28 @@ async function buildRoute() {
     if (_geoCacheDirty) {
       try { localStorage.setItem(_GEO_CACHE_KEY, JSON.stringify(geoCache)); } catch(e) {}
     }
+
+    // ── Auto-scan lot sizes for any stop that doesn't have one yet ────────
+    // Runs in parallel — each result is saved to bk.notes so mowMinutes() uses it
+    btn.textContent = '⏳ Scanning lot sizes…';
+    const _scanPromises = allUpcoming
+      .filter(bk => !/lot:\s*[\d.]+ac/i.test(String(bk.notes||'')))
+      .map(async bk => {
+        const city     = ZIP_CITY[bk.zip] || '';
+        const fullAddr = (bk.address||'') + (bk.zip?', '+bk.zip:'') + (city?', '+city:'') + ', FL';
+        const coord    = geoCache[fullAddr];
+        const result   = await scanPropertyAcres(coord?.lat ?? null, coord?.lon ?? null, bk.address, bk.zip);
+        const tag      = `Lot: ${result.acres}ac`;
+        const cleaned  = String(bk.notes||'').replace(/\bLot:\s*[\d.]+ac\b/gi,'').replace(/\s*\|\s*$/,'').trim();
+        bk.notes = cleaned ? cleaned + ' | ' + tag : tag;
+        // Persist to server silently
+        try {
+          const p = new URLSearchParams({action:'owner_update_booking',rowIndex:bk._rowIndex||(allBookings.indexOf(bk)+2),notes:bk.notes,adminToken});
+          fetch(SCRIPT_URL+'?'+p);
+        } catch(e) {}
+      });
+    await Promise.all(_scanPromises);
+    btn.textContent = '⏳ Optimizing…';
 
     const [startH, startM] = startTime.split(':').map(Number);
     const AVG_SPEED_MPH = 25;
@@ -7885,1505 +7932,4 @@ function getZoneDayHint(zip, resolvedZone) {
   const zone = resolvedZone || getZoneFromZip(zip);
   if (!zone) return '';
   const days = getCfgZoneDays(zone);
-  return days.length ? days.join('/') : '';
-}
-
-// =======================================================
-// CREW ASSIGNMENT
-// =======================================================
-async function assignCrew(rowIdx, crew) {
-  const b = allBookings[rowIdx];
-  if (!b) return;
-  try {
-    const params = new URLSearchParams({
-      action:   'set_crew',
-      rowIndex: (rowIdx + 2).toString(),
-      crew,
-      adminToken,
-    });
-    const res  = await fetch(SCRIPT_URL + '?' + params);
-    const data = await res.json();
-    if (data.success) {
-      allBookings[rowIdx].crew = crew;
-      showToast(crew ? 'Crew ' + crew + ' assigned' : 'Crew unassigned');
-      renderBookings();
-    } else {
-      showToast('Could not save crew: ' + (data.error || 'error'));
-    }
-  } catch(err) {
-    showToast('Network error saving crew');
-  }
-}
-
-
-// =======================================================
-// JOB TIME SETTING
-// =======================================================
-let _jobTimeSaveTimer = null;
-async function setJobTime(rowIdx, time) {
-  const b = allBookings[rowIdx];
-  if (!b || String(b.jobTime || '') === time) return;
-  clearTimeout(_jobTimeSaveTimer);
-  _jobTimeSaveTimer = setTimeout(async () => {
-    try {
-      const params = new URLSearchParams({
-        action:   'set_job_time',
-        rowIndex: (rowIdx + 2).toString(),
-        jobTime:  time,
-        adminToken,
-      });
-      const res  = await fetch(SCRIPT_URL + '?' + params);
-      const data = await res.json();
-      if (data.success) {
-        allBookings[rowIdx].jobTime = time;
-        showToast(time ? '⏰ Time set: ' + time : 'Time cleared');
-      } else {
-        showToast('⚠️ Could not save time: ' + (data.error || 'error'));
-      }
-    } catch(err) {
-      showToast('⚠️ Network error saving time');
-    }
-  }, 600);
-}
-
-// =======================================================
-// HISTORY TAB
-// =======================================================
-function initHistoryTab() {
-  renderHistoryList();
-}
-
-function _histIsDone(b) {
-  return String(b.done || '').length > 0;
-}
-
-function _histStatusLabel(b) {
-  const d = String(b.done || '').toLowerCase();
-  if (d.includes('issue')) return 'issue';
-  return 'done';
-}
-
-function renderHistoryList() {
-  const listEl  = document.getElementById('histList');
-  const countEl = document.getElementById('histCount');
-  if (!listEl) return;
-
-  const q    = (document.getElementById('histSearch')?.value || '').toLowerCase();
-  const crew = document.getElementById('histCrewFilter')?.value || 'all';
-
-  let jobs = (allBookings || [])
-    .map((b, i) => ({ b, i }))
-    .filter(({ b }) => _histIsDone(b) && !b.rowCancelled)
-    .filter(({ b }) => crew === 'all' || (b.crew || '') === crew)
-    .filter(({ b }) => {
-      if (!q) return true;
-      return [b.name, b.address, b.service, b.crew, b.markedBy].some(v =>
-        String(v || '').toLowerCase().includes(q));
-    })
-    .sort((a, b) => {
-      const da = a.b.serviceDate || a.b.serviceDateRaw || '';
-      const db = b.b.serviceDate || b.b.serviceDateRaw || '';
-      return db.localeCompare(da);
-    });
-
-  if (countEl) countEl.textContent = jobs.length + ' completed job' + (jobs.length !== 1 ? 's' : '');
-
-  if (!jobs.length) {
-    listEl.innerHTML = '<div class="hist-empty">No completed jobs found.</div>';
-    return;
-  }
-
-  listEl.innerHTML = jobs.map(({ b, i }) => {
-    const status = _histStatusLabel(b);
-    const badge  = status === 'issue'
-      ? '<span class="hist-status-issue">⚠️ Issue</span>'
-      : '<span class="hist-status-done">✓ Done</span>';
-    const photos = (b.photos || '').split(',').filter(u => u.trim()).length;
-    const photoChip = photos ? '<div class="hist-photo-count">📷 ' + photos + ' photo' + (photos > 1 ? 's' : '') + '</div>' : '';
-    const crewBadge = b.crew ? crewBadgeHTML(b.crew) : '';
-    const zoneBadge = zoneBadgeHTML(b.zip, b.zone);
-    const dateStr = displayDate(b.serviceDate || b.serviceDateRaw) || '—';
-    const svc    = esc(b.service || '—');
-    return '<div class="hist-item" onclick="openHistoryDetail(' + i + ')">' +
-      '<div class="hist-item-avatar">🌿</div>' +
-      '<div class="hist-item-main">' +
-        '<div class="hist-item-name">' + esc(b.name || 'Unknown') + '</div>' +
-        '<div class="hist-item-meta">' + dateStr + ' &nbsp;&middot;&nbsp; ' + svc +
-          (b.address ? ' &nbsp;&middot;&nbsp; ' + esc(b.address) : '') + '</div>' +
-        '<div style="display:flex;gap:6px;margin-top:5px;flex-wrap:wrap;">' + crewBadge + zoneBadge + '</div>' +
-      '</div>' +
-      '<div class="hist-item-right">' + badge + photoChip + '</div>' +
-    '</div>';
-  }).join('');
-}
-
-let _currentHistPhotoUrls = [];
-
-function openHistoryDetail(rowIdx) {
-  const b = allBookings[rowIdx];
-  if (!b) return;
-  _currentHistPhotoUrls = (b.photos || '').split(',').map(u => u.trim()).filter(Boolean);
-  document.getElementById('histDetailTitle').textContent = b.name || 'Job Detail';
-  const status = _histStatusLabel(b);
-  document.getElementById('histDetailStatus').innerHTML = status === 'issue'
-    ? '<span class="hist-status-issue">⚠️ Issue</span>'
-    : '<span class="hist-status-done">✓ Done</span>';
-  document.getElementById('histDetailBody').innerHTML = buildHistDetailHTML(b);
-  const overlay = document.getElementById('histDetailOverlay');
-  overlay.classList.add('open');
-  overlay.scrollTop = 0;
-}
-
-// ── PHOTO LIGHTBOX ──────────────────────────────────────────────────────────
-let _lightboxUrls = [];
-let _lightboxIdx  = 0;
-
-function openPhotoLightbox(idx, urls) {
-  _lightboxUrls = urls || [];
-  _lightboxIdx  = idx;
-  _renderLightbox();
-  document.getElementById('photoLightbox').classList.add('open');
-}
-
-function _renderLightbox() {
-  const url = _lightboxUrls[_lightboxIdx] || '';
-  const m   = url.match(/\/d\/([^\/\?]+)/);
-  const full = m ? 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1600' : url;
-  document.getElementById('lightboxImg').src = full;
-  document.getElementById('lightboxDriveLink').href = url;
-  // Prev/next
-  const prev = document.getElementById('lightboxPrev');
-  const next = document.getElementById('lightboxNext');
-  if (prev) prev.style.display = _lightboxUrls.length > 1 ? '' : 'none';
-  if (next) next.style.display = _lightboxUrls.length > 1 ? '' : 'none';
-}
-
-function lightboxNav(dir) {
-  _lightboxIdx = (_lightboxIdx + dir + _lightboxUrls.length) % _lightboxUrls.length;
-  _renderLightbox();
-}
-
-function closePhotoLightbox() {
-  document.getElementById('photoLightbox').classList.remove('open');
-}
-
-function closeHistoryDetail() {
-  document.getElementById('histDetailOverlay').classList.remove('open');
-}
-
-function buildHistDetailHTML(b) {
-  function row(label, val) {
-    if (!val) return '';
-    return '<div class="hist-row"><div class="hist-row-label">' + label + '</div><div class="hist-row-val">' + val + '</div></div>';
-  }
-  function card(title, content) {
-    return '<div class="hist-card"><div class="hist-card-title">' + title + '</div>' + content + '</div>';
-  }
-
-  const doneRaw   = String(b.done || '');
-  const doneClean = doneRaw.replace(/^[✓✔]\s*Done\s*[—\-]?\s*/i, '').trim();
-  const cashFlag  = isCash(b);
-  const payLabel  = cashFlag ? '💵 Cash' : '💳 Card';
-
-  const photoUrls = (b.photos || '').split(',').map(u => u.trim()).filter(Boolean);
-  let photosHTML;
-  if (photoUrls.length) {
-    photosHTML = '<div class="hist-photo-grid">' + photoUrls.map((url, pi) => {
-      const m = url.match(/\/d\/([^\/\?]+)/);
-      const thumb = m ? 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w400' : url;
-      return '<div class="hist-photo-thumb" onclick="openPhotoLightbox(' + pi + ',_currentHistPhotoUrls)">' +
-        '<img src="' + thumb + '" onerror="this.parentElement.innerHTML=\'<span style=\\\"font-size:28px;color:#9ca3af\\\">📷</span>\'">' +
-        '</div>';
-    }).join('') + '</div>';
-  } else {
-    photosHTML = '<div style="color:var(--text-muted);font-size:13px;">No photos attached to this job.</div>';
-  }
-
-  const crewName = !b.crew ? '' :
-    b.crew === 'A' ? ((cfgData && cfgData.crewNames && cfgData.crewNames.A) || 'Crew A') :
-    b.crew === 'B' ? ((cfgData && cfgData.crewNames && cfgData.crewNames.B) || 'Crew B') : b.crew;
-
-  return [
-    card('👤 Customer', [
-      row('Name',    esc(b.name || '')),
-      row('Phone',   b.phone ? '<a href="tel:' + esc(b.phone) + '">' + esc(b.phone) + '</a>' : ''),
-      row('Email',   b.email ? '<a href="mailto:' + esc(b.email) + '">' + esc(b.email) + '</a>' : ''),
-      row('Address', esc(b.address || '')),
-    ].join('')),
-    card('🛠️ Job Details', [
-      row('Service',   esc(b.service || '')),
-      row('Date',      esc(displayDate(b.serviceDate || b.serviceDateRaw) || '')),
-      row('Time',      esc(b.jobTime || '')),
-      row('Frequency', esc(b.frequency || '')),
-      row('Price',     esc(String(b.price || ''))),
-      row('Zone',      esc(b.zone || getZoneFromZip(b.zip) || '')),
-      row('Crew',      esc(crewName)),
-      row('Payment',   payLabel),
-    ].join('')),
-    b.notes && b.notes !== '(none)'
-      ? card('📝 Customer Notes', '<div class="hist-notes-box">' + esc(b.notes) + '</div>')
-      : '',
-    b.employeeNotes
-      ? card('🗒️ Employee Note', '<div class="hist-notes-box">' + esc(b.employeeNotes) + '</div>')
-      : '',
-    card('✓ Completion', [
-      row('Completed', esc(doneClean || doneRaw)),
-      row('Marked by', esc(b.markedBy || '')),
-    ].join('')),
-    card('📷 Photos', photosHTML),
-  ].join('');
-}
-
-// =======================================================
-// PHOTO UPLOAD  (multi-select with removable previews)
-// =======================================================
-let photoTargetRowIdx = null;
-let photoSelectedFiles = [];   // array of File objects
-
-function openPhotoUpload(rowIdx) {
-  photoTargetRowIdx = rowIdx;
-  photoSelectedFiles = [];
-  const inp = document.getElementById('photoFileInput');
-  if (inp) inp.value = '';
-  _renderPhotoGrid();
-  document.getElementById('photoUploadBtn').disabled = true;
-  document.getElementById('photoError').style.display   = 'none';
-  document.getElementById('photoSuccess').style.display = 'none';
-  const b = allBookings[rowIdx];
-  document.getElementById('photoModalSub').textContent =
-    b ? (b.name || '—') + ' · ' + (displayDate(b.serviceDate || b.serviceDateRaw) || '—') : '';
-  document.getElementById('photoModal').classList.add('open');
-}
-
-function closePhotoModal() {
-  document.getElementById('photoModal').classList.remove('open');
-  photoTargetRowIdx = null;
-  photoSelectedFiles = [];
-}
-
-function handlePhotoSelected(input) {
-  const files = Array.from(input.files || []);
-  if (!files.length) return;
-  photoSelectedFiles = photoSelectedFiles.concat(files);
-  input.value = '';   // reset so same file can be re-added if needed
-  _renderPhotoGrid();
-  document.getElementById('photoUploadBtn').disabled = false;
-  _updateUploadBtnLabel();
-}
-
-function removePhotoFromSelection(idx) {
-  photoSelectedFiles.splice(idx, 1);
-  _renderPhotoGrid();
-  document.getElementById('photoUploadBtn').disabled = photoSelectedFiles.length === 0;
-  _updateUploadBtnLabel();
-}
-
-function _updateUploadBtnLabel() {
-  const n   = photoSelectedFiles.length;
-  const btn = document.getElementById('photoUploadBtn');
-  if (!btn) return;
-  btn.textContent = n > 1 ? '📷 Upload ' + n + ' Photos' : '📷 Upload Photo';
-}
-
-function _renderPhotoGrid() {
-  const grid = document.getElementById('photoPreview');
-  if (!grid) return;
-  if (!photoSelectedFiles.length) { grid.innerHTML = ''; return; }
-
-  grid.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-top:10px;">' +
-    photoSelectedFiles.map((file, idx) => {
-      const url = URL.createObjectURL(file);
-      return '<div style="position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;border:1.5px solid var(--border);background:#f1f5f9;">' +
-        '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover;">' +
-        '<button onclick="removePhotoFromSelection(' + idx + ')" ' +
-          'style="position:absolute;top:4px;left:4px;width:22px;height:22px;border-radius:50%;' +
-          'background:rgba(0,0,0,.65);color:#fff;border:none;font-size:13px;cursor:pointer;' +
-          'display:flex;align-items:center;justify-content:center;line-height:1;padding:0;" ' +
-          'title="Remove">✕</button>' +
-        '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.4);' +
-          'color:#fff;font-size:9px;padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
-          file.name +
-        '</div>' +
-      '</div>';
-    }).join('') +
-  '</div>';
-}
-
-async function uploadPhoto() {
-  if (!photoSelectedFiles.length || photoTargetRowIdx === null) return;
-  const btn   = document.getElementById('photoUploadBtn');
-  const errEl = document.getElementById('photoError');
-  const sucEl = document.getElementById('photoSuccess');
-  errEl.style.display = 'none';
-  sucEl.style.display = 'none';
-  btn.disabled = true;
-
-  const total = photoSelectedFiles.length;
-  btn.textContent = total > 1 ? 'Uploading ' + total + ' photos…' : 'Uploading…';
-
-  // Compress all photos first, in parallel
-  const b = allBookings[photoTargetRowIdx];
-  const jobLabel = b ? (b.name || '') + ' — ' + (displayDate(b.serviceDate || b.serviceDateRaw) || '') : '';
-
-  const results = await Promise.all(photoSelectedFiles.map(async (file) => {
-    try {
-      const base64 = await _fileToBase64(file);
-      const body   = JSON.stringify({
-        action:     'upload_job_photo',
-        base64Data: base64,
-        fileName:   file.name,
-        mimeType:   file.type,
-        rowIndex:   (photoTargetRowIdx + 2),
-        jobLabel,
-        markedBy:   adminName || adminEmail || 'Staff',
-        adminToken,
-      });
-      const res  = await fetch(SCRIPT_URL, { method: 'POST', body });
-      const data = await res.json();
-      return { file, data };
-    } catch(e) {
-      return { file, data: { success: false, error: e.message } };
-    }
-  }));
-
-  let uploaded = 0;
-  const errors = [];
-  results.forEach(({ file, data }) => {
-    if (data.success) {
-      uploaded++;
-      if (data.fileUrl && b) {
-        b.photos = [b.photos, data.fileUrl].filter(Boolean).join(',');
-      }
-    } else {
-      errors.push(file.name + ': ' + (data.error || 'failed'));
-    }
-  });
-
-  if (errors.length) {
-    errEl.textContent = '❌ ' + errors.join(' | ');
-    errEl.style.display = 'block';
-  }
-  if (uploaded > 0) {
-    sucEl.textContent = '✅ ' + uploaded + ' photo' + (uploaded > 1 ? 's' : '') + ' uploaded!';
-    sucEl.style.display = 'block';
-    btn.textContent = '✅ Done';
-    setTimeout(() => closePhotoModal(), 2000);
-  } else {
-    btn.disabled = false;
-    _updateUploadBtnLabel();
-  }
-}
-
-// Compress image to max 1000px / 0.70 quality before base64-encoding
-// Keeps file sizes small for fast uploads while still looking good in the history view
-function _fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = reject;
-    reader.onload = e => {
-      const img = new Image();
-      img.onerror = reject;
-      img.onload = () => {
-        const MAX = 1000;
-        let w = img.width, h = img.height;
-        if (w > MAX || h > MAX) {
-          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-          else        { w = Math.round(w * MAX / h); h = MAX; }
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.70);
-        resolve(dataUrl.split(',')[1]);
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-// =======================================================
-// EMPLOYEE NOTE
-// =======================================================
-let _noteTargetRowIdx = null;
-
-function openNoteModal(rowIdx) {
-  _noteTargetRowIdx = rowIdx;
-  const b = allBookings[rowIdx];
-  document.getElementById('noteModalSub').textContent =
-    b ? (b.name || '—') + ' · ' + (displayDate(b.serviceDate || b.serviceDateRaw) || '—') : '';
-  document.getElementById('noteModalText').value = b ? (b.employeeNotes || '') : '';
-  document.getElementById('noteModalError').style.display = 'none';
-  document.getElementById('noteModalSaveBtn').disabled = false;
-  document.getElementById('noteModalSaveBtn').textContent = '💾 Save Note';
-  document.getElementById('employeeNoteModal').classList.add('open');
-  setTimeout(() => document.getElementById('noteModalText').focus(), 80);
-}
-
-function closeNoteModal() {
-  document.getElementById('employeeNoteModal').classList.remove('open');
-  _noteTargetRowIdx = null;
-}
-
-async function saveEmployeeNote() {
-  if (_noteTargetRowIdx === null) return;
-  const note = (document.getElementById('noteModalText').value || '').trim();
-  const btn  = document.getElementById('noteModalSaveBtn');
-  const errEl = document.getElementById('noteModalError');
-  btn.disabled = true;
-  btn.textContent = 'Saving…';
-  errEl.style.display = 'none';
-  try {
-    const params = new URLSearchParams({
-      action:    'set_employee_note',
-      rowIndex:  (_noteTargetRowIdx + 2).toString(),
-      note,
-      markedBy:  adminName || adminEmail || 'Staff',
-      adminToken,
-    });
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
-    const res  = await fetch(SCRIPT_URL + '?' + params, { signal: controller.signal });
-    clearTimeout(timeout);
-    const data = await res.json();
-    if (data.success) {
-      if (allBookings[_noteTargetRowIdx]) {
-        allBookings[_noteTargetRowIdx].employeeNotes = note;
-      }
-      btn.textContent = '✅ Saved';
-      showToast('📝 Note saved');
-      setTimeout(() => closeNoteModal(), 1200);
-    } else {
-      errEl.textContent = '❌ ' + (data.error || 'Could not save');
-      errEl.style.display = 'block';
-      btn.disabled = false;
-      btn.textContent = '💾 Save Note';
-    }
-  } catch(e) {
-    const msg = e.name === 'AbortError' ? '❌ Timed out — check your connection' : '❌ Network error: ' + e.message;
-    errEl.textContent = msg;
-    errEl.style.display = 'block';
-    btn.disabled = false;
-    btn.textContent = '💾 Save Note';
-  }
-}
-
-</script>
-
-<!-- NOTES POPUP -->
-<div id="routeContactOverlay" class="contact-popup-overlay" onclick="if(event.target===this)closeContactPopup()">
-  <div class="contact-popup">
-    <div class="contact-popup-name" id="contactPopupName"></div>
-    <div class="contact-popup-phone" id="contactPopupPhone"></div>
-    <div class="contact-popup-btns">
-      <a id="contactCallLink" class="contact-call-btn" href="#">📞 Call</a>
-      <a id="contactTextLink" class="contact-text-btn" href="#">💬 Text</a>
-    </div>
-    <button onclick="closeContactPopup()" style="margin-top:12px;width:100%;padding:10px;background:#f1f5f9;border:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;color:#64748b;">Cancel</button>
-  </div>
-</div>
-
-<div id="notesOverlay" class="notes-overlay" onclick="if(event.target===this)closeNotesPopup()">
-  <div class="notes-popup">
-    <div class="notes-popup-title" id="notesPopupTitle">Notes</div>
-    <div class="notes-popup-body"  id="notesPopupBody"></div>
-    <button class="notes-popup-close" onclick="closeNotesPopup()">Close</button>
-  </div>
-</div>
-
-<!-- PHOTO UPLOAD MODAL -->
-<div class="modal-overlay" id="photoModal" onclick="if(event.target===this)closePhotoModal()">
-  <div class="modal" style="max-width:480px;">
-
-    <!-- Header -->
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
-      <div>
-        <div style="font-size:18px;font-weight:700;color:var(--green-deep);">📷 Add Job Photos</div>
-        <div id="photoModalSub" style="font-size:13px;color:var(--text-muted);margin-top:3px;"></div>
-      </div>
-      <button onclick="closePhotoModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-muted);line-height:1;padding:0;">✕</button>
-    </div>
-
-    <!-- Drop zone / picker -->
-    <div style="border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;background:#f8faf8;cursor:pointer;"
-         onclick="document.getElementById('photoFileInput').click()">
-      <input type="file" id="photoFileInput" accept="image/*" multiple
-             style="display:none;" onchange="handlePhotoSelected(this)">
-      <div style="font-size:28px;margin-bottom:6px;">📷</div>
-      <div style="font-size:14px;font-weight:600;color:var(--green-deep);margin-bottom:2px;">Tap to choose photos</div>
-      <div style="font-size:12px;color:var(--text-muted);">Select one or many · JPG, PNG, HEIC · max 10 MB each</div>
-    </div>
-
-    <!-- Preview grid (thumbnails with X buttons rendered by JS) -->
-    <div id="photoPreview"></div>
-
-    <!-- Status messages -->
-    <div id="photoSuccess" style="display:none;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:11px 14px;font-size:14px;color:#15803d;font-weight:600;margin-top:10px;"></div>
-    <div id="photoError"   style="display:none;color:#dc2626;font-size:13px;font-weight:600;margin-top:8px;"></div>
-
-    <!-- Action buttons -->
-    <div style="display:flex;gap:10px;margin-top:14px;">
-      <button id="photoUploadBtn" class="btn-action btn-done" style="flex:1;"
-              onclick="uploadPhoto()" disabled>📷 Upload Photo</button>
-      <button class="btn-action" onclick="closePhotoModal()"
-              style="background:#f1f5f9;color:var(--text);border-color:#e2e8f0;">Cancel</button>
-    </div>
-
-  </div>
-</div>
-
-<!-- PHOTO LIGHTBOX -->
-<div id="photoLightbox" class="photo-lightbox" onclick="if(event.target===this)closePhotoLightbox()">
-  <button class="photo-lightbox-close" onclick="closePhotoLightbox()">✕</button>
-  <button id="lightboxPrev" onclick="lightboxNav(-1)"
-    style="position:fixed;left:14px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:50%;width:44px;height:44px;font-size:22px;cursor:pointer;">‹</button>
-  <img id="lightboxImg" src="data:," alt="Job photo" onerror="this.onerror=null;this.src='data:,'">
-  <button id="lightboxNext" onclick="lightboxNav(1)"
-    style="position:fixed;right:14px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:50%;width:44px;height:44px;font-size:22px;cursor:pointer;">›</button>
-  <a id="lightboxDriveLink" href="#" target="_blank" class="photo-lightbox-drive">Open in Drive ↗</a>
-</div>
-
-<!-- EMPLOYEE NOTE MODAL -->
-<div class="modal-overlay" id="employeeNoteModal" onclick="if(event.target===this)closeNoteModal()">
-  <div class="modal" style="max-width:420px;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
-      <div>
-        <div style="font-size:18px;font-weight:700;color:var(--green-deep);">📝 Employee Note</div>
-        <div id="noteModalSub" style="font-size:13px;color:var(--text-muted);margin-top:3px;"></div>
-      </div>
-      <button onclick="closeNoteModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-muted);line-height:1;padding:0;">✕</button>
-    </div>
-    <textarea id="noteModalText" placeholder="Enter a note for the owner (e.g. gate code, issue noticed, equipment needed…)"
-      style="width:100%;min-height:110px;padding:11px 13px;border:1.5px solid var(--border);border-radius:10px;
-             font-size:14px;font-family:inherit;resize:vertical;outline:none;box-sizing:border-box;"></textarea>
-    <div id="noteModalError" style="display:none;color:#dc2626;font-size:13px;font-weight:600;margin-top:6px;"></div>
-    <div style="display:flex;gap:10px;margin-top:12px;">
-      <button id="noteModalSaveBtn" class="btn-action btn-done" style="flex:1;" onclick="saveEmployeeNote()">💾 Save Note</button>
-      <button class="btn-action" onclick="closeNoteModal()" style="background:#f1f5f9;color:var(--text);border-color:#e2e8f0;">Cancel</button>
-    </div>
-  </div>
-</div>
-
-
-<script>
-const DISPATCH_START_HOUR = 7;   // 7 AM
-const DISPATCH_END_HOUR   = 19;  // 7 PM
-const DISPATCH_TOTAL_MINS = (DISPATCH_END_HOUR - DISPATCH_START_HOUR) * 60;
-let   _dispatchJobIdx     = -1;
-let   _dispatchPhotoUrls  = [];
-
-function isCashPaid(b) {
-  const cal = String(b.calendarEvent || '').toLowerCase();
-  return cal.includes('✅') || cal.includes('paid');
-}
-function dispatchJobClass(b) {
-  // Green  = fully archived (Complete Job was clicked)
-  if (b.rowCompleted) return 'status-completed';
-  const cash = isCash(b);
-  const paid = isCashPaid(b); // payment confirmed (card charged, cash recorded, autopay)
-  const done = isDone(b);
-  // Yellow = job done, waiting on payment
-  if (done && !paid) return 'status-done';
-  // Green  = done + paid (Complete Job not yet clicked — still shows yellow until archived)
-  if (done && paid) return 'status-done'; // keep yellow until owner clicks Complete Job
-  // Blue   = paid but job not done yet (prepaid / autopay charged before visit)
-  if (!done && paid) return 'status-paid';
-  // Yellow = invoiced but not done
-  if (String(b.invoiced || '').length > 2) return 'status-invoiced';
-  // Red    = upcoming, nothing done yet
-  return 'status-upcoming';
-}
-function dispatchPayIcon(b) {
-  if (isCash(b)) return ' 💵';
-  const cal = String(b.calendarEvent || '').toLowerCase();
-  const pm  = String(b.payMethod     || '').toLowerCase();
-  const hasCard = !!(b.cardLast4);
-  if (hasCard || cal.includes('autopay') || pm.includes('autopay') || pm.includes('card') || cal.includes('✅')) return ' 💳';
-  return '';
-}
-function dispatchServiceType(b) {
-  const svc = String(b.service || b.frequency || '').toLowerCase();
-  if (/pressure.?wash|washing/i.test(svc))              return '🚿 Pressure Wash';
-  if (/landscap|mulch|bed|trim|shrub|bush|hedge/i.test(svc)) return '🌳 Landscape';
-  if (/mow|lawn|grass|blow|edge/i.test(svc) || svc.includes('plan')) return '🌿 Mow';
-  if (/quote|estimate|visit/i.test(svc))                return '📋 Quote Visit';
-  return '🔧 Other';
-}
-function dispatchZoneBadge(b, dateStr) {
-  const zone = b.zone || getZoneFromZip(b.zip) || '';
-  if (!zone) return '';
-  let type = '';
-  if (dateStr && cfgData) {
-    const dow = new Date(dateStr + 'T12:00').toLocaleDateString('en-US', {weekday:'short'}); // "Mon"
-    const sched = (cfgData.zoneSchedule || {})[zone] || [];
-    const entry = sched.find(e => e.day === dow);
-    if (entry) type = entry.type; // 'primary' or 'backup'
-  }
-  const bg      = type === 'primary' ? 'rgba(76,255,145,.35)' : type === 'backup' ? 'rgba(255,255,255,.15)' : 'rgba(255,255,255,.22)';
-  const border  = type === 'primary' ? '1px solid rgba(76,255,145,.6)' : 'none';
-  const opacity = type === 'backup' ? '.65' : '1';
-  return `<span style="font-size:9px;background:${bg};border:${border};border-radius:4px;padding:1px 5px;font-weight:700;opacity:${opacity};" title="${type==='primary'?'Primary zone today':type==='backup'?'Backup zone today':''}">${zone}</span>`;
-}
-function fmtDispatchTime(startMin) {
-  const abs = DISPATCH_START_HOUR * 60 + startMin;
-  const h = Math.floor(abs / 60), m = abs % 60;
-  const ap = h >= 12 ? 'PM' : 'AM', hd = h > 12 ? h - 12 : h === 0 ? 12 : h;
-  return hd + ':' + String(m).padStart(2, '0') + ' ' + ap;
-}
-
-// ── Zone hint helper (used by Add Client + Add Job zip fields) ────────────
-function showZoneHint(inputId, hintId) {
-  if (!cfgData) loadCfgData();
-  const zip   = (document.getElementById(inputId)?.value || '').trim();
-  const hint  = document.getElementById(hintId);
-  if (!hint) return;
-  const zone  = getZoneFromZip(zip);
-  if (!zone) { hint.textContent = zip.length === 5 ? '⚠️ Zip not in a zone — check Config tab' : ''; return; }
-  const days  = getCfgZoneDays(zone);
-  const info  = ZONE_CITIES[zone];
-  const label = info ? info.label + ' · ' + info.cities : zone;
-
-  // Suggest the next service date in the corresponding date field
-  const dateFieldId = inputId === 'ac-zip' ? 'ac-date' : inputId === 'job-zip' ? 'job-date' : null;
-  let suggestedDate = '';
-  if (dateFieldId && days.length) {
-    const dateEl = document.getElementById(dateFieldId);
-    // Only suggest if the date field is empty or still at today's default
-    const todayStr = new Date().toISOString().slice(0, 10);
-    if (dateEl && (!dateEl.value || dateEl.value === todayStr)) {
-      const dayNameToNum = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
-      const targetDay = dayNameToNum[days[0]]; // use first configured day
-      if (targetDay !== undefined) {
-        const d = new Date();
-        d.setDate(d.getDate() + 1); // start from tomorrow
-        for (let i = 0; i < 7; i++) {
-          if (d.getDay() === targetDay) break;
-          d.setDate(d.getDate() + 1);
-        }
-        suggestedDate = d.toISOString().slice(0, 10);
-        dateEl.value = suggestedDate;
-      }
-    }
-  }
-
-  const dayStr = days.length
-    ? ' · ' + days.join('/') + (suggestedDate ? ' — suggested ' + new Date(suggestedDate + 'T12:00').toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'}) : '')
-    : '';
-  hint.textContent = '📍 ' + label + dayStr;
-}
-
-// ── Dispatch view mode ───────────────────────────────────────────────────
-let _dispatchView = 'week'; // 'day' or 'week'
-
-function setDispatchView(mode) {
-  _dispatchView = mode;
-  document.getElementById('dViewDay').style.fontWeight  = mode === 'day'  ? '800' : '500';
-  document.getElementById('dViewWeek').style.fontWeight = mode === 'week' ? '800' : '500';
-  document.getElementById('dViewDay').style.borderColor  = mode === 'day'  ? 'var(--green-mid)' : '';
-  document.getElementById('dViewWeek').style.borderColor = mode === 'week' ? 'var(--green-mid)' : '';
-  renderDispatchBoard();
-}
-function initDispatchTab() {
-  const today = new Date().toISOString().slice(0, 10);
-  const el = document.getElementById('dispatchDate');
-  if (el && !el.value) el.value = today;
-  setDispatchView('week');
-}
-function dispatchShiftDate(delta) {
-  const el = document.getElementById('dispatchDate');
-  if (!el || !el.value) return;
-  const amt = _dispatchView === 'week' ? 7 * delta : delta;
-  const d = new Date(el.value + 'T12:00:00');
-  d.setDate(d.getDate() + amt);
-  el.value = d.toISOString().slice(0, 10);
-  renderDispatchBoard();
-}
-function dispatchGoToday() {
-  const el = document.getElementById('dispatchDate');
-  if (el) el.value = new Date().toISOString().slice(0, 10);
-  renderDispatchBoard();
-}
-
-function renderDispatchBoard() {
-  if (_dispatchView === 'week') { renderDispatchWeek(); return; }
-  renderDispatchDay();
-}
-
-function _filterJobs(dateStr) {
-  const crewFilt = document.getElementById('dispatchCrewFilter')?.value || 'all';
-  let jobs = (allBookings || []).filter(b => dateOf(b) === dateStr && !b.rowCancelled);
-  if (crewFilt !== 'all') {
-    jobs = jobs.filter(b => {
-      const crew = (b.crew || '').trim();
-      return crewFilt === 'unassigned' ? !crew : crew === crewFilt;
-    });
-  }
-  return jobs;
-}
-
-// ── Week view — per-crew rows ─────────────────────────────────────────────
-function renderDispatchWeek() {
-  const anchor = document.getElementById('dispatchDate')?.value;
-  if (!anchor) return;
-  const emptyEl = document.getElementById('dispatchEmpty');
-  const axisEl  = document.getElementById('dispatchTimeAxis');
-  const rowsEl  = document.getElementById('dispatchBoardRows');
-  if (!rowsEl) return;
-
-  // 7-day range from anchor
-  const dates = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(anchor + 'T12:00:00');
-    d.setDate(d.getDate() + i);
-    dates.push(d.toISOString().slice(0, 10));
-  }
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-
-  // Collect all jobs across the week
-  const crewFilt = document.getElementById('dispatchCrewFilter')?.value || 'all';
-  const allWeekJobs = (allBookings || []).filter(b => {
-    if (b.rowCancelled) return false;
-    if (!dates.includes(dateOf(b))) return false;
-    if (crewFilt !== 'all') {
-      const c = (b.crew||'').trim();
-      return crewFilt === 'unassigned' ? !c : c === crewFilt;
-    }
-    return true;
-  });
-
-  if (axisEl) axisEl.innerHTML = '';
-
-  if (!allWeekJobs.length) {
-    if (emptyEl) emptyEl.style.display = 'block';
-    rowsEl.innerHTML = '';
-    return;
-  }
-  if (emptyEl) emptyEl.style.display = 'none';
-
-  // Get configured zone(s) for a crew on a day-of-week label e.g. "Mon"
-  function crewDayZones(crew, dayLabel) {
-    if (!cfgData) loadCfgData();
-    const zones = [];
-    // Read from new zoneSchedule format
-    for (const [zone, entries] of Object.entries(cfgData.zoneSchedule || {})) {
-      if (!Array.isArray(entries)) continue;
-      const entry = entries.find(e => e.day === dayLabel);
-      if (!entry) continue;
-      const assignedCrew = entry.crew || (cfgData.zoneCrew || {})[zone] || '';
-      if (crew === 'Unassigned' && !assignedCrew) zones.push(zone);
-      else if (assignedCrew === crew) zones.push(zone);
-    }
-    return zones;
-  }
-
-  // Cluster hint: show if a job is the only one of its zone on its day
-  function isolatedHint(b) {
-    const zone = b.zone || getZoneFromZip(b.zip) || '';
-    if (!zone) return '';
-    const d = dateOf(b);
-    if (allWeekJobs.filter(j => dateOf(j) === d && (j.zone||getZoneFromZip(j.zip)||'') === zone && j !== b).length > 0) return '';
-    let best = '', bestCnt = 0;
-    for (const ds of dates) {
-      if (ds === d) continue;
-      const cnt = allWeekJobs.filter(j => dateOf(j) === ds && (j.zone||getZoneFromZip(j.zip)||'') === zone).length;
-      if (cnt > bestCnt) { bestCnt = cnt; best = ds; }
-    }
-    if (best && bestCnt > 0) {
-      const bd = new Date(best + 'T12:00');
-      return `💡 ${bestCnt} ${zone} job${bestCnt>1?'s':''} on ${dayNames[bd.getDay()]}`;
-    }
-    return '';
-  }
-
-  // Group jobs by crew
-  const crewKeys = [];
-  const crewJobs = {};
-  for (const b of allWeekJobs) {
-    const k = (b.crew || '').trim() || 'Unassigned';
-    if (!crewJobs[k]) { crewJobs[k] = {}; crewKeys.push(k); dates.forEach(d => crewJobs[k][d] = []); }
-    const d = dateOf(b);
-    if (crewJobs[k][d]) crewJobs[k][d].push(b);
-  }
-  // Deduplicate crewKeys
-  const orderedCrews = [...new Set(['A','B','Unassigned',...crewKeys].filter(k => crewJobs[k]))];
-
-  // ── Header row (date labels) ──────────────────────────────────────────
-  const totalCols = dates.length;
-  let html = `<div style="border:1.5px solid var(--border);border-radius:14px;overflow:hidden;overflow-x:auto;">
-  <table style="width:100%;border-collapse:collapse;min-width:${totalCols*130+160}px;">
-    <thead>
-      <tr style="background:#f8faf6;border-bottom:2px solid var(--border);">
-        <th style="width:130px;min-width:130px;padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);border-right:1.5px solid var(--border);">Crew</th>`;
-  for (const ds of dates) {
-    const d   = new Date(ds + 'T12:00');
-    const isT = ds === todayStr;
-    const cnt = allWeekJobs.filter(b => dateOf(b) === ds).length;
-    html += `<th style="padding:10px 8px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
-              color:${isT?'var(--green-mid)':'var(--text-muted)'};border-right:1px solid var(--border);
-              border-bottom:${isT?'2px solid var(--green-mid)':'none'};">
-      ${dayNames[d.getDay()]} ${d.getMonth()+1}/${d.getDate()}
-      ${cnt ? `<span style="background:var(--green-mid);color:#fff;border-radius:20px;padding:0 6px;font-size:9px;font-weight:800;vertical-align:middle;"> ${cnt}</span>` : ''}
-    </th>`;
-  }
-  html += '</tr></thead><tbody>';
-
-  // ── One row per crew ──────────────────────────────────────────────────
-  for (const crew of orderedCrews) {
-    const crewLabel = crew === 'A' ? '🔵 Crew A' : crew === 'B' ? '🩷 Crew B' : crew === 'Unassigned' ? '⬜ Unassigned' : esc(crew);
-    const crewTotal = Object.values(crewJobs[crew]).flat().length;
-    html += `<tr style="border-bottom:1.5px solid var(--border);vertical-align:top;">
-      <td style="padding:12px 14px;border-right:1.5px solid var(--border);background:#f8faf6;white-space:nowrap;">
-        <div style="font-size:13px;font-weight:700;color:var(--green-deep);">${crewLabel}</div>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${crewTotal} job${crewTotal!==1?'s':''}</div>
-      </td>`;
-    for (const ds of dates) {
-      const cellJobs  = crewJobs[crew][ds] || [];
-      const _dow      = new Date(ds + 'T12:00').toLocaleDateString('en-US',{weekday:'short'}); // "Mon"
-      const _czones   = crewDayZones(crew, _dow);
-      // Build header label — primary zones highlighted, backup zones faded
-      const _czLabel  = _czones.length ? `<div style="font-size:9px;font-weight:700;letter-spacing:.05em;margin-bottom:4px;display:flex;gap:3px;flex-wrap:wrap;">${_czones.map(z => {
-        const _sc = (cfgData?.zoneSchedule || {})[z] || [];
-        const _en = _sc.find(e => e.day === _dow);
-        const isPrimary = _en?.type === 'primary';
-        const isBackup  = _en?.type === 'backup';
-        return `<span style="color:${isPrimary?'var(--green-mid)':isBackup?'#94a3b8':'var(--text-muted)'};${isPrimary?'':'opacity:.7;'}" title="${isPrimary?'Primary':'Backup'}">${z}${isBackup?' ·':''}</span>`;
-      }).join('')}</div>` : '';
-      html += `<td style="padding:6px;border-right:1px solid var(--border);vertical-align:top;min-width:130px;"
-               ondragover="dispatchWeekDragOver(event,'${ds}')"
-               ondrop="dispatchWeekDrop(event,'${ds}')">
-        ${_czLabel}`;
-      if (!cellJobs.length) {
-        html += `<div style="font-size:11px;color:#e2e8f0;font-style:italic;padding:4px 2px;">—</div>`;
-      } else {
-        for (const b of cellJobs) {
-          const ri   = allBookings.indexOf(b);
-          const cls  = dispatchJobClass(b);
-          const hint = isolatedHint(b);
-          const pay  = dispatchPayIcon(b);
-          const timeStr = b.jobTime ? fmtDispatchTime(
-            (() => { const [hh,mm]=b.jobTime.split(':').map(Number); return (hh-DISPATCH_START_HOUR)*60+(mm||0); })()
-          ) : '';
-          const _zone = dispatchZoneBadge(b, ds);
-          const _svc  = dispatchServiceType(b);
-          html += `<div class="dispatch-week-card ${cls}" draggable="true"
-              ondragstart="dispatchWeekDragStart(event,${ri})"
-              ondragend="dispatchWeekDragEnd(event)"
-              onclick="openDispatchDetail(${ri})"
-              id="wkcard_${ri}">
-            <div class="dispatch-week-card-name">${esc(b.name||'—')}${pay} ${_zone}</div>
-            <div class="dispatch-week-card-meta" style="font-size:10px;opacity:.8;">${_svc}</div>
-            <div class="dispatch-week-card-meta">${esc(b.address||'—')}</div>
-            <div class="dispatch-week-card-meta">${timeStr?'⏰ '+timeStr:''}</div>
-            ${hint ? `<div class="dispatch-week-card-hint">${hint}</div>` : ''}
-          </div>`;
-        }
-      }
-      html += '</td>';
-    }
-    html += '</tr>';
-  }
-  html += '</tbody></table></div>';
-  rowsEl.innerHTML = html;
-}
-
-// ── Day view (timeline) ───────────────────────────────────────────────────
-function renderDispatchDay() {
-  const dateStr  = document.getElementById('dispatchDate')?.value;
-  if (!dateStr) return;
-
-  const dayJobs = _filterJobs(dateStr);
-  const emptyEl = document.getElementById('dispatchEmpty');
-  const axisEl  = document.getElementById('dispatchTimeAxis');
-  const rowsEl  = document.getElementById('dispatchBoardRows');
-  if (!axisEl || !rowsEl) return;
-
-  if (!dayJobs.length) {
-    if (emptyEl) emptyEl.style.display = 'block';
-    axisEl.innerHTML = ''; rowsEl.innerHTML = '';
-    return;
-  }
-  if (emptyEl) emptyEl.style.display = 'none';
-
-  // Time axis
-  let axHtml = '<div class="dispatch-time-axis-label-col">Crew</div><div class="dispatch-time-slots">';
-  for (let h = DISPATCH_START_HOUR; h < DISPATCH_END_HOUR; h++) {
-    const lbl = h < 12 ? h + ' AM' : h === 12 ? '12 PM' : (h - 12) + ' PM';
-    axHtml += `<div class="dispatch-time-slot">${lbl}</div>`;
-  }
-  axHtml += '</div>';
-  axisEl.innerHTML = axHtml;
-
-  // Group by crew
-  const crews = {};
-  dayJobs.forEach(b => { const k = b.crew || 'Unassigned'; if (!crews[k]) crews[k] = []; crews[k].push(b); });
-
-  function estimateTimes(jobs) {
-    let cur = 60;
-    return jobs.map(b => {
-      let start = cur;
-      if (b.jobTime) {
-        const [hh, mm] = b.jobTime.split(':').map(Number);
-        start = (hh - DISPATCH_START_HOUR) * 60 + (mm || 0);
-        if (start < 0) start = 0;
-      }
-      const dur = mowMinutes(b);
-      cur = start + dur + 20;
-      return { b, start, dur };
-    });
-  }
-
-
-  let rowsHtml = '';
-  const crewOrder = ['A', 'B', ...Object.keys(crews).filter(k => k !== 'A' && k !== 'B')];
-  for (const k of crewOrder) {
-    if (!crews[k]) continue;
-    const timed = estimateTimes(crews[k]);
-    let blocks = '';
-    timed.forEach(({ b, start, dur }) => {
-      const left  = Math.max(0, (start / DISPATCH_TOTAL_MINS) * 100);
-      const width = Math.min(100 - left, Math.max(1.8, (dur / DISPATCH_TOTAL_MINS) * 100));
-      const cls   = dispatchJobClass(b);
-      const ri    = allBookings.indexOf(b);
-      const _payIco = dispatchPayIcon(b);
-      const _zonD   = b.zone || getZoneFromZip(b.zip) || '';
-      const _svcD   = dispatchServiceType(b);
-      // Zone priority badge: check if this zone is primary or backup for today's day-of-week
-      let _prioBadge = '';
-      if (_zonD && cfgData) {
-        const _dateStr = document.getElementById('dispatchDate')?.value || '';
-        if (_dateStr) {
-          const _dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(_dateStr + 'T12:00').getDay()];
-          const _sched = (cfgData.zoneSchedule || {})[_zonD] || [];
-          const _entry = _sched.find(e => e.day === _dow);
-          if (_entry && _entry.type === 'primary') {
-            _prioBadge = '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#4cff91;margin-left:4px;vertical-align:middle;" title="Primary zone today"></span>';
-          } else if (_entry && _entry.type === 'backup') {
-            _prioBadge = '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.4);border:1px solid rgba(255,255,255,.7);margin-left:4px;vertical-align:middle;" title="Backup zone today"></span>';
-          }
-        }
-      }
-      blocks += `<div class="dispatch-job-block ${cls}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%;" onclick="openDispatchDetail(${ri})" title="${esc(b.name || '')}">
-        <div class="dispatch-job-name">${esc(b.name || '—')}${_payIco}${_prioBadge}${_zonD ? ' <span style=\'font-size:9px;background:rgba(255,255,255,.3);border-radius:3px;padding:1px 4px;\'>' + _zonD + '</span>' : ''}</div>
-        <div class="dispatch-job-time">${fmtDispatchTime(start)} · ${dur}m</div>
-        <div class="dispatch-job-plan">${_svcD}</div>
-      </div>`;
-    });
-    const lbl = k === 'A' ? '🔵 Crew A' : k === 'B' ? '🩷 Crew B' : k === 'Unassigned' ? '⬜ Unassigned' : esc(k);
-    rowsHtml += `<div class="dispatch-crew-row">
-      <div class="dispatch-crew-label"><div class="dispatch-crew-name">${lbl}</div><div class="dispatch-crew-count">${crews[k].length} job${crews[k].length !== 1 ? 's' : ''}</div></div>
-      <div class="dispatch-job-track">${blocks}</div>
-    </div>`;
-  }
-  rowsEl.innerHTML = rowsHtml;
-}
-
-// Dispatch detail panel
-function openDispatchDetail(rowIdx) {
-  _dispatchJobIdx = rowIdx;
-  const b = allBookings[rowIdx];
-  if (!b) return;
-  _fillDispatchDetail(b, rowIdx);
-  document.getElementById('dispatchDetailOverlay').classList.add('open');
-}
-function closeDispatchDetail() {
-  document.getElementById('dispatchDetailOverlay').classList.remove('open');
-  _dispatchJobIdx = -1;
-}
-// ── Week view drag-to-reschedule ─────────────────────────────────────────
-let _dragRowIdx  = -1;
-let _dragOldDate = '';
-
-function dispatchWeekDragStart(ev, rowIdx) {
-  _dragRowIdx  = rowIdx;
-  _dragOldDate = dateOf(allBookings[rowIdx] || {});
-  ev.currentTarget.classList.add('dragging');
-  ev.dataTransfer.effectAllowed = 'move';
-}
-function dispatchWeekDragEnd(ev) {
-  ev.currentTarget.classList.remove('dragging');
-  document.querySelectorAll('.dispatch-week-day-body').forEach(el => el.classList.remove('drag-target'));
-}
-function dispatchWeekDragOver(ev, dateStr) {
-  ev.preventDefault();
-  ev.dataTransfer.dropEffect = 'move';
-  document.querySelectorAll('.dispatch-week-day-body').forEach(el => el.classList.remove('drag-target'));
-  const col = document.getElementById('weekCol_' + dateStr);
-  if (col) col.classList.add('drag-target');
-}
-function dispatchWeekDrop(ev, newDateStr) {
-  ev.preventDefault();
-  document.querySelectorAll('.dispatch-week-day-body').forEach(el => el.classList.remove('drag-target'));
-  if (_dragRowIdx < 0) return;
-  const b = allBookings[_dragRowIdx];
-  if (!b) return;
-  const oldDate = dateOf(b);
-  if (newDateStr === oldDate) return; // dropped on same day
-  // Open reschedule confirm modal
-  openDispatchResched(_dragRowIdx, newDateStr);
-  _dragRowIdx = -1;
-}
-
-// ── Dispatch reschedule modal ─────────────────────────────────────────────
-let _reschedRowIdx  = -1;
-let _reschedNewDate = '';
-
-function openDispatchResched(rowIdx, newDate) {
-  const b = allBookings[rowIdx];
-  if (!b) return;
-  _reschedRowIdx  = rowIdx;
-  _reschedNewDate = newDate;
-  const oldDate = dateOf(b) || '—';
-  const fmtDate = s => { if (!s||s==='—') return s; const d=new Date(s+'T12:00'); return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); };
-  document.getElementById('dispReschedInfo').innerHTML =
-    `<strong>${esc(b.name||'—')}</strong><br>` +
-    `Moving from <strong>${fmtDate(oldDate)}</strong> → <strong>${fmtDate(newDate)}</strong>`;
-  document.getElementById('dispReschedDate').value = newDate;
-  document.getElementById('dispReschedScope').value = 'single';
-  document.getElementById('dispReschedError').style.display = 'none';
-  const btn = document.getElementById('dispReschedConfirmBtn');
-  btn.disabled = false; btn.textContent = 'Reschedule';
-  document.getElementById('dispatchReschedOverlay').classList.add('open');
-}
-function closeDispatchResched() {
-  document.getElementById('dispatchReschedOverlay').classList.remove('open');
-  _reschedRowIdx = -1; _reschedNewDate = '';
-}
-async function submitDispatchResched() {
-  const b = allBookings[_reschedRowIdx];
-  if (!b) return;
-  const newDate  = document.getElementById('dispReschedDate').value || _reschedNewDate;
-  const notify   = document.getElementById('dispReschedNotify').checked;
-  const scope    = document.getElementById('dispReschedScope').value || 'single';
-  const btn      = document.getElementById('dispReschedConfirmBtn');
-  const errEl    = document.getElementById('dispReschedError');
-  if (btn.disabled) return;
-  btn.disabled = true; btn.textContent = 'Saving…'; errEl.style.display = 'none';
-  try {
-    const params = new URLSearchParams({
-      action:        'owner_reschedule',
-      rowIndex:      b._rowIndex || (_reschedRowIdx + 2),
-      newDate,
-      scope,
-      sendEmail:     notify ? 'true' : 'false',
-      expectedEmail: b.email || '',
-      adminToken,
-    });
-    const res  = await fetch(SCRIPT_URL + '?' + params.toString());
-    const data = await res.json();
-    if (data.success) {
-      allBookings[_reschedRowIdx].serviceDate    = newDate;
-      allBookings[_reschedRowIdx].serviceDateRaw = newDate;
-      closeDispatchResched();
-      renderDispatchBoard();
-      showToast(`📅 ${b.name||'Job'} moved to ${newDate}${notify?' · Customer notified':''}`);
-    } else {
-      errEl.textContent = data.error || 'Could not reschedule.';
-      errEl.style.display = 'block';
-      btn.disabled = false; btn.textContent = 'Reschedule';
-    }
-  } catch(err) {
-    errEl.textContent = 'Network error.';
-    errEl.style.display = 'block';
-    btn.disabled = false; btn.textContent = 'Reschedule';
-  }
-}
-
-// ── Dispatch Job Edit Panel ───────────────────────────────────────────────
-let _editRowIdx = -1;
-function openDispatchEditPanel(rowIdx) {
-  _editRowIdx = rowIdx;
-  const b = allBookings[rowIdx] || {};
-  let modal = document.getElementById('dispatchEditModal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'dispatchEditModal';
-    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1200;align-items:flex-end;justify-content:center;';
-    modal.innerHTML = `
-      <div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;padding:0 0 20px;box-shadow:0 -8px 40px rgba(0,0,0,.2);animation:slideInUp .22s ease;">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px 12px;border-bottom:1.5px solid var(--border);position:sticky;top:0;background:#fff;z-index:2;">
-          <div style="font-family:Playfair Display,serif;font-size:18px;font-weight:700;color:var(--green-deep);">✏️ Edit Job</div>
-          <button onclick="document.getElementById('dispatchEditModal').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-muted);">✕</button>
-        </div>
-        <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            ${_editField('Name',    'deName',  'text',  b.name||'')}
-            ${_editField('Phone',   'dePhone', 'tel',   b.phone||'')}
-            ${_editField('Email',   'deEmail', 'email', b.email||'')}
-            ${_editField('Price',   'dePrice', 'text',  b.price||'')}
-          </div>
-          ${_editField('Street Address', 'deAddress', 'text', b.address||'', true)}
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            ${_editField('Zip',  'deZip',  'text', b.zip||'')}
-            ${_editField('Time (HH:MM)', 'deTime', 'time', b.jobTime||'')}
-          </div>
-          <div>
-            <label style="font-size:13px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:5px;">Service Type</label>
-            <select id="deService" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;">
-              <option value="Lawn Mow &amp; Blow">🌿 Lawn Mow &amp; Blow</option>
-              <option value="Landscape">🌳 Landscape</option>
-              <option value="Pressure Wash">🚿 Pressure Wash</option>
-              <option value="Lawn Mow &amp; Landscape">🌿🌳 Mow &amp; Landscape</option>
-              <option value="Other">🔧 Other</option>
-            </select>
-          </div>
-          <div id="deEditStatus" style="font-size:13px;text-align:center;min-height:16px;"></div>
-          <button id="deEditSaveBtn" onclick="saveDispatchEdit()" style="width:100%;padding:13px;background:var(--green-mid);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;">💾 Save Changes</button>
-        </div>
-      </div>`;
-    modal.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
-    document.body.appendChild(modal);
-  }
-  // Pre-fill
-  document.getElementById('deName').value    = b.name    || '';
-  document.getElementById('dePhone').value   = b.phone   || '';
-  document.getElementById('deEmail').value   = b.email   || '';
-  document.getElementById('dePrice').value   = b.price   || '';
-  document.getElementById('deAddress').value = b.address || '';
-  document.getElementById('deZip').value     = b.zip     || '';
-  document.getElementById('deTime').value    = b.jobTime || '';
-  // Service type
-  const svc = document.getElementById('deService');
-  const curSvc = b.service || 'Lawn Mow & Blow';
-  [...svc.options].forEach(o => o.selected = (o.value === curSvc));
-  document.getElementById('deEditStatus').textContent = '';
-  const btn = document.getElementById('deEditSaveBtn');
-  btn.disabled = false; btn.textContent = '💾 Save Changes';
-  modal.style.display = 'flex';
-}
-function _editField(label, id, type, val, fullWidth) {
-  return `<div${fullWidth ? ' style="grid-column:1/-1;"' : ''}>
-    <label for="${id}" style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">${label}</label>
-    <input id="${id}" type="${type}" value="" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;outline:none;">
-  </div>`;
-}
-async function saveDispatchEdit() {
-  const btn    = document.getElementById('deEditSaveBtn');
-  const status = document.getElementById('deEditStatus');
-  if (btn.disabled) return;
-  btn.disabled = true; btn.textContent = 'Saving…'; status.textContent = '';
-
-  const b       = allBookings[_editRowIdx];
-  if (!b) { btn.disabled=false; btn.textContent='💾 Save Changes'; return; }
-  const rowIndex = b._rowIndex || (_editRowIdx + 2);
-
-  const name    = document.getElementById('deName').value.trim();
-  const phone   = document.getElementById('dePhone').value.trim();
-  const email   = document.getElementById('deEmail').value.trim();
-  const price   = document.getElementById('dePrice').value.trim();
-  const address = document.getElementById('deAddress').value.trim();
-  const zip     = document.getElementById('deZip').value.trim();
-  const jobTime = document.getElementById('deTime').value.trim();
-  const service = document.getElementById('deService').value;
-
-  try {
-    // Save time separately (has its own column handler)
-    if (jobTime !== (b.jobTime || '')) {
-      const tp = new URLSearchParams({ action:'set_job_time', rowIndex, jobTime, adminToken });
-      const tr = await fetch(SCRIPT_URL + '?' + tp.toString());
-      const td = await tr.json();
-      if (td.success) { allBookings[_editRowIdx].jobTime = jobTime; }
-    }
-    // Save all other fields
-    const params = new URLSearchParams({ action:'owner_update_booking', rowIndex, adminToken });
-    if (name    !== (b.name||''))    params.set('name',    name);
-    if (phone   !== (b.phone||''))   params.set('phone',   phone);
-    if (email   !== (b.email||''))   params.set('email',   email);
-    if (price   !== (b.price||''))   params.set('price',   price);
-    if (address !== (b.address||'')) params.set('address', address);
-    if (zip     !== (b.zip||''))     params.set('zip',     zip);
-    if (service !== (b.service||'')) params.set('service', service);
-
-    const res  = await fetch(SCRIPT_URL + '?' + params.toString());
-    const data = await res.json();
-    if (data.success) {
-      // Update local booking record
-      if (name)    allBookings[_editRowIdx].name    = name;
-      if (phone)   allBookings[_editRowIdx].phone   = phone;
-      if (email)   allBookings[_editRowIdx].email   = email;
-      if (price)   allBookings[_editRowIdx].price   = price;
-      if (address) allBookings[_editRowIdx].address = address;
-      if (zip)     allBookings[_editRowIdx].zip     = zip;
-      if (service) allBookings[_editRowIdx].service = service;
-      status.style.color = '#15803d'; status.textContent = '✅ Saved!';
-      setTimeout(() => {
-        document.getElementById('dispatchEditModal').style.display = 'none';
-        renderDispatchBoard();
-        // Refresh the detail panel if it's open
-        if (_dispatchJobIdx === _editRowIdx) {
-          _fillDispatchDetail(allBookings[_editRowIdx], _editRowIdx);
-        }
-      }, 800);
-    } else {
-      status.style.color = '#dc2626'; status.textContent = '❌ ' + (data.error || 'Save failed');
-      btn.disabled = false; btn.textContent = '💾 Save Changes';
-    }
-  } catch(err) {
-    status.style.color = '#dc2626'; status.textContent = '❌ Network error';
-    btn.disabled = false; btn.textContent = '💾 Save Changes';
-  }
-}
-
-async function dispatchAssignCrew(rowIdx, crew) {
-  const b = allBookings[rowIdx]; if (!b) return;
-  try {
-    const params = new URLSearchParams({ action:'set_crew', rowIndex:(b._rowIndex||(rowIdx+2)).toString(), crew, adminToken });
-    const res  = await fetch(SCRIPT_URL + '?' + params.toString());
-    const data = await res.json();
-    if (data.success) {
-      allBookings[rowIdx].crew = crew;
-      renderDispatchBoard();
-      showToast(crew ? 'Assigned to Crew ' + crew : 'Crew cleared');
-    } else { showToast('Error: ' + (data.error || 'Failed')); }
-  } catch { showToast('Network error'); }
-}
-function showDispatchTab(tab) {
-  ['info', 'notes', 'photos', 'history'].forEach(t => {
-    document.getElementById('dTab-' + t)?.classList.toggle('active', t === tab);
-    document.getElementById('dispatch-tab-' + t)?.classList.toggle('active', t === tab);
-  });
-}
-function _fillDispatchDetail(b, rowIdx) {
-  function dRow(label, val) {
-    if (!val || val === '(none)') return '';
-    return `<div class="dispatch-info-row"><div class="dispatch-info-label">${label}</div><div class="dispatch-info-val">${esc(String(val))}</div></div>`;
-  }
-  const cash = isCash(b), done = isDone(b);
-  const calStr = String(b.calendarEvent || '').toLowerCase(), pmStr = String(b.payMethod || '').toLowerCase();
-  const paid = calStr.includes('✅') || pmStr.includes('autopay');
-
-  // Info tab
-  let info = `<div style="margin-bottom:16px;">
-    ${done ? `<span style="background:#dcfce7;color:#15803d;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">✓ Done</span>`
-           : `<span style="background:#fef9c3;color:#92400e;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">Upcoming</span>`}
-  </div>`;
-  const zone     = b.zone || getZoneFromZip(b.zip) || '';
-  const doneDate = b.doneDate || String(b.done||'').replace(/^✓ Done —?\s*/i,'').trim();
-  const payStr   = cash ? '💵 Cash' + (isCashPaid(b) ? ' ✅ Collected' : ' — Pending') : (b.payMethod || b.calendarEvent || '');
-  const cardStr  = b.cardLast4 ? `💳 ${b.cardBrand||'Card'} ••${b.cardLast4}` : '';
-  info += dRow('Customer', b.name)
-       + dRow('Address',  (b.address || '') + (b.zip ? ', ' + b.zip : ''))
-       + dRow('Phone',    b.phone)
-       + dRow('Email',    b.email)
-       + dRow('Date',     b.serviceDate || b.serviceDateRaw)
-       + dRow('Time',     b.jobTime)
-       + dRow('Plan',     b.frequency)
-       + dRow('Price',    b.price)
-       + dRow('Payment',  payStr)
-       + dRow('Card',     cardStr)
-       + dRow('Zone',     zone)
-       + dRow('Crew',     b.crew)
-       + dRow('Status',   b.rowCompleted ? '✅ Completed & Archived' : done ? '✓ Done' : '🕐 Upcoming')
-       + dRow('Done by',  b.markedBy)
-       + dRow('Done on',  doneDate)
-       + dRow('Service',  b.service || 'Lawn Mow & Blow')
-       + dRow('Notes',    b.notes && b.notes !== '(none)' ? b.notes : '');
-  // Crew assignment row
-  const curCrew = b.crew || '';
-  info += `<div style="margin-bottom:14px;display:flex;align-items:center;gap:10px;">
-    <span style="font-size:13px;font-weight:600;color:var(--text-muted);min-width:80px;">Crew</span>
-    <select onchange="dispatchAssignCrew(${rowIdx}, this.value)" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;cursor:pointer;">
-      <option value="" ${!curCrew?'selected':''}>⬜ Unassigned</option>
-      <option value="A" ${curCrew==='A'?'selected':''}>🔵 Crew A</option>
-      <option value="B" ${curCrew==='B'?'selected':''}>🩷 Crew B</option>
-    </select>
-  </div>`;
-  info += `<div class="dispatch-action-row">`;
-  if (b.phone) info += `<a href="tel:${esc(b.phone)}" class="dispatch-action-btn" style="background:var(--green-mid);color:#fff;text-decoration:none;">📞 Call</a>`;
-  info += `<a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent((b.address || '') + (b.zip ? ', ' + b.zip : '') + ', FL')}" target="_blank" rel="noopener" class="dispatch-action-btn" style="background:#1d4ed8;color:#fff;text-decoration:none;">🗺 Navigate</a>`;
-  if (!done) info += `<button class="dispatch-action-btn" style="background:#15803d;color:#fff;" onclick="closeDispatchDetail();triggerMarkDone(${rowIdx})">✓ Mark Job Done</button>`;
-  if (cash && !paid) info += `<button class="dispatch-action-btn" style="background:#b45309;color:#fff;" onclick="closeDispatchDetail();triggerCashPaid(${rowIdx})">💵 Cash Collected</button>`;
-  info += `<button class="dispatch-action-btn" style="background:#374151;color:#fff;" onclick="openDispatchEditPanel(${rowIdx})">✏️ Edit Job</button>`;
-  info += `</div>`;
-  document.getElementById('dispatch-tab-info').innerHTML = info;
-
-  // Notes tab
-  const custRec = allCustomers.find(c => String(c.Email || '').toLowerCase().trim() === String(b.email || '').toLowerCase().trim());
-  const custNotes = custRec ? String(custRec.Notes || '').trim() : '';
-  let notes = '';
-  if (custNotes) notes += `<div style="margin-bottom:14px;"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:8px;">Customer Notes</div><div class="hist-notes-box">${esc(custNotes)}</div></div>`;
-  if (b.employeeNotes) notes += `<div style="margin-bottom:14px;"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:8px;">Crew Note</div><div class="hist-notes-box">${esc(b.employeeNotes)}</div></div>`;
-  if (!custNotes && !b.employeeNotes) notes = `<div style="color:var(--text-muted);font-size:14px;padding:16px 0;">No notes on file.</div>`;
-  notes += `<button class="dispatch-action-btn" style="background:#0369a1;color:#fff;margin-top:12px;" onclick="closeDispatchDetail();openNoteModal(${rowIdx})">📝 ${b.employeeNotes ? 'Edit Crew Note' : 'Add Crew Note'}</button>`;
-  document.getElementById('dispatch-tab-notes').innerHTML = notes;
-
-  // Photos tab — convert Google Drive share links to embeddable thumbnails
-  function driveThumb(url) {
-    const m = url.match(/\/d\/([^\/\?]+)/);
-    return m ? 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w400' : url;
-  }
-  const photoUrls = (b.photos || '').split(',').map(s => s.trim()).filter(Boolean);
-  window._dispatchPhotoUrls = photoUrls;
-  let photos = photoUrls.length
-    ? `<div class="hist-photo-grid">${photoUrls.map((url, pi) => `<div class="hist-photo-thumb" onclick="openPhotoLightbox(${pi}, _dispatchPhotoUrls)"><img src="${esc(driveThumb(url))}" alt="Job photo" onerror="this.parentElement.style.display='none'"></div>`).join('')}</div>`
-    : `<div style="color:var(--text-muted);font-size:14px;padding:16px 0;">No photos yet.</div>`;
-  photos += `<button class="dispatch-action-btn" style="background:#7c3aed;color:#fff;margin-top:16px;" onclick="closeDispatchDetail();openPhotoUpload(${rowIdx})">📷 Add Photo</button>`;
-  document.getElementById('dispatch-tab-photos').innerHTML = photos;
-
-  // History tab
-  const em = String(b.email || '').toLowerCase().trim();
-  const hist = (allBookings || []).filter(j => String(j.email || '').toLowerCase().trim() === em)
-    .sort((a, z) => (z.serviceDate || '').localeCompare(a.serviceDate || ''));
-  document.getElementById('dispatch-tab-history').innerHTML = hist.length
-    ? hist.map(j => `<div style="padding:12px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
-        <div><div style="font-size:14px;font-weight:600;color:var(--green-deep);">${esc(j.serviceDate || j.serviceDateRaw || '—')}</div><div style="font-size:12px;color:var(--text-muted);">${esc(j.frequency || '')}</div></div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
-          ${isDone(j) ? `<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">✓ Done</span>` : `<span style="background:#fef9c3;color:#92400e;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">Upcoming</span>`}
-          <span style="font-size:13px;font-weight:700;color:var(--green-deep);">${esc(j.price || '')}</span>
-        </div>
-      </div>`).join('')
-    : `<div style="color:var(--text-muted);font-size:14px;padding:16px 0;">No history found.</div>`;
-
-  showDispatchTab('info');
-}
-
-// ── Zone Guide ────────────────────────────────────────────────────────────
-const ZONE_PAIRS = [
-  { day:'Mon', dayFull:'Monday',    z1:{zone:'Z1',name:'Crystal River',                       cities:''},              backup:{zone:'Z2',name:'Inverness',    cities:'Floral City · Hernando',    note:'~15 min — here Tuesday'} },
-  { day:'Tue', dayFull:'Tuesday',   z1:{zone:'Z2',name:'Inverness · Floral City · Hernando',  cities:''},              backup:{zone:'Z1',name:'Crystal River',cities:'',                          note:'~15 min — was here Monday'} },
-  { day:'Wed', dayFull:'Wednesday', z1:{zone:'Z3',name:'Lecanto · Beverly Hills · Homosassa', cities:''},              backup:{zone:'Z4',name:'Dunnellon',    cities:'Citrus Springs',            note:'~10 min — here Thursday'} },
-  { day:'Thu', dayFull:'Thursday',  z1:{zone:'Z4',name:'Dunnellon · Citrus Springs',          cities:''},              backup:{zone:'Z3',name:'Lecanto',      cities:'Beverly Hills · Homosassa', note:'~10 min — was here Wednesday'} },
-  { day:'Fri', dayFull:'Friday',    z1:{zone:'Z5',name:'Ocala',                               cities:'Marion County'}, backup:null },
-  { day:'Sat', dayFull:'Saturday',  catchup:true },
-  { day:'Sun', dayFull:'Sunday',    holy:true },
-];
-const ZONE_SCHEDULE = [
-  { day:'MON', dayFull:'Monday',
-    crewA:{zone:'Z1', name:'Crystal River',                       cities:''},
-    crewB:{zone:'Z5', name:'Ocala',                               cities:'Marion County'} },
-  { day:'TUE', dayFull:'Tuesday',
-    crewA:{zone:'Z2', name:'Inverness · Floral City · Hernando',  cities:''},
-    crewB:{zone:'Z5', name:'Ocala',                               cities:'Marion County — cont.'} },
-  { day:'WED', dayFull:'Wednesday',
-    crewA:{zone:'Z3', name:'Lecanto · Beverly Hills · Homosassa', cities:''},
-    crewB:null },
-  { day:'THU', dayFull:'Thursday',
-    crewA:{zone:'Z4', name:'Dunnellon · Citrus Springs',          cities:''},
-    crewB:null },
-  { day:'FRI', dayFull:'Friday',
-    crewA:{zone:'Overflow', name:'Catch-up / Biweeklies',         cities:'Any zone'},
-    crewB:{zone:'Overflow', name:'Catch-up / Biweeklies',         cities:'Any zone'} },
-  { day:'SAT', dayFull:'Saturday',  crewA:null, crewB:{zone:'Catch-up', name:'Catch-up day',  cities:'Any zone with pending work', weekend:true} },
-  { day:'SUN', dayFull:'Sunday',    crewA:null, crewB:{zone:'🙏',       name:'Holy day',       cities:'Emergencies only',          weekend:true} },
-];
-let _zgTab = 'current';
-
-function openZoneGuide() {
-  _zgTab = 'current';
-  let overlay = document.getElementById('zoneGuideOverlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'zoneGuideOverlay';
-    overlay.onclick = e => { if (e.target === overlay) closeZoneGuide(); };
-    overlay.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:800;align-items:center;justify-content:center;padding:16px;';
-    overlay.innerHTML = `
-      <div style="background:#fff;border-radius:20px;width:100%;max-width:700px;max-height:90vh;overflow-y:auto;box-shadow:0 12px 48px rgba(0,0,0,.22);">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px 14px;border-bottom:1.5px solid #e2e8f0;position:sticky;top:0;background:#fff;z-index:2;">
-          <div>
-            <div style="font-family:'Playfair Display',serif;font-size:18px;color:#1a3a1a;">🗺 Zone Schedule Guide</div>
-            <div style="font-size:12px;color:#64748b;margin-top:2px;">Reference only — use this while rebooking customers into the right days</div>
-          </div>
-          <button onclick="closeZoneGuide()" style="width:34px;height:34px;border-radius:50%;border:1.5px solid #e2e8f0;background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">✕</button>
-        </div>
-        <div style="padding:20px;">
-          <div style="display:flex;gap:8px;margin-bottom:16px;">
-            <button id="zgTabCurrent" onclick="switchZgTab('current')" style="font-family:inherit;">📍 Current — 1 Crew</button>
-            <button id="zgTabFuture"  onclick="switchZgTab('future')"  style="font-family:inherit;">🔮 Future — 2 Crews</button>
-          </div>
-          <table id="zoneGuideBody" style="width:100%;border-collapse:collapse;font-family:inherit;"></table>
-          <div id="zoneGuideNote" style="margin-top:16px;background:#f8faf8;border-radius:10px;padding:12px 14px;font-size:12px;color:#374151;line-height:1.7;"></div>
-        </div>
-      </div>`;
-    document.body.appendChild(overlay);
-  }
-  overlay.style.display = 'flex';
-  renderZoneGuide();
-}
-function closeZoneGuide() {
-  const o = document.getElementById('zoneGuideOverlay');
-  if (o) o.style.display = 'none';
-}
-function switchZgTab(t) { _zgTab = t; renderZoneGuide(); }
-
-function renderZoneGuide() {
-  const isCurrent = _zgTab === 'current';
-  const activeSty  = 'padding:8px 18px;border:none;border-radius:8px;background:#1a3a1a;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;';
-  const inactiveSty= 'padding:8px 18px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;color:#64748b;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;';
-  const ec = document.getElementById('zgTabCurrent'); if (ec) ec.style.cssText = isCurrent ? activeSty : inactiveSty;
-  const ef = document.getElementById('zgTabFuture');  if (ef) ef.style.cssText = !isCurrent ? activeSty : inactiveSty;
-  const body = document.getElementById('zoneGuideBody');
-  const note = document.getElementById('zoneGuideNote');
-  if (!body || !note) return;
-
-  if (isCurrent) {
-    body.innerHTML = `<thead><tr>
-      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;width:70px;">Day</th>
-      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">Primary Zone</th>
-      <th style="background:#4a6741;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">Backup Zone <span style="font-weight:400;font-size:10px;opacity:.8;">(overflow only)</span></th>
-    </tr></thead><tbody>${ZONE_PAIRS.map(row => {
-      if (row.catchup) return `<tr>
-        <td style="padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;text-align:center;font-size:12px;font-weight:700;color:#92400e;">SAT<br><span style="font-size:10px;font-weight:400;color:#b45309;">Saturday</span></td>
-        <td colspan="2" style="padding:13px 16px;background:#fffbeb;border:1px solid #fde68a;font-size:13px;color:#78350f;">
-          🔄 <strong>Catch-up day</strong> — biweekly customers, anything that ran long during the week, overflow from any zone.
-        </td>
-      </tr>`;
-      if (row.holy) return `<tr>
-        <td style="padding:10px 12px;background:#f5f3ff;border:1px solid #ddd6fe;text-align:center;font-size:12px;font-weight:700;color:#5b21b6;">SUN<br><span style="font-size:10px;font-weight:400;color:#7c3aed;">Sunday</span></td>
-        <td colspan="2" style="padding:13px 16px;background:#f5f3ff;border:1px solid #ddd6fe;font-size:13px;color:#4c1d95;">
-          🙏 <strong>Holy day — emergencies only.</strong> Do not schedule regular jobs on Sunday.
-        </td>
-      </tr>`;
-      return `<tr>
-        <td style="padding:10px 12px;background:#f8faf6;border:1px solid #e2e8f0;text-align:center;font-size:12px;font-weight:700;color:#374151;">${row.day}<br><span style="font-size:10px;font-weight:400;color:#9ca3af;">${row.dayFull}</span></td>
-        <td style="padding:10px 14px;background:#f0f7f0;border:1px solid #e2e8f0;text-align:center;">
-          <div style="display:inline-block;background:#c8e6c9;color:#1b5e20;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:5px;">${row.z1.zone}</div>
-          <div style="font-size:13px;font-weight:700;color:#1e293b;">${row.z1.name}</div>
-          ${row.z1.cities ? `<div style="font-size:11px;font-weight:600;color:#2d6a2d;margin-top:3px;">${row.z1.cities}</div>` : ''}
-        </td>
-        ${row.backup
-          ? `<td style="padding:10px 14px;background:#fafafa;border:1px solid #e2e8f0;text-align:center;border-left:2px dashed #d1d5db;">
-               <div style="display:inline-block;background:#e5e7eb;color:#6b7280;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:4px;">${row.backup.zone}</div>
-               <div style="font-size:12px;font-weight:600;color:#6b7280;">${row.backup.name}</div>
-               ${row.backup.cities?`<div style="font-size:10px;color:#9ca3af;margin-top:2px;">${row.backup.cities}</div>`:''}
-               <div style="font-size:10px;color:#6b7280;background:#f3f4f6;border-radius:20px;padding:1px 7px;margin-top:4px;display:inline-block;">${row.backup.note}</div>
-             </td>`
-          : `<td style="padding:10px 14px;background:#fafafa;border:1px solid #e2e8f0;text-align:center;border-left:2px dashed #d1d5db;color:#94a3b8;font-size:12px;font-style:italic;">
-               Use Sat catch-up if overflow
-             </td>`
-        }
-      </tr>`;
-    }).join('')}</tbody>`;
-    note.innerHTML = '<strong>Primary zone</strong> is the plan for each day. <strong>Backup zone</strong> is the closest neighbor — only use it if you genuinely need to overflow jobs onto that day. Saturday = catch-up. Sunday = emergencies only.';
-  } else {
-    body.innerHTML = `<thead><tr>
-      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;width:70px;">Day</th>
-      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">💗 Crew A — April</th>
-      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">🔵 Crew B — Hunter &amp; Jon</th>
-    </tr></thead><tbody>${ZONE_SCHEDULE.map(row => {
-      const aCell = row.crewA
-        ? `<td style="padding:10px 12px;background:${row.crewA.big?'#fff7f0':'#fff8fb'};border:1px solid #e2e8f0;text-align:center;">
-             <div style="display:inline-block;background:${row.crewA.big?'#fce0ec':'#f7d6e6'};color:#a0305a;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:4px;">${row.crewA.zone}</div>
-             <div style="font-size:12px;font-weight:600;color:#1e293b;">${row.crewA.name}</div>
-             <div style="font-size:10px;color:#64748b;margin-top:2px;">${row.crewA.cities}</div>
-           </td>`
-        : `<td style="padding:10px 12px;background:#fafafa;border:1px solid #e2e8f0;text-align:center;color:#cbd5e1;font-size:12px;">OFF</td>`;
-      const bCell = row.crewB
-        ? `<td style="padding:10px 12px;background:${row.crewB.weekend?'#eef6ff':'#f8fbff'};border:1px solid #e2e8f0;text-align:center;">
-             <div style="display:inline-block;background:#d0e4f8;color:#1a4080;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:4px;">${row.crewB.zone}</div>
-             <div style="font-size:12px;font-weight:600;color:#1e293b;">${row.crewB.name}</div>
-             <div style="font-size:10px;color:#64748b;margin-top:2px;">${row.crewB.cities}</div>
-           </td>`
-        : `<td style="padding:10px 12px;background:#fafafa;border:1px solid #e2e8f0;text-align:center;color:#cbd5e1;font-size:12px;">OFF</td>`;
-      const isWeekend = row.day==='SAT'||row.day==='SUN';
-      return `<tr>
-        <td style="padding:10px 12px;background:${isWeekend?'#e8f2e8':'#f8faf6'};border:1px solid #e2e8f0;text-align:center;font-size:12px;font-weight:700;color:${isWeekend?'#2d6a2d':'#374151'};">
-          ${row.day}<br><span style="font-size:10px;font-weight:400;color:${isWeekend?'#4a8a4a':'#9ca3af'};">${row.dayFull}</span>
-        </td>${aCell}${bCell}
-      </tr>`;
-    }).join('')}</tbody>`;
-    note.innerHTML = '<strong>Future setup:</strong> Crew A owns Citrus County (Z1, Z2, Z3 — Crystal River, Inverness, Lecanto belt). Crew B owns the southern zones (Z4 Dunnellon/Citrus Springs + Z5 Ocala). Ocala gets two days since Marion County is large.';
-  }
-}
-</script>
-</body>
-</html>
+  re
