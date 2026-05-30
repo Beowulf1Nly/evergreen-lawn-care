@@ -6270,14 +6270,15 @@ function moveRouteStop(dateStr, crew, fromIdx, dir) {
   // Swap the stops
   [order[fromIdx], order[toIdx]] = [order[toIdx], order[fromIdx]];
 
-  // Swap distFromPrev so the stop carries its approximate travel time into its new slot.
-  // Also clear distFromPrev on the stop right after the destination so it doesn't show
-  // a stale drive time from the old predecessor.
-  const avgDist = order.reduce((s, x) => s + (x.distFromPrev || 0), 0) / (order.length || 1);
-  [order[fromIdx].distFromPrev, order[toIdx].distFromPrev] =
-    [order[toIdx].distFromPrev, order[fromIdx].distFromPrev];
-  const afterIdx = Math.max(fromIdx, toIdx) + 1;
-  if (order[afterIdx]) order[afterIdx].distFromPrev = avgDist; // rough estimate for successor
+  // After a manual reorder, distFromPrev values are stale for every stop
+  // after the earliest affected position. Replace them with the route average
+  // so times are at least consistently estimated (re-optimize for exact times).
+  const totalDist = order.reduce((s, x) => s + (x.distFromPrev || 0), 0);
+  const avgDist   = totalDist / (order.length || 1);
+  const firstAffected = Math.min(fromIdx, toIdx);
+  for (let j = firstAffected; j < order.length; j++) {
+    order[j].distFromPrev = avgDist;
+  }
 
   // Re-render route with recalculated times
   renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
@@ -7791,9 +7792,20 @@ function dispatchServiceType(b) {
   if (/quote|estimate|visit/i.test(svc))                return '📋 Quote Visit';
   return '🔧 Other';
 }
-function dispatchZoneBadge(b) {
+function dispatchZoneBadge(b, dateStr) {
   const zone = b.zone || getZoneFromZip(b.zip) || '';
-  return zone ? `<span style="font-size:9px;background:rgba(255,255,255,.25);border-radius:4px;padding:1px 5px;font-weight:700;">${zone}</span>` : '';
+  if (!zone) return '';
+  let type = '';
+  if (dateStr && cfgData) {
+    const dow = new Date(dateStr + 'T12:00').toLocaleDateString('en-US', {weekday:'short'}); // "Mon"
+    const sched = (cfgData.zoneSchedule || {})[zone] || [];
+    const entry = sched.find(e => e.day === dow);
+    if (entry) type = entry.type; // 'primary' or 'backup'
+  }
+  const bg      = type === 'primary' ? 'rgba(76,255,145,.35)' : type === 'backup' ? 'rgba(255,255,255,.15)' : 'rgba(255,255,255,.22)';
+  const border  = type === 'primary' ? '1px solid rgba(76,255,145,.6)' : 'none';
+  const opacity = type === 'backup' ? '.65' : '1';
+  return `<span style="font-size:9px;background:${bg};border:${border};border-radius:4px;padding:1px 5px;font-weight:700;opacity:${opacity};" title="${type==='primary'?'Primary zone today':type==='backup'?'Backup zone today':''}">${zone}</span>`;
 }
 function fmtDispatchTime(startMin) {
   const abs = DISPATCH_START_HOUR * 60 + startMin;
@@ -8012,7 +8024,14 @@ function renderDispatchWeek() {
       const cellJobs  = crewJobs[crew][ds] || [];
       const _dow      = new Date(ds + 'T12:00').toLocaleDateString('en-US',{weekday:'short'}); // "Mon"
       const _czones   = crewDayZones(crew, _dow);
-      const _czLabel  = _czones.length ? `<div style="font-size:9px;font-weight:700;color:var(--green-mid);letter-spacing:.05em;margin-bottom:4px;">${_czones.join(' · ')}</div>` : '';
+      // Build header label — primary zones highlighted, backup zones faded
+      const _czLabel  = _czones.length ? `<div style="font-size:9px;font-weight:700;letter-spacing:.05em;margin-bottom:4px;display:flex;gap:3px;flex-wrap:wrap;">${_czones.map(z => {
+        const _sc = (cfgData?.zoneSchedule || {})[z] || [];
+        const _en = _sc.find(e => e.day === _dow);
+        const isPrimary = _en?.type === 'primary';
+        const isBackup  = _en?.type === 'backup';
+        return `<span style="color:${isPrimary?'var(--green-mid)':isBackup?'#94a3b8':'var(--text-muted)'};${isPrimary?'':'opacity:.7;'}" title="${isPrimary?'Primary':'Backup'}">${z}${isBackup?' ·':''}</span>`;
+      }).join('')}</div>` : '';
       html += `<td style="padding:6px;border-right:1px solid var(--border);vertical-align:top;min-width:130px;"
                ondragover="dispatchWeekDragOver(event,'${ds}')"
                ondrop="dispatchWeekDrop(event,'${ds}')">
@@ -8028,7 +8047,7 @@ function renderDispatchWeek() {
           const timeStr = b.jobTime ? fmtDispatchTime(
             (() => { const [hh,mm]=b.jobTime.split(':').map(Number); return (hh-DISPATCH_START_HOUR)*60+(mm||0); })()
           ) : '';
-          const _zone = dispatchZoneBadge(b);
+          const _zone = dispatchZoneBadge(b, ds);
           const _svc  = dispatchServiceType(b);
           html += `<div class="dispatch-week-card ${cls}" draggable="true"
               ondragstart="dispatchWeekDragStart(event,${ri})"
