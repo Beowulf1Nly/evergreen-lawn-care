@@ -7929,18 +7929,15 @@ function renderZoneSchedule() {
   if (!hasAnySaved) {
     cfgData._schedVersion = SCHED_VERSION;
     cfgData.zoneSchedule = {};
-    ZONE_PAIRS.forEach(row => {
-      if (row.catchup || row.holy || !row.z1) return;
-      const z1 = row.z1.zone;
-      if (!cfgData.zoneSchedule[z1]) cfgData.zoneSchedule[z1] = [];
-      cfgData.zoneSchedule[z1].push({ day: row.day, type: 'primary', crew: '' });
-      if (row.backup) {
-        const bz = row.backup.zone;
-        if (!cfgData.zoneSchedule[bz]) cfgData.zoneSchedule[bz] = [];
-        if (!cfgData.zoneSchedule[bz].find(e => e.day === row.day))
-          cfgData.zoneSchedule[bz].push({ day: row.day, type: 'backup', crew: '' });
-      }
-    });
+    // Default schedule: Z1 Mon, Z2 Mon, Z3 Tue, Z4 Tue, Z5 Wed — adjust in Config tab
+    const DEFAULT_SCHED = {
+      Z1:[{day:'Mon',type:'primary',crew:''}],
+      Z2:[{day:'Mon',type:'primary',crew:''}],
+      Z3:[{day:'Tue',type:'primary',crew:''}],
+      Z4:[{day:'Tue',type:'primary',crew:''}],
+      Z5:[{day:'Wed',type:'primary',crew:''}],
+    };
+    Object.assign(cfgData.zoneSchedule, DEFAULT_SCHED);
     saveCfgData();
   }
   const WORK_DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -8256,7 +8253,27 @@ function renderDispatchWeek(anchorDate, crewFilt) {
     var cells='';
     days.forEach(function(ds) {
       var jobs=jobsByCrewDay[k+'|'+ds]||[], isToday=ds===today;
-      var cards=jobs.map(function(b){var ri=allBookings.indexOf(b);return '<div class="dispatch-week-card '+_dispJobClass(b)+'" onclick="openDispatchDetail('+ri+')" style="cursor:pointer;margin-bottom:4px;border-radius:6px;padding:5px 7px;font-size:11px;"><div class="dispatch-week-card-name">'+esc(b.name||'--')+'</div><div class="dispatch-week-card-meta">'+(b.jobTime?esc(b.jobTime)+' \xb7 ':'')+_dispMowMin(b)+'m</div></div>';}).join('');
+      var cards=jobs.map(function(b){
+        var ri=allBookings.indexOf(b);
+        var price=parseFloat(String(b.price||'').replace(/[^0-9.]/g,''))||0;
+        var zone=getZoneFromZip(b.zip)||b.zone||'';
+        var city=(ZIP_CITY&&ZIP_CITY[String(b.zip||'').slice(0,5)])||'';
+        var shortAddr=city||(b.zip?String(b.zip).slice(0,5):'');
+        var cls=_dispJobClass(b);
+        var isDark=cls==='status-upcoming'||cls==='status-completed'||cls==='status-paid';
+        var textColor=isDark?'#fff':'#1a1a1a';
+        return '<div class="dispatch-week-card '+cls+'" onclick="openDispatchDetail('+ri+')" style="cursor:pointer;margin-bottom:5px;border-radius:8px;padding:7px 9px;font-size:11px;line-height:1.4;color:'+textColor+';">'
+          +'<div style="font-weight:800;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(b.name||'--')+'</div>'
+          +(shortAddr?'<div style="font-size:10px;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📍 '+esc(shortAddr)+'</div>':'')
+          +'<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:3px;">'
+          +(b.jobTime?'<span style="font-size:10px;opacity:.9;">⏰ '+esc(b.jobTime)+'</span>':'')
+          +'<span style="font-size:10px;opacity:.85;">'+_dispMowMin(b)+'m</span>'
+          +(zone?'<span style="font-size:9px;font-weight:700;background:rgba(255,255,255,.25);border-radius:4px;padding:1px 4px;">'+esc(zone)+'</span>':'')
+          +(price?'<span style="font-size:10px;font-weight:700;margin-left:auto;">$'+price.toFixed(0)+'</span>':'')
+          +'</div>'
+          +(b.frequency?'<div style="font-size:9px;opacity:.75;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(b.frequency)+'</div>':'')
+          +'</div>';
+      }).join('');
       if (!cards) cards='<div class="dispatch-week-empty">No jobs</div>';
       cells+='<div style="flex:1;min-width:0;border-right:1px solid var(--border);padding:6px;background:'+(isToday?'#f0fdf4':'#fff')+';">'+cards+'</div>';
     });
@@ -8305,6 +8322,8 @@ function _populateDispatchDetail(b, rowIdx) {
   info+='<div class="dispatch-action-row">';
   if(b.phone) info+='<a href="tel:'+esc(b.phone)+'" class="dispatch-action-btn" style="background:var(--green-mid);color:#fff;text-decoration:none;">📞 Call</a>';
   info+='<a href="https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent((b.address||'')+(b.zip?', '+b.zip:'')+', FL')+'" target="_blank" rel="noopener" class="dispatch-action-btn" style="background:#1d4ed8;color:#fff;text-decoration:none;">🗺 Navigate</a>';
+  if(!done) info+='<button class="dispatch-action-btn" style="background:#15803d;color:#fff;" onclick="closeDispatchDetail();triggerMarkDone('+rowIdx+')">✓ Mark Done</button>';
+  if(cash&&!paid) info+='<button class="dispatch-action-btn" style="background:#854d0e;color:#fff;" onclick="closeDispatchDetail();triggerCashPaid('+rowIdx+')">💵 Cash Collected</button>';
   if(adminRole==='owner'&&!done) info+='<button class="dispatch-action-btn" style="background:#f59e0b;color:#fff;" onclick="openDispatchResched('+rowIdx+')">📅 Reschedule</button>';
   info+='</div>';
   var infoEl=document.getElementById('dispatch-tab-info'); if(infoEl) infoEl.innerHTML=info;
@@ -8458,13 +8477,6 @@ function custDirections(addr) {
 
 // ── Zone Guide modal ─────────────────────────────────────────────────────
 var _zgTab='current';
-var ZONE_PAIRS_DISP=[
-  {day:'MON',z1:{zone:'Z1',name:'Crystal River',cities:'Inglis · Yankeetown'},z2:{zone:'Z2',name:'Inverness',cities:'Floral City · Hernando'},drive:'~15 min'},
-  {day:'TUE',z1:{zone:'Z3',name:'Lecanto',cities:'Beverly Hills · Citrus Hills'},z2:{zone:'Z4',name:'Dunnellon / Citrus Springs',cities:'Holder · Chiefland',big:true},drive:'~20 min · Z4 biggest'},
-  {day:'WED',z1:{zone:'Z5',name:'Ocala',cities:'Marion County'},z2:{zone:'Z8',name:'The Villages',cities:'Sumter County'},drive:'~35 min'},
-  {day:'THU',z1:{zone:'Z6',name:'Brooksville',cities:'Hernando County'},z2:{zone:'Z7',name:'Spring Hill',cities:'Pasco County'},drive:'~20 min'},
-  {day:'FRI',flex:true}
-];
 
 function openZoneGuide(){
   if(!document.getElementById('zoneGuideOverlay')){
@@ -8493,48 +8505,74 @@ function closeZoneGuide(){var el=document.getElementById('zoneGuideOverlay');if(
 function switchZgTab(t){_zgTab=t;_renderZoneGuide();}
 
 function _renderZoneGuide(){
-  var cur=_zgTab==='current';
-  var sA='padding:8px 18px;border:none;border-radius:8px;background:var(--green-deep);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;';
-  var sI='padding:8px 18px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;color:#64748b;font-size:13px;cursor:pointer;font-family:inherit;';
+  // Config-driven: reads from cfgData.zoneSchedule + ZONE_CITIES
+  if(!cfgData) loadCfgData();
+  var sched=cfgData.zoneSchedule||{};
+  var nameA=cfgData.crewNames&&cfgData.crewNames.A?cfgData.crewNames.A:'Crew A';
+  var nameB=cfgData.crewNames&&cfgData.crewNames.B?cfgData.crewNames.B:'Crew B';
+  var sActive='padding:8px 18px;border:none;border-radius:8px;background:var(--green-deep);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;';
+  var sIdle='padding:8px 18px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;color:#64748b;font-size:13px;cursor:pointer;font-family:inherit;';
   var cb=document.getElementById('zgTabCurrent'),fb=document.getElementById('zgTabFuture');
-  if(cb) cb.style.cssText=cur?sA:sI; if(fb) fb.style.cssText=!cur?sA:sI;
+  if(cb) cb.style.cssText=_zgTab==='current'?sActive:sIdle;
+  if(fb) fb.style.cssText=_zgTab==='crew'?sActive:sIdle;
   var body=document.getElementById('zoneGuideBody'),note=document.getElementById('zoneGuideNote');
   if(!body||!note) return;
-  if(cur){
-    body.innerHTML='<thead><tr>'
-      +'<th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;width:70px;">Day</th>'
-      +'<th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">Zone 1 — Start here</th>'
-      +'<th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">Zone 2 — Roll into next</th>'
-      +'</tr></thead><tbody>'+ZONE_PAIRS_DISP.map(function(r){
-        if(r.flex) return '<tr><td style="padding:10px 12px;background:#f0f6ff;border:1px solid #e2e8f0;text-align:center;font-size:12px;font-weight:700;color:#2a50a0;">FRI</td>'
-          +'<td colspan="2" style="padding:12px 16px;background:#f0f6ff;border:1px solid #e2e8f0;font-size:13px;"><strong>Flex / Overflow</strong> — biweeklies, Z4 overflow, or any zone that ran long.</td></tr>';
-        return '<tr><td style="padding:10px 12px;background:#f8faf6;border:1px solid #e2e8f0;text-align:center;font-size:12px;font-weight:700;">'+r.day+'</td>'
-          +'<td style="padding:10px 14px;background:#f8fbff;border:1px solid #e2e8f0;text-align:center;"><div style="font-size:11px;font-weight:800;color:#1a4080;">'+r.z1.zone+'</div><div style="font-size:12px;font-weight:600;">'+r.z1.name+'</div><div style="font-size:10px;color:#64748b;">'+r.z1.cities+'</div></td>'
-          +'<td style="padding:10px 14px;background:'+(r.z2.big?'#fff7f0':'#f8fbff')+';border:1px solid #e2e8f0;text-align:center;"><div style="font-size:11px;font-weight:800;color:'+(r.z2.big?'#a04010':'#1a4080')+';">'+r.z2.zone+(r.z2.big?' ⭐':'')+'</div><div style="font-size:12px;font-weight:600;">'+r.z2.name+'</div><div style="font-size:10px;color:#64748b;">'+r.z2.cities+'</div><div style="font-size:10px;color:#2d6a2d;background:#e8f5e8;border-radius:20px;padding:1px 7px;margin-top:4px;display:inline-block;">'+r.drive+'</div></td></tr>';
-      }).join('')+'</tbody>';
-    note.innerHTML='<strong>How it works:</strong> Start in Zone 1, finish Zone 2. Each pair minimizes drive time between zones.';
-  } else {
-    var SCHED=[
-      {day:'MON',crewA:{zone:'Z1',name:'Crystal River'},crewB:{zone:'Z5',name:'Ocala'}},
-      {day:'TUE',crewA:{zone:'Z2',name:'Inverness'},crewB:{zone:'Z6',name:'Brooksville'}},
-      {day:'WED',crewA:{zone:'Z3',name:'Lecanto'},crewB:{zone:'Z7',name:'Spring Hill'}},
-      {day:'THU',crewA:{zone:'Z4 ⭐',name:'Dunnellon / Citrus Springs',big:true},crewB:{zone:'Z8',name:'The Villages'}},
-      {day:'FRI',crewA:{zone:'Z4 ⭐',name:'Citrus Springs day 2',big:true},crewB:null},
-      {day:'SAT',crewA:null,crewB:{zone:'OVF',name:'Overflow / Biweeklies'}}
-    ];
-    body.innerHTML='<thead><tr>'
-      +'<th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;width:70px;">Day</th>'
-      +'<th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">💗 Crew A — April</th>'
-      +'<th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">🔵 Crew B — Hunter &amp; Jon</th>'
-      +'</tr></thead><tbody>'+SCHED.map(function(r){
-        var aC=r.crewA?'<td style="padding:10px 12px;background:#fff8fb;border:1px solid #e2e8f0;text-align:center;"><div style="font-size:11px;font-weight:800;color:#a0305a;">'+r.crewA.zone+'</div><div style="font-size:12px;font-weight:600;">'+r.crewA.name+'</div></td>'
-          :'<td style="padding:10px 12px;background:#fafafa;border:1px solid #e2e8f0;text-align:center;color:#cbd5e1;font-size:12px;">OFF</td>';
-        var bC=r.crewB?'<td style="padding:10px 12px;background:#f8fbff;border:1px solid #e2e8f0;text-align:center;"><div style="font-size:11px;font-weight:800;color:#1a4080;">'+r.crewB.zone+'</div><div style="font-size:12px;font-weight:600;">'+r.crewB.name+'</div></td>'
-          :'<td style="padding:10px 12px;background:#fafafa;border:1px solid #e2e8f0;text-align:center;color:#cbd5e1;font-size:12px;">OFF</td>';
-        return '<tr><td style="padding:10px 12px;background:#f8faf6;border:1px solid #e2e8f0;text-align:center;font-size:12px;font-weight:700;">'+r.day+'</td>'+aC+bC+'</tr>';
-      }).join('')+'</tbody>';
-    note.innerHTML='<strong>Future:</strong> Crew A owns north Citrus (Z1–Z4), Crew B owns south/east (Z5–Z8). Z4 spans two days.';
+
+  // Build day -> [{zone, type, crew}] map from cfgData
+  var WORK_DAYS=['Mon','Tue','Wed','Thu','Fri','Sat'];
+  var dayMap={}; // day -> [{zone, type, crew, info}]
+  WORK_DAYS.forEach(function(d){dayMap[d]=[];});
+  Object.keys(ZONE_CITIES).forEach(function(z){
+    var entries=sched[z]||[];
+    entries.forEach(function(e){
+      if(dayMap[e.day]) dayMap[e.day].push({zone:z,type:e.type||'primary',crew:e.crew||'',info:ZONE_CITIES[z]});
+    });
+  });
+  // Sort each day: primary first, then backup; within same type sort by zone
+  WORK_DAYS.forEach(function(d){
+    dayMap[d].sort(function(a,b){
+      if(a.type==='primary'&&b.type!=='primary') return -1;
+      if(a.type!=='primary'&&b.type==='primary') return 1;
+      return a.zone.localeCompare(b.zone);
+    });
+  });
+
+  // Build zone pill HTML
+  function zonePill(entry){
+    var isPrimary=entry.type==='primary';
+    var crewColor=entry.crew==='A'?'#fbcfe8':entry.crew==='B'?'#bfdbfe':'#e5e7eb';
+    var crewLabel=entry.crew==='A'?nameA:entry.crew==='B'?nameB:'';
+    return '<div style="display:inline-flex;flex-direction:column;align-items:center;background:'+(isPrimary?'#f0fdf4':'#fafafa')+';border:1.5px '+(isPrimary?'solid':'dashed')+' '+(isPrimary?'var(--green-mid)':'#9ca3af')+';border-radius:10px;padding:6px 10px;min-width:90px;margin:3px;">'
+      +'<span style="font-size:13px;font-weight:'+(isPrimary?'900':'600')+';color:'+(isPrimary?'var(--green-deep)':'#6b7280')+';">'+entry.zone+'</span>'
+      +'<span style="font-size:10px;font-weight:'+(isPrimary?'600':'400')+';color:'+(isPrimary?'#374151':'#9ca3af')+';text-align:center;line-height:1.3;">'+esc(entry.info.cities)+'</span>'
+      +(isPrimary?'<span style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--green-mid);margin-top:2px;">PRIMARY</span>':'<span style="font-size:9px;color:#9ca3af;margin-top:2px;">backup</span>')
+      +(crewLabel?'<span style="font-size:9px;font-weight:600;background:'+crewColor+';border-radius:4px;padding:1px 5px;margin-top:3px;">'+esc(crewLabel)+'</span>':'')
+      +'</div>';
   }
+
+  var activeDays=WORK_DAYS.filter(function(d){return dayMap[d].length>0;});
+  if(!activeDays.length){
+    body.innerHTML='';
+    note.innerHTML='<strong>No schedule configured yet.</strong> Go to the <strong>Config</strong> tab to set which zones run on which days.';
+    return;
+  }
+
+  body.innerHTML='<thead><tr>'
+    +'<th style="background:#1a3a1a;color:#fff;padding:10px 14px;text-align:left;font-size:12px;font-weight:700;width:80px;">Day</th>'
+    +'<th style="background:#1a3a1a;color:#fff;padding:10px 14px;text-align:left;font-size:12px;font-weight:700;">Zones <span style="font-weight:400;opacity:.7;">(bold = primary · dashed = backup)</span></th>'
+    +'</tr></thead><tbody>'
+    +WORK_DAYS.map(function(d){
+      var entries=dayMap[d];
+      if(!entries.length) return '';
+      var pills=entries.map(zonePill).join('');
+      var isWknd=d==='Sat'||d==='Sun';
+      return '<tr>'
+        +'<td style="padding:10px 14px;background:'+(isWknd?'#f0fdf4':'#f8faf6')+';border:1px solid #e2e8f0;font-size:13px;font-weight:700;color:'+(isWknd?'var(--green-mid)':'#374151')+';white-space:nowrap;vertical-align:middle;">'+d+'</td>'
+        +'<td style="padding:8px 10px;background:#fff;border:1px solid #e2e8f0;"><div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center;">'+pills+'</div></td>'
+        +'</tr>';
+    }).join('')
+    +'</tbody>';
+  note.innerHTML='<strong>Bold border</strong> = primary zone for that day. <strong>Dashed border</strong> = backup / overflow. Crew labels show who handles that zone. Edit in the <strong>Config</strong> tab.';
 }
 
 </script>
