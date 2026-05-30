@@ -1259,6 +1259,17 @@
 
         <button class="route-optimize-btn" id="routeOptBtn" onclick="buildRoute()">⚡ Optimize Route</button>
 
+        <!-- Calendar sync row -->
+        <div style="display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap;">
+          <button id="routeCalSyncBtn" onclick="syncRouteToCalendar(false)" style="display:none;padding:9px 16px;background:#4285f4;color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;">
+            📅 Sync to Google Calendar
+          </button>
+          <label style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;">
+            <input type="checkbox" id="routeAutoSync" style="width:15px;height:15px;accent-color:#4285f4;cursor:pointer;">
+            Auto-sync calendar after optimize
+          </label>
+        </div>
+
         <!-- Crew filter -->
         <div class="route-sync-row" style="margin-top:12px;">
           <select id="routeCrewFilter" class="route-crew-select" onchange="setRouteCrew(this.value)">
@@ -6078,6 +6089,7 @@ let _routeCustomOrder = {};
 let _savedRoute = null;           // { customOrder, stats, startTime, startAddr, dates, savedAt }
 let _routeViewDayIdx = 0;         // which day we're currently viewing in day-nav mode
 let _routeViewDates  = [];        // ordered list of dates in current saved/built route
+let _lastCalendarUpdates = [];    // calendarUpdates from the most recent buildRoute call
 
 // ── Zip → Zone mapping for Citrus County service area ───────────────────
 const ZIP_ZONE = {
@@ -7041,6 +7053,11 @@ async function buildRoute() {
     _routeCustomOrder = {};
 
     // Helper: optimize one crew's stops for a day
+    // Uses time-window-aware NN: floating stops are assigned to the window
+    // (gap between anchors) where they cause the least detour, then ordered
+    // by NN within each window. This prevents backtracking through a far
+    // cluster just to reach a 3pm anchor on time — those stops slide to
+    // the post-anchor window automatically.
     function optimizeCrewStops(crewJobs, geocodedMap) {
       const geocoded    = crewJobs.map(bk => {
         const city = ZIP_CITY[bk.zip] || '';
@@ -7054,52 +7071,139 @@ async function buildRoute() {
       const anchored = validStops.filter(s => s.bk.jobTime);
       const floating = validStops.filter(s => !s.bk.jobTime);
 
-      anchored.sort((a, b) => {
-        const [ah, am] = (a.bk.jobTime||'00:00').split(':').map(Number);
-        const [bh, bm] = (b.bk.jobTime||'00:00').split(':').map(Number);
-        return (ah*60+am) - (bh*60+bm);
+      // No anchors → pure nearest-neighbour
+      if (!anchored.length) {
+        const ordered = floating.length
+          ? nearestNeighbour(startCoord || floating[0] || {}, floating)
+          : [];
+        _calcDist(ordered);
+        for (const fs of failedStops) ordered.push({ bk: fs.bk, lat:null, lon:null, distFromPrev:0, geocodeFailed:true }), allFailedStops.push(fs);
+        return ordered;
+      }
+
+      anchored.sort((a, b) => toMin(a.bk.jobTime) - toMin(b.bk.jobTime));
+
+      // Build time windows: W[0]=start→anchor[0], W[1]=anchor[0]→anchor[1], …, W[n]=anchor[n-1]→∞
+      // Each window knows: startMin, endMin (anchor's fixed time), startCoord, endCoord
+      const [sH, sM] = startTime.split(':').map(Number);
+      const dayStartMin = sH * 60 + sM;
+
+      const windows = anchored.map((anch, i) => ({
+        endMin:    toMin(anch.bk.jobTime),
+        startMin:  i === 0 ? dayStartMin : toMin(anchored[i-1].bk.jobTime) + mowMinutes(anchored[i-1].bk),
+        startCoord: i === 0 ? (startCoord || null) : anchored[i-1],
+        endCoord:  anch,
+        anchor:    anch,
+      }));
+      // Final window after last anchor
+      windows.push({
+        startMin:  toMin(anchored[anchored.length-1].bk.jobTime) + mowMinutes(anchored[anchored.length-1].bk),
+        endMin:    Infinity,
+        startCoord: anchored[anchored.length-1],
+        endCoord:  null,
+        anchor:    null,
       });
 
-      const freeOrdered = floating.length
-        ? nearestNeighbour(startCoord || (floating[0] || anchored[0] || {}), floating)
-        : [];
+      // Assign each floating stop to the best window.
+      // Score = detour distance: dist(windowStart→stop) + dist(stop→windowEnd)
+      // weighted by whether the stop actually fits time-wise in the window.
+      const windowStops = windows.map(() => []);
+      // Deferral penalty per window level (miles): keeps nearby stops in early windows
+      // while letting far stops slide to later windows where they don't need a return trip
+      const DEFER_COST = 5.0;
 
-      let ordered = [];
-      let freeIdx = 0;
-      const [sH, sM] = startTime.split(':').map(Number);
-      let cursorMin = sH * 60 + sM;
+      for (const stop of floating) {
+        let bestW = windows.length - 1;
+        let bestScore = Infinity;
 
-      for (const anch of anchored) {
-        const [ah, am] = (anch.bk.jobTime||'00:00').split(':').map(Number);
-        const anchMin  = ah * 60 + am;
-        while (freeIdx < freeOrdered.length) {
-          const dur = mowMinutes(freeOrdered[freeIdx].bk);
-          if (cursorMin + dur + 15 <= anchMin) {
-            ordered.push(freeOrdered[freeIdx]); cursorMin += dur + 20; freeIdx++;
-          } else break;
+        for (let wi = 0; wi < windows.length; wi++) {
+          const w = windows[wi];
+          const isLastWindow = wi === windows.length - 1;
+
+          // Time feasibility: skip if clearly not enough slack (non-last windows)
+          const availMin = w.endMin - w.startMin;
+          if (!isLastWindow && availMin < mowMinutes(stop.bk) + 10) continue;
+
+          const fromCoord = w.startCoord;
+          const toCoord   = w.endCoord;
+
+          // distFromStart: cost to reach this stop from window start
+          const dFS = (fromCoord?.lat != null && stop.lat != null)
+            ? haversineMiles(fromCoord.lat, fromCoord.lon, stop.lat, stop.lon) : 50;
+
+          // distToEnd: cost to continue to the window's anchor after this stop.
+          // Last window has no fixed end → 0 (no forced return trip).
+          // This is the key: a far stop in an early window pays BOTH legs (out + back),
+          // but in the last window only pays the outbound leg.
+          const dTE = (!isLastWindow && toCoord?.lat != null && stop.lat != null)
+            ? haversineMiles(stop.lat, stop.lon, toCoord.lat, toCoord.lon) : 0;
+
+          // Total route cost + deferral penalty (each later window costs DEFER_COST extra)
+          const score = dFS + dTE + wi * DEFER_COST;
+
+          if (score < bestScore) { bestScore = score; bestW = wi; }
         }
-        ordered.push(anch);
-        cursorMin = anchMin + mowMinutes(anch.bk);
+        windowStops[bestW].push(stop);
       }
-      while (freeIdx < freeOrdered.length) { ordered.push(freeOrdered[freeIdx]); freeIdx++; }
-      if (!ordered.length) ordered = freeOrdered;
 
-      // Calculate distFromPrev for every stop using coordinates (covers anchored stops too)
-      let prevCoord = startCoord;
-      for (const s of ordered) {
-        if (s.lat != null && s.lon != null && prevCoord?.lat != null) {
-          s.distFromPrev = haversineMiles(prevCoord.lat, prevCoord.lon, s.lat, s.lon);
-          prevCoord = s;
-        } else if (s.distFromPrev == null) {
-          s.distFromPrev = 0;
+      // Within each window, sort assigned stops by NN from window's start coord
+      const ordered = [];
+      for (let wi = 0; wi < windows.length; wi++) {
+        const w     = windows[wi];
+        const stops = windowStops[wi];
+        if (stops.length) {
+          const origin = w.startCoord || stops[0];
+          const nn     = nearestNeighbour(origin, stops);
+          // Re-check time: if stops don't fit even after assignment, push overflow to next window
+          let curMin = w.startMin;
+          const overflow = [];
+          for (const s of nn) {
+            const dur = mowMinutes(s.bk);
+            if (wi < windows.length - 1 && curMin + dur + 10 > w.endMin) {
+              overflow.push(s); // doesn't fit — defer to next window
+            } else {
+              ordered.push(s);
+              curMin += dur + 20;
+            }
+          }
+          // Prepend overflow to next window's stops
+          if (overflow.length && wi + 1 < windows.length) {
+            windowStops[wi + 1].unshift(...overflow);
+          } else {
+            ordered.push(...overflow); // last window — just append
+          }
         }
+        // Place anchor after its window's stops
+        if (w.anchor) ordered.push(w.anchor);
       }
+
+      _calcDist(ordered);
 
       for (const fs of failedStops) {
-        ordered.push({ bk: fs.bk, lat: null, lon: null, distFromPrev: 0, geocodeFailed: true });
+        ordered.push({ bk: fs.bk, lat:null, lon:null, distFromPrev:0, geocodeFailed:true });
         allFailedStops.push(fs);
       }
       return ordered;
+    }
+
+    // Convert "HH:MM" → minutes since midnight
+    function toMin(t) {
+      if (!t) return 0;
+      const [h, m] = String(t).split(':').map(Number);
+      return (h||0)*60 + (m||0);
+    }
+
+    // Calculate distFromPrev for an ordered stop array in-place
+    function _calcDist(arr) {
+      let prev = startCoord;
+      for (const s of arr) {
+        if (s.lat != null && s.lon != null && prev?.lat != null) {
+          s.distFromPrev = haversineMiles(prev.lat, prev.lon, s.lat, s.lon);
+          prev = s;
+        } else {
+          s.distFromPrev = s.distFromPrev ?? 0;
+        }
+      }
     }
 
     for (const dateStr of sortedDates) {
@@ -7197,6 +7301,14 @@ async function buildRoute() {
       banner.innerHTML = `✅ Route optimized &amp; saved · ${sortedDates.length} day${sortedDates.length!==1?'s':''} · Re-opens automatically on the Route tab`;
     }
 
+    // Show calendar sync button (hidden until a route exists)
+    const _calBtn = document.getElementById('routeCalSyncBtn');
+    if (_calBtn && !document.getElementById('routeAutoSync')?.checked) {
+      _calBtn.style.display = '';
+      _calBtn.disabled = false;
+      _calBtn.textContent = '📅 Sync to Google Calendar';
+    }
+
     if (sortedDates.length > 1) {
       // Multi-day: show day-nav and render the first day
       document.getElementById('routeDayNav').style.display = 'flex';
@@ -7214,26 +7326,17 @@ async function buildRoute() {
       renderDispatchBoard();
     }
 
-    // ── Push optimized times to Google Calendar (only if checkbox is checked) ──
-    if (syncCal && calendarUpdates.length) {
-      btn.textContent = '📅 Syncing to Calendar…';
-      try {
-        const syncParams = new URLSearchParams({ action: 'sync_route_to_calendar', updates: JSON.stringify(calendarUpdates) });
-        const syncRes    = await fetch(SCRIPT_URL + '?' + syncParams + '&' + authParam());
-        const syncData   = await syncRes.json();
-        if (syncData.success) {
-          const banner = document.createElement('div');
-          banner.style.cssText = 'margin-bottom:16px;padding:12px 16px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;font-size:13px;color:#166534;font-weight:600;';
-          const parts = [];
-          if (syncData.updated) parts.push(syncData.updated + ' updated');
-          if (syncData.created) parts.push(syncData.created + ' new calendar event' + (syncData.created !== 1 ? 's' : '') + ' created');
-          if (syncData.failed)  parts.push(syncData.failed  + ' failed');
-          banner.innerHTML = '✅ Google Calendar synced — ' + (parts.join(' · ') || 'no changes') + '.';
-          if (tl) tl.insertAdjacentElement('afterbegin', banner);
-        }
-      } catch(calErr) {
-        console.warn('Calendar sync failed:', calErr);
-      }
+    // Store for manual sync button
+    _lastCalendarUpdates = calendarUpdates;
+
+    // Auto-sync to Google Calendar if toggled on
+    const autoSync = document.getElementById('routeAutoSync')?.checked;
+    if (autoSync && calendarUpdates.length) {
+      await syncRouteToCalendar(true);
+    } else if (calendarUpdates.length) {
+      // Show the manual sync button
+      const calBtn = document.getElementById('routeCalSyncBtn');
+      if (calBtn) calBtn.style.display = '';
     }
 
     // Failed geocodes warning
@@ -7251,6 +7354,49 @@ async function buildRoute() {
     if (errEl) { errEl.textContent = '❌ ' + (err.message || String(err)); errEl.style.display = 'block'; }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '⚡ Optimize Route'; }
+  }
+}
+
+// ── Sync optimized route times to Google Calendar ───────────────────────
+async function syncRouteToCalendar(silent) {
+  if (!_lastCalendarUpdates.length) {
+    showToast('No route to sync — optimize first');
+    return;
+  }
+  const calBtn = document.getElementById('routeCalSyncBtn');
+  if (calBtn) { calBtn.disabled = true; calBtn.textContent = '📅 Syncing…'; }
+  try {
+    const syncParams = new URLSearchParams({
+      action:  'sync_route_to_calendar',
+      updates: JSON.stringify(_lastCalendarUpdates),
+    });
+    const res  = await fetch(SCRIPT_URL + '?' + syncParams + '&' + authParam());
+    const data = await res.json();
+    if (data.success) {
+      const parts = [];
+      if (data.updated) parts.push(data.updated + ' updated');
+      if (data.created) parts.push(data.created + ' created');
+      if (data.failed)  parts.push(data.failed + ' failed');
+      const msg = '📅 Google Calendar synced — ' + (parts.join(' · ') || 'no changes');
+      showToast(msg);
+      if (!silent) {
+        const tl = document.getElementById('routeTimeline');
+        if (tl) {
+          const b = document.createElement('div');
+          b.style.cssText = 'padding:10px 14px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;font-size:13px;color:#166534;font-weight:600;margin-bottom:12px;';
+          b.textContent = msg;
+          tl.prepend(b);
+          setTimeout(() => b.remove(), 5000);
+        }
+      }
+      if (calBtn) calBtn.style.display = 'none'; // hide after sync
+    } else {
+      showToast('❌ Calendar sync failed: ' + (data.error || 'unknown error'));
+      if (calBtn) { calBtn.disabled = false; calBtn.textContent = '📅 Sync to Google Calendar'; }
+    }
+  } catch(err) {
+    showToast('❌ Calendar sync error: ' + err.message);
+    if (calBtn) { calBtn.disabled = false; calBtn.textContent = '📅 Sync to Google Calendar'; }
   }
 }
 
