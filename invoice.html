@@ -6964,52 +6964,43 @@ function polyAreaAcres(nodes) {
 }
 
 // ── Florida Statewide Cadastral — same API used by the quote form ─────────
+// ── FL Statewide Cadastral — exact same logic as the quote form on index.html ─
 const FL_CADASTRAL_URL = 'https://services9.arcgis.com/Gh9awoU677aKree0/arcgis/rest/services/Florida_Statewide_Cadastral/FeatureServer/0/query';
 
+// Read acreage from parcel attributes — same field priority as index.html
 function _sqftToAcres(a) {
   const ac = parseFloat(a.CALC_ACRES||a.GIS_ACRES||a.ACRES||a.ACREAGE||a.TOT_ACRES||a.PARCEL_ACRES||0);
   if (ac > 0) return ac;
-  const sf = parseFloat(a.LND_SQFOOT||a.LAND_SQFOOT||a.CALC_SQFOOT||a.LAND_SF||a.LOT_SIZE||a.SQFOOTAGE||0);
-  if (sf > 100) return sf / 43560;
-  const shSf = parseFloat(a.Shape__Area||a.SHAPE_Area||0);
-  if (shSf > 100) return shSf / 43560;
+  const sqft = parseFloat(a.LND_SQFOOT||a.LAND_SQFOOT||a.CALC_SQFOOT||a.LAND_SF||a.LOT_SIZE||a.SQFOOTAGE||0);
+  if (sqft > 100) return sqft / 43560;
+  // Florida Statewide Cadastral uses State Plane FL (feet), so Shape__Area is sq ft
+  const shapeSqft = parseFloat(a.Shape__Area||a.SHAPE_Area||0);
+  if (shapeSqft > 100) return shapeSqft / 43560;
   return 0;
 }
+
+// Pick best parcel — same logic as index.html's pickBestParcel()
+// Road strips / easements are always smaller than the residential lot, so pick largest.
 function _pickBestParcel(features, houseNum) {
   if (!features?.length) return null;
   const attrs = features.map(f => f.attributes);
   if (attrs.length === 1) return attrs[0];
-
-  // Address match always wins (most accurate)
   if (houseNum) {
-    const m = attrs.filter(a => String(a.PHY_ADDR1||a.SITE_ADDR||'').trim().startsWith(houseNum));
-    if (m.length) {
-      // Among address matches, prefer residential-sized (0.05–5 ac)
-      const res = m.filter(a => { const ac = _sqftToAcres(a); return ac >= 0.05 && ac <= 5; });
-      if (res.length) return res.reduce((b,a) => _sqftToAcres(a)>_sqftToAcres(b)?a:b, res[0]);
-      return m[0];
-    }
+    const match = attrs.filter(a => String(a.PHY_ADDR1||a.SITE_ADDR||'').trim().startsWith(houseNum));
+    if (match.length > 0) return match.reduce((b,a) => _sqftToAcres(a)>_sqftToAcres(b)?a:b, match[0]);
   }
-
-  // No address match — prefer parcels in a residential size range (0.05–5 ac).
-  // This avoids picking huge neighbouring farm/forest parcels.
-  const res = attrs.filter(a => { const ac = _sqftToAcres(a); return ac >= 0.05 && ac <= 5; });
-  if (res.length) return res.reduce((b,a) => _sqftToAcres(a)>_sqftToAcres(b)?a:b, res[0]);
-
-  // All parcels are tiny (road strips) or huge — pick smallest non-zero
-  const nonZero = attrs.filter(a => _sqftToAcres(a) > 0);
-  if (nonZero.length) return nonZero.reduce((b,a) => _sqftToAcres(a)<_sqftToAcres(b)?a:b, nonZero[0]);
-
-  return attrs[0];
+  return attrs.reduce((b,a) => _sqftToAcres(a)>_sqftToAcres(b)?a:b, attrs[0]);
 }
+
 async function _cadastralQuery(params) {
   try {
-    const qs  = Object.entries(params).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
+    const qs  = Object.entries(params).map(([k,v]) => k+'='+encodeURIComponent(v)).join('&');
     const res = await fetch(FL_CADASTRAL_URL+'?'+qs);
     const d   = await res.json();
     return d.features?.length ? d.features : null;
   } catch(e) { return null; }
 }
+
 const ZIP_TYPICAL_ACRES = {
   '34428':0.18,'34429':0.18,'34423':0.18,
   '34450':0.20,'34451':0.20,'34452':0.20,'34453':0.20,
@@ -7026,37 +7017,61 @@ const ZIP_TYPICAL_ACRES = {
   '32621':0.30,'32626':0.30,'32668':0.30,'32693':0.30,
   '34601':0.20,'34602':0.20,'34604':0.30,
 };
-// Always returns { acres, source, sqft, isTypical? }
+
+// Scan lot size — exact same flow as index.html's lookupLotSize():
+// 1. Fresh Nominatim geocode (same as quote form — routing coords can be road-centre, not parcel)
+// 2. FL Cadastral 100m buffer
+// 3. FL Cadastral 250m buffer (large/rural lots)
+// 4. FL Cadastral address text query
+// 5. ZIP typical fallback
 async function scanPropertyAcres(lat, lon, address, zip) {
   const houseNum = String(address||'').trim().split(/\s+/)[0]||'';
-  if (lat != null && lon != null) {
-    const geoParam = JSON.stringify({x:lon,y:lat,spatialReference:{wkid:4326}});
-    const base = {where:'1=1',geometryType:'esriGeometryPoint',inSR:'4326',
-                  spatialRel:'esriSpatialRelIntersects',outFields:'*',returnGeometry:'false',f:'json'};
-    for (const dist of ['100','250']) {
-      const feats = await _cadastralQuery({...base,geometry:geoParam,distance:dist,units:'esriSRUnit_Meter'});
-      const attrs = feats ? _pickBestParcel(feats, houseNum) : null;
-      if (attrs) {
-        const acres = _sqftToAcres(attrs);
-        // Cap at 5ac — anything larger is a wrong parcel (farm/forest), fall through
-        if (acres > 0 && acres <= 5) return {acres:Math.round(acres*100)/100, source:'FL parcel record', sqft:Math.round(acres*43560)};
-      }
+
+  // Fresh geocode — same as index.html (routing geoCache hits road centreline, not parcel centre)
+  let useLat = lat, useLon = lon;
+  try {
+    const query = address + (zip ? ', FL ' + zip : '') + ', US';
+    const r = await fetch(
+      'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(query) + '&format=json&limit=1&countrycodes=us',
+      { headers: { 'Accept': 'application/json' } }
+    );
+    const d = await r.json();
+    if (d?.[0]) { useLat = parseFloat(d[0].lat); useLon = parseFloat(d[0].lon); }
+    // Brief retry if rate-limited
+    if (!d?.[0]) {
+      await new Promise(r => setTimeout(r, 1200));
+      const r2 = await fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(query) + '&format=json&limit=1&countrycodes=us', { headers: { 'Accept': 'application/json' } });
+      const d2 = await r2.json();
+      if (d2?.[0]) { useLat = parseFloat(d2[0].lat); useLon = parseFloat(d2[0].lon); }
     }
+  } catch(e) {}
+
+  if (useLat != null && useLon != null) {
+    const geoParam = JSON.stringify({ x: useLon, y: useLat, spatialReference: { wkid: 4326 } });
+    const base = { where:'1=1', geometryType:'esriGeometryPoint', inSR:'4326',
+                   spatialRel:'esriSpatialRelIntersects', outFields:'*', returnGeometry:'false', f:'json' };
+
+    // 100m buffer
+    let attrs = _pickBestParcel(await _cadastralQuery({...base, geometry:geoParam, distance:'100', units:'esriSRUnit_Meter'}), houseNum);
+    if (attrs) { const ac = _sqftToAcres(attrs); if (ac > 0) return {acres:Math.round(ac*100)/100, source:'FL parcel record', sqft:Math.round(ac*43560)}; }
+
+    // 250m buffer (rural / large lots)
+    attrs = _pickBestParcel(await _cadastralQuery({...base, geometry:geoParam, distance:'250', units:'esriSRUnit_Meter'}), houseNum);
+    if (attrs) { const ac = _sqftToAcres(attrs); if (ac > 0) return {acres:Math.round(ac*100)/100, source:'FL parcel record', sqft:Math.round(ac*43560)}; }
+
+    // Address text fallback
     try {
-      const clean = String(address).replace(/,.*/,'').trim().toUpperCase().replace(/'/g,"''");
-      const parts = clean.split(/\s+/), hn=parts[0], st=parts.slice(1).join(' ');
-      for (const where of [`PHY_ADDR1 LIKE '${hn}%${st}%'`,`PHY_ADDR1 LIKE '%${st}%'`]) {
-        const feats = await _cadastralQuery({where,outFields:'*',returnGeometry:'false',f:'json'});
-        const attrs = feats ? _pickBestParcel(feats, houseNum) : null;
-        if (attrs) {
-          const acres = _sqftToAcres(attrs);
-          if (acres > 0 && acres <= 5) return {acres:Math.round(acres*100)/100, source:'FL parcel record', sqft:Math.round(acres*43560)};
-        }
+      const clean  = String(address).replace(/,.*/,'').trim().toUpperCase().replace(/'/g,"''");
+      const parts  = clean.split(/\s+/), hn = parts[0], st = parts.slice(1).join(' ');
+      for (const where of [`PHY_ADDR1 LIKE '${hn}%${st}%'`, `PHY_ADDR1 LIKE '%${st}%'`]) {
+        attrs = _pickBestParcel(await _cadastralQuery({where, outFields:'*', returnGeometry:'false', f:'json'}), houseNum);
+        if (attrs) { const ac = _sqftToAcres(attrs); if (ac > 0) return {acres:Math.round(ac*100)/100, source:'FL parcel record', sqft:Math.round(ac*43560)}; }
       }
     } catch(e) {}
   }
+
   const typical = ZIP_TYPICAL_ACRES[String(zip||'')] || 0.25;
-  return {acres:typical, source:'typical for zip', sqft:Math.round(typical*43560), isTypical:true};
+  return { acres: typical, source: 'typical for zip', sqft: Math.round(typical*43560), isTypical: true };
 }
 
 
