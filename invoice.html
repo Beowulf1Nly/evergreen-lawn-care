@@ -6267,21 +6267,20 @@ function moveRouteStop(dateStr, crew, fromIdx, dir) {
   const toIdx = fromIdx + dir;
   if (toIdx < 0 || toIdx >= order.length) return;
 
-  // Swap the stops
+  // Swap the stops — leave distFromPrev as-is (cached distances are close enough
+  // for same-area stops). User can hit ⚡ Optimize to get exact times.
   [order[fromIdx], order[toIdx]] = [order[toIdx], order[fromIdx]];
 
-  // After a manual reorder, distFromPrev values are stale for every stop
-  // after the earliest affected position. Replace them with the route average
-  // so times are at least consistently estimated (re-optimize for exact times).
-  const totalDist = order.reduce((s, x) => s + (x.distFromPrev || 0), 0);
-  const avgDist   = totalDist / (order.length || 1);
-  const firstAffected = Math.min(fromIdx, toIdx);
-  for (let j = firstAffected; j < order.length; j++) {
-    order[j].distFromPrev = avgDist;
-  }
-
-  // Re-render route with recalculated times
+  // Re-render route — show estimated-times banner
   renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
+  const _tl = document.getElementById('routeTimeline');
+  if (_tl && !document.getElementById('routeReorderBanner')) {
+    const _b = document.createElement('div');
+    _b.id = 'routeReorderBanner';
+    _b.style.cssText = 'background:#fff8e1;border:1.5px solid #fde047;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#78350f;display:flex;align-items:center;justify-content:space-between;gap:12px;';
+    _b.innerHTML = '<span>⏱ Drive times are estimated after manual reorder.</span><button onclick="buildRoute()" style="background:#1a3a1a;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;">⚡ Re-optimize</button>';
+    _tl.prepend(_b);
+  }
 
   // Persist new order
   saveRouteToStorage(_routeCustomOrder,
