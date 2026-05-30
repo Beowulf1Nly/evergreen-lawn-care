@@ -6350,7 +6350,7 @@ function buildCrewStopsHtml(dateStr, crew, orderedStops, startTimeStr, startVal)
     const stop = orderedStops[i];
     const { bk, distFromPrev } = stop;
     const noGeo = !!stop.geocodeFailed;
-    const driveMin = noGeo ? 0 : Math.round((distFromPrev / AVG_SPEED_MPH) * 60);
+    const driveMin = noGeo ? 0 : Math.round(((distFromPrev || 0) / AVG_SPEED_MPH) * 60);
     if (!noGeo) cursor = new Date(cursor.getTime() + driveMin * 60000);
     const arrivalTime = noGeo ? '—' : cursor.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
     const mowMin = mowMinutes(bk);
@@ -6647,6 +6647,9 @@ async function buildRoute() {
   }
   const sortedDates = Object.keys(byDate).sort();
 
+  // Clear jobTime so no stops are treated as "anchored" on this fresh optimize run
+  allUpcoming.forEach(b => { delete b.jobTime; });
+
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Optimizing…'; }
   if (tl) tl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:14px;">Geocoding addresses…</div>';
   if (sb) sb.style.display = 'none';
@@ -6726,6 +6729,17 @@ async function buildRoute() {
       }
       while (freeIdx < freeOrdered.length) { ordered.push(freeOrdered[freeIdx]); freeIdx++; }
       if (!ordered.length) ordered = freeOrdered;
+
+      // Calculate distFromPrev for every stop using coordinates (covers anchored stops too)
+      let prevCoord = startCoord;
+      for (const s of ordered) {
+        if (s.lat != null && s.lon != null && prevCoord?.lat != null) {
+          s.distFromPrev = haversineMiles(prevCoord.lat, prevCoord.lon, s.lat, s.lon);
+          prevCoord = s;
+        } else if (s.distFromPrev == null) {
+          s.distFromPrev = 0;
+        }
+      }
 
       for (const fs of failedStops) {
         ordered.push({ bk: fs.bk, lat: null, lon: null, distFromPrev: 0, geocodeFailed: true });
