@@ -8479,11 +8479,11 @@ function _fillDispatchDetail(b, rowIdx) {
 
 // ── Zone Guide ────────────────────────────────────────────────────────────
 const ZONE_PAIRS = [
-  { day:'MON', dayFull:'Monday',    z1:{zone:'Z1',name:'Crystal River',                    cities:''},                                    backup:{zone:'Z2',name:'Inverness',              cities:'Floral City · Hernando',   note:'~15 min away'} },
-  { day:'TUE', dayFull:'Tuesday',   z1:{zone:'Z3',name:'Lecanto · Beverly Hills · Homosassa', cities:''},                                 backup:{zone:'Z4',name:'Dunnellon',              cities:'Citrus Springs',           note:'~10 min away'} },
-  { day:'WED', dayFull:'Wednesday', z1:{zone:'Z5',name:'Ocala',                            cities:'Marion County'},                        backup:{zone:'Z4',name:'Dunnellon',              cities:'Citrus Springs',           note:'~30 min away'} },
-  { day:'THU', dayFull:'Thursday',  z1:{zone:'Z2',name:'Inverness · Floral City · Hernando', cities:''},                                  backup:{zone:'Z1',name:'Crystal River',          cities:'',                          note:'~15 min away'} },
-  { day:'FRI', dayFull:'Friday',    z1:{zone:'Z4',name:'Dunnellon · Citrus Springs',       cities:''},                                    backup:{zone:'Z5',name:'Ocala',                  cities:'Marion County',            note:'~30 min away'} },
+  { day:'MON', dayFull:'Monday',    z1:{zone:'Z1',name:'Crystal River',                       cities:''},              backup:{zone:'Z2',name:'Inverness',    cities:'Floral City · Hernando', note:'~15 min away'} },
+  { day:'TUE', dayFull:'Tuesday',   z1:{zone:'Z3',name:'Lecanto · Beverly Hills · Homosassa', cities:''},              backup:{zone:'Z4',name:'Dunnellon',    cities:'Citrus Springs',         note:'~10 min away'} },
+  { day:'WED', dayFull:'Wednesday', z1:{zone:'Z5',name:'Ocala',                               cities:'Marion County'}, backup:null },
+  { day:'THU', dayFull:'Thursday',  z1:{zone:'Z2',name:'Inverness · Floral City · Hernando',  cities:''},              backup:{zone:'Z1',name:'Crystal River',cities:'',                       note:'~15 min away'} },
+  { day:'FRI', dayFull:'Friday',    z1:{zone:'Z4',name:'Dunnellon · Citrus Springs',          cities:''},              backup:{zone:'Z3',name:'Lecanto',      cities:'Beverly Hills · Homosassa', note:'~10 min away'} },
   { day:'SAT', dayFull:'Saturday',  catchup:true },
   { day:'SUN', dayFull:'Sunday',    holy:true },
 ];
@@ -8580,12 +8580,17 @@ function renderZoneGuide() {
           <div style="font-size:13px;font-weight:700;color:#1e293b;">${row.z1.name}</div>
           ${row.z1.cities ? `<div style="font-size:11px;font-weight:600;color:#2d6a2d;margin-top:3px;">${row.z1.cities}</div>` : ''}
         </td>
-        <td style="padding:10px 14px;background:#fafafa;border:1px solid #e2e8f0;text-align:center;border-left:2px dashed #d1d5db;">
-          <div style="display:inline-block;background:#e5e7eb;color:#6b7280;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:4px;">${row.backup.zone}</div>
-          <div style="font-size:12px;font-weight:600;color:#6b7280;">${row.backup.name}</div>
-          <div style="font-size:10px;color:#9ca3af;margin-top:2px;">${row.backup.cities}</div>
-          <div style="font-size:10px;color:#6b7280;background:#f3f4f6;border-radius:20px;padding:1px 7px;margin-top:4px;display:inline-block;">${row.backup.note}</div>
-        </td>
+        ${row.backup
+          ? `<td style="padding:10px 14px;background:#fafafa;border:1px solid #e2e8f0;text-align:center;border-left:2px dashed #d1d5db;">
+               <div style="display:inline-block;background:#e5e7eb;color:#6b7280;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:4px;">${row.backup.zone}</div>
+               <div style="font-size:12px;font-weight:600;color:#6b7280;">${row.backup.name}</div>
+               ${row.backup.cities?`<div style="font-size:10px;color:#9ca3af;margin-top:2px;">${row.backup.cities}</div>`:''}
+               <div style="font-size:10px;color:#6b7280;background:#f3f4f6;border-radius:20px;padding:1px 7px;margin-top:4px;display:inline-block;">${row.backup.note}</div>
+             </td>`
+          : `<td style="padding:10px 14px;background:#fafafa;border:1px solid #e2e8f0;text-align:center;border-left:2px dashed #d1d5db;color:#94a3b8;font-size:12px;font-style:italic;">
+               Use Sat catch-up if overflow
+             </td>`
+        }
       </tr>`;
     }).join('')}</tbody>`;
     note.innerHTML = '<strong>Primary zone</strong> is the plan for each day. <strong>Backup zone</strong> is the closest neighbor — only use it if you genuinely need to overflow jobs onto that day. Saturday = catch-up. Sunday = emergencies only.';
