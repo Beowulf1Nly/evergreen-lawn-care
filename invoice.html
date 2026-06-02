@@ -161,6 +161,24 @@
      ROUTE TAB
   ══════════════════════════════════════════ */
   .route-wrap { max-width:700px; margin:0 auto; padding:16px 16px 60px; }
+  /* Crew clock-in modal */
+  .crew-chip { display:inline-flex; align-items:center; gap:6px; background:var(--green-light); color:var(--green-deep); border:1.5px solid var(--green-mid); border-radius:20px; padding:5px 12px; font-size:13px; font-weight:600; }
+  .crew-chip-remove { cursor:pointer; font-size:15px; line-height:1; opacity:.7; }
+  .crew-chip-remove:hover { opacity:1; color:var(--red); }
+  .crew-search-item { padding:10px 14px; font-size:13px; cursor:pointer; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .crew-search-item:hover { background:var(--green-pale); }
+  .crew-search-item:last-child { border-bottom:none; }
+
+  /* Job completion steps */
+  .job-step { display:none; }
+  .job-step.active { display:block; }
+  .job-step-title { font-size:18px; font-weight:800; color:var(--green-deep); font-family:'Playfair Display',serif; margin-bottom:6px; }
+  .job-step-sub { font-size:14px; color:var(--text-muted); margin-bottom:20px; line-height:1.5; }
+  .job-complete-btn { width:100%; padding:15px; border:none; border-radius:12px; font-family:inherit; font-size:15px; font-weight:800; cursor:pointer; margin-bottom:8px; transition:opacity .15s; }
+  .job-complete-btn:hover { opacity:.88; }
+  .job-bypass-link { display:block; text-align:center; font-size:13px; color:var(--text-muted); cursor:pointer; padding:4px; text-decoration:underline; }
+  .job-bypass-link:hover { color:var(--text); }
+
   .finish-job-btn {
     padding:10px 14px; border:2px solid var(--border); border-radius:10px;
     background:#fff; font-family:inherit; font-size:13px; font-weight:600;
@@ -1045,17 +1063,17 @@
 
   <!-- Owner tab bar (hidden for employees) -->
   <div class="tab-bar" id="ownerTabs" style="display:none;">
-    <button class="tab-btn active" onclick="showTab('jobs')"  data-tab="jobs">📋 Jobs</button>
-    <button class="tab-btn" onclick="showTab('route')" data-tab="route">🗺️ Route</button>
-    <button class="tab-btn owner-only" onclick="showTab('dispatch')" data-tab="dispatch">📅 Dispatch</button>
-    <button class="tab-btn owner-only" onclick="showTab('add')"   data-tab="add">➕ Add Client</button>
-    <button class="tab-btn" onclick="showTab('quote')" data-tab="quote">📋 Estimate</button>
-    <button class="tab-btn owner-only" onclick="showTab('job')" data-tab="job">📅 Add Job</button>
-    <button class="tab-btn owner-only" onclick="showTab('customers')" data-tab="customers">👥 Customers</button>
-    <button class="tab-btn owner-only" onclick="showTab('stats')" data-tab="stats">📊 Stats</button>
-    <button class="tab-btn owner-only" onclick="showTab('analytics')" data-tab="analytics">📈 Analytics</button>
-    <button class="tab-btn owner-only" onclick="showTab('config')" data-tab="config">⚙️ Config</button>
-    <button class="tab-btn owner-only" onclick="showTab('history')" data-tab="history">🗂️ History</button>
+    <button class="tab-btn active" onclick="showTab('jobs')"      data-tab="jobs"      data-min-role="manager">📋 Jobs</button>
+    <button class="tab-btn"        onclick="showTab('route')"     data-tab="route"     data-min-role="helper">🗺️ Route</button>
+    <button class="tab-btn"        onclick="showTab('dispatch')"  data-tab="dispatch"  data-min-role="manager">📅 Dispatch</button>
+    <button class="tab-btn"        onclick="showTab('add')"       data-tab="add"       data-min-role="manager">➕ Add Client</button>
+    <button class="tab-btn"        onclick="showTab('quote')"     data-tab="quote"     data-min-role="manager">📋 Estimate</button>
+    <button class="tab-btn"        onclick="showTab('job')"       data-tab="job"       data-min-role="manager">📅 Add Job</button>
+    <button class="tab-btn"        onclick="showTab('customers')" data-tab="customers" data-min-role="manager">👥 Customers</button>
+    <button class="tab-btn"        onclick="showTab('stats')"     data-tab="stats"     data-min-role="owner">📊 Stats</button>
+    <button class="tab-btn"        onclick="showTab('analytics')" data-tab="analytics" data-min-role="owner">📈 Analytics</button>
+    <button class="tab-btn"        onclick="showTab('config')"    data-tab="config"    data-min-role="owner">⚙️ Config</button>
+    <button class="tab-btn"        onclick="showTab('history')"   data-tab="history"   data-min-role="owner">🗂️ History</button>
   </div>
 
   <!-- ── JOBS TAB ── -->
@@ -1476,6 +1494,67 @@
 
       <!-- Timeline renders here -->
       <div id="routeTimeline"></div>
+
+      <!-- Crew clock-in selection modal -->
+      <div id="crewSelectOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2100;align-items:flex-end;justify-content:center;" onclick="if(event.target===this)closeCrewSelect()">
+        <div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:460px;padding:26px 22px 34px;box-shadow:0 -8px 40px rgba(0,0,0,.2);animation:slideInUp .22s ease;">
+          <div style="font-family:'Playfair Display',serif;font-size:19px;font-weight:700;color:var(--green-deep);margin-bottom:4px;">🟢 Who's Working Today?</div>
+          <div style="font-size:13px;color:var(--text-muted);margin-bottom:18px;">You're auto-selected. Search and add crew members.</div>
+          <!-- Leader chip (always present) -->
+          <div id="crewLeaderChip" style="margin-bottom:12px;"></div>
+          <!-- Selected helpers -->
+          <div id="crewSelectedChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
+          <!-- Search -->
+          <input id="crewSearchInput" type="text" placeholder="Search crew members…"
+            oninput="filterCrewList(this.value)"
+            style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;outline:none;box-sizing:border-box;margin-bottom:6px;">
+          <div id="crewSearchResults" style="max-height:200px;overflow-y:auto;border:1.5px solid var(--border);border-radius:10px;margin-bottom:16px;"></div>
+          <button onclick="confirmCrewAndStartRoute()" style="width:100%;padding:15px;background:linear-gradient(135deg,#15803d,#166534);color:#fff;border:none;border-radius:12px;font-family:inherit;font-size:15px;font-weight:800;cursor:pointer;">🟢 Start Route</button>
+        </div>
+      </div>
+
+      <!-- Multi-step job completion modal (crew leader) -->
+      <div id="jobCompleteOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2100;align-items:flex-end;justify-content:center;">
+        <div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:460px;padding:26px 22px 34px;box-shadow:0 -8px 40px rgba(0,0,0,.2);animation:slideInUp .22s ease;">
+          <!-- Step indicator -->
+          <div id="jobStepIndicator" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:14px;"></div>
+
+          <!-- Step 1: Confirm done -->
+          <div class="job-step active" id="jobStep1">
+            <div class="job-step-title">✅ Mark Job Complete</div>
+            <div class="job-step-sub" id="jobStep1Sub"></div>
+            <button class="job-complete-btn" style="background:var(--green-mid);color:#fff;" onclick="_jobStepNext()">✓ Yes, Job is Done</button>
+            <span class="job-bypass-link" onclick="closeJobCompleteModal()">Cancel</span>
+          </div>
+
+          <!-- Step 2: Cash collection -->
+          <div class="job-step" id="jobStep2">
+            <div class="job-step-title" id="jobStep2Title">💵 Cash Collection</div>
+            <div class="job-step-sub" id="jobStep2Sub"></div>
+            <button class="job-complete-btn" id="jobCashBtn" style="background:#b45309;color:#fff;" onclick="_jobMarkCash()">💵 Cash Collected</button>
+            <span class="job-bypass-link" id="jobCashBypass" onclick="_jobStepNext()">Skip — no cash</span>
+          </div>
+
+          <!-- Step 3: Photo -->
+          <div class="job-step" id="jobStep3">
+            <div class="job-step-title">📷 Job Photo</div>
+            <div class="job-step-sub">Take a before/after photo for the record.</div>
+            <input type="file" id="jobPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="_jobPhotoSelected(this)">
+            <button class="job-complete-btn" style="background:#7c3aed;color:#fff;" onclick="document.getElementById('jobPhotoInput').click()">📷 Take / Upload Photo</button>
+            <div id="jobPhotoPreview" style="margin:10px 0;display:none;"><img id="jobPhotoThumb" style="width:100%;border-radius:10px;max-height:180px;object-fit:cover;" src=""></div>
+            <span class="job-bypass-link" onclick="_jobStepNext()">Bypass — no photo</span>
+          </div>
+
+          <!-- Step 4: Submit -->
+          <div class="job-step" id="jobStep4">
+            <div class="job-step-title">🏁 Submit &amp; Finish</div>
+            <div class="job-step-sub" id="jobStep4Sub"></div>
+            <div id="jobSubmitError" style="color:var(--red);font-size:13px;margin-bottom:10px;display:none;"></div>
+            <button id="jobSubmitBtn" class="job-complete-btn" style="background:#15803d;color:#fff;" onclick="_jobSubmit()">✓ Submit Job</button>
+            <span class="job-bypass-link" onclick="closeJobCompleteModal()">Cancel</span>
+          </div>
+        </div>
+      </div>
 
       <!-- Finish Route modal (employee clock-out) -->
       <div id="finishRouteOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:flex-end;justify-content:center;" onclick="if(event.target===this)closeFinishRouteModal()">
@@ -2402,21 +2481,34 @@ function showApp() {
   document.getElementById('adminGreeting').textContent  = '👤 ' + adminName;
 
   const roleTag = document.getElementById('roleTag');
-  roleTag.textContent = adminRole === 'owner' ? '⭐ Owner' : '🔧 Employee';
+  // ── Role hierarchy ─────────────────────────────────────────────────────
+  // Normalise legacy 'employee' → 'crew_leader' for backward compat
+  if (adminRole === 'employee') adminRole = 'crew_leader';
+  const _ROLE_LEVEL = { helper: 0, crew_leader: 1, manager: 2, owner: 3 };
+  window._roleLevel  = () => _ROLE_LEVEL[adminRole] ?? 0;
+  window._isAtLeast  = (r) => window._roleLevel() >= (_ROLE_LEVEL[r] ?? 99);
+
+  const _ROLE_LABELS = { helper:'👷 Helper', crew_leader:'🔵 Crew Leader', manager:'📋 Manager', owner:'⭐ Owner' };
+  roleTag.textContent = _ROLE_LABELS[adminRole] || '🔧 Staff';
   roleTag.className   = 'header-role ' + (adminRole === 'owner' ? 'owner' : 'employee');
 
-  // Tab bar visible to everyone; owner-only tabs hidden for employees
+  // Show/hide tabs by minimum role level
   document.getElementById('ownerTabs').style.display = 'flex';
-  document.querySelectorAll('.tab-btn.owner-only').forEach(btn => {
-    btn.style.display = adminRole === 'owner' ? '' : 'none';
+  document.querySelectorAll('.tab-btn[data-min-role]').forEach(btn => {
+    btn.style.display = window._isAtLeast(btn.dataset.minRole) ? '' : 'none';
   });
 
-  if (adminRole === 'owner') {
-    document.getElementById('headerTitle').textContent = 'Admin';
-    document.getElementById('searchBar').style.display  = 'flex';
+  // Navigate to correct default tab
+  if (window._isAtLeast('manager')) {
+    document.getElementById('headerTitle').textContent = adminRole === 'owner' ? 'Admin' : 'Manager';
+    document.getElementById('searchBar').style.display = 'flex';
   } else {
-    document.getElementById('headerTitle').textContent  = 'Staff';
-    // Lock route crew filter to employee's assigned crew(s)
+    document.getElementById('headerTitle').textContent = 'Staff';
+    document.getElementById('searchBar').style.display = 'none';
+    setTimeout(() => showTab('route'), 50);
+    if (!window._isAtLeast('crew_leader')) {
+      // Helper: don't auto-start the route, just show it read-only
+    }
     setTimeout(applyEmployeeCrewFilter, 100);
   }
 }
@@ -6462,18 +6554,288 @@ function clearSavedRoute() {
 
 // ── Route tab role setup ──────────────────────────────────────────────────
 function _setupRouteTabForRole() {
-  const isOwner = adminRole === 'owner';
+  const isManager = window._isAtLeast ? window._isAtLeast('manager') : adminRole === 'owner';
+  const isLeader  = window._isAtLeast ? window._isAtLeast('crew_leader') : false;
   const optBtn   = document.getElementById('routeOptBtn');
   const clockBtn = document.getElementById('routeClockInBtn');
-  if (optBtn)   optBtn.style.display   = isOwner ? '' : 'none';
-  if (clockBtn) clockBtn.style.display = isOwner ? 'none' : '';
-  // Employees can't change crew filter or date range (their route is auto-built)
-  const crewSel = document.getElementById('routeCrewFilter');
-  if (crewSel) crewSel.disabled = !isOwner;
+  // Managers/owners see Optimize; crew leader sees Clock In; helpers see neither (route is auto-built)
+  if (optBtn)   optBtn.style.display   = isManager ? '' : 'none';
+  if (clockBtn) clockBtn.style.display = (!isManager && isLeader) ? '' : 'none';
+  // Only managers/owners can change date range and crew filter
+  const crewSel    = document.getElementById('routeCrewFilter');
   const modeSingle = document.getElementById('routeModeSingle');
   const modeRange  = document.getElementById('routeModeRange');
-  if (modeSingle) modeSingle.style.display = isOwner ? '' : 'none';
-  if (modeRange)  modeRange.style.display  = isOwner ? '' : 'none';
+  if (crewSel)    crewSel.disabled             = !isManager;
+  if (modeSingle) modeSingle.style.display     = isManager ? '' : 'none';
+  if (modeRange)  modeRange.style.display      = isManager ? '' : 'none';
+  // Helpers: auto-build the route silently when they open the tab
+  if (!isLeader && !isManager) {
+    setTimeout(() => { if (!Object.keys(_routeCustomOrder).length) buildRoute(); }, 200);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CREW CLOCK-IN SELECTION
+// ─────────────────────────────────────────────────────────────────────────
+let _allCrewList  = [];   // fetched from server
+let _clockInCrew  = [];   // selected helpers [{name, hourlyRate}]
+
+async function employeeStartRoute() {
+  // Fetch crew list, then open selection modal
+  const btn = document.getElementById('routeClockInBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Loading…'; }
+  try {
+    const res  = await fetch(SCRIPT_URL + '?action=get_crew_list&adminToken=' + encodeURIComponent(adminToken));
+    const data = await res.json();
+    _allCrewList = (data.crew || []).filter(c => c.email.toLowerCase() !== adminEmail.toLowerCase());
+  } catch(e) { _allCrewList = []; }
+  if (btn) { btn.disabled = false; btn.textContent = '🟢 Clock In & Start Route'; }
+
+  // Leader chip
+  const leaderChip = document.getElementById('crewLeaderChip');
+  if (leaderChip) leaderChip.innerHTML = `<span class="crew-chip">👤 ${esc(adminName)} <em style="font-weight:400;opacity:.7;">(you)</em></span>`;
+
+  _clockInCrew = [];
+  renderCrewChips();
+  filterCrewList('');
+  document.getElementById('crewSearchInput').value = '';
+  const ov = document.getElementById('crewSelectOverlay');
+  if (ov) ov.style.display = 'flex';
+}
+
+function closeCrewSelect() {
+  const ov = document.getElementById('crewSelectOverlay');
+  if (ov) ov.style.display = 'none';
+}
+
+function filterCrewList(q) {
+  const results = document.getElementById('crewSearchResults');
+  if (!results) return;
+  const already = new Set(_clockInCrew.map(c => c.name));
+  const filtered = _allCrewList.filter(c =>
+    !already.has(c.name) &&
+    (c.name.toLowerCase().includes(q.toLowerCase()) || !q)
+  );
+  if (!filtered.length) {
+    results.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text-muted);font-style:italic;">No crew members found.</div>';
+    return;
+  }
+  results.innerHTML = filtered.map(c => {
+    const roleLabel = { helper:'Helper', crew_leader:'Crew Leader', manager:'Manager' }[c.role] || c.role;
+    const rate = c.hourlyRate ? ' · $' + c.hourlyRate + '/hr' : '';
+    return `<div class="crew-search-item" onclick="addCrewMember(${JSON.stringify(c).replace(/"/g,'&quot;')})">
+      <span>${esc(c.name)}<span style="font-size:11px;color:var(--text-muted);margin-left:6px;">${roleLabel}${rate}</span></span>
+      <span style="color:var(--green-mid);font-weight:700;font-size:18px;">+</span>
+    </div>`;
+  }).join('');
+}
+
+function addCrewMember(member) {
+  if (!_clockInCrew.find(c => c.name === member.name)) {
+    _clockInCrew.push({ name: member.name, hourlyRate: member.hourlyRate || 0 });
+  }
+  renderCrewChips();
+  filterCrewList(document.getElementById('crewSearchInput').value);
+}
+
+function removeCrewMember(name) {
+  _clockInCrew = _clockInCrew.filter(c => c.name !== name);
+  renderCrewChips();
+  filterCrewList(document.getElementById('crewSearchInput').value);
+}
+
+function renderCrewChips() {
+  const el = document.getElementById('crewSelectedChips');
+  if (!el) return;
+  el.innerHTML = _clockInCrew.map(c =>
+    `<span class="crew-chip">${esc(c.name)}
+      <span class="crew-chip-remove" onclick="removeCrewMember(${JSON.stringify(c.name).replace(/"/g,'&quot;')})">×</span>
+    </span>`
+  ).join('');
+}
+
+async function confirmCrewAndStartRoute() {
+  closeCrewSelect();
+  const btn = document.getElementById('routeClockInBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Building route…'; }
+  try { await buildRoute(); } catch(e) {}
+  if (btn) { btn.disabled = false; btn.textContent = '🟢 Clock In & Start Route'; }
+
+  _clockInTime = new Date();
+  try { localStorage.setItem('evg_clock_in', _clockInTime.toISOString()); } catch(e) {}
+  try { localStorage.setItem('evg_clock_in_crew', JSON.stringify(_clockInCrew)); } catch(e) {}
+
+  const bar = document.getElementById('routeActiveBar');
+  if (bar) bar.style.display = 'flex';
+  // Show crew summary in bar
+  if (_clockInCrew.length) {
+    const names = _clockInCrew.map(c => c.name).join(', ');
+    const summary = document.createElement('div');
+    summary.style.cssText = 'font-size:11px;color:#15803d;margin-top:2px;';
+    summary.textContent = 'With: ' + names;
+    document.getElementById('routeElapsedDisplay').parentNode.appendChild(summary);
+  }
+
+  if (_clockInInterval) clearInterval(_clockInInterval);
+  _clockInInterval = setInterval(_updateElapsedTimer, 1000);
+  _updateElapsedTimer();
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// MULTI-STEP JOB COMPLETION (crew leader)
+// ─────────────────────────────────────────────────────────────────────────
+let _jobCompleteRowIdx  = -1;
+let _jobCompleteStep    = 1;
+let _jobCashCollected   = false;
+let _jobPhotoFile       = null;
+let _jobPhotoBase64     = null;
+const JOB_STEPS         = 4;
+
+function openCrewJobComplete(rowIdx) {
+  const b = allBookings[rowIdx];
+  if (!b) return;
+  _jobCompleteRowIdx = rowIdx;
+  _jobCompleteStep   = 1;
+  _jobCashCollected  = false;
+  _jobPhotoFile      = null;
+  _jobPhotoBase64    = null;
+  document.getElementById('jobPhotoPreview').style.display = 'none';
+  document.getElementById('jobSubmitError').style.display  = 'none';
+
+  // Step 1 subtitle
+  document.getElementById('jobStep1Sub').textContent =
+    `Confirm ${b.name || 'this job'}'s lawn is mowed, trimmed, and blown off.`;
+
+  // Step 2: detect cash vs card, set up accordingly
+  const isCash = String(b.calendarEvent||'').toLowerCase().includes('cash') ||
+                 String(b.payMethod||'').toLowerCase().includes('cash');
+  if (isCash) {
+    document.getElementById('jobStep2Title').textContent = '💵 Collect Cash';
+    document.getElementById('jobStep2Sub').textContent  = `${b.name} is a cash customer — collect $${parseFloat(String(b.price||'0').replace(/[^0-9.]/g,''))||'?'} now.`;
+    document.getElementById('jobCashBtn').textContent    = '💵 Cash Collected ✓';
+    document.getElementById('jobCashBypass').textContent = 'Bypass — couldn\'t collect';
+  } else {
+    document.getElementById('jobStep2Title').textContent = '💳 Payment';
+    document.getElementById('jobStep2Sub').textContent  = `${b.name} is on card/autopay. Did they pay cash instead?`;
+    document.getElementById('jobCashBtn').textContent    = '💵 Customer Paid Cash';
+    document.getElementById('jobCashBypass').textContent = 'No — card/autopay as normal';
+  }
+
+  // Step 4 subtitle
+  document.getElementById('jobStep4Sub').textContent =
+    `Submit to mark ${b.name || 'job'} as complete. Manager will review and process payment.`;
+
+  _jobGoToStep(1);
+  document.getElementById('jobCompleteOverlay').style.display = 'flex';
+}
+
+function closeJobCompleteModal() {
+  document.getElementById('jobCompleteOverlay').style.display = 'none';
+  _jobCompleteRowIdx = -1;
+}
+
+function _jobGoToStep(n) {
+  _jobCompleteStep = n;
+  document.querySelectorAll('.job-step').forEach((el, i) => {
+    el.classList.toggle('active', i + 1 === n);
+  });
+  document.getElementById('jobStepIndicator').textContent = `Step ${n} of ${JOB_STEPS}`;
+}
+
+function _jobStepNext() { _jobGoToStep(_jobCompleteStep + 1); }
+
+function _jobMarkCash() {
+  _jobCashCollected = true;
+  _jobStepNext();
+}
+
+function _jobPhotoSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  _jobPhotoFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _jobPhotoBase64 = e.target.result.split(',')[1];
+    const thumb = document.getElementById('jobPhotoThumb');
+    thumb.src = e.target.result;
+    document.getElementById('jobPhotoPreview').style.display = 'block';
+    // Auto-advance to step 4
+    setTimeout(() => _jobGoToStep(4), 600);
+  };
+  reader.readAsDataURL(file);
+}
+
+async function _jobSubmit() {
+  const b       = allBookings[_jobCompleteRowIdx];
+  const errEl   = document.getElementById('jobSubmitError');
+  const submitBtn = document.getElementById('jobSubmitBtn');
+  if (!b) { closeJobCompleteModal(); return; }
+
+  submitBtn.disabled = true; submitBtn.textContent = 'Submitting…';
+  errEl.style.display = 'none';
+
+  try {
+    // 1. Mark done
+    const doneParams = new URLSearchParams({
+      action:   'mark_done',
+      rowIndex: b._rowIndex || (_jobCompleteRowIdx + 2),
+      markedBy: adminName || adminEmail || 'Staff',
+      adminToken,
+    });
+    const doneRes = await fetch(SCRIPT_URL + '?' + doneParams);
+    const doneData = await doneRes.json();
+    if (!doneData.success) throw new Error(doneData.error || 'Mark done failed');
+
+    // 2. If unexpected cash (card customer paid cash) — mark it
+    if (_jobCashCollected) {
+      const isCash = String(b.calendarEvent||'').toLowerCase().includes('cash') ||
+                     String(b.payMethod||'').toLowerCase().includes('cash');
+      if (!isCash) {
+        // Card customer paid cash — record it so manager doesn't double-charge
+        const cashParams = new URLSearchParams({
+          action:    'mark_cash_paid',
+          rowIndex:  b._rowIndex || (_jobCompleteRowIdx + 2),
+          adminToken,
+          markedBy:  adminName || 'Crew',
+        });
+        await fetch(SCRIPT_URL + '?' + cashParams).catch(() => {});
+      }
+    }
+
+    // 3. Upload photo if taken
+    if (_jobPhotoBase64 && _jobPhotoFile) {
+      const photoPayload = {
+        action:     'upload_job_photo',
+        base64Data: _jobPhotoBase64,
+        fileName:   _jobPhotoFile.name,
+        mimeType:   _jobPhotoFile.type,
+        rowIndex:   b._rowIndex || (_jobCompleteRowIdx + 2),
+        jobLabel:   (b.name || '') + ' - ' + (b.serviceDate || ''),
+        markedBy:   adminName || 'Crew',
+        adminToken,
+      };
+      await fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(photoPayload),
+        headers:{'Content-Type':'application/json'} }).catch(() => {});
+    }
+
+    // Update local state
+    const todayLabel = new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+    allBookings[_jobCompleteRowIdx].done     = '✓ Done — ' + todayLabel;
+    allBookings[_jobCompleteRowIdx].markedBy = adminName;
+
+    closeJobCompleteModal();
+    showToast('✅ ' + (b.name||'Job') + ' submitted! Moving to next stop.');
+
+    // Re-render route so next stop is highlighted
+    const dateStr = _routeViewDates[_routeViewDayIdx] || _routeViewDates[0];
+    if (dateStr && _routeCustomOrder[dateStr]) {
+      renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
+      _reinjectRouteAllBtns(dateStr);
+    }
+  } catch(err) {
+    errEl.textContent = '❌ ' + err.message; errEl.style.display = 'block';
+    submitBtn.disabled = false; submitBtn.textContent = '✓ Submit Job';
+  }
 }
 
 // Employee clicks "Clock In & Start Route"
@@ -6570,6 +6932,7 @@ async function submitClockOut() {
       hours:    hours.toFixed(2),
       jobType:  _finishJobType,
       date:     dateStr,
+      helpers:  JSON.stringify(_clockInCrew || []),  // crew members clocked in by leader
       adminToken,
     });
     const res  = await fetch(SCRIPT_URL + '?' + p.toString());
@@ -6578,7 +6941,8 @@ async function submitClockOut() {
       // Stop timer, clear clock-in state
       if (_clockInInterval) { clearInterval(_clockInInterval); _clockInInterval = null; }
       _clockInTime = null;
-      try { localStorage.removeItem('evg_clock_in'); } catch(e) {}
+      try { localStorage.removeItem('evg_clock_in'); localStorage.removeItem('evg_clock_in_crew'); } catch(e) {}
+      _clockInCrew = [];
       const bar = document.getElementById('routeActiveBar');
       if (bar) bar.style.display = 'none';
       closeFinishRouteModal();
@@ -6597,11 +6961,12 @@ function initRouteTab() {
   _setupRouteTabForRole();
 
   // Restore clock-in from localStorage (e.g. employee refreshed the page mid-route)
-  if (adminRole !== 'owner' && !_clockInTime) {
+  if (!window._isAtLeast?.('manager') && !_clockInTime) {
     try {
       const saved = localStorage.getItem('evg_clock_in');
       if (saved) {
         _clockInTime = new Date(saved);
+        try { _clockInCrew = JSON.parse(localStorage.getItem('evg_clock_in_crew') || '[]'); } catch(e2) {}
         const bar = document.getElementById('routeActiveBar');
         if (bar) bar.style.display = 'flex';
         if (_clockInInterval) clearInterval(_clockInInterval);
@@ -6978,7 +7343,10 @@ function buildCrewStopsHtml(dateStr, crew, orderedStops, startTimeStr, startVal)
               <a class="route-nav-btn" href="${mapsUrl}" target="_blank" rel="noopener">🗺 Navigate</a>
               ${bk.phone?`<button class="route-contact-btn" onclick="openContactPopup(${JSON.stringify(bk.name||'')},${JSON.stringify(bk.phone||'')})">📞 Contact</button>`:''}
             </div>
-            ${rowIdx>=0&&!done?`<button class="route-done-btn" onclick="routeMarkDone(${rowIdx},this)">✓ Mark Done</button>`:''}
+            ${rowIdx>=0&&!done?(window._isAtLeast&&!window._isAtLeast('manager')
+              ?`<button class="route-done-btn" style="background:#15803d;" onclick="openCrewJobComplete(${rowIdx})">✓ Mark Done</button>`
+              :`<button class="route-done-btn" onclick="routeMarkDone(${rowIdx},this)">✓ Mark Done</button>`)
+            :''}
           </div>
           ${postDoneActions ? `<div style="margin-top:4px;">${postDoneActions}</div>` : ''}
           ${photoNoteRow}
