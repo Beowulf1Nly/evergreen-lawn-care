@@ -851,6 +851,54 @@
   .dispatch-week-card-hint { font-size:10px; margin-top:3px; padding:2px 5px; background:rgba(255,255,255,.25); border-radius:4px; display:inline-block; }
   .dispatch-week-empty { font-size:12px; color:var(--text-muted); font-style:italic; padding:8px 4px; }
 
+  /* ── Dispatch month view ── */
+  .dispatch-month-grid {
+    display:grid; grid-template-columns:repeat(7,1fr);
+    border-left:1px solid var(--border); border-top:1px solid var(--border);
+    background:#fff; border-radius:0 0 14px 14px; overflow:hidden;
+  }
+  .dispatch-month-dow {
+    padding:8px 0; text-align:center; font-size:11px; font-weight:700;
+    text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted);
+    background:#f8faf6; border-right:1px solid var(--border); border-bottom:2px solid var(--border);
+  }
+  .dispatch-month-cell {
+    border-right:1px solid var(--border); border-bottom:1px solid var(--border);
+    padding:6px 7px; min-height:88px; cursor:pointer; transition:background .12s;
+    position:relative; display:flex; flex-direction:column; gap:3px;
+  }
+  .dispatch-month-cell:hover { background:#f0fdf4; }
+  .dispatch-month-cell.other-month { background:#fafafa; }
+  .dispatch-month-cell.other-month .dispatch-month-day-num { color:#d1d5db; }
+  .dispatch-month-cell.is-today { background:#f0fdf4; }
+  .dispatch-month-cell.is-today .dispatch-month-day-num {
+    background:var(--green-mid); color:#fff; border-radius:50%;
+    width:24px; height:24px; display:flex; align-items:center; justify-content:center;
+    font-weight:800;
+  }
+  .dispatch-month-day-num {
+    font-size:13px; font-weight:700; color:var(--text); flex-shrink:0;
+    width:24px; height:24px; display:flex; align-items:center; justify-content:center;
+  }
+  .dispatch-month-job-pill {
+    font-size:10px; font-weight:700; border-radius:5px; padding:2px 5px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    line-height:1.3; cursor:pointer;
+  }
+  .dispatch-month-job-pill.status-upcoming  { background:#d32f2f; color:#fff; }
+  .dispatch-month-job-pill.status-done      { background:#f9a825; color:#1a1a1a; }
+  .dispatch-month-job-pill.status-cash      { background:#f9a825; color:#1a1a1a; }
+  .dispatch-month-job-pill.status-invoiced  { background:#f9a825; color:#1a1a1a; }
+  .dispatch-month-job-pill.status-paid      { background:#1565c0; color:#fff; }
+  .dispatch-month-job-pill.status-completed { background:#2e7d32; color:#fff; opacity:.8; }
+  .dispatch-month-more { font-size:10px; font-weight:600; color:var(--text-muted); padding:1px 4px; }
+
+  @media (max-width:640px) {
+    .dispatch-month-cell { min-height:60px; padding:4px 4px; }
+    .dispatch-month-dow  { font-size:9px; padding:6px 0; }
+    .dispatch-month-job-pill { font-size:9px; padding:1px 4px; }
+  }
+
   /* ── Dispatch: mobile card list (day view on narrow screens) ── */
   .dispatch-mobile-list { display:none; padding:0 0 20px; }
   .dispatch-mobile-crew-hdr {
@@ -1397,8 +1445,9 @@
       <div class="dispatch-controls">
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
           <div style="display:flex;gap:6px;">
-            <button class="dispatch-nav-btn" id="dViewDay"  onclick="setDispatchView('day')"  style="font-weight:700;">Day</button>
-            <button class="dispatch-nav-btn" id="dViewWeek" onclick="setDispatchView('week')" style="">Week</button>
+            <button class="dispatch-nav-btn" id="dViewDay"   onclick="setDispatchView('day')"   style="font-weight:700;">Day</button>
+            <button class="dispatch-nav-btn" id="dViewWeek"  onclick="setDispatchView('week')"  style="">Week</button>
+            <button class="dispatch-nav-btn" id="dViewMonth" onclick="setDispatchView('month')" style="">Month</button>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
             <button class="dispatch-nav-btn" onclick="dispatchShiftDate(-1)">◀</button>
@@ -1434,6 +1483,10 @@
 
       <!-- Mobile card list — shown instead of timeline on narrow screens (day view only) -->
       <div id="dispatchMobileList" class="dispatch-mobile-list"></div>
+      <!-- Month calendar grid -->
+      <div id="dispatchMonthWrap" style="display:none;">
+        <div class="dispatch-month-grid" id="dispatchMonthGrid"></div>
+      </div>
 
       <div id="dispatchEmpty" style="display:none;text-align:center;padding:48px 20px;color:var(--text-muted);font-size:15px;">
         📭 No jobs scheduled for this date.
@@ -8268,7 +8321,14 @@ function dispatchShiftDate(delta) {
   const el = document.getElementById('dispatchDate');
   if (!el.value) el.value = new Date().toISOString().slice(0, 10);
   const d = new Date(el.value + 'T12:00');
-  d.setDate(d.getDate() + (_dispView === 'week' ? delta * 7 : delta));
+  if (_dispView === 'month') {
+    d.setMonth(d.getMonth() + delta);
+    d.setDate(1); // keep at 1st so we don't overshoot short months
+  } else if (_dispView === 'week') {
+    d.setDate(d.getDate() + delta * 7);
+  } else {
+    d.setDate(d.getDate() + delta);
+  }
   el.value = d.toISOString().slice(0, 10);
   renderDispatchBoard();
 }
@@ -8280,10 +8340,13 @@ function dispatchGoToday() {
 
 function setDispatchView(view) {
   _dispView = view;
-  const dayBtn  = document.getElementById('dViewDay');
-  const weekBtn = document.getElementById('dViewWeek');
-  [dayBtn, weekBtn].forEach(function(btn) { if (btn) { btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; btn.style.fontWeight = '500'; } });
-  const activeBtn = view === 'day' ? dayBtn : weekBtn;
+  const dayBtn   = document.getElementById('dViewDay');
+  const weekBtn  = document.getElementById('dViewWeek');
+  const monthBtn = document.getElementById('dViewMonth');
+  [dayBtn, weekBtn, monthBtn].forEach(function(btn) {
+    if (btn) { btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; btn.style.fontWeight = '500'; }
+  });
+  const activeBtn = view === 'day' ? dayBtn : view === 'week' ? weekBtn : monthBtn;
   if (activeBtn) { activeBtn.style.background = 'var(--green-mid)'; activeBtn.style.color = '#fff'; activeBtn.style.borderColor = 'var(--green-mid)'; activeBtn.style.fontWeight = '800'; }
   renderDispatchBoard();
 }
@@ -8337,7 +8400,15 @@ function renderDispatchBoard() {
   var boardEl  = document.querySelector('.dispatch-board-outer');
   var emptyEl  = document.getElementById('dispatchEmpty');
   if (!dateStr || !allBookings) { if (emptyEl) emptyEl.style.display='block'; if (boardEl) boardEl.style.display='none'; return; }
-  if (_dispView === 'week') { var _ml=document.getElementById('dispatchMobileList'); if(_ml) _ml.innerHTML=''; renderDispatchWeek(dateStr, crewFilt); return; }
+
+  // Show/hide containers based on view
+  var _mw = document.getElementById('dispatchMonthWrap');
+  if (_mw) _mw.style.display = (_dispView === 'month') ? '' : 'none';
+  if (boardEl) boardEl.style.display = (_dispView === 'month') ? 'none' : '';
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  if (_dispView === 'week')  { var _ml=document.getElementById('dispatchMobileList'); if(_ml) _ml.innerHTML=''; renderDispatchWeek(dateStr, crewFilt); return; }
+  if (_dispView === 'month') { var _ml2=document.getElementById('dispatchMobileList'); if(_ml2) _ml2.innerHTML=''; renderDispatchMonth(dateStr, crewFilt); return; }
 
   var dayJobs = allBookings.filter(function(b) { return !b.rowCancelled && _dispDateOf(b) === dateStr; });
   if (crewFilt !== 'all') dayJobs = dayJobs.filter(function(b) { var c=(b.crew||'').trim(); return crewFilt==='unassigned'?!c:c===crewFilt; });
@@ -8476,6 +8547,111 @@ function _zoneHeaderBadges(zones) {
           + '</span>';
       }).join('')
     + '</div>';
+}
+
+function renderDispatchMonth(anchorDate, crewFilt) {
+  var grid = document.getElementById('dispatchMonthGrid');
+  if (!grid) return;
+
+  var anchor = new Date(anchorDate + 'T12:00');
+  var year   = anchor.getFullYear();
+  var month  = anchor.getMonth(); // 0-based
+  var today  = new Date().toISOString().slice(0, 10);
+
+  // Build a map: dateStr → [booking, ...]
+  var jobMap = {};
+  (allBookings || []).forEach(function(b) {
+    if (b.rowCancelled) return;
+    var ds = _dispDateOf(b);
+    if (!ds) return;
+    if (crewFilt !== 'all') {
+      var c = (b.crew || '').trim();
+      if (crewFilt === 'unassigned' ? c : c !== crewFilt) return;
+    }
+    if (!jobMap[ds]) jobMap[ds] = [];
+    jobMap[ds].push(b);
+  });
+
+  // First cell = Sunday of the week containing the 1st of the month
+  var firstOfMonth = new Date(year, month, 1);
+  var startCell    = new Date(firstOfMonth);
+  startCell.setDate(1 - firstOfMonth.getDay()); // back to Sunday
+
+  var DOWS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  // Month title row above grid
+  var wrap = document.getElementById('dispatchMonthWrap');
+  var titleEl = wrap ? wrap.querySelector('.dispatch-month-title') : null;
+  if (!titleEl) {
+    titleEl = document.createElement('div');
+    titleEl.className = 'dispatch-month-title';
+    titleEl.style.cssText = 'font-size:16px;font-weight:800;color:var(--green-deep);padding:14px 4px 10px;font-family:"Playfair Display",serif;';
+    if (wrap) wrap.insertBefore(titleEl, grid);
+  }
+  titleEl.textContent = MONTHS[month] + ' ' + year;
+
+  var html = '';
+
+  // Day-of-week headers
+  DOWS.forEach(function(d) {
+    html += '<div class="dispatch-month-dow">' + d + '</div>';
+  });
+
+  // Build 6 rows × 7 cols = 42 cells (covers any month layout)
+  for (var cell = 0; cell < 42; cell++) {
+    var cellDate = new Date(startCell);
+    cellDate.setDate(startCell.getDate() + cell);
+    var ds       = cellDate.toISOString().slice(0, 10);
+    var dayNum   = cellDate.getDate();
+    var inMonth  = cellDate.getMonth() === month;
+    var isToday  = ds === today;
+
+    var classes  = 'dispatch-month-cell';
+    if (!inMonth) classes += ' other-month';
+    if (isToday)  classes += ' is-today';
+
+    var jobs = jobMap[ds] || [];
+
+    // Pills — show up to 3, then "+N more"
+    var pillsHtml = '';
+    var MAX_PILLS = 3;
+    jobs.slice(0, MAX_PILLS).forEach(function(b) {
+      var cls  = _dispJobClass(b);
+      var crew = b.crew ? ' [' + b.crew + ']' : '';
+      var lbl  = esc((b.name || '—').split(' ')[0]) + crew;
+      var ri   = allBookings.indexOf(b);
+      pillsHtml += '<div class="dispatch-month-job-pill ' + cls + '" '
+        + 'onclick="event.stopPropagation();openDispatchDetail(' + ri + ')" '
+        + 'title="' + esc(b.name||'') + '">' + lbl + '</div>';
+    });
+    if (jobs.length > MAX_PILLS) {
+      pillsHtml += '<div class="dispatch-month-more">+' + (jobs.length - MAX_PILLS) + ' more</div>';
+    }
+
+    // Click day → switch to day view
+    html += '<div class="' + classes + '" onclick="dispatchJumpToDay(\'' + ds + '\')">'
+      + '<div class="dispatch-month-day-num">' + dayNum + '</div>'
+      + pillsHtml
+      + '</div>';
+
+    // Only render 5 rows if the 6th is entirely outside the month
+    if (cell === 34) {
+      var allOutside = true;
+      for (var x = 35; x < 42; x++) {
+        var xd = new Date(startCell); xd.setDate(startCell.getDate() + x);
+        if (xd.getMonth() === month) { allOutside = false; break; }
+      }
+      if (allOutside) break;
+    }
+  }
+
+  grid.innerHTML = html;
+}
+
+function dispatchJumpToDay(dateStr) {
+  document.getElementById('dispatchDate').value = dateStr;
+  setDispatchView('day');
 }
 
 function renderDispatchWeek(anchorDate, crewFilt) {
