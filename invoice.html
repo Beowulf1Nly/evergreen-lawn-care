@@ -850,6 +850,66 @@
   .dispatch-week-card-meta { font-size:10px; opacity:.85; margin-top:1px; }
   .dispatch-week-card-hint { font-size:10px; margin-top:3px; padding:2px 5px; background:rgba(255,255,255,.25); border-radius:4px; display:inline-block; }
   .dispatch-week-empty { font-size:12px; color:var(--text-muted); font-style:italic; padding:8px 4px; }
+
+  /* ── Dispatch: mobile card list (day view on narrow screens) ── */
+  .dispatch-mobile-list { display:none; padding:0 0 20px; }
+  .dispatch-mobile-crew-hdr {
+    font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.07em;
+    color:var(--text-muted); padding:14px 0 6px;
+    border-bottom:2px solid var(--green-light); margin-bottom:8px;
+  }
+  .dispatch-mobile-card {
+    background:#fff; border-radius:12px; padding:13px 15px 11px;
+    margin-bottom:9px; box-shadow:0 1px 5px rgba(0,0,0,.07);
+    border-left:4px solid #e2e8f0; cursor:pointer;
+    display:flex; align-items:center; gap:12px; transition:box-shadow .15s;
+  }
+  .dispatch-mobile-card.status-upcoming  { border-left-color:#d32f2f; }
+  .dispatch-mobile-card.status-done      { border-left-color:#f9a825; }
+  .dispatch-mobile-card.status-cash      { border-left-color:#f9a825; }
+  .dispatch-mobile-card.status-invoiced  { border-left-color:#1565c0; }
+  .dispatch-mobile-card.status-paid      { border-left-color:#1565c0; }
+  .dispatch-mobile-card.status-completed { border-left-color:#2e7d32; opacity:.75; }
+  .dispatch-mobile-dot { width:11px; height:11px; border-radius:50%; flex-shrink:0; }
+  .dispatch-mobile-card.status-upcoming  .dispatch-mobile-dot { background:#d32f2f; }
+  .dispatch-mobile-card.status-done      .dispatch-mobile-dot { background:#f9a825; }
+  .dispatch-mobile-card.status-cash      .dispatch-mobile-dot { background:#f9a825; }
+  .dispatch-mobile-card.status-invoiced  .dispatch-mobile-dot { background:#1565c0; }
+  .dispatch-mobile-card.status-paid      .dispatch-mobile-dot { background:#1565c0; }
+  .dispatch-mobile-card.status-completed .dispatch-mobile-dot { background:#2e7d32; }
+  .dispatch-mobile-body { flex:1; min-width:0; }
+  .dispatch-mobile-name { font-size:15px; font-weight:700; color:var(--green-deep); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dispatch-mobile-addr { font-size:12px; color:var(--text-muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dispatch-mobile-meta { display:flex; gap:6px; margin-top:5px; flex-wrap:wrap; }
+  .dispatch-mobile-pill { font-size:11px; font-weight:600; padding:2px 8px; border-radius:20px; background:var(--green-light); color:var(--green-deep); }
+  .dispatch-mobile-pill.freq  { background:#f1f5f9; color:#475569; }
+  .dispatch-mobile-pill.price { background:#f0fdf4; color:#15803d; }
+  .dispatch-mobile-arrow { font-size:20px; color:#cbd5e1; flex-shrink:0; line-height:1; }
+
+  @media (max-width:640px) {
+    /* Wrap: reduce padding */
+    .dispatch-wrap { padding:12px 10px 60px; }
+
+    /* Controls: stack into two rows, full width inputs */
+    .dispatch-controls { padding:12px 14px; gap:10px; flex-direction:column; align-items:stretch; }
+    .dispatch-controls > div { flex-wrap:wrap; gap:8px; }
+    .dispatch-date-input { flex:1; min-width:0; }
+    /* Hide legend on mobile — not enough room */
+    .dispatch-legend { display:none; }
+
+    /* Day view: hide horizontal timeline, show card list */
+    .dispatch-board-outer { display:none !important; }
+    .dispatch-mobile-list { display:block; }
+
+    /* Week view: allow horizontal scroll, shrink column min-width */
+    .dispatch-week-day-col { min-width:110px; }
+    .dispatch-week-card { font-size:11px; padding:6px 7px; }
+
+    /* Detail panel: taller bottom sheet, bigger tab buttons */
+    .dispatch-detail-panel { max-height:93vh; }
+    .dispatch-tab-btn { padding:9px 12px; font-size:12px; }
+    .dispatch-action-btn { padding:12px 16px; font-size:14px; flex:1; text-align:center; justify-content:center; }
+  }
 </style>
 </head>
 <body>
@@ -1372,6 +1432,9 @@
         <div id="dispatchBoardRows"></div>
       </div>
 
+      <!-- Mobile card list — shown instead of timeline on narrow screens (day view only) -->
+      <div id="dispatchMobileList" class="dispatch-mobile-list"></div>
+
       <div id="dispatchEmpty" style="display:none;text-align:center;padding:48px 20px;color:var(--text-muted);font-size:15px;">
         📭 No jobs scheduled for this date.
       </div>
@@ -1397,8 +1460,8 @@
     </div>
     <!-- Reschedule Modal -->
     <div class="confirm-overlay" id="dispatchReschedOverlay" onclick="if(event.target===this)closeDispatchResched()">
-      <div class="confirm-box" style="max-width:420px;width:94%;">
-        <h4 style="margin:0 0 10px;font-family:'Playfair Display',serif;color:var(--green-deep);">📅 Reschedule Job</h4>
+      <div class="confirm-box" style="max-width:440px;width:94%;">
+        <h4 style="margin:0 0 4px;font-family:'Playfair Display',serif;color:var(--green-deep);">📅 Reschedule Job</h4>
         <div id="dispReschedInfo" style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.5;"></div>
         <div style="margin-bottom:14px;">
           <label style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:5px;">New Date</label>
@@ -1410,6 +1473,12 @@
             <option value="single">Only this appointment</option>
             <option value="all">This + all future appointments</option>
           </select>
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:5px;">
+            Reason for rescheduling <span style="font-weight:400;color:var(--text-muted);">(shown to customer in email)</span>
+          </label>
+          <textarea id="dispReschedReason" rows="3" placeholder="e.g. Crew scheduling conflict, weather delay, equipment issue…" style="width:100%;padding:10px 13px;border:2px solid var(--green-mid);border-radius:10px;font-size:14px;font-family:inherit;outline:none;resize:vertical;box-sizing:border-box;background:#f0fdf4;"></textarea>
         </div>
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:18px;font-size:14px;">
           <input type="checkbox" id="dispReschedNotify" checked style="width:16px;height:16px;accent-color:var(--green-mid);">
@@ -7397,6 +7466,18 @@ async function buildRoute() {
     const allFailedStops  = [];
     let outerHtml = '';
 
+    // Snapshot any existing manual order BEFORE resetting, so optimizeCrewStops
+    // can respect it. This prevents Re-optimize from throwing away manual reordering.
+    const _prevRouteOrder = {};
+    for (const _ds of Object.keys(_routeCustomOrder)) {
+      const _do = _routeCustomOrder[_ds];
+      _prevRouteOrder[_ds] = {};
+      for (const _crew of Object.keys(_do)) {
+        // Store just the bk references in order so we can match by identity
+        _prevRouteOrder[_ds][_crew] = (Array.isArray(_do[_crew]) ? _do[_crew] : []).map(s => s.bk).filter(Boolean);
+      }
+    }
+
     // Reset custom order for this run
     // Structure: _routeCustomOrder[dateStr] = { A: [stops], B: [stops], unassigned: [stops] }
     _routeCustomOrder = {};
@@ -7407,7 +7488,7 @@ async function buildRoute() {
     // by NN within each window. This prevents backtracking through a far
     // cluster just to reach a 3pm anchor on time — those stops slide to
     // the post-anchor window automatically.
-    function optimizeCrewStops(crewJobs, geocodedMap) {
+    function optimizeCrewStops(crewJobs, geocodedMap, savedBkOrder) {
       const geocoded    = crewJobs.map(bk => {
         const city = ZIP_CITY[bk.zip] || '';
         const fullAddr = (bk.address || '') + (bk.zip ? ', ' + bk.zip : '') + (city ? ', ' + city : '') + ', FL';
@@ -7416,6 +7497,33 @@ async function buildRoute() {
       });
       const validStops  = geocoded.filter(s => !s.failed);
       const failedStops = geocoded.filter(s => s.failed);
+
+      // ── Respect saved manual order ───────────────────────────────────────
+      // If the user has manually reordered stops, preserve that order exactly.
+      // Only new stops not present in the saved order are appended at the end via NN.
+      if (savedBkOrder && savedBkOrder.length) {
+        const savedGeoMap = new Map(geocoded.map(s => [s.bk, s]));
+        // Reconstruct ordered array using saved bk references
+        const reordered = [];
+        for (const bk of savedBkOrder) {
+          const gs = savedGeoMap.get(bk);
+          if (gs) reordered.push(gs);
+        }
+        // New stops not in the saved order → insert via NN at the end
+        const savedSet  = new Set(savedBkOrder);
+        const newStops  = validStops.filter(s => !savedSet.has(s.bk));
+        if (newStops.length) {
+          const origin = reordered[reordered.length - 1] || startCoord || newStops[0];
+          reordered.push(...nearestNeighbour(origin, newStops));
+        }
+        _calcDist(reordered);
+        for (const fs of failedStops) {
+          reordered.push({ bk: fs.bk, lat:null, lon:null, distFromPrev:0, geocodeFailed:true });
+          allFailedStops.push(fs);
+        }
+        return reordered;
+      }
+      // ── End saved-order path ─────────────────────────────────────────────
 
       const anchored = validStops.filter(s => s.bk.jobTime);
       const floating = validStops.filter(s => !s.bk.jobTime);
@@ -7568,11 +7676,12 @@ async function buildRoute() {
         crewGroups[key].push(bk);
       }
 
-      // Optimize each crew independently
+      // Optimize each crew independently — pass saved order so manual positioning is preserved
       const crewOrders = {};
       const crewKeys   = Object.keys(crewGroups).sort(); // A, B, unassigned
       for (const crew of crewKeys) {
-        crewOrders[crew] = optimizeCrewStops(crewGroups[crew], geoCache);
+        const savedOrder = _prevRouteOrder[dateStr]?.[crew] || null;
+        crewOrders[crew] = optimizeCrewStops(crewGroups[crew], geoCache, savedOrder);
       }
 
       _routeCustomOrder[dateStr] = crewOrders;
@@ -7608,7 +7717,7 @@ async function buildRoute() {
           const bkIdx = allBookings.indexOf(stop.bk);
           if (bkIdx >= 0) {
             allBookings[bkIdx].jobTime = cursor.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', hour12:false });
-            delete allBookings[bkIdx]._routePinned; // clear pin after optimization
+            // Keep _routePinned intact — _prevRouteOrder handles dedup on re-optimize
           }
           cursor = doneAt;
         }
@@ -7773,13 +7882,21 @@ async function geocodeAddr(addr) {
   const zipMatch   = addr.match(/,\s*(\d{5})/);
   const zip        = zipMatch ? zipMatch[1] : '';
   const city       = ZIP_CITY[zip] || '';
-  // Street-only version (no zip), e.g. "22 W Golfstream Place, Dunnellon, FL"
+
+  // Strip zip from the address → "123 Oak St, Crystal River, FL"
   const streetOnly = addr.replace(/,\s*\d{5}/, '');
-  const addrByCity = city
-    ? streetOnly.replace(/, FL$/i, '') + ', ' + city + ', FL'
-    : '';
-  // Bare street + Florida (widest net)
-  const streetFL   = streetOnly.replace(/, FL$/i, '').trim() + ', Florida';
+
+  // Strip trailing state and then ALSO strip the city name if it was already
+  // appended by buildRoute (addr format is "street, zip, city, FL").
+  // Without this, addrByCity becomes "street, city, city, FL" which geocoders reject.
+  let streetNoState = streetOnly.replace(/,\s*FL\s*$/i, '').replace(/,\s*Florida\s*$/i, '').trim();
+  if (city && streetNoState.toLowerCase().endsWith(', ' + city.toLowerCase())) {
+    streetNoState = streetNoState.slice(0, streetNoState.length - city.length - 2).trim();
+  }
+  // Best geocodable form: "123 Oak St, Crystal River, FL"
+  const addrByCity = city ? streetNoState + ', ' + city + ', FL' : '';
+  // Widest net fallback: "123 Oak St, Florida"
+  const streetFL   = streetNoState + ', Florida';
 
   // fetchWithTimeout: abort after ms milliseconds so a hanging API never stalls the route build
   function fetchWithTimeout(url, opts, ms = 4000) {
@@ -8220,7 +8337,7 @@ function renderDispatchBoard() {
   var boardEl  = document.querySelector('.dispatch-board-outer');
   var emptyEl  = document.getElementById('dispatchEmpty');
   if (!dateStr || !allBookings) { if (emptyEl) emptyEl.style.display='block'; if (boardEl) boardEl.style.display='none'; return; }
-  if (_dispView === 'week') { renderDispatchWeek(dateStr, crewFilt); return; }
+  if (_dispView === 'week') { var _ml=document.getElementById('dispatchMobileList'); if(_ml) _ml.innerHTML=''; renderDispatchWeek(dateStr, crewFilt); return; }
 
   var dayJobs = allBookings.filter(function(b) { return !b.rowCancelled && _dispDateOf(b) === dateStr; });
   if (crewFilt !== 'all') dayJobs = dayJobs.filter(function(b) { var c=(b.crew||'').trim(); return crewFilt==='unassigned'?!c:c===crewFilt; });
@@ -8278,6 +8395,45 @@ function renderDispatchBoard() {
   });
   var rowsEl = document.getElementById('dispatchBoardRows');
   if (rowsEl) rowsEl.innerHTML = rowsHtml;
+  renderDispatchMobileList(dayJobs);
+}
+
+function renderDispatchMobileList(dayJobs) {
+  var el = document.getElementById('dispatchMobileList');
+  if (!el) return;
+  if (!dayJobs || !dayJobs.length) { el.innerHTML = ''; return; }
+
+  var crews = {};
+  dayJobs.forEach(function(b) { var k = b.crew || 'Unassigned'; if (!crews[k]) crews[k] = []; crews[k].push(b); });
+  var crewOrder = ['A','B'].concat(Object.keys(crews).filter(function(k){ return k!=='A' && k!=='B'; }));
+
+  var html = '';
+  crewOrder.forEach(function(k) {
+    if (!crews[k]) return;
+    var lbl = k==='A' ? '🔵 Crew A' : k==='B' ? '🩷 Crew B' : k==='Unassigned' ? '⬜ Unassigned' : esc(k);
+    html += '<div class="dispatch-mobile-crew-hdr">' + lbl + ' &nbsp;·&nbsp; ' + crews[k].length + ' job' + (crews[k].length!==1?'s':'') + '</div>';
+    crews[k].forEach(function(b) {
+      var cls    = _dispJobClass(b);
+      var ri     = allBookings.indexOf(b);
+      var price  = parseFloat(String(b.price||'').replace(/[^0-9.]/g,'')) || 0;
+      var addr   = [b.address, b.zip].filter(Boolean).join(', ');
+      var timeStr = b.jobTime ? '⏰ ' + b.jobTime : '';
+      html += '<div class="dispatch-mobile-card ' + cls + '" onclick="openDispatchDetail(' + ri + ')">'
+        + '<div class="dispatch-mobile-dot"></div>'
+        + '<div class="dispatch-mobile-body">'
+        + '<div class="dispatch-mobile-name">' + esc(b.name||'—') + '</div>'
+        + (addr ? '<div class="dispatch-mobile-addr">📍 ' + esc(addr) + '</div>' : '')
+        + '<div class="dispatch-mobile-meta">'
+        + (timeStr ? '<span class="dispatch-mobile-pill">' + esc(timeStr) + '</span>' : '')
+        + (b.frequency ? '<span class="dispatch-mobile-pill freq">' + esc(b.frequency) + '</span>' : '')
+        + (price ? '<span class="dispatch-mobile-pill price">$' + price.toFixed(0) + '</span>' : '')
+        + '</div>'
+        + '</div>'
+        + '<div class="dispatch-mobile-arrow">›</div>'
+        + '</div>';
+    });
+  });
+  el.innerHTML = html;
 }
 
 function _getCrewDayZones(crew, dayLabel) {
@@ -8499,6 +8655,10 @@ function _showDragReschedSheet(rowIdx, targetDate) {
       +     '<button id="_drsScopeAll" onclick="_drsSetScope(\'all\')" style="flex:1;padding:10px;border:2px solid var(--border);border-radius:10px;background:#fff;color:var(--text-muted);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;">This + all future</button>'
       +   '</div>'
       + '</div>'
+      + '<div style="margin-bottom:16px;">'
+      +   '<label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px;">Reason <span style="font-weight:400;">(shown to customer in email)</span></label>'
+      +   '<textarea id="_drsReason" rows="3" placeholder="e.g. Crew scheduling conflict, weather delay…" style="width:100%;padding:10px 13px;border:2px solid var(--green-mid);border-radius:10px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box;background:#f0fdf4;outline:none;"></textarea>'
+      + '</div>'
       + '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:20px;font-size:14px;">'
       +   '<input type="checkbox" id="_drsNotify" checked style="width:18px;height:18px;accent-color:var(--green-mid);">'
       +   '<span>📧 Notify customer by email</span>'
@@ -8539,15 +8699,26 @@ function _drsCancel() {
 async function _drsConfirm() {
   var newDate = document.getElementById('_drsDate').value;
   var notify  = document.getElementById('_drsNotify').checked;
+  var reason  = (document.getElementById('_drsReason')?.value || '').trim();
   var errEl   = document.getElementById('_drsError');
   var btn     = document.getElementById('_drsConfirm');
   var rowIdx  = _dispReschedRowIdx;
   var b       = allBookings[rowIdx];
   if (!b || !newDate) { if(errEl){errEl.textContent='Please select a date.';errEl.style.display='block';} return; }
+  if (!reason) { if(errEl){errEl.textContent='Please enter a reason — it will appear in the customer email.';errEl.style.display='block';} return; }
   if (btn) { btn.disabled=true; btn.textContent='Rescheduling…'; }
   if (errEl) errEl.style.display='none';
   try {
-    var p = new URLSearchParams({ action:'reschedule_job', rowIndex:b._rowIndex||(rowIdx+2), newDate:newDate, scope:_drsScope, notify:notify?'1':'0', adminToken:adminToken });
+    var p = new URLSearchParams({
+      action:        'owner_reschedule',       // correct action name
+      rowIndex:      b._rowIndex || (rowIdx + 2),
+      expectedEmail: b.email || '',
+      newDate:       newDate,
+      scope:         _drsScope,
+      sendEmail:     notify ? 'true' : 'false',
+      reason:        reason,
+      adminToken:    adminToken,
+    });
     var res  = await fetch(SCRIPT_URL+'?'+p);
     var data = await res.json();
     if (data.success) {
@@ -8787,20 +8958,36 @@ function closeDispatchResched() {
 }
 
 async function submitDispatchResched() {
-  var newDate=document.getElementById('dispReschedDate').value;
-  var scope=document.getElementById('dispReschedScope').value;
-  var notify=document.getElementById('dispReschedNotify').checked;
-  var errEl=document.getElementById('dispReschedError'), btn=document.getElementById('dispReschedConfirmBtn');
-  var b=allBookings[_dispReschedIdx];
-  if(!b||!newDate){errEl.textContent='Select a date.';errEl.style.display='block';return;}
+  var newDate = document.getElementById('dispReschedDate').value;
+  var scope   = document.getElementById('dispReschedScope').value;
+  var notify  = document.getElementById('dispReschedNotify').checked;
+  var reason  = (document.getElementById('dispReschedReason')?.value || '').trim();
+  var errEl   = document.getElementById('dispReschedError');
+  var btn     = document.getElementById('dispReschedConfirmBtn');
+  var b       = allBookings[_dispReschedIdx];
+  if (!b || !newDate) { errEl.textContent='Select a date.'; errEl.style.display='block'; return; }
+  if (!reason) { errEl.textContent='Please enter a reason — it will appear in the customer email.'; errEl.style.display='block'; return; }
   btn.disabled=true; btn.textContent='Rescheduling…';
   try {
-    var p=new URLSearchParams({action:'reschedule_job',rowIndex:b._rowIndex||(_dispReschedIdx+2),newDate:newDate,scope:scope,notify:notify?'1':'0',adminToken:adminToken});
-    var res=await fetch(SCRIPT_URL+'?'+p), data=await res.json();
-    if(data.success){b.serviceDate=newDate;closeDispatchResched();showToast('📅 Rescheduled to '+newDate);renderDispatchBoard();}
-    else{errEl.textContent=data.error||'Reschedule failed.';errEl.style.display='block';}
-  }catch(e){errEl.textContent='Network error.';errEl.style.display='block';}
-  finally{btn.disabled=false;btn.textContent='Reschedule';}
+    var p = new URLSearchParams({
+      action:        'owner_reschedule',       // correct action name
+      rowIndex:      b._rowIndex || (_dispReschedIdx + 2),
+      expectedEmail: b.email || '',
+      newDate:       newDate,
+      scope:         scope,
+      sendEmail:     notify ? 'true' : 'false',
+      reason:        reason,
+      adminToken:    adminToken,
+    });
+    var res = await fetch(SCRIPT_URL + '?' + p), data = await res.json();
+    if (data.success) {
+      b.serviceDate = newDate;
+      closeDispatchResched();
+      showToast('📅 Rescheduled to ' + newDate + (notify ? ' · Customer notified' : ''));
+      renderDispatchBoard();
+    } else { errEl.textContent = data.error || 'Reschedule failed.'; errEl.style.display='block'; }
+  } catch(e) { errEl.textContent='Network error.'; errEl.style.display='block'; }
+  finally { btn.disabled=false; btn.textContent='Reschedule'; }
 }
 
 // ═══════════════════════════════════════════════════════
