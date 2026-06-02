@@ -7258,20 +7258,12 @@ function mowMinutes(bk) {
 //   0.25ac ≈ 20 min · 0.50ac ≈ 30 min · 1.00ac ≈ 60 min
 // Linear interpolation between table entries.
 function mowMinsFromAcres(acres) {
-  const T = [
-    [0.08, 12], [0.12, 14], [0.15, 16], [0.20, 18], [0.25, 20],
-    [0.33, 24], [0.40, 27], [0.50, 30], [0.60, 36], [0.75, 44],
-    [1.00, 60], [1.25, 73], [1.50, 87], [2.00, 112], [3.00, 150],
-  ];
-  if (acres <= T[0][0])             return T[0][1];
-  if (acres >= T[T.length-1][0])   return T[T.length-1][1];
-  for (let i = 0; i < T.length - 1; i++) {
-    const [a0,m0] = T[i], [a1,m1] = T[i+1];
-    if (acres >= a0 && acres <= a1) {
-      return Math.round(m0 + (acres - a0) / (a1 - a0) * (m1 - m0));
-    }
-  }
-  return 60;
+  // Calibrated for: 42" ZTR mowing + simultaneous weed whacker (2-person crew).
+  // 13 min base = fixed overhead (equipment setup, blowing, obstacles/buffer).
+  // 47 min/acre = derived from 42" deck at ~5 mph effective residential speed.
+  // Anchors: 0.25ac ≈ 25 min · 1.0ac ≈ 60 min.
+  // Use the ✏️ edit button on any stop to override with the real time.
+  return Math.max(15, Math.round(13 + acres * 47));
 }
 
 // ── Polygon area → acres (Shoelace formula on lat/lon nodes) ─────────────
