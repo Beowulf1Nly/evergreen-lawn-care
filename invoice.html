@@ -160,7 +160,44 @@
   /* ══════════════════════════════════════════
      ROUTE TAB
   ══════════════════════════════════════════ */
-  .route-wrap { max-width:640px; margin:0 auto; padding:20px 16px 60px; }
+  .route-wrap { max-width:700px; margin:0 auto; padding:16px 16px 60px; }
+
+  /* Day note board */
+  .route-day-notes {
+    background:#fffbeb; border:2px solid #f59e0b; border-radius:14px;
+    padding:16px 18px; margin-bottom:20px;
+  }
+  .route-day-notes-title {
+    font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:.07em;
+    color:#92400e; margin-bottom:12px; display:flex; align-items:center; gap:6px;
+  }
+  .route-day-notes-jobs {
+    display:flex; flex-direction:column; gap:6px; margin-bottom:14px;
+  }
+  .route-day-notes-job-row {
+    display:flex; gap:8px; font-size:13px; line-height:1.5;
+    padding:7px 10px; background:#fff; border-radius:8px;
+    border:1px solid #fde68a;
+  }
+  .route-day-notes-job-name {
+    font-weight:700; color:#78350f; flex-shrink:0; min-width:90px;
+  }
+  .route-day-notes-job-text { color:#374151; flex:1; }
+  .route-day-notes-empty { font-size:13px; color:#a16207; font-style:italic; margin-bottom:10px; }
+  .route-day-note-textarea {
+    width:100%; min-height:72px; padding:10px 13px;
+    border:2px solid #f59e0b; border-radius:10px; font-family:inherit;
+    font-size:14px; resize:vertical; box-sizing:border-box; outline:none;
+    background:#fff; color:var(--text); line-height:1.5; transition:border .15s;
+  }
+  .route-day-note-textarea:focus { border-color:#d97706; }
+  .route-day-note-save {
+    margin-top:8px; padding:7px 18px; background:#f59e0b; color:#fff;
+    border:none; border-radius:8px; font-family:inherit; font-size:13px;
+    font-weight:700; cursor:pointer; transition:opacity .15s;
+  }
+  .route-day-note-save:hover { opacity:.88; }
+  .route-day-note-saved { font-size:12px; color:#16a34a; margin-left:8px; opacity:0; transition:opacity .3s; }
 
   /* Control panel */
   .route-cp {
@@ -1317,19 +1354,24 @@
   <div id="pane-route" class="tab-pane">
     <div class="route-wrap">
 
-      <!-- Control panel -->
+      <!-- Control panel — compact -->
       <div class="route-cp">
-        <div class="route-cp-title">🗺️ Route Planner</div>
-        <div class="route-cp-sub" id="routeCpSub">Loading upcoming jobs…</div>
-        <div class="route-cp-fields">
-          <div class="route-cp-field">
-            <label for="routeStartTime">🕗 Start time</label>
-            <input type="time" id="routeStartTime" value="08:00">
+        <!-- Row 1: title + job count -->
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:14px;">
+          <div class="route-cp-title" style="margin-bottom:0;">🗺️ Route Planner</div>
+          <div id="routeCpSub" style="font-size:12px;color:var(--text-muted);white-space:nowrap;"></div>
+        </div>
+
+        <!-- Row 2: start time + start address -->
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-end;">
+          <div class="route-cp-field" style="flex:0 0 auto;">
+            <label for="routeStartTime" style="font-size:11px;">🕗 Start</label>
+            <input type="time" id="routeStartTime" value="08:00" style="width:118px;">
           </div>
-          <div class="route-cp-field addr-wrap">
-            <label for="routeStartAddr">📍 Starting from <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
-            <input type="text" id="routeStartAddr" placeholder="Home base address or leave blank"
-              autocomplete="off"
+          <div class="route-cp-field addr-wrap" style="flex:1;min-width:200px;">
+            <label for="routeStartAddr" style="font-size:11px;">📍 Starting from <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+            <input type="text" id="routeStartAddr" placeholder="Leave blank to start at first job"
+              autocomplete="off" style="width:100%;"
               onfocus="routeAddrFocus(this)"
               oninput="routeAddrInput(this)"
               onkeydown="routeAddrKeydown(event)"
@@ -1337,62 +1379,45 @@
             <div class="addr-suggestions" id="addrSuggestions"></div>
           </div>
         </div>
-        <!-- Date mode toggle -->
-        <div class="route-range-btns" style="margin-bottom:10px;">
-          <button id="routeModeSingle" class="route-range-btn active" onclick="setRouteDateMode('single')">📅 Single Day</button>
-          <button id="routeModeRange"  class="route-range-btn"        onclick="setRouteDateMode('range')">📆 Date Range</button>
-        </div>
 
-        <!-- Single day picker -->
-        <div id="routeSinglePicker" style="margin-bottom:10px;">
-          <div class="route-cp-field">
-            <label for="routeSingleDate">📆 Date to optimize</label>
-            <input type="date" id="routeSingleDate" style="padding:9px 12px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;outline:none;width:180px;" oninput="initRouteTab()">
+        <!-- Row 3: date mode + date picker inline -->
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+          <button id="routeModeSingle" class="route-range-btn active" onclick="setRouteDateMode('single')">📅 Day</button>
+          <button id="routeModeRange"  class="route-range-btn"        onclick="setRouteDateMode('range')">📆 Range</button>
+          <!-- Single day picker -->
+          <div id="routeSinglePicker">
+            <input type="date" id="routeSingleDate" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;outline:none;" oninput="initRouteTab()">
+          </div>
+          <!-- Date range picker -->
+          <div id="routeRangePicker" style="display:none;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+            <input type="date" id="routeRangeFrom" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:13px;outline:none;" oninput="initRouteTab()">
+            <span style="font-size:12px;color:var(--text-muted);">→</span>
+            <input type="date" id="routeRangeTo"   style="padding:8px 10px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:13px;outline:none;" oninput="initRouteTab()">
           </div>
         </div>
 
-        <!-- Date range picker -->
-        <div id="routeRangePicker" style="display:none;margin-bottom:10px;">
-          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
-            <div class="route-cp-field">
-              <label for="routeRangeFrom">📆 From</label>
-              <input type="date" id="routeRangeFrom" style="padding:9px 12px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;outline:none;width:160px;" oninput="initRouteTab()">
-            </div>
-            <div class="route-cp-field">
-              <label for="routeRangeTo">📆 To</label>
-              <input type="date" id="routeRangeTo" style="padding:9px 12px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;outline:none;width:160px;" oninput="initRouteTab()">
-            </div>
-          </div>
-        </div>
-
+        <!-- Row 4: optimize button -->
         <button class="route-optimize-btn" id="routeOptBtn" onclick="buildRoute()">⚡ Optimize Route</button>
 
-        <!-- DEV: force re-scan all lot sizes on current route -->
-        <button id="devScanBtn" onclick="devScanAllLots(this)" style="margin-top:8px;width:100%;padding:10px;background:#1e293b;color:#94a3b8;border:1.5px dashed #475569;border-radius:10px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;">🔬 [DEV] Force scan all lot sizes</button>
-
-        <!-- Calendar sync row -->
-        <div style="display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap;">
-          <button id="routeCalSyncBtn" onclick="syncRouteToCalendar(false)" style="display:none;padding:9px 16px;background:#4285f4;color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;">
-            📅 Sync to Google Calendar
-          </button>
-          <label style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;">
-            <input type="checkbox" id="routeAutoSync" style="width:15px;height:15px;accent-color:#4285f4;cursor:pointer;">
-            Auto-sync calendar after optimize
-          </label>
-        </div>
-
-        <!-- Crew filter -->
-        <div class="route-sync-row" style="margin-top:12px;">
+        <!-- Row 5: crew + sync + clear — all inline -->
+        <div style="display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;">
           <select id="routeCrewFilter" class="route-crew-select" onchange="setRouteCrew(this.value)">
             <option value="all">👥 All crews</option>
             <option value="A">🔵 Crew A</option>
             <option value="B">🩷 Crew B</option>
             <option value="unassigned">⬜ Unassigned</option>
           </select>
-          <button class="route-range-btn" id="routeClearSavedBtn" onclick="clearSavedRoute()" style="display:none;background:#fff1f2;border-color:#fca5a5;color:#dc2626;">🗑 Clear Saved</button>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--text-muted);cursor:pointer;white-space:nowrap;">
+            <input type="checkbox" id="routeAutoSync" style="width:14px;height:14px;accent-color:#4285f4;cursor:pointer;">
+            Auto-sync cal
+          </label>
+          <button id="routeCalSyncBtn" onclick="syncRouteToCalendar(false)" style="display:none;padding:7px 13px;background:#4285f4;color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;">📅 Sync Calendar</button>
+          <button class="route-range-btn" id="routeClearSavedBtn" onclick="clearSavedRoute()" style="display:none;background:#fff1f2;border-color:#fca5a5;color:#dc2626;padding:6px 12px;font-size:12px;">🗑 Clear</button>
+          <!-- DEV button: tucked away, minimal -->
+          <button id="devScanBtn" onclick="devScanAllLots(this)" title="Force re-scan lot sizes" style="padding:6px 10px;background:transparent;color:#94a3b8;border:1px dashed #cbd5e1;border-radius:7px;font-family:inherit;font-size:11px;cursor:pointer;margin-left:auto;">🔬 Scan lots</button>
         </div>
 
-        <div id="routeError" class="route-error" style="display:none;"></div>
+        <div id="routeError" class="route-error" style="display:none;margin-top:10px;"></div>
       </div>
 
       <!-- Stats bar (hidden until route is built) -->
@@ -6754,6 +6779,70 @@ function buildCrewStopsHtml(dateStr, crew, orderedStops, startTimeStr, startVal)
   return html;
 }
 
+// ── Day Note Board ────────────────────────────────────────────────────────
+const _DAY_NOTES_KEY = 'evg_route_day_notes_v1';
+
+function _loadDayNotes() {
+  try { return JSON.parse(localStorage.getItem(_DAY_NOTES_KEY) || '{}'); } catch(e) { return {}; }
+}
+function _saveDayNote(dateStr, text) {
+  const all = _loadDayNotes();
+  if (text.trim()) all[dateStr] = text.trim();
+  else delete all[dateStr];
+  try { localStorage.setItem(_DAY_NOTES_KEY, JSON.stringify(all)); } catch(e) {}
+}
+function routeSaveDayNote(dateStr) {
+  const ta  = document.getElementById('routeDayNoteTA_' + dateStr);
+  const lbl = document.getElementById('routeDayNoteSaved_' + dateStr);
+  if (!ta) return;
+  _saveDayNote(dateStr, ta.value);
+  if (lbl) { lbl.style.opacity = '1'; setTimeout(() => { lbl.style.opacity = '0'; }, 1800); }
+}
+
+function buildDayNoteBoard(dateStr, allStops) {
+  // Collect all notes from every job scheduled this day
+  const noteRows = [];
+  allStops.forEach(function(s) {
+    const bk = s.bk || s;
+    const name = (bk.name || '').split(' ')[0] || '?';
+    const parts = [];
+    const custNote = String(bk.notes || '').trim().replace(/\|/g, '·').replace(/Lot:\s*[\d.]+ac\s*/gi, '').replace(/First mow.*?Following:.*?\d+/gi,'').replace(/first service.*?following.*?\d+/gi,'').trim();
+    if (custNote) parts.push(custNote);
+    if (bk.employeeNotes) parts.push('📝 ' + String(bk.employeeNotes).trim());
+    // Customer record notes from allCustomers
+    const em = String(bk.email || '').toLowerCase().trim();
+    const cust = (allCustomers || []).find(c => String(c.Email||'').toLowerCase().trim() === em);
+    if (cust && cust.Notes) {
+      const cn = String(cust.Notes).trim();
+      if (cn && !custNote.includes(cn.slice(0, 20))) parts.push('👤 ' + cn);
+    }
+    if (parts.length) noteRows.push({ name, text: parts.join(' · ') });
+  });
+
+  const savedNote = (_loadDayNotes())[dateStr] || '';
+
+  const jobNotesHtml = noteRows.length
+    ? noteRows.map(r =>
+        `<div class="route-day-notes-job-row">
+          <span class="route-day-notes-job-name">${esc(r.name)}</span>
+          <span class="route-day-notes-job-text">${esc(r.text)}</span>
+        </div>`).join('')
+    : '<div class="route-day-notes-empty">No customer notes on file for today\'s jobs.</div>';
+
+  return `<div class="route-day-notes">
+    <div class="route-day-notes-title">📋 Day Notes</div>
+    <div class="route-day-notes-jobs">${jobNotesHtml}</div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#92400e;margin-bottom:6px;">Your Note for Today</div>
+    <textarea class="route-day-note-textarea" id="routeDayNoteTA_${dateStr}"
+      placeholder="e.g. Make sure to grab the saw · Call Smith before heading over · Bring extra trimmer line…"
+      >${esc(savedNote)}</textarea>
+    <div style="display:flex;align-items:center;margin-top:8px;">
+      <button class="route-day-note-save" onclick="routeSaveDayNote('${dateStr}')">Save Note</button>
+      <span class="route-day-note-saved" id="routeDayNoteSaved_${dateStr}">✓ Saved</span>
+    </div>
+  </div>`;
+}
+
 function renderRouteDay(dateStr, crewStopsObj) {
   const container = document.getElementById('routeDay_' + dateStr);
   if (!container) return;
@@ -6767,16 +6856,22 @@ function renderRouteDay(dateStr, crewStopsObj) {
   const startVal  = (document.getElementById('routeStartAddr')?.value || '').trim();
   const crews     = Object.keys(crewStopsObj).sort();
 
+  // Collect all stops across crews for the note board
+  const allDayStops = crews.reduce((acc, c) => acc.concat(crewStopsObj[c] || []), []);
+  container.innerHTML = buildDayNoteBoard(dateStr, allDayStops) + '<div id="routeDayStops_' + dateStr + '"></div>';
+  // From here on, render into the stops sub-div (so the note board stays at top)
+  const stopsContainer = document.getElementById('routeDayStops_' + dateStr) || container;
+
   const crewLabels = { A: '🔵 Crew A', B: '🩷 Crew B', unassigned: '⬜ Unassigned', all: '📋 All Stops' };
   const crewColors = { A: '#eff6ff', B: '#fff0f6', unassigned: '#f9fafb', all: '#f9fafb' };
   const crewBorder = { A: '#bfdbfe', B: '#fbcfe8', unassigned: '#e5e7eb', all: '#e5e7eb' };
 
   if (crews.length === 1) {
-    // Single crew — render full width
+    // Single crew — render full width into stops container
     const crew = crews[0];
-    container.innerHTML = buildCrewStopsHtml(dateStr, crew, crewStopsObj[crew], startTime, startVal);
+    stopsContainer.innerHTML = buildCrewStopsHtml(dateStr, crew, crewStopsObj[crew], startTime, startVal);
   } else {
-    // Multiple crews — tabbed view (owner cycles between crews, much cleaner on mobile)
+    // Multiple crews — tabbed view
     const firstCrew = crews[0];
     let tabsHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">';
     for (const crew of crews) {
@@ -6797,7 +6892,7 @@ function renderRouteDay(dateStr, crewStopsObj) {
       const display = crew === firstCrew ? '' : 'display:none;';
       paneHtml += `<div id="routeCrewPane_${dateStr}_${crew}" style="${display}"><div id="routeCrewCol_${dateStr}_${crew}"></div></div>`;
     }
-    container.innerHTML = tabsHtml + paneHtml;
+    stopsContainer.innerHTML = tabsHtml + paneHtml;
 
     // Fill each crew pane
     for (const crew of crews) {
@@ -8654,6 +8749,99 @@ function dispatchJumpToDay(dateStr) {
   setDispatchView('day');
 }
 
+// ── Ghost card helpers ────────────────────────────────────────────────────
+// Computes recurring jobs whose next occurrence falls in the given week
+// but don't yet have a scheduled booking.
+function _dispGetGhosts(days) {
+  var daysSet = new Set(days);
+  // All confirmed email|date pairs (real bookings)
+  var confirmed = new Set();
+  (allBookings || []).forEach(function(b) {
+    if (b.rowCancelled) return;
+    var ds = _dispDateOf(b); if (!ds) return;
+    var em = String(b.email || '').toLowerCase().trim(); if (!em) return;
+    confirmed.add(em + '|' + ds);
+  });
+
+  var ghosts = {}; // dateStr → crew → [ghostInfo]
+
+  (allBookings || []).forEach(function(b) {
+    if (b.rowCancelled || b.rowCompleted) return;
+    var freq = String(b.frequency || '').toLowerCase();
+    if (!freq || /one.time|quote|free/i.test(freq)) return;
+
+    // Determine interval in days
+    var interval = 0;
+    var daysCol = parseInt(b.days || '');
+    if (!isNaN(daysCol) && daysCol > 0) {
+      interval = daysCol;
+    } else if (/weekly/i.test(freq) && !/bi/i.test(freq)) {
+      interval = 7;
+    } else if (/bi.?weekly/i.test(freq)) {
+      interval = 14;
+    } else if (/21/i.test(freq)) {
+      interval = 21;
+    } else if (/month|30.day/i.test(freq)) {
+      interval = 30;
+    } else {
+      return; // Can't determine interval
+    }
+
+    var jobDate = _dispDateOf(b); if (!jobDate) return;
+    var nextObj = new Date(jobDate + 'T12:00');
+    nextObj.setDate(nextObj.getDate() + interval);
+    var nextDate = nextObj.toISOString().slice(0, 10);
+
+    if (!daysSet.has(nextDate)) return; // Not in this week's window
+
+    var em = String(b.email || '').toLowerCase().trim(); if (!em) return;
+    if (confirmed.has(em + '|' + nextDate)) return; // Already scheduled
+
+    var ghostCrew = (b.crew || '').trim() || 'Unassigned';
+    if (!ghosts[nextDate]) ghosts[nextDate] = {};
+    if (!ghosts[nextDate][ghostCrew]) ghosts[nextDate][ghostCrew] = [];
+
+    // Deduplicate by email (same customer could have multiple rows)
+    var already = ghosts[nextDate][ghostCrew].some(function(g){ return g.email === em; });
+    if (!already) {
+      ghosts[nextDate][ghostCrew].push({
+        name: b.name || '—', email: em,
+        phone: b.phone || '', address: b.address || '', zip: b.zip || '',
+        frequency: b.frequency || '', price: b.price || '', crew: b.crew || '',
+        nextDate: nextDate,
+      });
+    }
+  });
+  return ghosts;
+}
+
+// Open Add Job tab pre-filled from a ghost card
+function scheduleGhostJob(g) {
+  closeDispatchDetail();
+  showTab('job');
+  var set = function(id, val) { var el = document.getElementById(id); if (el) el.value = val || ''; };
+  setTimeout(function() {
+    set('job-name',    g.name);
+    set('job-email',   g.email);
+    set('job-phone',   g.phone);
+    set('job-address', g.address);
+    set('job-zip',     g.zip);
+    set('job-date',    g.nextDate);
+    set('job-crew',    g.crew);
+    // Match frequency to plan select
+    var planEl = document.getElementById('job-plan');
+    if (planEl) {
+      var fLower = (g.frequency || '').toLowerCase();
+      if (/weekly/i.test(fLower) && !/bi/i.test(fLower))   planEl.value = 'Weekly Plan';
+      else if (/bi.?weekly/i.test(fLower))                  planEl.value = 'Bi-Weekly Plan';
+      else if (/custom/i.test(fLower))                      planEl.value = 'Custom Plan';
+      if (typeof jobAutoFillPrice === 'function') jobAutoFillPrice();
+    }
+    set('job-price', String(g.price || '').replace(/[^0-9.]/g, ''));
+    if (typeof jobAutoFillEmail === 'function') jobAutoFillEmail();
+  }, 80);
+}
+
 function renderDispatchWeek(anchorDate, crewFilt) {
   // Start from anchorDate (today), show next 7 days
   var anchor = new Date(anchorDate+'T12:00');
@@ -8677,6 +8865,8 @@ function renderDispatchWeek(anchorDate, crewFilt) {
     if (crewFilt!=='all') jobs=jobs.filter(function(b){var c=(b.crew||'').trim();return crewFilt==='unassigned'?!c:c===crewFilt;});
     jobs.forEach(function(b){var k=b.crew||'Unassigned';allCrews.add(k);var key=k+'|'+ds;if(!jobsByCrewDay[key])jobsByCrewDay[key]=[];jobsByCrewDay[key].push(b);});
   });
+  // Compute ghost cards (recurring jobs whose next occurrence falls in this week but aren't scheduled)
+  var ghosts = _dispGetGhosts(days);
   // Always show A and B even with no jobs so zone headers are visible
   ['A','B'].forEach(function(k){ allCrews.add(k); });
   var crewOrder=['A','B'].concat(Array.from(allCrews).filter(function(k){return k!=='A'&&k!=='B';}));
@@ -8717,8 +8907,31 @@ function renderDispatchWeek(anchorDate, crewFilt) {
           +(b.frequency?'<div style="font-size:9px;opacity:.75;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(b.frequency)+'</div>':'')
           +'</div>';
       }).join('');
-      if(!cards) cards='<div style="font-size:11px;color:var(--text-muted);font-style:italic;padding:4px 2px;">No jobs</div>';
-      cells+='<div style="flex:1;min-width:0;border-right:1px solid var(--border);padding:6px;background:'+(isToday?'#f0fdf4':'#fff')+';min-height:60px;transition:background .15s;" ondragover="_dispDragOver(event)" ondragleave="_dispDragLeave(event)" ondrop="_dispDropWeek(event,\''+ds+'\',\''+k+'\')">'+zoneHeader+cards+'</div>';
+      // Append ghost cards for this crew + day
+      var dayGhosts = (ghosts[ds] && ghosts[ds][k]) || [];
+      // Also include ghosts assigned to 'Unassigned' on unassigned crew column
+      if (!dayGhosts.length && k === 'Unassigned' && ghosts[ds] && ghosts[ds]['Unassigned']) {
+        dayGhosts = ghosts[ds]['Unassigned'];
+      }
+      var ghostCards = dayGhosts.map(function(g) {
+        var gData = JSON.stringify(g).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+        var city = (ZIP_CITY && ZIP_CITY[String(g.zip||'').slice(0,5)]) || '';
+        var shortAddr = city || (g.zip ? String(g.zip).slice(0,5) : '');
+        return '<div style="margin-bottom:5px;border-radius:8px;padding:7px 9px;font-size:11px;line-height:1.4;'
+          + 'background:#f8fafc;color:#64748b;border:2px dashed #cbd5e1;opacity:0.78;">'
+          + '<div style="font-weight:800;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#475569;">👻 '+esc(g.name)+'</div>'
+          + (shortAddr ? '<div style="font-size:10px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📍 '+esc(shortAddr)+'</div>' : '')
+          + '<div style="font-size:9px;margin-top:3px;color:#94a3b8;">'+esc(g.frequency)+' · not scheduled</div>'
+          + (adminRole==='owner'
+              ? '<button onclick="scheduleGhostJob(JSON.parse(this.dataset.g))" data-g=\''+gData+'\' '
+                + 'style="margin-top:5px;padding:3px 8px;font-size:10px;font-weight:700;font-family:inherit;'
+                + 'background:#1a3a1a;color:#fff;border:none;border-radius:6px;cursor:pointer;">+ Schedule</button>'
+              : '')
+          + '</div>';
+      }).join('');
+
+      if(!cards && !ghostCards) cards='<div style="font-size:11px;color:var(--text-muted);font-style:italic;padding:4px 2px;">No jobs</div>';
+      cells+='<div style="flex:1;min-width:0;border-right:1px solid var(--border);padding:6px;background:'+(isToday?'#f0fdf4':'#fff')+';min-height:60px;transition:background .15s;" ondragover="_dispDragOver(event)" ondragleave="_dispDragLeave(event)" ondrop="_dispDropWeek(event,\''+ds+'\',\''+k+'\')">'+zoneHeader+cards+ghostCards+'</div>';
     });
     var lbl=k==='A'?'🔵 Crew A':k==='B'?'💗 Crew B':k==='Unassigned'?'🗳️ Unassigned':esc(k);
     rowsHtml+='<div class="dispatch-crew-row" style="align-items:stretch;"><div class="dispatch-crew-label" style="min-height:60px;"><div class="dispatch-crew-name">'+lbl+'</div></div><div style="flex:1;display:flex;min-width:0;">'+cells+'</div></div>';
