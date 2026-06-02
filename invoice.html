@@ -161,6 +161,13 @@
      ROUTE TAB
   ══════════════════════════════════════════ */
   .route-wrap { max-width:700px; margin:0 auto; padding:16px 16px 60px; }
+  .finish-job-btn {
+    padding:10px 14px; border:2px solid var(--border); border-radius:10px;
+    background:#fff; font-family:inherit; font-size:13px; font-weight:600;
+    cursor:pointer; transition:all .15s; color:var(--text);
+  }
+  .finish-job-btn.active { background:var(--green-mid); border-color:var(--green-mid); color:#fff; }
+  .finish-job-btn:hover:not(.active) { border-color:var(--green-mid); }
 
   /* Day note board */
   .route-day-notes {
@@ -1396,8 +1403,18 @@
           </div>
         </div>
 
-        <!-- Row 4: optimize button -->
-        <button class="route-optimize-btn" id="routeOptBtn" onclick="buildRoute()">⚡ Optimize Route</button>
+        <!-- Row 4: optimize button (owners) / clock-in button (employees) -->
+        <button class="route-optimize-btn" id="routeOptBtn"    onclick="buildRoute()"         style="display:none;">⚡ Optimize Route</button>
+        <button class="route-optimize-btn" id="routeClockInBtn" onclick="employeeStartRoute()" style="display:none;background:linear-gradient(135deg,#15803d,#166534);">🟢 Clock In &amp; Start Route</button>
+
+        <!-- Employee: active route bar (shown after clock-in) -->
+        <div id="routeActiveBar" style="display:none;margin-top:10px;background:#f0fdf4;border:2px solid #86efac;border-radius:12px;padding:12px 16px;display:none;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:12px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.06em;">🟢 Route Active</div>
+            <div id="routeElapsedDisplay" style="font-size:22px;font-weight:800;color:#1a3a1a;font-variant-numeric:tabular-nums;">0:00:00</div>
+          </div>
+          <button onclick="showFinishRouteModal()" style="padding:12px 20px;background:#dc2626;color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;">🏁 Finish Route</button>
+        </div>
 
         <!-- Row 5: crew + sync + clear — all inline -->
         <div style="display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;">
@@ -1459,6 +1476,35 @@
 
       <!-- Timeline renders here -->
       <div id="routeTimeline"></div>
+
+      <!-- Finish Route modal (employee clock-out) -->
+      <div id="finishRouteOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:flex-end;justify-content:center;" onclick="if(event.target===this)closeFinishRouteModal()">
+        <div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:460px;padding:28px 24px 36px;box-shadow:0 -8px 40px rgba(0,0,0,.18);animation:slideInUp .22s ease;">
+          <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--green-deep);margin-bottom:4px;">🏁 Finish Route</div>
+          <div id="finishRouteSummary" style="font-size:14px;color:var(--text-muted);margin-bottom:20px;line-height:1.6;"></div>
+
+          <div style="margin-bottom:14px;">
+            <label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);display:block;margin-bottom:6px;">Hours Worked</label>
+            <input id="finishRouteHours" type="number" step="0.25" min="0.25" style="width:100%;padding:11px 14px;border:2px solid var(--green-mid);border-radius:10px;font-family:inherit;font-size:18px;font-weight:700;outline:none;box-sizing:border-box;">
+          </div>
+
+          <div style="margin-bottom:20px;">
+            <label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);display:block;margin-bottom:6px;">Job Type</label>
+            <div id="finishRouteJobBtns" style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="finish-job-btn active" onclick="selectFinishJobType(this,'Mowing')"     style="flex:1;min-width:80px;">🌿 Mowing</button>
+              <button class="finish-job-btn"        onclick="selectFinishJobType(this,'Weeding')"    style="flex:1;min-width:80px;">🌱 Weeding</button>
+              <button class="finish-job-btn"        onclick="selectFinishJobType(this,'Cleaning')"   style="flex:1;min-width:80px;">🧹 Cleaning</button>
+              <button class="finish-job-btn"        onclick="selectFinishJobType(this,'Landscaping')" style="flex:1;min-width:80px;">🌳 Landscaping</button>
+            </div>
+          </div>
+
+          <div id="finishRouteError" style="color:var(--red);font-size:13px;margin-bottom:10px;display:none;"></div>
+          <div style="display:flex;gap:10px;">
+            <button onclick="closeFinishRouteModal()" style="flex:1;padding:14px;border:1.5px solid var(--border);border-radius:12px;background:#fff;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">Cancel</button>
+            <button id="finishRouteSubmitBtn" onclick="submitClockOut()" style="flex:2;padding:14px;background:#15803d;color:#fff;border:none;border-radius:12px;font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;">✓ Submit &amp; Clock Out</button>
+          </div>
+        </div>
+      </div>
 
       <!-- Sticky Route All button — shown once a route is built -->
       <div id="routeAllBtnWrap" style="display:none;position:sticky;bottom:16px;margin-top:20px;z-index:50;">
@@ -6264,6 +6310,11 @@ let _routeViewDayIdx = 0;         // which day we're currently viewing in day-na
 let _routeViewDates  = [];        // ordered list of dates in current saved/built route
 let _lastCalendarUpdates = [];    // calendarUpdates from the most recent buildRoute call
 
+// ── Employee clock-in state ───────────────────────────────────────────────
+let _clockInTime     = null;   // Date when employee started route
+let _clockInInterval = null;   // setInterval for the elapsed timer
+let _finishJobType   = 'Mowing';
+
 // ── Zip → Zone mapping for Citrus County service area ───────────────────
 const ZIP_ZONE = {
   // Zone 1 — Crystal River
@@ -6409,7 +6460,157 @@ function clearSavedRoute() {
   initRouteTab();
 }
 
+// ── Route tab role setup ──────────────────────────────────────────────────
+function _setupRouteTabForRole() {
+  const isOwner = adminRole === 'owner';
+  const optBtn   = document.getElementById('routeOptBtn');
+  const clockBtn = document.getElementById('routeClockInBtn');
+  if (optBtn)   optBtn.style.display   = isOwner ? '' : 'none';
+  if (clockBtn) clockBtn.style.display = isOwner ? 'none' : '';
+  // Employees can't change crew filter or date range (their route is auto-built)
+  const crewSel = document.getElementById('routeCrewFilter');
+  if (crewSel) crewSel.disabled = !isOwner;
+  const modeSingle = document.getElementById('routeModeSingle');
+  const modeRange  = document.getElementById('routeModeRange');
+  if (modeSingle) modeSingle.style.display = isOwner ? '' : 'none';
+  if (modeRange)  modeRange.style.display  = isOwner ? '' : 'none';
+}
+
+// Employee clicks "Clock In & Start Route"
+async function employeeStartRoute() {
+  const btn = document.getElementById('routeClockInBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Building route…'; }
+  try {
+    await buildRoute(); // runs the same optimization
+  } catch(e) {}
+  if (btn) { btn.disabled = false; btn.textContent = '🟢 Clock In & Start Route'; }
+
+  // Record clock-in time
+  _clockInTime = new Date();
+  try { localStorage.setItem('evg_clock_in', _clockInTime.toISOString()); } catch(e) {}
+
+  // Show active bar + start timer
+  const bar = document.getElementById('routeActiveBar');
+  if (bar) bar.style.display = 'flex';
+
+  if (_clockInInterval) clearInterval(_clockInInterval);
+  _clockInInterval = setInterval(_updateElapsedTimer, 1000);
+  _updateElapsedTimer();
+}
+
+function _updateElapsedTimer() {
+  if (!_clockInTime) return;
+  const el = document.getElementById('routeElapsedDisplay');
+  if (!el) return;
+  const secs = Math.floor((Date.now() - _clockInTime.getTime()) / 1000);
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  el.textContent = h + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+}
+
+function showFinishRouteModal() {
+  if (!_clockInTime) { showToast('Clock in first.'); return; }
+  const elapsed = (Date.now() - _clockInTime.getTime()) / 3600000; // hours
+  const rounded = Math.round(elapsed * 4) / 4; // round to nearest 0.25hr
+
+  document.getElementById('finishRouteHours').value = rounded.toFixed(2);
+  document.getElementById('finishRouteSummary').textContent =
+    'Clocked in at ' + _clockInTime.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})
+    + ' · ' + rounded.toFixed(2) + ' hours worked so far';
+  document.getElementById('finishRouteError').style.display = 'none';
+
+  // Auto-detect most common job type from today's jobs
+  const dateStr = _routeViewDates[_routeViewDayIdx] || _routeViewDates[0] || new Date().toISOString().slice(0,10);
+  const dayOrder = _routeCustomOrder[dateStr];
+  if (dayOrder) {
+    const stops = Array.isArray(dayOrder) ? dayOrder : Object.values(dayOrder).flat();
+    const freq = stops.map(s => String(s.bk?.frequency || s.bk?.service || '').toLowerCase());
+    const isMowing = freq.some(f => /mow|lawn/.test(f));
+    const isWeed   = freq.some(f => /weed|trim/.test(f));
+    const isClean  = freq.some(f => /clean/.test(f));
+    const isLand   = freq.some(f => /landscape|mulch|plant/.test(f));
+    _finishJobType = isMowing ? 'Mowing' : isWeed ? 'Weeding' : isClean ? 'Cleaning' : isLand ? 'Landscaping' : 'Mowing';
+  }
+  // Highlight the matching button
+  document.querySelectorAll('.finish-job-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.includes(_finishJobType));
+  });
+
+  const ov = document.getElementById('finishRouteOverlay');
+  if (ov) ov.style.display = 'flex';
+}
+
+function closeFinishRouteModal() {
+  const ov = document.getElementById('finishRouteOverlay');
+  if (ov) ov.style.display = 'none';
+}
+
+function selectFinishJobType(btn, type) {
+  _finishJobType = type;
+  document.querySelectorAll('.finish-job-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+async function submitClockOut() {
+  const hoursInput = document.getElementById('finishRouteHours');
+  const errEl      = document.getElementById('finishRouteError');
+  const submitBtn  = document.getElementById('finishRouteSubmitBtn');
+  const hours = parseFloat(hoursInput?.value || '0');
+  if (!hours || hours <= 0) {
+    errEl.textContent = 'Enter valid hours.'; errEl.style.display = 'block'; return;
+  }
+  errEl.style.display = 'none';
+  submitBtn.disabled = true; submitBtn.textContent = 'Submitting…';
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  try {
+    const p = new URLSearchParams({
+      action:   'employee_clock_out',
+      hours:    hours.toFixed(2),
+      jobType:  _finishJobType,
+      date:     dateStr,
+      adminToken,
+    });
+    const res  = await fetch(SCRIPT_URL + '?' + p.toString());
+    const data = await res.json();
+    if (data.success) {
+      // Stop timer, clear clock-in state
+      if (_clockInInterval) { clearInterval(_clockInInterval); _clockInInterval = null; }
+      _clockInTime = null;
+      try { localStorage.removeItem('evg_clock_in'); } catch(e) {}
+      const bar = document.getElementById('routeActiveBar');
+      if (bar) bar.style.display = 'none';
+      closeFinishRouteModal();
+      const pay = data.total ? ' · $' + data.total + ' logged' : '';
+      showToast('✅ Clocked out! ' + hours.toFixed(2) + 'h ' + _finishJobType + pay);
+    } else {
+      errEl.textContent = data.error || 'Failed to submit.'; errEl.style.display = 'block';
+    }
+  } catch(e) {
+    errEl.textContent = 'Network error.'; errEl.style.display = 'block';
+  }
+  submitBtn.disabled = false; submitBtn.textContent = '✓ Submit & Clock Out';
+}
+
 function initRouteTab() {
+  _setupRouteTabForRole();
+
+  // Restore clock-in from localStorage (e.g. employee refreshed the page mid-route)
+  if (adminRole !== 'owner' && !_clockInTime) {
+    try {
+      const saved = localStorage.getItem('evg_clock_in');
+      if (saved) {
+        _clockInTime = new Date(saved);
+        const bar = document.getElementById('routeActiveBar');
+        if (bar) bar.style.display = 'flex';
+        if (_clockInInterval) clearInterval(_clockInInterval);
+        _clockInInterval = setInterval(_updateElapsedTimer, 1000);
+        _updateElapsedTimer();
+      }
+    } catch(e) {}
+  }
+
   // Set default dates if not yet set
   const singleEl = document.getElementById('routeSingleDate');
   if (singleEl && !singleEl.value) singleEl.value = todayISOStr();
@@ -6751,13 +6952,14 @@ function buildCrewStopsHtml(dateStr, crew, orderedStops, startTimeStr, startVal)
       <button class="btn-action" style="background:#0369a1;color:#fff;font-size:12px;padding:7px 12px;" onclick="openNoteModal(${rowIdx})">📝 ${bk.employeeNotes?'Edit Note':'Add Note'}</button>
     </div>` : '';
 
+    const _isOwnerView = adminRole === 'owner';
     html += `
-      <div class="route-stop" style="margin-bottom:12px;" id="routeStop_${dateStr}_${crew}_${i}" draggable="true"
-           ondragstart="routeDragStart(event,'${dateStr}',${crewKey},${i})"
+      <div class="route-stop" style="margin-bottom:12px;" id="routeStop_${dateStr}_${crew}_${i}" draggable="${_isOwnerView}"
+           ${_isOwnerView ? `ondragstart="routeDragStart(event,'${dateStr}',${crewKey},${i})"
            ondragover="routeDragOver(event,'${dateStr}',${crewKey},${i})"
            ondrop="routeDrop(event,'${dateStr}',${crewKey},${i})"
-           ondragend="routeDragEnd(event)">
-        <div class="route-stop-controls">
+           ondragend="routeDragEnd(event)"` : ''}>
+        <div class="route-stop-controls" style="${_isOwnerView ? '' : 'display:none;'}">
           <button class="route-reorder-btn" title="Move up"   onclick="moveRouteStop('${dateStr}',${crewKey},${i},-1)" ${i===0?'disabled':''}>↑</button>
           <button class="route-reorder-btn" title="Move down" onclick="moveRouteStop('${dateStr}',${crewKey},${i},1)"  ${i===orderedStops.length-1?'disabled':''}>↓</button>
         </div>
