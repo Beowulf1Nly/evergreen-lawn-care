@@ -1460,6 +1460,21 @@
       <!-- Timeline renders here -->
       <div id="routeTimeline"></div>
 
+      <!-- Sticky Route All button — shown once a route is built -->
+      <div id="routeAllBtnWrap" style="display:none;position:sticky;bottom:16px;margin-top:20px;z-index:50;">
+        <button onclick="openRouteAllStops()" style="
+          width:100%;padding:16px;border:none;border-radius:14px;
+          background:linear-gradient(135deg,#1565c0,#0d47a1);
+          color:#fff;font-family:inherit;font-size:15px;font-weight:800;
+          cursor:pointer;box-shadow:0 4px 20px rgba(21,101,192,.45);
+          display:flex;align-items:center;justify-content:center;gap:10px;
+          transition:opacity .15s,transform .1s;letter-spacing:.01em;"
+          onmouseover="this.style.opacity='.9'" onmouseout="this.style.opacity='1'">
+          🗺 Route All in Google Maps
+        </button>
+        <div id="routeAllStopCount" style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:6px;font-weight:500;"></div>
+      </div>
+
     </div>
   </div>
 
@@ -3755,7 +3770,8 @@ function custChangeFreq(custIdx) {
         const data = await res.json();
         if (data.success) {
           closeCustEdit();
-          showToast('Frequency changed to ' + freq + '.');
+          const cancelledMsg = data.cancelled > 0 ? ` · ${data.cancelled} old appointment${data.cancelled !== 1 ? 's' : ''} cancelled` : '';
+          showToast('Plan changed to ' + freq + cancelledMsg);
           sessionStorage.removeItem('evg_customers_cache');
           allCustomers = []; // clear in-memory cache so renderCustomers shows fresh data
           loadBookings();
@@ -6389,6 +6405,7 @@ function clearSavedRoute() {
   document.getElementById('routeDayNav').style.display = 'none';
   document.getElementById('routeTimeline').innerHTML = '';
   document.getElementById('routeStatsBar').style.display = 'none';
+  _updateRouteAllBtn();
   initRouteTab();
 }
 
@@ -6425,6 +6442,7 @@ function initRouteTab() {
     if (_routeViewDayIdx >= _routeViewDates.length) _routeViewDayIdx = 0;
     document.getElementById('routeClearSavedBtn').style.display = '';
     renderSavedRoute(saved);
+    _updateRouteAllBtn();
   } else {
     // No saved route — just clear
     const tl = document.getElementById('routeTimeline');
@@ -7030,6 +7048,73 @@ function closeContactPopup() {
   if (ov) { ov.style.display = 'none'; }
 }
 
+// ── Route All Stops across every day in the current route ────────────────
+function openRouteAllStops() {
+  if (!_routeCustomOrder || !Object.keys(_routeCustomOrder).length) {
+    showToast('Build a route first.');
+    return;
+  }
+
+  const startAddr = (document.getElementById('routeStartAddr')?.value || '').trim();
+
+  function fmtAddr(bk) {
+    const city = ZIP_CITY[bk.zip] || '';
+    const base = (bk.address || '').trim();
+    if (city) return base + ', ' + city + ', FL';
+    if (bk.zip) return base + ', ' + bk.zip + ', FL';
+    return base + ', FL';
+  }
+
+  // Collect all stops in date order, all crews, skipping done jobs
+  const sortedDates = Object.keys(_routeCustomOrder).sort();
+  const allAddrs = [];
+  for (const ds of sortedDates) {
+    const dayOrder = _routeCustomOrder[ds];
+    const stops = Array.isArray(dayOrder) ? dayOrder : Object.values(dayOrder).flat();
+    for (const s of stops) {
+      if (!isDone(s.bk) && (s.bk.address || s.bk.zip)) {
+        allAddrs.push(fmtAddr(s.bk));
+      }
+    }
+  }
+
+  if (!allAddrs.length) { showToast('All jobs are already done! 🎉'); return; }
+
+  const MAX = 10; // Google Maps URL waypoint limit
+  const trimmed = allAddrs.slice(0, MAX);
+  if (allAddrs.length > MAX) {
+    showToast(`Opening first ${MAX} of ${allAddrs.length} remaining stops`);
+  }
+
+  let url = 'https://www.google.com/maps/dir/';
+  if (startAddr) url += encodeURIComponent(startAddr) + '/';
+  url += trimmed.map(a => encodeURIComponent(a)).join('/');
+  window.open(url, '_blank', 'noopener');
+}
+
+function _updateRouteAllBtn() {
+  const wrap    = document.getElementById('routeAllBtnWrap');
+  const countEl = document.getElementById('routeAllStopCount');
+  if (!wrap) return;
+  const hasDates = _routeCustomOrder && Object.keys(_routeCustomOrder).length > 0;
+  wrap.style.display = hasDates ? '' : 'none';
+  if (hasDates && countEl) {
+    // Count remaining (non-done) stops
+    let total = 0, done = 0;
+    Object.values(_routeCustomOrder).forEach(dayOrder => {
+      const stops = Array.isArray(dayOrder) ? dayOrder : Object.values(dayOrder).flat();
+      total += stops.length;
+      done  += stops.filter(s => isDone(s.bk)).length;
+    });
+    const remaining = total - done;
+    const days = Object.keys(_routeCustomOrder).length;
+    countEl.textContent = remaining + ' stop' + (remaining !== 1 ? 's' : '') + ' remaining'
+      + (done > 0 ? ' · ' + done + ' done' : '')
+      + ' · ' + days + ' day' + (days !== 1 ? 's' : '')
+      + (total > 10 ? ' · Google Maps shows first 10' : '');
+  }
+}
+
 // ── Route All → Google Maps multi-stop (auto-skips done jobs) ────────────
 function openRouteAllMaps(dateStr) {
   const dayOrder = _routeCustomOrder[dateStr];
@@ -7109,6 +7194,7 @@ function _reinjectRouteAllBtns(dateStr) {
   _rafDiv.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-bottom:4px;';
   _rafDiv.innerHTML = `<button class="route-all-btn" onclick="openRouteAllMaps('${dateStr}')">🗺 Open Route in Google Maps</button>`;
   tl.prepend(_rafDiv);
+  _updateRouteAllBtn(); // keep bottom button stop-count in sync
 }
 
 // ── Haversine distance in miles ──────────────────────────────────────────
@@ -7168,15 +7254,24 @@ function mowMinutes(bk) {
 }
 
 // ── Acres → estimated mow minutes ───────────────────────────────────────
-// Assumes riding mower ~1.2 ac/hr on mowable area (≈50% of total lot)
-// + 15 min setup/edges/blowing
+// Calibrated from real-world stop times (mow + trim edges + blow):
+//   0.25ac ≈ 20 min · 0.50ac ≈ 30 min · 1.00ac ≈ 60 min
+// Linear interpolation between table entries.
 function mowMinsFromAcres(acres) {
-  // County parcels include house, driveway, landscaping, trees — typically 35-40% is actual grass.
-  // Using 0.38 so a 1ac county lot ≈ 0.38ac mowable ≈ 34min, a 3ac lot ≈ 1.14ac ≈ 72min.
-  const mowable = acres * 0.38;
-  const mowHrs  = mowable / 1.2;         // riding mower: 1.2 ac/hr
-  const mins    = Math.round(mowHrs * 60) + 15;
-  return Math.min(150, Math.max(20, mins));
+  const T = [
+    [0.08, 12], [0.12, 14], [0.15, 16], [0.20, 18], [0.25, 20],
+    [0.33, 24], [0.40, 27], [0.50, 30], [0.60, 36], [0.75, 44],
+    [1.00, 60], [1.25, 73], [1.50, 87], [2.00, 112], [3.00, 150],
+  ];
+  if (acres <= T[0][0])             return T[0][1];
+  if (acres >= T[T.length-1][0])   return T[T.length-1][1];
+  for (let i = 0; i < T.length - 1; i++) {
+    const [a0,m0] = T[i], [a1,m1] = T[i+1];
+    if (acres >= a0 && acres <= a1) {
+      return Math.round(m0 + (acres - a0) / (a1 - a0) * (m1 - m0));
+    }
+  }
+  return 60;
 }
 
 // ── Polygon area → acres (Shoelace formula on lat/lon nodes) ─────────────
@@ -7356,10 +7451,14 @@ function editLotSize(rowIdx, badgeEl) {
       await fetch(SCRIPT_URL+'?'+p);
     } catch(e) {}
     inp.remove();
-    // Re-render the route stop
+    // Recalculate cascading arrival times with the new mow duration, then re-render
     const dateStr = _routeViewDates[_routeViewDayIdx] || _routeViewDates[0];
-    if (dateStr && _routeCustomOrder[dateStr]) { renderRouteDay(dateStr, _routeCustomOrder[dateStr]); _reinjectRouteAllBtns(dateStr); }
-    showToast('Lot size updated to ' + acres + 'ac');
+    if (dateStr && _routeCustomOrder[dateStr]) {
+      _syncRouteOrderToDispatch(dateStr); // updates all bk.jobTime with new mow mins
+      renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
+      _reinjectRouteAllBtns(dateStr);
+    }
+    showToast('Lot size updated to ' + acres + 'ac — ' + mowMinsFromAcres(acres) + ' min est.');
   };
 
   inp.onkeydown = e => { if (e.key === 'Enter') saveIt(); if (e.key === 'Escape') { badgeEl.style.display=''; inp.remove(); } };
@@ -7407,9 +7506,10 @@ async function scanAndSaveLotSize(rowIdx, lat, lon, btnEl) {
     await fetch(SCRIPT_URL + '?' + params);
   } catch(e) {}
 
-  // Re-render route stop with updated estimate
+  // Recalculate cascading times with new mow duration, then re-render
   const dateStr = _routeViewDates[_routeViewDayIdx] || _routeViewDates[0];
   if (dateStr && _routeCustomOrder[dateStr]) {
+    _syncRouteOrderToDispatch(dateStr); // cascades updated mow mins through all stops
     renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
     _reinjectRouteAllBtns(dateStr);
   }
@@ -7899,6 +7999,7 @@ async function buildRoute() {
     saveRouteToStorage(_routeCustomOrder, statsObj, sortedDates);
     _routeViewDates  = sortedDates;
     _routeViewDayIdx = 0;
+    _updateRouteAllBtn();
 
     // Show saved banner
     const banner = document.getElementById('routeSavedBanner');
