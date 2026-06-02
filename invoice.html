@@ -3610,7 +3610,9 @@ function custChangeFreq(custIdx) {
           closeCustEdit();
           showToast('Frequency changed to ' + freq + '.');
           sessionStorage.removeItem('evg_customers_cache');
+          allCustomers = []; // clear in-memory cache so renderCustomers shows fresh data
           loadBookings();
+          loadCustomers();
         } else {
           showToast('Error: ' + (data.error || 'Failed'));
         }
@@ -4377,6 +4379,7 @@ function confirmYes() {
 // SCHEDULE PLAN (from completed quote visit) → redirects to Job tab
 // ═══════════════════════════════════════════════════════
 function openSchedulePlan(rowIdx) {
+  closeDispatchDetail(); // close the dispatch overlay before switching tabs (prevents it covering the page)
   openJobTab(rowIdx);
 }
 
@@ -4556,8 +4559,12 @@ async function executeCompleteJob(rowIdx) {
   if (!b) return;
   try {
     const params = new URLSearchParams({
-      action:    'owner_complete_job',
-      rowIndex:  b._rowIndex || (rowIdx + 2),
+      action:      'owner_complete_job',
+      rowIndex:    b._rowIndex || (rowIdx + 2),
+      // Send email + serviceDate so the server can find the real row if _rowIndex
+      // shifted (autoScheduleNext inserts at row 2, bumping all subsequent indices)
+      email:       b.email || '',
+      serviceDate: b.serviceDate || b.serviceDateRaw || '',
       adminToken,
     });
     const res  = await fetch(SCRIPT_URL + '?' + params.toString());
@@ -8166,14 +8173,20 @@ function setDispatchView(view) {
 
 function _dispJobClass(b) {
   if (b.rowCompleted) return 'status-completed';
-  if (isDone(b)) return 'status-done';
-  var cal = String(b.calendarEvent||'').toLowerCase(), pm = String(b.payMethod||'').toLowerCase();
+  var cal  = String(b.calendarEvent||'').toLowerCase(), pm = String(b.payMethod||'').toLowerCase();
+  var inv  = String(b.invoiced||'').toLowerCase();
   var cash = cal.includes('cash') || pm.includes('cash');
-  var paid = (!cal.includes('not paid') && !cal.includes('pending')) && (cal.includes('paid') || cal.includes('autopay') || cal.includes('auto-pay') || pm.includes('autopay') || pm.includes('auto-pay'));
-  var inv  = String(b.invoiced||'').length > 2;
+  var paid = (!cal.includes('not paid') && !cal.includes('pending')) &&
+             (cal.includes('paid') || cal.includes('autopay') || cal.includes('auto-pay') ||
+              pm.includes('autopay') || pm.includes('auto-pay') ||
+              inv.includes('paid') || inv.includes('✅'));
+  var free = String(b.frequency||'').toLowerCase().includes('free');
+  // Done + paid/free = green (status-completed). Done but unpaid = yellow (status-done).
+  if (isDone(b)) return (paid || free) ? 'status-completed' : 'status-done';
+  var invStr = String(b.invoiced||'');
   if (cash && !paid) return 'status-cash';
   if (paid) return 'status-paid';
-  if (inv)  return 'status-invoiced';
+  if (invStr.length > 2) return 'status-invoiced';
   return 'status-upcoming';
 }
 
@@ -8320,7 +8333,9 @@ function renderDispatchWeek(anchorDate, crewFilt) {
   var DNAMES=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   var axisEl=document.getElementById('dispatchTimeAxis');
   if (axisEl) {
-    var ax='<div class="dispatch-time-axis-label-col">Crew</div><div class="dispatch-time-slots" style="display:grid;grid-template-columns:repeat(7,1fr);">';
+    // min-width:0 overrides the day-view's min-width:800px so the 7 header columns
+    // stay the same width as the 7 flex cells below them
+    var ax='<div class="dispatch-time-axis-label-col">Crew</div><div class="dispatch-time-slots" style="display:grid;grid-template-columns:repeat(7,1fr);min-width:0;">';
     days.forEach(function(ds){ var d2=new Date(ds+'T12:00'); var isT=ds===today; ax+='<div class="dispatch-time-slot" style="'+(isT?'color:var(--green-mid);font-weight:800;background:#f0fdf4;':'')+'">'+DNAMES[d2.getDay()]+'<br><span style="font-size:10px;">'+(d2.getMonth()+1)+'/'+d2.getDate()+'</span></div>'; });
     ax+='</div>'; axisEl.innerHTML=ax;
   }
@@ -8351,13 +8366,20 @@ function renderDispatchWeek(anchorDate, crewFilt) {
         var cls=_dispJobClass(b);
         var isDark=cls==='status-upcoming'||cls==='status-completed'||cls==='status-paid';
         var tc=isDark?'#fff':'#1a1a1a';
+        // Zone mismatch: job's zone is not in the crew's assigned zones for this day
+        var crewZoneNames=zones.map(function(z){return z.zone;});
+        var zoneMismatch=zone&&k!=='Unassigned'&&crewZoneNames.length>0&&crewZoneNames.indexOf(zone)<0;
+        var zoneBadgeStyle=zoneMismatch
+          ?'background:#dc2626;color:#fff;font-weight:800;'
+          :'background:rgba(255,255,255,.25);';
+        var zoneBadgeTitle=zoneMismatch?'⚠️ '+zone+' is not scheduled for Crew '+k+' on '+dLbl:'Zone '+zone;
         return '<div class="dispatch-week-card '+cls+'" draggable="true" ondragstart="_dispDragStart(event,'+ri+')" onclick="openDispatchDetail('+ri+')" style="cursor:grab;margin-bottom:5px;border-radius:8px;padding:7px 9px;font-size:11px;line-height:1.4;color:'+tc+';">'
           +'<div style="font-weight:800;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(b.name||'--')+'</div>'
           +(shortAddr?'<div style="font-size:10px;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📍 '+esc(shortAddr)+'</div>':'')
           +'<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:3px;">'
           +(b.jobTime?'<span style="font-size:10px;opacity:.9;">⏰ '+esc(b.jobTime)+'</span>':'')
           +'<span style="font-size:10px;opacity:.85;">'+_dispMowMin(b)+'m</span>'
-          +(zone?'<span style="font-size:9px;font-weight:700;background:rgba(255,255,255,.25);border-radius:4px;padding:1px 4px;">'+esc(zone)+'</span>':'')
+          +(zone?'<span title="'+esc(zoneBadgeTitle)+'" style="font-size:9px;font-weight:700;'+zoneBadgeStyle+'border-radius:4px;padding:1px 4px;">'+esc(zone)+'</span>':'')
           +(price?'<span style="font-size:10px;font-weight:700;margin-left:auto;">$'+price.toFixed(0)+'</span>':'')
           +'</div>'
           +(b.frequency?'<div style="font-size:9px;opacity:.75;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(b.frequency)+'</div>':'')
