@@ -5058,7 +5058,7 @@ async function sendInvoice() {
   const invoiceAddr    = b ? (b.address || '') : (c.address || '');
   const invoiceService = b ? (b.service || b.frequency || 'Lawn Service') : (c.plan || 'Lawn Service');
   const invoiceDate    = b ? (b.serviceDate || b.serviceDateRaw || '') : '';
-  const invoiceRowIdx  = b ? (activeRowIdx + 2) : 0; // 0 = no booking row (advance invoice)
+  const invoiceRowIdx  = b ? (b._rowIndex || (activeRowIdx + 2)) : 0; // 0 = no booking row (advance invoice)
 
   const base = parseFloat(document.getElementById('invoiceAmount').value);
   const days = parseInt(document.getElementById('invoiceDays').value) || 7;
@@ -5093,6 +5093,7 @@ async function sendInvoice() {
     daysUntilDue: days,
     note:         note || '',
     rowIndex:     invoiceRowIdx,
+    serviceDate:  invoiceDate,   // lets the server re-find the exact row if it shifted — prevents wrong-row / double invoicing
     adminToken:   adminToken,
     tipAmount:    tip,
   });
