@@ -5100,21 +5100,31 @@ async function sendInvoice() {
 
   try {
     const res  = await fetch(SCRIPT_URL + '?' + params.toString());
-    const data = await res.json();
+    let data;
+    try { data = await res.json(); }
+    catch (parseErr) { console.error('sendInvoice: non-JSON response', res && res.status, parseErr); throw new Error('NETWORK'); }
     if (data.success) {
       okEl.style.display = 'block';
-      document.getElementById('sendBtnText').textContent = '✅ Sent!';
+      document.getElementById('sendBtnText').textContent = data.alreadyInvoiced ? '✅ Already invoiced' : '✅ Sent!';
       if (b && activeRowIdx !== null) {
         allBookings[activeRowIdx].invoiced = 'Invoiced — ' + new Date().toLocaleDateString();
       }
       setTimeout(() => { closeInvoiceModal(); renderBookings(); }, 2000);
     } else {
-      throw new Error(data.error || 'Invoice failed');
+      // Server reached us and returned a real error — show it verbatim (no blind retry).
+      console.error('sendInvoice: server error', data);
+      btn.disabled = false;
+      document.getElementById('sendBtnText').textContent = '📧 Send Invoice';
+      errEl.textContent = '❌ ' + (data.error || 'Invoice failed');
+      errEl.style.display = 'block';
     }
   } catch(err) {
+    // True network / non-JSON failure. The invoice MAY have been created server-side,
+    // so warn against blindly resending (that is how duplicate invoices happen).
+    console.error('sendInvoice: request failed', err);
     btn.disabled = false;
     document.getElementById('sendBtnText').textContent = '📧 Send Invoice';
-    errEl.textContent = '❌ ' + err.message;
+    errEl.innerHTML = '⚠️ Couldn\'t confirm the invoice was sent. <strong>It may have already been created</strong> — check Stripe (or the customer\'s portal) before resending so they aren\'t billed twice.';
     errEl.style.display = 'block';
   }
 }
@@ -9303,17 +9313,17 @@ function _getCrewDayZones(crew, dayLabel) {
 }
 function _zoneHeaderBadges(zones) {
   if (!zones.length) return '';
-  return '<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:4px;">' +
+  return '<div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:3px;">' +
     zones.map(function(z) {
       var info    = ZONE_CITIES[z.zone] || {};
       var primary = z.type === 'primary';
       var bg = primary ? '#e8f5e9' : '#f3f4f6';
       var bd = primary ? 'var(--green-mid)' : '#cbd5e1';
       var fg = primary ? 'var(--green-deep)' : '#64748b';
-      return '<span title="' + esc((info.cities || z.zone)) + (primary ? '' : ' (backup)') +
-        '" style="display:inline-flex;align-items:center;font-size:10px;font-weight:700;background:' + bg +
+      return '<span title="' + esc((info.cities || z.zone)) + (primary ? '' : ' (backup day)') +
+        '" style="display:inline-flex;align-items:center;font-size:10px;font-weight:800;background:' + bg +
         ';border:1px ' + (primary ? 'solid' : 'dashed') + ' ' + bd + ';color:' + fg +
-        ';border-radius:6px;padding:1px 6px;">' + esc(z.zone) + '</span>';
+        ';border-radius:6px;padding:1px 6px;">' + esc(z.zone) + (primary ? '' : '<sup style="font-size:7px;">2</sup>') + '</span>';
     }).join('') +
     '</div>';
 }
@@ -9394,11 +9404,11 @@ function _dispDragOver(ev) {
   ev.preventDefault();
   try { ev.dataTransfer.dropEffect = 'move'; } catch(e) {}
   var row = ev.currentTarget;
-  if (row && row.classList) row.classList.add('drag-over');
+  if (row && row.classList) { row.classList.add('drag-over'); row.classList.add('drag-target'); }
 }
 function _dispDragLeave(ev) {
   var row = ev.currentTarget;
-  if (row && row.classList) row.classList.remove('drag-over');
+  if (row && row.classList) { row.classList.remove('drag-over'); row.classList.remove('drag-target'); }
 }
 function _dispDropDayCrew(ev, crewKey) {
   ev.preventDefault();
@@ -9601,42 +9611,79 @@ async function submitDispatchResched() {
 // ═══════════════════════════════════════════════════════
 // DISPATCH — WEEK & MONTH VIEWS  (restored)
 // ═══════════════════════════════════════════════════════
-function _dispWeekStart(dateStr) {
-  var d = new Date(dateStr + 'T12:00');
-  if (isNaN(d)) d = new Date();
-  d.setDate(d.getDate() - d.getDay()); // back to Sunday
-  return d;
-}
-
 function renderDispatchWeek(dateStr, crewFilt) {
+  // Classic layout: a crew (rows) x day (columns) matrix. Each cell shows the
+  // zone badges that crew services that day, then the day's job cards.
   var axisEl = document.getElementById('dispatchTimeAxis');
   if (axisEl) axisEl.innerHTML = '';
   var rowsEl = document.getElementById('dispatchBoardRows');
   if (!rowsEl) return;
 
-  var start = _dispWeekStart(dateStr);
+  // 7 day columns starting at the selected date
+  var start = new Date(dateStr + 'T12:00');
+  if (isNaN(start)) start = new Date();
+  var days = [];
+  for (var i = 0; i < 7; i++) { var d = new Date(start); d.setDate(start.getDate() + i); days.push(d); }
   var todayStr = new Date().toISOString().slice(0, 10);
-  var html = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;padding:6px;">';
-  for (var i = 0; i < 7; i++) {
-    var d = new Date(start); d.setDate(start.getDate() + i);
-    var ds = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-    var jobs = allBookings.filter(function(b) { return !b.rowCancelled && _dispDateOf(b) === ds; });
-    if (crewFilt && crewFilt !== 'all') jobs = jobs.filter(function(b) { var c = (b.crew || '').trim(); return crewFilt === 'unassigned' ? !c : c === crewFilt; });
-    jobs.sort(function(a, b) { return String(a.jobTime || '99:99').localeCompare(String(b.jobTime || '99:99')); });
-    var isToday = ds === todayStr;
-    html += '<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;background:' + (isToday ? '#f0fdf4' : '#fff') + ';min-height:120px;">';
-    html += '<div style="padding:6px 8px;font-size:11px;font-weight:800;text-align:center;background:' + (isToday ? 'var(--green-mid)' : '#f8faf6') + ';color:' + (isToday ? '#fff' : 'var(--text-muted)') + ';">' + DAYS_OF_WEEK[i] + ' ' + d.getDate() + '</div>';
-    html += '<div style="padding:5px;display:flex;flex-direction:column;gap:4px;">';
-    if (!jobs.length) {
-      html += '<div style="font-size:11px;color:#cbd5e1;text-align:center;padding:8px 0;">—</div>';
-    } else {
-      jobs.forEach(function(b) {
-        var ri = allBookings.indexOf(b);
-        html += '<div class="dispatch-month-job-pill ' + _dispJobClass(b) + '" onclick="openDispatchDetail(' + ri + ')" title="' + esc(b.name || '') + '">' + (b.jobTime ? (esc(b.jobTime) + ' ') : '') + esc(b.name || '—') + '</div>';
-      });
-    }
-    html += '</div></div>';
+  function dstr(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
+  // Which crew rows to show
+  var crews;
+  if (crewFilt === 'A' || crewFilt === 'B') crews = [crewFilt];
+  else if (crewFilt === 'unassigned') crews = ['Unassigned'];
+  else {
+    crews = ['A', 'B'];
+    var hasUnassigned = allBookings.some(function(b) {
+      if (b.rowCancelled || (b.crew || '').trim()) return false;
+      var ds = _dispDateOf(b); return days.some(function(d) { return dstr(d) === ds; });
+    });
+    if (hasUnassigned) crews.push('Unassigned');
   }
+
+  var html = '<div class="dispatch-week-grid" style="grid-template-columns:86px repeat(' + days.length + ',minmax(132px,1fr));">';
+  // Header row
+  html += '<div class="dispatch-week-day-hdr" style="position:sticky;left:0;z-index:6;">CREW</div>';
+  days.forEach(function(d) {
+    var isToday = dstr(d) === todayStr;
+    html += '<div class="dispatch-week-day-hdr' + (isToday ? ' today-col' : '') + '">' + DAYS_OF_WEEK[d.getDay()] +
+      ' <span style="color:var(--text);font-weight:800;">' + (d.getMonth() + 1) + '/' + d.getDate() + '</span></div>';
+  });
+  // One row per crew
+  crews.forEach(function(crewKey) {
+    var label = crewKey === 'A' ? '🔵 Crew A' : crewKey === 'B' ? '🩷 Crew B' : '⬜ Unassigned';
+    html += '<div style="position:sticky;left:0;z-index:4;background:#fff;border-bottom:1px solid var(--border);border-right:2px solid var(--border);padding:10px 8px;font-size:13px;font-weight:800;color:var(--text);">' + label + '</div>';
+    days.forEach(function(d) {
+      var ds = dstr(d), dow = DAYS_OF_WEEK[d.getDay()];
+      var zoneHdr = (crewKey === 'Unassigned') ? '' : _zoneHeaderBadges(_getCrewDayZones(crewKey, dow));
+      var jobs = allBookings.filter(function(b) {
+        if (b.rowCancelled || _dispDateOf(b) !== ds) return false;
+        var c = (b.crew || '').trim();
+        return crewKey === 'Unassigned' ? !c : c === crewKey;
+      });
+      jobs.sort(function(a, b) { return String(a.jobTime || '99:99').localeCompare(String(b.jobTime || '99:99')); });
+      var cards = '';
+      if (jobs.length) {
+        cards = jobs.map(function(b) {
+          var ri    = allBookings.indexOf(b);
+          var price = parseFloat(String(b.price || '').replace(/[^0-9.]/g, '')) || 0;
+          var city  = ZIP_CITY[b.zip] || b.address || '';
+          var zone  = b.zone || getZoneFromZip(b.zip) || '';
+          var dur   = _dispMowMin(b);
+          var meta  = (b.jobTime ? ('⏰ ' + esc(b.jobTime) + ' · ') : '') + dur + 'm' + (zone ? (' · ' + esc(zone)) : '');
+          var hint  = (price ? ('$' + price.toFixed(0)) : '') + (b.frequency ? ((price ? ' · ' : '') + esc(b.frequency)) : '');
+          return '<div class="dispatch-week-card ' + _dispJobClass(b) + '" draggable="true" ondragstart="_dispDragStart(event,' + ri + ')" onclick="openDispatchDetail(' + ri + ')" title="' + esc(b.name || '') + '">' +
+            '<div class="dispatch-week-card-name">' + esc(b.name || '—') + '</div>' +
+            (city ? '<div class="dispatch-week-card-meta">📍 ' + esc(city) + '</div>' : '') +
+            '<div class="dispatch-week-card-meta">' + meta + '</div>' +
+            (hint ? '<div class="dispatch-week-card-hint">' + hint + '</div>' : '') +
+            '</div>';
+        }).join('');
+      } else {
+        cards = '<div class="dispatch-week-empty">No jobs</div>';
+      }
+      html += '<div class="dispatch-week-day-body" ondragover="_dispDragOver(event)" ondragleave="_dispDragLeave(event)" ondrop="_dispDropDayCrew(event,\'' + crewKey + '\')">' + zoneHdr + cards + '</div>';
+    });
+  });
   html += '</div>';
   rowsEl.innerHTML = html;
 }
