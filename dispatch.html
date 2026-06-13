@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Dispatch Board — Evergreen Lawn Care</title>
+<link rel="icon" href="favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green-deep:#1a3a1a; --green-mid:#2d6a2d; --green-light:#e8f5e9;
+    --green-pale:#f0f7f0; --border:#e2e8f0; --text:#1e293b;
+    --text-muted:#64748b; --red:#dc2626; --amber:#d97706; --violet:#7c3aed;
+    --shadow-sm:0 1px 3px rgba(0,0,0,.08); --shadow-md:0 4px 16px rgba(0,0,0,.12);
+    --shadow-lg:0 8px 40px rgba(0,0,0,.2);
+  }
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Inter',sans-serif; background:#f1f5f1; color:var(--text); min-height:100vh; }
+
+  /* ── Login ── */
+  #loginScreen {
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh; background:var(--green-deep);
+    background-image:radial-gradient(ellipse at 20% 80%, rgba(45,106,45,.35) 0%, transparent 60%),
+                     radial-gradient(ellipse at 80% 20%, rgba(26,58,26,.5) 0%, transparent 60%);
+  }
+  .login-box {
+    background:#fff; border-radius:20px; padding:40px 36px;
+    max-width:400px; width:92%; box-shadow:0 8px 48px rgba(0,0,0,.25);
+  }
+  .login-logo { font-family:'Playfair Display',serif; font-size:22px; color:var(--green-deep); margin-bottom:4px; }
+  .login-sub  { font-size:13px; color:var(--text-muted); margin-bottom:24px; }
+  .login-input {
+    width:100%; padding:13px 16px; border:2px solid var(--border);
+    border-radius:12px; font-size:15px; font-family:inherit; outline:none;
+    margin-bottom:12px; transition:border .2s;
+  }
+  .login-input:focus { border-color:var(--green-mid); }
+  .login-btn {
+    width:100%; padding:14px; background:var(--green-mid); color:#fff;
+    border:none; border-radius:12px; font-size:15px; font-weight:700;
+    font-family:inherit; cursor:pointer; transition:opacity .15s;
+  }
+  .login-btn:hover { opacity:.88; }
+  .login-btn:disabled { opacity:.5; cursor:not-allowed; }
+  #loginMsg { font-size:13px; color:var(--text-muted); margin-top:10px; text-align:center; }
+  #loginErr { font-size:13px; color:var(--red); margin-top:8px; text-align:center; display:none; }
+
+  /* ── App shell ── */
+  #appScreen { display:none; flex-direction:column; min-height:100vh; }
+  header {
+    background:var(--green-deep); color:#fff; padding:0 20px;
+    display:flex; align-items:center; justify-content:space-between;
+    height:56px; flex-shrink:0; position:sticky; top:0; z-index:100;
+    box-shadow:0 2px 12px rgba(0,0,0,.3);
+  }
+  .hdr-brand { font-family:'Playfair Display',serif; font-size:18px; display:flex; align-items:center; gap:10px; }
+  .hdr-right  { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .hdr-btn {
+    padding:7px 13px; border-radius:8px; border:1.5px solid rgba(255,255,255,.22);
+    background:transparent; color:#fff; font-size:13px; font-family:inherit;
+    cursor:pointer; transition:all .15s; text-decoration:none; display:inline-flex; align-items:center;
+  }
+  .hdr-btn:hover { background:rgba(255,255,255,.12); border-color:rgba(255,255,255,.4); }
+  #liveClock {
+    font-size:12px; color:rgba(255,255,255,.65); font-variant-numeric:tabular-nums;
+    letter-spacing:.02em; padding:4px 10px; background:rgba(0,0,0,.2); border-radius:6px;
+  }
+
+  /* ── Controls bar ── */
+  .controls-bar {
+    background:#fff; border-bottom:1.5px solid var(--border);
+    padding:11px 20px; display:flex; align-items:center;
+    justify-content:space-between; flex-wrap:wrap; gap:10px;
+    position:sticky; top:56px; z-index:90; box-shadow:0 1px 4px rgba(0,0,0,.05);
+  }
+  .controls-left  { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .controls-right { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .date-nav-btn {
+    padding:7px 14px; border:1.5px solid var(--border); border-radius:8px;
+    background:#fff; font-size:13px; font-family:inherit; cursor:pointer;
+    transition:all .15s; font-weight:600; color:var(--text);
+  }
+  .date-nav-btn:hover { border-color:var(--green-mid); color:var(--green-mid); }
+  .date-nav-btn.today { background:var(--green-mid); color:#fff; border-color:var(--green-mid); }
+  .date-input {
+    padding:7px 12px; border:1.5px solid var(--border); border-radius:8px;
+    font-size:14px; font-family:inherit; outline:none; background:#fff;
+  }
+  .date-input:focus { border-color:var(--green-mid); }
+  .crew-select {
+    padding:7px 12px; border:1.5px solid var(--border); border-radius:8px;
+    font-size:13px; font-family:inherit; outline:none; background:#fff; cursor:pointer;
+  }
+  .date-label { font-size:16px; font-weight:700; color:var(--green-deep); }
+  .legend { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text-muted); font-weight:600; flex-wrap:wrap; }
+  .legend-dot { width:9px; height:9px; border-radius:50%; display:inline-block; }
+
+  /* ── Stats ribbon ── */
+  .stats-ribbon {
+    background:linear-gradient(95deg,#1a3a1a 0%,#2a5c2a 60%,#2d6a2d 100%);
+    padding:9px 20px; display:flex; align-items:center; gap:0; flex-shrink:0;
+    border-bottom:2px solid rgba(0,0,0,.12);
+  }
+  .stat-pill { display:flex; flex-direction:column; align-items:center; padding:3px 18px; border-right:1px solid rgba(255,255,255,.13); }
+  .stat-pill:first-child { padding-left:4px; }
+  .stat-num { font-size:19px; font-weight:800; color:#fff; line-height:1.1; }
+  .stat-lbl { font-size:9px; color:rgba(255,255,255,.52); text-transform:uppercase; letter-spacing:.07em; margin-top:1px; }
+  .stat-progress-wrap { flex:1; margin-left:14px; display:flex; flex-direction:column; gap:4px; min-width:90px; }
+  .stat-progress-track { background:rgba(255,255,255,.18); border-radius:20px; height:5px; overflow:hidden; }
+  .stat-progress-fill { background:#4ade80; height:100%; border-radius:20px; transition:width .7s ease; }
+  .stat-pct { font-size:11px; color:rgba(255,255,255,.6); }
+
+  /* ── Board ── */
+  .board-wrap { flex:1; padding:18px; overflow-x:auto; }
+  .board-outer {
+    background:#fff; border:1.5px solid var(--border); border-radius:16px;
+    overflow:hidden; min-width:900px; box-shadow:var(--shadow-sm);
+  }
+  .board-time-axis {
+    display:flex; border-bottom:2px solid var(--border);
+    background:#f8faf6; position:sticky; top:0; z-index:10;
+  }
+  .board-label-col {
+    width:162px; min-width:162px; flex-shrink:0; padding:12px 16px;
+    font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--text-muted); border-right:1.5px solid var(--border);
+  }
+  .board-time-slots { flex:1; display:flex; }
+  .board-time-slot {
+    flex:1; text-align:center; font-size:10px; color:var(--text-muted);
+    font-weight:600; padding:10px 0; border-right:1px solid var(--border);
+  }
+  .board-time-slot:last-child { border-right:none; }
+
+  .board-crew-row { display:flex; border-bottom:1.5px solid var(--border); min-height:100px; }
+  .board-crew-row:last-child { border-bottom:none; }
+  .board-crew-label {
+    width:162px; min-width:162px; flex-shrink:0; padding:14px 16px;
+    border-right:1.5px solid var(--border); background:#f8faf6;
+    display:flex; flex-direction:column; justify-content:center; gap:4px;
+  }
+  .board-crew-name  { font-size:13px; font-weight:700; color:var(--green-deep); }
+  .board-crew-count { font-size:11px; color:var(--text-muted); }
+  .board-job-track  {
+    flex:1; position:relative; min-height:100px;
+    background:repeating-linear-gradient(
+      90deg, transparent, transparent calc(100%/12 - 1px),
+      rgba(226,232,240,.55) calc(100%/12 - 1px), rgba(226,232,240,.55) calc(100%/12)
+    );
+    transition:background-color .12s;
+  }
+  .board-job-track.drag-over {
+    background-color:rgba(45,106,45,.07) !important;
+    outline:2px dashed var(--green-mid);
+    outline-offset:-3px;
+  }
+
+  /* ── Job blocks ── */
+  .job-block {
+    position:absolute; top:10px; height:calc(100% - 20px);
+    border-radius:9px; cursor:grab; display:flex; flex-direction:column;
+    justify-content:center; padding:8px 10px; overflow:hidden;
+    box-shadow:0 2px 8px rgba(0,0,0,.16); transition:transform .13s, box-shadow .13s, opacity .13s;
+    min-width:76px; user-select:none;
+  }
+  .job-block:active { cursor:grabbing; }
+  .job-block:hover  { transform:translateY(-2px); box-shadow:0 6px 22px rgba(0,0,0,.24); z-index:5; }
+  .job-block.dragging { opacity:.5; transform:scale(.96); box-shadow:none; }
+  .job-block.upcoming  { background:linear-gradient(135deg,#22c55e,#16a34a); color:#fff; }
+  .job-block.done      { background:linear-gradient(135deg,#94a3b8,#64748b); color:#fff; }
+  .job-block.cash      { background:linear-gradient(135deg,#f59e0b,#b45309); color:#fff; }
+  .job-block.invoiced  { background:linear-gradient(135deg,#3b82f6,#1d4ed8); color:#fff; }
+  .job-block.paid      { background:linear-gradient(135deg,#a855f7,#7c3aed); color:#fff; }
+  .job-block.completed { background:linear-gradient(135deg,#4b5563,#374151); color:#9ca3af; }
+  .job-block.today-pulse.upcoming { animation:softPulse 2.5s ease-in-out infinite; }
+  @keyframes softPulse {
+    0%,100% { box-shadow:0 2px 8px rgba(22,163,74,.3); }
+    50%      { box-shadow:0 5px 24px rgba(22,163,74,.6); }
+  }
+  .job-name { font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .job-time { font-size:10px; opacity:.82; white-space:nowrap; margin-top:1px; }
+  .job-plan { font-size:10px; opacity:.7; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* ── Current time line ── */
+  .current-time-line {
+    position:absolute; top:0; bottom:0; width:2px;
+    background:#ef4444; z-index:8; pointer-events:none;
+    box-shadow:0 0 8px rgba(239,68,68,.45);
+  }
+  .current-time-line::before {
+    content:''; position:absolute; top:-5px; left:-4px;
+    width:10px; height:10px; border-radius:50%;
+    background:#ef4444; box-shadow:0 0 8px rgba(239,68,68,.5);
+  }
+
+  /* ── Empty / loading ── */
+  .board-empty { text-align:center; padding:64px 20px; color:var(--text-muted); font-size:15px; }
+
+  /* ── Detail panel ── */
+  .detail-overlay {
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,.45); z-index:200;
+    align-items:flex-end; justify-content:center;
+  }
+  .detail-overlay.open { display:flex; }
+  .detail-panel {
+    background:#fff; border-radius:24px 24px 0 0;
+    width:100%; max-width:680px; max-height:90vh;
+    overflow-y:auto; box-shadow:0 -8px 48px rgba(0,0,0,.22);
+    animation:slideUp .22s ease;
+  }
+  @keyframes slideUp { from { transform:translateY(40px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+  .detail-topbar {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 20px 12px; border-bottom:1.5px solid var(--border);
+    position:sticky; top:0; background:#fff; z-index:2;
+  }
+  .detail-tabs { display:flex; gap:4px; flex-wrap:wrap; }
+  .d-tab-btn {
+    padding:7px 13px; border:1.5px solid var(--border); border-radius:8px;
+    background:#fff; font-size:13px; font-family:inherit; cursor:pointer;
+    transition:all .15s; font-weight:500; color:var(--text-muted);
+  }
+  .d-tab-btn.active { background:var(--green-mid); border-color:var(--green-mid); color:#fff; font-weight:700; }
+  .close-btn {
+    width:34px; height:34px; border-radius:50%; border:1.5px solid var(--border);
+    background:#fff; font-size:16px; cursor:pointer; display:flex;
+    align-items:center; justify-content:center; flex-shrink:0; transition:all .15s;
+  }
+  .close-btn:hover { background:#fee2e2; border-color:#fca5a5; color:#dc2626; }
+  .d-tab-pane { display:none; padding:20px; }
+  .d-tab-pane.active { display:block; }
+
+  /* ── Detail info layout ── */
+  .d-cust-header { display:flex; gap:14px; align-items:flex-start; margin-bottom:18px; }
+  .d-avatar {
+    width:48px; height:48px; border-radius:50%; flex-shrink:0;
+    background:linear-gradient(135deg,var(--green-mid),var(--green-deep));
+    color:#fff; font-size:20px; font-weight:800;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .d-cust-name { font-size:19px; font-weight:800; color:var(--green-deep); line-height:1.2; }
+  .d-cust-sub  { font-size:13px; color:var(--text-muted); margin-top:3px; }
+
+  .d-section { margin-top:14px; padding-top:12px; border-top:1px solid var(--border); }
+  .d-section-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); margin-bottom:10px; }
+  .d-row { display:flex; gap:8px; margin-bottom:8px; font-size:14px; }
+  .d-label { width:98px; font-weight:600; color:var(--text-muted); font-size:12px; flex-shrink:0; padding-top:1px; }
+  .d-val   { flex:1; color:var(--text); word-break:break-word; }
+
+  .d-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:18px; padding-top:16px; border-top:1.5px solid var(--border); }
+  .d-btn {
+    padding:10px 17px; border-radius:10px; border:none;
+    font-size:13px; font-weight:700; font-family:inherit;
+    cursor:pointer; transition:opacity .15s; text-decoration:none;
+    display:inline-flex; align-items:center; gap:5px;
+  }
+  .d-btn:hover { opacity:.85; }
+
+  /* ── Service chips ── */
+  .svc-chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .svc-chip {
+    padding:5px 12px; background:#f0fdf4; color:#15803d;
+    border:1.5px solid #86efac; border-radius:20px;
+    font-size:12px; font-weight:600; display:flex; align-items:center; gap:4px;
+  }
+  .svc-chip-price { color:var(--text-muted); font-weight:400; }
+
+  /* ── Crew inline select ── */
+  .crew-inline-sel {
+    padding:5px 10px; border:1.5px solid var(--border); border-radius:8px;
+    font-size:13px; font-family:inherit; outline:none; background:#fff;
+    cursor:pointer; color:var(--text);
+  }
+  .crew-inline-sel:focus { border-color:var(--green-mid); }
+
+  /* ── Notes & Photos ── */
+  .notes-box {
+    background:#f8faf8; border:1.5px solid var(--border); border-radius:10px;
+    padding:12px 14px; font-size:13px; color:var(--text); line-height:1.6;
+    white-space:pre-wrap; word-break:break-word; margin-bottom:12px;
+  }
+  .photo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:10px; }
+  .photo-thumb {
+    aspect-ratio:1; border-radius:10px; overflow:hidden;
+    border:1.5px solid var(--border); background:#f1f5f9;
+    cursor:pointer; transition:opacity .15s;
+  }
+  .photo-thumb:hover { opacity:.85; }
+  .photo-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+  .hist-row {
+    padding:12px 0; border-bottom:1px solid var(--border);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .hist-row:last-child { border-bottom:none; }
+
+  /* ── Reschedule modal ── */
+  .modal-overlay {
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,.5);
+    z-index:400; align-items:center; justify-content:center; padding:16px;
+  }
+  .modal-overlay.open { display:flex; }
+  .modal-box {
+    background:#fff; border-radius:20px; padding:28px 28px 24px;
+    max-width:430px; width:100%; box-shadow:var(--shadow-lg);
+    animation:slideUp .2s ease;
+  }
+  .modal-title { font-size:18px; font-weight:800; color:var(--green-deep); margin-bottom:3px; }
+  .modal-sub   { font-size:13px; color:var(--text-muted); margin-bottom:20px; }
+  .modal-label { font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; margin:0 0 6px; display:block; }
+  .modal-input {
+    width:100%; padding:11px 14px; border:1.5px solid var(--border); border-radius:10px;
+    font-size:14px; font-family:inherit; outline:none; margin-bottom:16px; transition:border .2s;
+  }
+  .modal-input:focus { border-color:var(--green-mid); }
+  .scope-row { display:flex; gap:8px; margin-bottom:16px; }
+  .scope-btn {
+    flex:1; padding:10px; border:1.5px solid var(--border); border-radius:10px;
+    background:#fff; font-size:13px; font-family:inherit; cursor:pointer;
+    transition:all .15s; font-weight:500; color:var(--text-muted); text-align:center;
+  }
+  .scope-btn.active { background:#f0fdf4; border-color:#16a34a; color:#15803d; font-weight:700; }
+  .notify-row { display:flex; align-items:center; gap:10px; margin-bottom:20px; cursor:pointer; padding:10px 12px; background:#f8faf8; border-radius:10px; border:1.5px solid var(--border); }
+  .notify-row input { width:16px; height:16px; cursor:pointer; accent-color:var(--green-mid); flex-shrink:0; }
+  .notify-row span { font-size:13px; color:var(--text); font-weight:500; line-height:1.4; }
+  .modal-actions { display:flex; gap:10px; }
+  .modal-cancel {
+    flex:1; padding:12px; border:1.5px solid var(--border); border-radius:10px;
+    background:#fff; font-size:14px; font-family:inherit; cursor:pointer; font-weight:600;
+    color:var(--text-muted); transition:all .15s;
+  }
+  .modal-cancel:hover { border-color:#9ca3af; }
+  .modal-confirm {
+    flex:2; padding:12px; border:none; border-radius:10px;
+    background:var(--green-mid); color:#fff; font-size:14px; font-family:inherit;
+    cursor:pointer; font-weight:700; transition:opacity .15s;
+  }
+  .modal-confirm:hover { opacity:.88; }
+  .modal-confirm:disabled { opacity:.45; cursor:not-allowed; }
+
+  /* ── Toast ── */
+  #toast {
+    position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:#1a3a1a; color:#fff; padding:12px 24px; border-radius:12px;
+    font-size:14px; font-weight:600; z-index:500; opacity:0;
+    transition:opacity .25s, transform .25s; pointer-events:none; white-space:nowrap;
+    box-shadow:0 4px 20px rgba(0,0,0,.3);
+  }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* ── Photo lightbox ── */
+  .lightbox {
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,.92);
+    z-index:900; align-items:center; justify-content:center;
+  }
+  .lightbox.open { display:flex; }
+  .lightbox img { max-width:92vw; max-height:88vh; border-radius:12px; }
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">🌿 Evergreen Dispatch</div>
+    <div class="login-sub">Staff login required</div>
+    <div id="loginStep1">
+      <input class="login-input" type="email" id="emailInput" placeholder="Staff email address"
+             onkeydown="if(event.key==='Enter')requestCode()">
+      <button class="login-btn" id="codeBtn" onclick="requestCode()">Send Login Code</button>
+    </div>
+    <div id="loginStep2" style="display:none;">
+      <input class="login-input" type="text" id="codeInput" placeholder="6-digit code"
+             inputmode="numeric" maxlength="6" onkeydown="if(event.key==='Enter')verifyCode()">
+      <button class="login-btn" id="verifyBtn" onclick="verifyCode()">Sign In</button>
+    </div>
+    <div id="loginMsg"></div>
+    <div id="loginErr"></div>
+  </div>
+</div>
+
+<!-- App -->
+<div id="appScreen" style="display:none;flex-direction:column;min-height:100vh;">
+  <header>
+    <div class="hdr-brand">📅 Dispatch</div>
+    <div class="hdr-right">
+      <span id="hdrGreeting" style="font-size:13px;color:rgba(255,255,255,.7);"></span>
+      <span id="hdrRole" style="font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(255,255,255,.15);color:#fff;"></span>
+      <span id="liveClock"></span>
+      <button class="hdr-btn" onclick="openZoneGuide()">🗺 Zones</button>
+      <button class="hdr-btn" onclick="loadJobs()">↻ Refresh</button>
+      <a class="hdr-btn" href="invoice.html">← Admin</a>
+      <button class="hdr-btn" onclick="doLogout()">Sign Out</button>
+    </div>
+  </header>
+
+  <div class="controls-bar">
+    <div class="controls-left">
+      <button class="date-nav-btn" onclick="shiftDate(-1)" title="Previous day (←)">◀</button>
+      <button class="date-nav-btn today" onclick="goToday()">Today</button>
+      <button class="date-nav-btn" onclick="shiftDate(1)" title="Next day (→)">▶</button>
+      <input type="date" id="dispDate" class="date-input" onchange="renderBoard()">
+      <span class="date-label" id="dispDateLabel"></span>
+    </div>
+    <div class="controls-right">
+      <select id="crewFilter" class="crew-select" onchange="renderBoard()">
+        <option value="all">👥 All Crews</option>
+        <option value="A">🔵 Crew A</option>
+        <option value="B">🩷 Crew B</option>
+        <option value="unassigned">⬜ Unassigned</option>
+      </select>
+      <div class="legend">
+        <span class="legend-dot" style="background:#22c55e;"></span>Upcoming
+        <span class="legend-dot" style="background:#64748b;margin-left:8px;"></span>Done
+        <span class="legend-dot" style="background:#f59e0b;margin-left:8px;"></span>Cash
+        <span class="legend-dot" style="background:#3b82f6;margin-left:8px;"></span>Invoiced
+        <span class="legend-dot" style="background:#a855f7;margin-left:8px;"></span>Paid
+        <span class="legend-dot" style="background:#374151;margin-left:8px;"></span>Archived
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats ribbon -->
+  <div id="statsRibbon" class="stats-ribbon" style="display:none;"></div>
+
+  <div class="board-wrap">
+    <div id="boardOuter" class="board-outer" style="display:none;">
+      <div class="board-time-axis" id="timeAxis"></div>
+      <div id="boardRows"></div>
+    </div>
+    <div id="boardEmpty" class="board-empty" style="display:none;">
+      📭 No jobs scheduled for this date.
+    </div>
+    <div id="boardLoading" class="board-empty">Loading jobs…</div>
+  </div>
+</div>
+
+<!-- Detail panel (bottom sheet) -->
+<div class="detail-overlay" id="detailOverlay" onclick="if(event.target===this)closeDetail()">
+  <div class="detail-panel">
+    <div class="detail-topbar">
+      <div class="detail-tabs">
+        <button class="d-tab-btn active" id="dTab-info"    onclick="showDTab('info')">📋 Info</button>
+        <button class="d-tab-btn"        id="dTab-notes"   onclick="showDTab('notes')">📝 Notes</button>
+        <button class="d-tab-btn"        id="dTab-photos"  onclick="showDTab('photos')">📷 Photos</button>
+        <button class="d-tab-btn"        id="dTab-history" onclick="showDTab('history')">🗂 History</button>
+      </div>
+      <button class="close-btn" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="d-tab-pane active" id="dp-info"></div>
+    <div class="d-tab-pane"        id="dp-notes"></div>
+    <div class="d-tab-pane"        id="dp-photos"></div>
+    <div class="d-tab-pane"        id="dp-history"></div>
+  </div>
+</div>
+
+<!-- Reschedule modal -->
+<div class="modal-overlay" id="rescheduleOverlay" onclick="if(event.target===this)closeRescheduleModal()">
+  <div class="modal-box">
+    <div class="modal-title">📅 Reschedule Job</div>
+    <div class="modal-sub">Moving <strong id="reschName"></strong></div>
+    <label class="modal-label" for="reschDate">New Date</label>
+    <input type="date" id="reschDate" class="modal-input">
+    <label class="modal-label">Scope</label>
+    <div class="scope-row">
+      <button class="scope-btn active" id="scopeSingle" onclick="setReschScope('single')">This visit only</button>
+      <button class="scope-btn"        id="scopeAll"    onclick="setReschScope('all')">All future visits</button>
+    </div>
+    <label class="notify-row">
+      <input type="checkbox" id="reschNotify" checked>
+      <span>Email customer about the change</span>
+    </label>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeRescheduleModal()">Cancel</button>
+      <button class="modal-confirm" id="reschConfirmBtn" onclick="executeReschedule()">Reschedule</button>
+    </div>
+  </div>
+</div>
+
+<!-- Photo lightbox -->
+<div class="lightbox" id="lightbox" onclick="this.classList.remove('open')">
+  <img id="lightboxImg" alt="Job photo">
+</div>
+
+<div id="toast"></div>
+
+<!-- Zone Guide Modal -->
+<div id="zoneGuideOverlay" onclick="if(event.target===this)closeZoneGuide()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:20px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto;box-shadow:0 12px 48px rgba(0,0,0,.22);animation:slideUp .22s ease;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px 14px;border-bottom:1.5px solid #e2e8f0;position:sticky;top:0;background:#fff;z-index:2;">
+      <div>
+        <div style="font-family:'Playfair Display',serif;font-size:18px;color:#1a3a1a;">🗺 Zone Schedule Guide</div>
+        <div style="font-size:12px;color:#64748b;margin-top:2px;">Reference only — use while rebooking customers into the right days</div>
+      </div>
+      <button onclick="closeZoneGuide()" style="width:34px;height:34px;border-radius:50%;border:1.5px solid #e2e8f0;background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">✕</button>
+    </div>
+    <div style="padding:20px;">
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <button id="zgTabCurrent" onclick="switchZgTab('current')">📍 Current — 1 Crew</button>
+        <button id="zgTabFuture"  onclick="switchZgTab('future')">🔮 Future — 2 Crews</button>
+      </div>
+      <table id="zoneGuideBody" style="width:100%;border-collapse:collapse;font-family:'Inter',sans-serif;"></table>
+      <div id="zoneGuideNote" style="margin-top:16px;background:#f8faf8;border-radius:10px;padding:12px 14px;font-size:12px;color:#374151;line-height:1.7;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
+const SESSION_KEY = 'eg_staff_session';
+const START_HOUR  = 7;
+const END_HOUR    = 19;
+const TOTAL_MINS  = (END_HOUR - START_HOUR) * 60;
+
+let adminToken = '', adminName = '', adminEmail = '', adminRole = 'employee';
+let allBookings = [], allCustomers = [];
+let _detailIdx   = -1;
+let _reschRowIdx = -1;
+let _reschScope  = 'single';
+let _dragRowIdx  = -1;
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function esc(s) { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function authParam() { return 'adminToken='+encodeURIComponent(adminToken)+'&adminEmail='+encodeURIComponent(adminEmail); }
+function showToast(msg,dur=2800) {
+  const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),dur);
+}
+function isDone(b) { const d=String(b.done||''); return b.rowCompleted||d.includes('Done')||d.startsWith('✓'); }
+function isCash(b) {
+  const c=String(b.calendarEvent||'').toLowerCase(), p=String(b.payMethod||'').toLowerCase();
+  return c.includes('cash')||p.includes('cash');
+}
+function isPaid(b) {
+  const c=String(b.calendarEvent||'').toLowerCase(), p=String(b.payMethod||'').toLowerCase();
+  if (c.includes('not paid')||c.includes('pending')) return false;
+  return c.includes('✅')||c.includes('autopay')||c.includes('auto-pay')||p.includes('autopay')||p.includes('auto-pay');
+}
+function dateOf(b) {
+  const raw = b.serviceDate || b.serviceDateRaw || '';
+  if (!raw) return '';
+  const s = String(raw).trim();
+  const d = new Date(s.includes('T') ? s : s+'T12:00');
+  if (isNaN(d)) return s.slice(0,10);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function mowMin(b) {
+  const n = String(b.notes||'').toLowerCase();
+  if (/yard[:\s]+x?l|extra.large/.test(n)) return 75;
+  if (/yard[:\s]+large/.test(n))           return 55;
+  if (/yard[:\s]+small/.test(n))           return 25;
+  return 40;
+}
+function fmtTime(startMin) {
+  const abs=START_HOUR*60+startMin, h=Math.floor(abs/60), m=abs%60;
+  const ap=h>=12?'PM':'AM', hd=h>12?h-12:h===0?12:h;
+  return hd+':'+String(m).padStart(2,'0')+' '+ap;
+}
+function jobClass(b) {
+  if (b.rowCompleted) return 'completed';
+  if (isDone(b))      return 'done';
+  const cash=isCash(b), inv=String(b.invoiced||'').length>2;
+  if (cash&&!isPaid(b)) return 'cash';
+  if (inv) return 'invoiced';
+  if (isPaid(b)) return 'paid';
+  return 'upcoming';
+}
+function parseServices(str) {
+  if (!str) return [];
+  return String(str).split(';').map(s=>s.trim()).filter(Boolean).map(s=>{
+    const idx=s.lastIndexOf(':');
+    if (idx<1) return null;
+    const name=s.slice(0,idx).trim();
+    const price=parseFloat(s.slice(idx+1).trim());
+    return (name&&!isNaN(price))?{name,price}:null;
+  }).filter(Boolean);
+}
+function custFor(email) {
+  const em=String(email||'').toLowerCase();
+  return allCustomers.find(c=>String(c.Email||c.email||'').toLowerCase()===em)||null;
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────
+function loadSession() { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; } }
+function saveSession(token,name,email,role) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify({token,name,email,role,ts:Date.now()}));
+}
+function doLogout() { localStorage.removeItem(SESSION_KEY); location.reload(); }
+
+async function requestCode() {
+  const email=document.getElementById('emailInput').value.trim();
+  if (!email||!email.includes('@')) { showLoginErr('Enter a valid email.'); return; }
+  const btn=document.getElementById('codeBtn');
+  btn.disabled=true; btn.textContent='Sending…';
+  document.getElementById('loginErr').style.display='none';
+  try {
+    const res=await fetch(SCRIPT_URL+'?action=admin_request_code&email='+encodeURIComponent(email));
+    const data=await res.json();
+    if (data.success) {
+      adminEmail=email;
+      document.getElementById('loginStep1').style.display='none';
+      document.getElementById('loginStep2').style.display='block';
+      document.getElementById('loginMsg').textContent='Code sent to '+email;
+    } else { showLoginErr(data.error||'Could not send code.'); btn.disabled=false; btn.textContent='Send Login Code'; }
+  } catch { showLoginErr('Network error.'); btn.disabled=false; btn.textContent='Send Login Code'; }
+}
+async function verifyCode() {
+  const code=document.getElementById('codeInput').value.trim();
+  if (!code) { showLoginErr('Enter the 6-digit code.'); return; }
+  const btn=document.getElementById('verifyBtn');
+  btn.disabled=true; btn.textContent='Signing in…';
+  try {
+    const res=await fetch(SCRIPT_URL+'?action=admin_verify_code&email='+encodeURIComponent(adminEmail)+'&code='+encodeURIComponent(code));
+    const data=await res.json();
+    if (data.success) {
+      adminToken=data.token||''; adminName=data.name||adminEmail;
+      adminRole=(data.role||'employee').toLowerCase();
+      saveSession(adminToken,adminName,adminEmail,adminRole);
+      startApp();
+    } else { showLoginErr(data.error||'Invalid code.'); btn.disabled=false; btn.textContent='Sign In'; }
+  } catch { showLoginErr('Network error.'); btn.disabled=false; btn.textContent='Sign In'; }
+}
+function showLoginErr(msg) {
+  const el=document.getElementById('loginErr'); el.textContent=msg; el.style.display=msg?'block':'none';
+}
+
+// ── App start ─────────────────────────────────────────────────────────────
+function startApp() {
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('appScreen').style.display='flex';
+  document.getElementById('hdrGreeting').textContent='👤 '+adminName;
+  document.getElementById('hdrRole').textContent=adminRole==='owner'?'⭐ Owner':'🔧 Employee';
+  document.getElementById('dispDate').value=new Date().toISOString().slice(0,10);
+  updateDateLabel();
+  startClock();
+  initDragDrop();
+  setInterval(renderCurrentTimeLine, 60000);
+  loadJobs();
+}
+
+// ── Live clock ────────────────────────────────────────────────────────────
+function startClock() {
+  function tick() {
+    const now=new Date(), h=now.getHours(), m=now.getMinutes();
+    const ap=h>=12?'PM':'AM', hd=h>12?h-12:h===0?12:h;
+    document.getElementById('liveClock').textContent=hd+':'+String(m).padStart(2,'0')+' '+ap;
+  }
+  tick();
+  setInterval(tick,15000);
+}
+
+// ── Date nav ──────────────────────────────────────────────────────────────
+function updateDateLabel() {
+  const v=document.getElementById('dispDate').value;
+  if (!v) return;
+  const d=new Date(v+'T12:00');
+  document.getElementById('dispDateLabel').textContent=
+    d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+}
+function shiftDate(delta) {
+  const el=document.getElementById('dispDate');
+  if (!el.value) return;
+  const d=new Date(el.value+'T12:00'); d.setDate(d.getDate()+delta);
+  el.value=d.toISOString().slice(0,10); updateDateLabel(); renderBoard();
+}
+function goToday() {
+  document.getElementById('dispDate').value=new Date().toISOString().slice(0,10);
+  updateDateLabel(); renderBoard();
+}
+
+// ── Data ──────────────────────────────────────────────────────────────────
+async function loadJobs() {
+  document.getElementById('boardLoading').style.display='block';
+  document.getElementById('boardOuter').style.display='none';
+  document.getElementById('boardEmpty').style.display='none';
+  document.getElementById('statsRibbon').style.display='none';
+  try {
+    const res=await fetch(SCRIPT_URL+'?action=bookings&'+authParam());
+    const data=await res.json();
+    if (!data.success) {
+      if ((data.error||'').toLowerCase().includes('unauthorized')) { doLogout(); return; }
+      throw new Error(data.error||'Load failed');
+    }
+    allBookings=data.bookings||[];
+    try {
+      const cr=await fetch(SCRIPT_URL+'?action=customers_list&'+authParam());
+      const cd=await cr.json();
+      if (cd.success) allCustomers=cd.customers||[];
+    } catch {}
+    document.getElementById('boardLoading').style.display='none';
+    renderBoard();
+  } catch(err) {
+    document.getElementById('boardLoading').textContent='⚠️ '+err.message+' — check your connection.';
+  }
+}
+
+// ── Stats ribbon ──────────────────────────────────────────────────────────
+function renderStatsRibbon(jobs) {
+  const ribbon=document.getElementById('statsRibbon');
+  if (!jobs.length) { ribbon.style.display='none'; return; }
+  const total=jobs.length;
+  const done=jobs.filter(isDone).length;
+  const remaining=total-done;
+  let revenue=0;
+  jobs.forEach(b=>{ const p=parseFloat(String(b.price||'').replace(/[^0-9.]/g,'')); if(!isNaN(p)) revenue+=p; });
+  const pct=total?Math.round((done/total)*100):0;
+  ribbon.style.display='flex';
+  ribbon.innerHTML=`
+    <div class="stat-pill"><span class="stat-num">${total}</span><span class="stat-lbl">Total</span></div>
+    <div class="stat-pill"><span class="stat-num" style="color:#4ade80;">${done}</span><span class="stat-lbl">Done</span></div>
+    <div class="stat-pill"><span class="stat-num" style="color:#fbbf24;">${remaining}</span><span class="stat-lbl">Remaining</span></div>
+    <div class="stat-pill" style="border-right:none;"><span class="stat-num" style="color:#a5f3fc;">$${revenue.toFixed(0)}</span><span class="stat-lbl">Est. Rev.</span></div>
+    <div class="stat-progress-wrap">
+      <span class="stat-pct">${pct}% complete</span>
+      <div class="stat-progress-track"><div class="stat-progress-fill" style="width:${pct}%;"></div></div>
+    </div>`;
+}
+
+// ── Current time line ─────────────────────────────────────────────────────
+function renderCurrentTimeLine() {
+  const today=new Date().toISOString().slice(0,10);
+  const selected=document.getElementById('dispDate')?.value;
+  const tracks=document.querySelectorAll('.board-job-track');
+  if (selected!==today) {
+    tracks.forEach(t=>{ const l=t.querySelector('.current-time-line'); if(l) l.remove(); });
+    return;
+  }
+  const now=new Date();
+  const nowMins=now.getHours()*60+now.getMinutes();
+  const startMins=START_HOUR*60, endMins=END_HOUR*60;
+  if (nowMins<startMins||nowMins>endMins) {
+    tracks.forEach(t=>{ const l=t.querySelector('.current-time-line'); if(l) l.remove(); });
+    return;
+  }
+  const pct=((nowMins-startMins)/(endMins-startMins))*100;
+  tracks.forEach(track=>{
+    let line=track.querySelector('.current-time-line');
+    if (!line) { line=document.createElement('div'); line.className='current-time-line'; track.appendChild(line); }
+    line.style.left=pct.toFixed(2)+'%';
+  });
+}
+
+// ── Drag-and-drop (crew reassignment) ─────────────────────────────────────
+function initDragDrop() {
+  const boardRows=document.getElementById('boardRows');
+
+  boardRows.addEventListener('dragstart',e=>{
+    const block=e.target.closest('.job-block');
+    if (!block) return;
+    _dragRowIdx=parseInt(block.dataset.rowidx);
+    e.dataTransfer.effectAllowed='move';
+    e.dataTransfer.setData('text/plain',String(_dragRowIdx));
+    requestAnimationFrame(()=>block.classList.add('dragging'));
+  });
+
+  boardRows.addEventListener('dragend',e=>{
+    const block=e.target.closest('.job-block');
+    if (block) block.classList.remove('dragging');
+    document.querySelectorAll('.board-job-track.drag-over').forEach(t=>t.classList.remove('drag-over'));
+    _dragRowIdx=-1;
+  });
+
+  boardRows.addEventListener('dragover',e=>{
+    e.preventDefault();
+    e.dataTransfer.dropEffect='move';
+    const track=e.target.closest('.board-job-track');
+    document.querySelectorAll('.board-job-track.drag-over').forEach(t=>t.classList.remove('drag-over'));
+    if (track) track.classList.add('drag-over');
+  });
+
+  boardRows.addEventListener('dragleave',e=>{
+    const track=e.target.closest('.board-job-track');
+    if (track&&!track.contains(e.relatedTarget)) track.classList.remove('drag-over');
+  });
+
+  boardRows.addEventListener('drop',e=>{
+    e.preventDefault();
+    document.querySelectorAll('.board-job-track.drag-over').forEach(t=>t.classList.remove('drag-over'));
+    const track=e.target.closest('.board-job-track');
+    if (!track||_dragRowIdx<0) return;
+    const newCrew=track.dataset.crew||'';
+    const b=allBookings[_dragRowIdx];
+    if (!b) return;
+    const normNew=newCrew==='Unassigned'?'':newCrew;
+    const normOld=(b.crew||'').trim();
+    if (normNew===normOld) return;
+    assignCrew(_dragRowIdx, normNew);
+    _dragRowIdx=-1;
+  });
+}
+
+// ── Assign crew ───────────────────────────────────────────────────────────
+async function assignCrew(rowIdx, crewKey) {
+  const b=allBookings[rowIdx]; if (!b) return;
+  showToast('Reassigning…',60000);
+  try {
+    const p=new URLSearchParams({action:'set_crew',rowIndex:b._rowIndex||(rowIdx+2),crew:crewKey,adminToken});
+    const res=await fetch(SCRIPT_URL+'?'+p.toString());
+    const data=await res.json();
+    if (data.success) {
+      allBookings[rowIdx].crew=crewKey;
+      showToast(crewKey?'✓ Moved to Crew '+crewKey:'✓ Crew unassigned');
+      renderBoard();
+      if (_detailIdx===rowIdx) populateDetail(allBookings[rowIdx],rowIdx);
+    } else { showToast('Error: '+(data.error||'Failed')); }
+  } catch { showToast('Network error — crew not changed.'); }
+}
+
+// ── Render board ──────────────────────────────────────────────────────────
+function renderBoard() {
+  updateDateLabel();
+  const dateStr=document.getElementById('dispDate').value;
+  const crewFilt=document.getElementById('crewFilter').value;
+  if (!dateStr) return;
+
+  const today=new Date().toISOString().slice(0,10);
+  const isToday=dateStr===today;
+
+  let dayJobs=allBookings.filter(b=>dateOf(b)===dateStr&&!b.rowCancelled);
+  if (crewFilt!=='all') {
+    dayJobs=dayJobs.filter(b=>{
+      const crew=(b.crew||'').trim();
+      return crewFilt==='unassigned'?!crew:crew===crewFilt;
+    });
+  }
+
+  renderStatsRibbon(dayJobs);
+
+  const outer=document.getElementById('boardOuter');
+  const empty=document.getElementById('boardEmpty');
+
+  if (!dayJobs.length) {
+    outer.style.display='none'; empty.style.display='block'; return;
+  }
+  outer.style.display='block'; empty.style.display='none';
+
+  // Time axis
+  let axHtml='<div class="board-label-col">Crew</div><div class="board-time-slots">';
+  for (let h=START_HOUR;h<END_HOUR;h++) {
+    const lbl=h<12?h+' AM':h===12?'12 PM':(h-12)+' PM';
+    axHtml+=`<div class="board-time-slot">${lbl}</div>`;
+  }
+  axHtml+='</div>';
+  document.getElementById('timeAxis').innerHTML=axHtml;
+
+  // Group by crew
+  const crews={};
+  dayJobs.forEach(b=>{ const k=b.crew||'Unassigned'; if(!crews[k]) crews[k]=[]; crews[k].push(b); });
+
+  function estimateTimes(jobs) {
+    let cur=60;
+    return jobs.map(b=>{
+      let start=cur;
+      if (b.jobTime) {
+        const [hh,mm]=b.jobTime.split(':').map(Number);
+        start=(hh-START_HOUR)*60+(mm||0);
+        if (start<0) start=0;
+      }
+      const dur=mowMin(b);
+      cur=start+dur+20;
+      return {b,start,dur};
+    });
+  }
+
+  let rowsHtml='';
+  const crewOrder=['A','B',...Object.keys(crews).filter(k=>k!=='A'&&k!=='B')];
+  for (const k of crewOrder) {
+    if (!crews[k]) continue;
+    const jobs=crews[k];
+    const timed=estimateTimes(jobs);
+    let blocks='';
+    timed.forEach(({b,start,dur})=>{
+      const left=Math.max(0,(start/TOTAL_MINS)*100);
+      const width=Math.min(100-left,Math.max(1.8,(dur/TOTAL_MINS)*100));
+      const cls=jobClass(b);
+      const rowIdx=allBookings.indexOf(b);
+      const pulseClass=(isToday&&cls==='upcoming')?' today-pulse':'';
+      const statusIcon=isDone(b)?'✓ ':isCash(b)&&!isPaid(b)?'💵 ':isPaid(b)?'✅ ':'';
+      blocks+=`<div class="job-block ${cls}${pulseClass}" draggable="true" data-rowidx="${rowIdx}"
+        style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%;"
+        onclick="openDetail(${rowIdx})"
+        title="${esc(b.name||'')} · ${fmtTime(start)}">
+        <div class="job-name">${statusIcon}${esc(b.name||'—')}</div>
+        <div class="job-time">${fmtTime(start)} · ${dur}m</div>
+        <div class="job-plan">${esc(b.frequency||'')}</div>
+      </div>`;
+    });
+    const lbl=k==='A'?'🔵 Crew A':k==='B'?'🩷 Crew B':k==='Unassigned'?'⬜ Unassigned':esc(k);
+    rowsHtml+=`<div class="board-crew-row">
+      <div class="board-crew-label">
+        <div class="board-crew-name">${lbl}</div>
+        <div class="board-crew-count">${jobs.length} job${jobs.length!==1?'s':''}</div>
+      </div>
+      <div class="board-job-track" data-crew="${esc(k)}">${blocks}</div>
+    </div>`;
+  }
+  document.getElementById('boardRows').innerHTML=rowsHtml;
+  renderCurrentTimeLine();
+}
+
+// ── Detail panel ──────────────────────────────────────────────────────────
+function openDetail(rowIdx) {
+  _detailIdx=rowIdx;
+  const b=allBookings[rowIdx]; if (!b) return;
+  populateDetail(b,rowIdx);
+  document.getElementById('detailOverlay').classList.add('open');
+}
+function closeDetail() {
+  document.getElementById('detailOverlay').classList.remove('open');
+  _detailIdx=-1;
+}
+function showDTab(t) {
+  ['info','notes','photos','history'].forEach(k=>{
+    document.getElementById('dTab-'+k)?.classList.toggle('active',k===t);
+    document.getElementById('dp-'+k)?.classList.toggle('active',k===t);
+  });
+}
+
+function populateDetail(b,rowIdx) {
+  const done=isDone(b), cash=isCash(b), paid=isPaid(b);
+  const custRec=custFor(b.email);
+  const services=parseServices(custRec?String(custRec.Services||custRec.services||''):'');
+  const initial=(b.name||'?').trim().charAt(0).toUpperCase();
+  const addrStr=(b.address||'')+(b.zip?', '+b.zip:'');
+
+  // ── Info tab ──
+  const statusBadge=b.rowCompleted
+    ?`<span style="background:#e2e8f0;color:#374151;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">🗂 Archived</span>`
+    :done
+    ?`<span style="background:#dcfce7;color:#15803d;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">✓ Done</span>`
+    :cash&&!paid
+    ?`<span style="background:#fef9c3;color:#b45309;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">💵 Cash Pending</span>`
+    :`<span style="background:#f0fdf4;color:#166534;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">📅 Upcoming</span>`;
+
+  let info=`
+    <div class="d-cust-header">
+      <div class="d-avatar">${esc(initial)}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="d-cust-name">${esc(b.name||'—')}</div>
+        <div class="d-cust-sub">${esc(b.frequency||'')}${b.price?' · '+esc(b.price):''}</div>
+        <div style="margin-top:7px;">${statusBadge}</div>
+      </div>
+    </div>`;
+
+  // Job details
+  info+=`<div class="d-section"><div class="d-section-lbl">Job Details</div>`;
+  if (addrStr.trim()) info+=`<div class="d-row"><div class="d-label">📍 Address</div><div class="d-val">${esc(addrStr)}</div></div>`;
+  if (b.phone) info+=`<div class="d-row"><div class="d-label">📞 Phone</div><div class="d-val">${esc(b.phone)}</div></div>`;
+  if (b.email) info+=`<div class="d-row"><div class="d-label">✉️ Email</div><div class="d-val">${esc(b.email)}</div></div>`;
+  const dateDisp=b.serviceDate||b.serviceDateRaw;
+  if (dateDisp) info+=`<div class="d-row"><div class="d-label">📅 Date</div><div class="d-val">${esc(String(dateDisp))}</div></div>`;
+  const payDisp=cash?'💵 Cash':(b.payMethod||b.calendarEvent||'');
+  if (payDisp) info+=`<div class="d-row"><div class="d-label">💳 Payment</div><div class="d-val">${esc(payDisp)}</div></div>`;
+  if (b.markedBy) info+=`<div class="d-row"><div class="d-label">✓ Done by</div><div class="d-val">${esc(b.markedBy)}</div></div>`;
+
+  // Crew — dropdown for owners, text for employees
+  if (adminRole==='owner') {
+    const crewVal=b.crew||'';
+    info+=`<div class="d-row"><div class="d-label">👥 Crew</div><div class="d-val">
+      <select class="crew-inline-sel" onchange="assignCrew(${rowIdx},this.value==='__unassigned'?'':this.value)">
+        <option value="__unassigned"${!crewVal||crewVal==='Unassigned'?' selected':''}>— Unassigned —</option>
+        <option value="A"${crewVal==='A'?' selected':''}>🔵 Crew A</option>
+        <option value="B"${crewVal==='B'?' selected':''}>🩷 Crew B</option>
+      </select>
+    </div></div>`;
+  } else if (b.crew&&b.crew!=='Unassigned') {
+    info+=`<div class="d-row"><div class="d-label">👥 Crew</div><div class="d-val">${esc(b.crew)}</div></div>`;
+  }
+  info+=`</div>`; // end d-section
+
+  // Per-customer side services
+  if (services.length) {
+    info+=`<div class="d-section">
+      <div class="d-section-lbl">Side Services Available</div>
+      <div class="svc-chips">${services.map(s=>`<div class="svc-chip">${esc(s.name)} <span class="svc-chip-price">$${s.price.toFixed(0)}</span></div>`).join('')}</div>
+    </div>`;
+  }
+
+  // Actions
+  info+=`<div class="d-actions">`;
+  if (b.phone) info+=`<a href="tel:${esc(b.phone)}" class="d-btn" style="background:var(--green-mid);color:#fff;">📞 Call</a>`;
+  if (addrStr.trim()) info+=`<a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addrStr+', FL')}" target="_blank" rel="noopener" class="d-btn" style="background:#1d4ed8;color:#fff;">🗺 Navigate</a>`;
+  if (!done&&!b.rowCompleted) info+=`<button class="d-btn" style="background:#15803d;color:#fff;" onclick="closeDetail();markJobDone(${rowIdx})">✓ Mark Done</button>`;
+  if (cash&&!paid&&!done&&!b.rowCompleted) info+=`<button class="d-btn" style="background:#b45309;color:#fff;" onclick="closeDetail();markCashCollected(${rowIdx})">💵 Cash Collected</button>`;
+  if (adminRole==='owner'&&!b.rowCompleted) info+=`<button class="d-btn" style="background:#475569;color:#fff;" onclick="closeDetail();openRescheduleModal(${rowIdx})">📅 Reschedule</button>`;
+  info+=`</div>`;
+  document.getElementById('dp-info').innerHTML=info;
+
+  // ── Notes tab ──
+  const custNotes=custRec?String(custRec.Notes||custRec.notes||'').trim():'';
+  let notes='';
+  if (custNotes) notes+=`<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:8px;">Customer Notes</div><div class="notes-box">${esc(custNotes)}</div></div>`;
+  if (b.employeeNotes) notes+=`<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:8px;">Crew Note</div><div class="notes-box">${esc(b.employeeNotes)}</div></div>`;
+  if (!custNotes&&!b.employeeNotes) notes=`<div style="color:var(--text-muted);font-size:14px;padding:16px 0;">No notes on file.</div>`;
+  notes+=`<button class="d-btn" style="background:#0369a1;color:#fff;margin-top:12px;" onclick="closeDetail();openNoteEditor(${rowIdx})">📝 ${b.employeeNotes?'Edit Note':'Add Crew Note'}</button>`;
+  document.getElementById('dp-notes').innerHTML=notes;
+
+  // ── Photos tab ──
+  const photos=(b.photos||'').split(',').map(s=>s.trim()).filter(Boolean);
+  let photosHtml=photos.length
+    ?`<div class="photo-grid">${photos.map(u=>`<div class="photo-thumb" onclick="openLightbox('${esc(u)}')"><img src="${esc(u)}" alt="Job photo" onerror="this.parentElement.style.display='none'"></div>`).join('')}</div>`
+    :`<div style="color:var(--text-muted);font-size:14px;padding:16px 0;">No photos yet.</div>`;
+  photosHtml+=`<button class="d-btn" style="background:#7c3aed;color:#fff;margin-top:16px;" onclick="closeDetail();openPhotoAdder(${rowIdx})">📷 Add Photo</button>`;
+  document.getElementById('dp-photos').innerHTML=photosHtml;
+
+  // ── History tab ──
+  const em=String(b.email||'').toLowerCase();
+  const hist=allBookings.filter(j=>String(j.email||'').toLowerCase()===em)
+    .sort((a,z)=>(z.serviceDate||'').localeCompare(a.serviceDate||''));
+  document.getElementById('dp-history').innerHTML=hist.length
+    ?hist.map(j=>`<div class="hist-row">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--green-deep);">${esc(j.serviceDate||j.serviceDateRaw||'—')}</div>
+          <div style="font-size:12px;color:var(--text-muted);">${esc(j.frequency||'')}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+          ${isDone(j)?`<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">✓ Done</span>`:`<span style="background:#fef9c3;color:#92400e;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">Upcoming</span>`}
+          <span style="font-size:13px;font-weight:700;color:var(--green-deep);">${esc(j.price||'')}</span>
+        </div>
+      </div>`).join('')
+    :`<div style="color:var(--text-muted);font-size:14px;padding:16px 0;">No history found.</div>`;
+
+  showDTab('info');
+}
+
+// ── Reschedule modal ──────────────────────────────────────────────────────
+function openRescheduleModal(rowIdx) {
+  _reschRowIdx=rowIdx;
+  _reschScope='single';
+  const b=allBookings[rowIdx]; if (!b) return;
+  document.getElementById('reschName').textContent=b.name||'this customer';
+  document.getElementById('reschDate').value=dateOf(b)||new Date().toISOString().slice(0,10);
+  document.getElementById('scopeSingle').classList.add('active');
+  document.getElementById('scopeAll').classList.remove('active');
+  document.getElementById('reschNotify').checked=true;
+  const btn=document.getElementById('reschConfirmBtn');
+  btn.disabled=false; btn.textContent='Reschedule';
+  document.getElementById('rescheduleOverlay').classList.add('open');
+}
+function closeRescheduleModal() {
+  document.getElementById('rescheduleOverlay').classList.remove('open');
+  _reschRowIdx=-1;
+}
+function setReschScope(s) {
+  _reschScope=s;
+  document.getElementById('scopeSingle').classList.toggle('active',s==='single');
+  document.getElementById('scopeAll').classList.toggle('active',s==='all');
+}
+async function executeReschedule() {
+  if (_reschRowIdx<0) return;
+  const b=allBookings[_reschRowIdx]; if (!b) return;
+  const newDate=document.getElementById('reschDate').value;
+  if (!newDate) { showToast('Pick a date first.'); return; }
+  const notify=document.getElementById('reschNotify').checked;
+  const btn=document.getElementById('reschConfirmBtn');
+  btn.disabled=true; btn.textContent='Rescheduling…';
+  showToast('Rescheduling…',60000);
+  try {
+    const p=new URLSearchParams({
+      action:'owner_reschedule',
+      rowIndex:b._rowIndex||(_reschRowIdx+2),
+      newDate,
+      scope:_reschScope,
+      expectedEmail:b.email||'',
+      sendEmail:notify?'true':'false',
+      adminToken
+    });
+    const res=await fetch(SCRIPT_URL+'?'+p.toString());
+    const data=await res.json();
+    if (data.success) {
+      allBookings[_reschRowIdx].serviceDate=newDate;
+      allBookings[_reschRowIdx].serviceDateRaw=newDate;
+      closeRescheduleModal();
+      showToast('✓ Rescheduled'+(notify?' — customer notified 📧':''));
+      renderBoard();
+    } else {
+      showToast('Error: '+(data.error||'Reschedule failed'));
+      btn.disabled=false; btn.textContent='Reschedule';
+    }
+  } catch {
+    showToast('Network error — job not rescheduled.');
+    btn.disabled=false; btn.textContent='Reschedule';
+  }
+}
+
+// ── Quick actions ─────────────────────────────────────────────────────────
+async function markJobDone(rowIdx) {
+  const b=allBookings[rowIdx]; if (!b) return;
+  showToast('Marking done…',60000);
+  try {
+    const p=new URLSearchParams({action:'mark_done',rowIndex:b._rowIndex||(rowIdx+2),markedBy:adminName||adminEmail||'Staff',adminToken});
+    const res=await fetch(SCRIPT_URL+'?'+p.toString());
+    const data=await res.json();
+    if (data.success) {
+      allBookings[rowIdx].done='✓ Done — '+new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+      allBookings[rowIdx].markedBy=adminName||'Staff';
+      showToast('✓ '+b.name+' marked done!');
+      renderBoard();
+    } else { showToast('Error: '+(data.error||'Failed')); }
+  } catch { showToast('Network error'); }
+}
+async function markCashCollected(rowIdx) {
+  const b=allBookings[rowIdx]; if (!b) return;
+  showToast('Recording cash…',60000);
+  try {
+    const p=new URLSearchParams({action:'mark_cash_paid',rowIndex:b._rowIndex||(rowIdx+2),adminToken,markedBy:adminName||adminEmail||'Staff'});
+    const res=await fetch(SCRIPT_URL+'?'+p.toString());
+    const data=await res.json();
+    if (data.success) {
+      allBookings[rowIdx].calendarEvent='✅ Cash paid';
+      showToast('💵 Cash recorded for '+b.name);
+      renderBoard();
+    } else { showToast('Error: '+(data.error||'Failed')); }
+  } catch { showToast('Network error'); }
+}
+
+// ── Note editor ───────────────────────────────────────────────────────────
+let _noteRowIdx=-1;
+function openNoteEditor(rowIdx) {
+  _noteRowIdx=rowIdx;
+  const b=allBookings[rowIdx]||{};
+  let modal=document.getElementById('noteModal');
+  if (!modal) {
+    modal=document.createElement('div');
+    modal.id='noteModal';
+    modal.style.cssText='display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;align-items:center;justify-content:center;padding:16px;';
+    modal.innerHTML=`<div style="background:#fff;border-radius:18px;padding:28px;max-width:420px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.18);">
+      <h3 style="font-size:18px;font-weight:700;color:var(--green-deep);margin-bottom:14px;">📝 Job Note</h3>
+      <textarea id="noteText" rows="4" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="e.g. Trimmed hedges, gate code 1234…"></textarea>
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button onclick="document.getElementById('noteModal').style.display='none'" style="flex:1;padding:11px;border:1.5px solid var(--border);border-radius:10px;background:#fff;font-family:inherit;font-size:14px;cursor:pointer;">Cancel</button>
+        <button id="noteSaveBtn" onclick="saveNote()" style="flex:1;padding:11px;background:#0369a1;color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;">Save</button>
+      </div>
+    </div>`;
+    modal.onclick=e=>{ if(e.target===modal) modal.style.display='none'; };
+    document.body.appendChild(modal);
+  }
+  document.getElementById('noteText').value=b.employeeNotes||'';
+  modal.style.display='flex';
+  setTimeout(()=>document.getElementById('noteText')?.focus(),50);
+}
+async function saveNote() {
+  const note=document.getElementById('noteText').value.trim();
+  const btn=document.getElementById('noteSaveBtn');
+  if (btn.disabled) return;
+  btn.disabled=true; btn.textContent='Saving…';
+  const b=allBookings[_noteRowIdx];
+  if (!b) { btn.disabled=false; btn.textContent='Save'; return; }
+  try {
+    const p=new URLSearchParams({action:'set_employee_note',rowIndex:b._rowIndex||(_noteRowIdx+2),note,adminToken});
+    const res=await fetch(SCRIPT_URL+'?'+p.toString());
+    const data=await res.json();
+    if (data.success) {
+      allBookings[_noteRowIdx].employeeNotes=note;
+      document.getElementById('noteModal').style.display='none';
+      showToast('📝 Note saved.');
+      renderBoard();
+    } else { showToast('Error: '+(data.error||'Failed')); btn.disabled=false; btn.textContent='Save'; }
+  } catch { showToast('Network error'); btn.disabled=false; btn.textContent='Save'; }
+}
+
+// ── Photo upload ──────────────────────────────────────────────────────────
+let _photoRowIdx=-1;
+function openPhotoAdder(rowIdx) {
+  _photoRowIdx=rowIdx;
+  let modal=document.getElementById('photoModal');
+  if (!modal) {
+    modal=document.createElement('div');
+    modal.id='photoModal';
+    modal.style.cssText='display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;align-items:center;justify-content:center;padding:16px;';
+    modal.innerHTML=`<div style="background:#fff;border-radius:18px;padding:28px;max-width:420px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.18);">
+      <h3 style="font-size:18px;font-weight:700;color:var(--green-deep);margin-bottom:14px;">📷 Add Job Photo</h3>
+      <input type="file" id="photoFile" accept="image/*" capture="environment" style="width:100%;margin-bottom:12px;font-size:14px;">
+      <div id="photoPreview" style="display:none;margin-bottom:12px;"><img id="photoPreviewImg" style="width:100%;border-radius:10px;max-height:200px;object-fit:cover;" alt="preview"></div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="document.getElementById('photoModal').style.display='none'" style="flex:1;padding:11px;border:1.5px solid var(--border);border-radius:10px;background:#fff;font-family:inherit;font-size:14px;cursor:pointer;">Cancel</button>
+        <button id="photoUpBtn" onclick="uploadPhoto()" style="flex:1;padding:11px;background:#7c3aed;color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;">Upload</button>
+      </div>
+      <div id="photoStatus" style="font-size:13px;text-align:center;margin-top:10px;"></div>
+    </div>`;
+    modal.onclick=e=>{ if(e.target===modal) modal.style.display='none'; };
+    document.body.appendChild(modal);
+    document.getElementById('photoFile').addEventListener('change',function(){
+      const f=this.files[0]; if(!f) return;
+      const r=new FileReader();
+      r.onload=e2=>{ document.getElementById('photoPreviewImg').src=e2.target.result; document.getElementById('photoPreview').style.display='block'; };
+      r.readAsDataURL(f);
+    });
+  }
+  document.getElementById('photoStatus').textContent='';
+  document.getElementById('photoPreview').style.display='none';
+  document.getElementById('photoFile').value='';
+  modal.style.display='flex';
+}
+async function uploadPhoto() {
+  const file=document.getElementById('photoFile').files[0];
+  if (!file) { showToast('Select a photo first.'); return; }
+  const btn=document.getElementById('photoUpBtn'), status=document.getElementById('photoStatus');
+  if (btn.disabled) return; btn.disabled=true; btn.textContent='Uploading…';
+  const r=new FileReader();
+  r.onload=async ev=>{
+    const b=allBookings[_photoRowIdx];
+    const payload={action:'upload_job_photo',base64Data:ev.target.result.split(',')[1],fileName:file.name,mimeType:file.type,rowIndex:b?(b._rowIndex||(_photoRowIdx+2)):0,jobLabel:b?b.name+' — '+(b.serviceDate||''):'',markedBy:adminName||adminEmail||'Staff',adminToken};
+    try {
+      const res=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify(payload)});
+      const data=await res.json();
+      if (data.success) {
+        status.style.color='#15803d'; status.textContent='✅ Uploaded!';
+        if (b&&data.fileUrl) allBookings[_photoRowIdx].photos=b.photos?b.photos+','+data.fileUrl:data.fileUrl;
+        setTimeout(()=>{ document.getElementById('photoModal').style.display='none'; renderBoard(); },1400);
+      } else { status.style.color='#dc2626'; status.textContent='❌ '+(data.error||'Failed'); btn.disabled=false; btn.textContent='Upload'; }
+    } catch { status.style.color='#dc2626'; status.textContent='❌ Network error'; btn.disabled=false; btn.textContent='Upload'; }
+  };
+  r.readAsDataURL(file);
+}
+
+// ── Lightbox ──────────────────────────────────────────────────────────────
+function openLightbox(url) {
+  document.getElementById('lightboxImg').src=url;
+  document.getElementById('lightbox').classList.add('open');
+}
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────
+document.addEventListener('keydown',e=>{
+  if (e.target.matches('input,textarea,select')) return;
+  if (e.key==='Escape') { closeDetail(); closeRescheduleModal(); }
+  if (e.key==='ArrowLeft'&&!e.metaKey&&!e.ctrlKey) shiftDate(-1);
+  if (e.key==='ArrowRight'&&!e.metaKey&&!e.ctrlKey) shiftDate(1);
+});
+
+// ── Zone Guide ────────────────────────────────────────────────────────────
+const ZONE_PAIRS = [
+  { day:'MON', dayFull:'Monday',    z1:{zone:'Z1',name:'Crystal River',   cities:'Inglis · Yankeetown'},          z2:{zone:'Z2',name:'Inverness',              cities:'Floral City · Hernando'},   drive:'~15 min between zones' },
+  { day:'TUE', dayFull:'Tuesday',   z1:{zone:'Z3',name:'Lecanto',         cities:'Beverly Hills · Citrus Hills'}, z2:{zone:'Z4',name:'Dunnellon / Citrus Springs', cities:'Holder · Chiefland', big:true}, drive:'~20 min · Z4 is biggest' },
+  { day:'WED', dayFull:'Wednesday', z1:{zone:'Z5',name:'Ocala',           cities:'Marion County'},                z2:{zone:'Z8',name:'The Villages',           cities:'Sumter County'},            drive:'~35 min between zones' },
+  { day:'THU', dayFull:'Thursday',  z1:{zone:'Z6',name:'Brooksville',     cities:'Hernando County'},              z2:{zone:'Z7',name:'Spring Hill',            cities:'Pasco County'},             drive:'~20 min between zones' },
+  { day:'FRI', dayFull:'Friday',    flex:true },
+];
+const ZONE_SCHEDULE = [
+  { day:'MON', dayFull:'Monday',    crewA:{zone:'Z1',name:'Crystal River',         cities:'Inglis · Yankeetown'},         crewB:{zone:'Z5',name:'Ocala',          cities:'Marion County'} },
+  { day:'TUE', dayFull:'Tuesday',   crewA:{zone:'Z2',name:'Inverness',             cities:'Floral City · Hernando'},       crewB:{zone:'Z6',name:'Brooksville',    cities:'Hernando County'} },
+  { day:'WED', dayFull:'Wednesday', crewA:{zone:'Z3',name:'Lecanto',               cities:'Beverly Hills · Citrus Hills'}, crewB:{zone:'Z7',name:'Spring Hill',    cities:'Pasco County'} },
+  { day:'THU', dayFull:'Thursday',  crewA:{zone:'Z4 ⭐',name:'Dunnellon / Citrus Springs',cities:'Holder · Chiefland — day 1',big:true}, crewB:{zone:'Z8',name:'The Villages',cities:'Sumter County'} },
+  { day:'FRI', dayFull:'Friday',    crewA:{zone:'Z4 ⭐',name:'Dunnellon / Citrus Springs',cities:'Holder · Chiefland — day 2',big:true}, crewB:null },
+  { day:'SAT', dayFull:'Saturday',  crewA:null, crewB:{zone:'Overflow',name:'Catch-up / Biweeklies',cities:'Any zone with pending work',weekend:true} },
+  { day:'SUN', dayFull:'Sunday',    crewA:null, crewB:{zone:'Buffer',name:'Catch-up / Rest',cities:'Finish anything outstanding',weekend:true} },
+];
+let _zgTab='current';
+function openZoneGuide()  { _zgTab='current'; renderZoneGuide(); document.getElementById('zoneGuideOverlay').style.display='flex'; }
+function closeZoneGuide() { document.getElementById('zoneGuideOverlay').style.display='none'; }
+function switchZgTab(t)   { _zgTab=t; renderZoneGuide(); }
+function renderZoneGuide() {
+  const isCurrent=_zgTab==='current';
+  document.getElementById('zgTabCurrent').style.cssText=isCurrent
+    ?'padding:8px 18px;border:none;border-radius:8px;background:#1a3a1a;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;'
+    :'padding:8px 18px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;color:#64748b;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;';
+  document.getElementById('zgTabFuture').style.cssText=!isCurrent
+    ?'padding:8px 18px;border:none;border-radius:8px;background:#1a3a1a;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;'
+    :'padding:8px 18px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;color:#64748b;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;';
+  const body=document.getElementById('zoneGuideBody');
+  const note=document.getElementById('zoneGuideNote');
+  if (isCurrent) {
+    body.innerHTML=`<thead><tr>
+      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;width:70px;">Day</th>
+      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">Zone 1 — Start here</th>
+      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">Zone 2 — Roll into next</th>
+    </tr></thead><tbody>${ZONE_PAIRS.map(row=>{
+      if (row.flex) return `<tr>
+        <td style="padding:10px 12px;background:#f0f6ff;border:1px solid #e2e8f0;text-align:center;font-size:12px;font-weight:700;color:#2a50a0;">FRI<br><span style="font-size:10px;font-weight:400;color:#9ca3af;">Friday</span></td>
+        <td colspan="2" style="padding:12px 16px;background:#f0f6ff;border:1px solid #e2e8f0;color:#374151;font-size:13px;">
+          <strong>Flex / Overflow day</strong> — all 8 zones done Mon–Thu. Use Friday for biweekly customers, Z4 overflow, or any zone that ran long.
+        </td></tr>`;
+      return `<tr>
+        <td style="padding:10px 12px;background:#f8faf6;border:1px solid #e2e8f0;text-align:center;font-size:12px;font-weight:700;color:#374151;">${row.day}<br><span style="font-size:10px;font-weight:400;color:#9ca3af;">${row.dayFull}</span></td>
+        <td style="padding:10px 14px;background:#f8fbff;border:1px solid #e2e8f0;text-align:center;">
+          <div style="display:inline-block;background:#d0e8ff;color:#1a4080;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:4px;">${row.z1.zone}</div>
+          <div style="font-size:12px;font-weight:600;color:#1e293b;">${row.z1.name}</div>
+          <div style="font-size:10px;color:#64748b;margin-top:2px;">${row.z1.cities}</div>
+        </td>
+        <td style="padding:10px 14px;background:${row.z2.big?'#fff7f0':'#f8fbff'};border:1px solid #e2e8f0;text-align:center;">
+          <div style="display:inline-block;background:${row.z2.big?'#fde8d0':'#d0e8ff'};color:${row.z2.big?'#a04010':'#1a4080'};font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:4px;">${row.z2.zone}${row.z2.big?' ⭐':''}</div>
+          <div style="font-size:12px;font-weight:600;color:#1e293b;">${row.z2.name}</div>
+          <div style="font-size:10px;color:#64748b;margin-top:2px;">${row.z2.cities}</div>
+          <div style="font-size:10px;color:#2d6a2d;background:#e8f5e8;border-radius:20px;padding:1px 7px;margin-top:4px;display:inline-block;">${row.drive}</div>
+        </td></tr>`;
+    }).join('')}</tbody>`;
+    note.innerHTML='<strong>How it works:</strong> Start the morning in Zone 1, knock out all jobs there, then drive to Zone 2. Each pair is chosen so Zone 2 is the closest neighbor — no criss-crossing.';
+  } else {
+    body.innerHTML=`<thead><tr>
+      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;width:70px;">Day</th>
+      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">💗 Crew A — April</th>
+      <th style="background:#1a3a1a;color:#fff;padding:10px 12px;text-align:center;font-size:12px;">🔵 Crew B — Hunter &amp; Jon</th>
+    </tr></thead><tbody>${ZONE_SCHEDULE.map(row=>{
+      const aCell=row.crewA
+        ?`<td style="padding:10px 12px;background:${row.crewA.big?'#fff7f0':'#fff8fb'};border:1px solid #e2e8f0;text-align:center;">
+             <div style="display:inline-block;background:${row.crewA.big?'#fce0ec':'#f7d6e6'};color:#a0305a;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:4px;">${row.crewA.zone}</div>
+             <div style="font-size:12px;font-weight:600;color:#1e293b;">${row.crewA.name}</div>
+             <div style="font-size:10px;color:#64748b;margin-top:2px;">${row.crewA.cities}</div></td>`
+        :`<td style="padding:10px 12px;background:#fafafa;border:1px solid #e2e8f0;text-align:center;color:#cbd5e1;font-size:12px;">OFF</td>`;
+      const bCell=row.crewB
+        ?`<td style="padding:10px 12px;background:${row.crewB.weekend?'#eef6ff':'#f8fbff'};border:1px solid #e2e8f0;text-align:center;">
+             <div style="display:inline-block;background:#d0e4f8;color:#1a4080;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-bottom:4px;">${row.crewB.zone}</div>
+             <div style="font-size:12px;font-weight:600;color:#1e293b;">${row.crewB.name}</div>
+             <div style="font-size:10px;color:#64748b;margin-top:2px;">${row.crewB.cities}</div></td>`
+        :`<td style="padding:10px 12px;background:#fafafa;border:1px solid #e2e8f0;text-align:center;color:#cbd5e1;font-size:12px;">OFF</td>`;
+      const isWeekend=row.day==='SAT'||row.day==='SUN';
+      return `<tr>
+        <td style="padding:10px 12px;background:${isWeekend?'#e8f2e8':'#f8faf6'};border:1px solid #e2e8f0;text-align:center;font-size:12px;font-weight:700;color:${isWeekend?'#2d6a2d':'#374151'};">
+          ${row.day}<br><span style="font-size:10px;font-weight:400;color:${isWeekend?'#4a8a4a':'#9ca3af'};">${row.dayFull}</span>
+        </td>${aCell}${bCell}</tr>`;
+    }).join('')}</tbody>`;
+    note.innerHTML='<strong>Future setup:</strong> Crew A owns the north Citrus cluster (Z1–Z4), Crew B owns the south/east cluster (Z5–Z8). Z4 gets two days because it\'s the biggest zone.';
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded',()=>{
+  const saved=loadSession();
+  if (saved&&saved.token&&(Date.now()-saved.ts<(30*24*60*60*1000))) {
+    adminToken=saved.token; adminName=saved.name||''; adminEmail=saved.email||''; adminRole=(saved.role||'employee');
+    startApp();
+  }
+});
+</script>
+</body>
+</html>
