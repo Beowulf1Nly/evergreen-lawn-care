@@ -9750,8 +9750,11 @@ function _dispDropDayCrew(ev, crewKey) {
   assignCrew(ri, newCrew);
 }
 
-// ── WEEK VIEW DROP: date change + optional crew change ────────────────────
-async function _dispDropWeekDay(ev, newDateStr, newCrewKey) {
+// Stores crew key to apply after a drag-initiated reschedule modal confirms
+var _dispDragPendingCrew = null;
+
+// ── WEEK VIEW DROP: open reschedule modal pre-filled with destination date ─
+function _dispDropWeekDay(ev, newDateStr, newCrewKey) {
   ev.preventDefault();
   var row = ev.currentTarget;
   if (row && row.classList) { row.classList.remove('drag-over'); row.classList.remove('drag-target'); }
@@ -9767,55 +9770,23 @@ async function _dispDropWeekDay(ev, newDateStr, newCrewKey) {
   var newCrew = (newCrewKey === 'Unassigned') ? '' : newCrewKey;
   var dateChanged = newDateStr && newDateStr !== oldDate;
   var crewChanged = (b.crew || '') !== newCrew;
+  if (!dateChanged && !crewChanged) return;
 
-  if (!dateChanged && !crewChanged) return; // dropped on same cell
-
-  // Reschedule date first if it changed
   if (dateChanged) {
-    var _riW = parseInt(b._rowIndex, 10);
-    if (!_riW || _riW < 2) _riW = ri + 2;
-    showToast('📅 Moving…');
-    try {
-      var params = new URLSearchParams({
-        action:        'owner_reschedule',
-        rowIndex:      _riW,
-        newDate:       newDateStr,
-        scope:         'single',
-        reason:        'Drag rescheduled',
-        sendEmail:     'false',
-        expectedEmail: (b.email || '').toLowerCase().trim(),
-        serviceDate:   b.serviceDate || b.serviceDateRaw || '',
-        adminToken:    adminToken,
-      });
-      var res  = await fetch(SCRIPT_URL + '?' + params.toString());
-      var data = await res.json();
-      if (data.success) {
-        b.serviceDate    = newDateStr;
-        b.serviceDateRaw = newDateStr;
-        showToast('📅 Moved to ' + newDateStr + (b.email ? '' : ''));
-      } else {
-        showToast('❌ ' + (data.error || 'Could not reschedule'));
-        try { renderDispatchBoard(); } catch(e) {}
-        return;
-      }
-    } catch(err) {
-      showToast('❌ Network error: ' + err.message);
-      try { renderDispatchBoard(); } catch(e) {}
-      return;
-    }
-  }
-
-  // Then reassign crew if it changed
-  if (crewChanged) {
-    await assignCrew(ri, newCrew);
-  } else {
-    try { renderBookings(); } catch(e) {}
-    try { renderDispatchBoard(); } catch(e) {}
+    // Open the full reschedule modal pre-filled — user picks scope + notify
+    _dispDragPendingCrew = crewChanged ? { ri: ri, crew: newCrew } : null;
+    openDispatchResched(ri);
+    // Override the date input with the drop target date
+    var dEl = document.getElementById('dispReschedDate');
+    if (dEl) dEl.value = newDateStr;
+  } else if (crewChanged) {
+    // Only crew changed — assign directly, no modal needed
+    assignCrew(ri, newCrew);
   }
 }
 
-// ── MONTH VIEW DROP: reschedule to a new date ─────────────────────────────
-async function _dispDropMonthDay(ev, newDateStr) {
+// ── MONTH VIEW DROP: open reschedule modal pre-filled ─────────────────────
+function _dispDropMonthDay(ev, newDateStr) {
   ev.preventDefault();
   var cell = ev.currentTarget;
   if (cell && cell.classList) { cell.classList.remove('drag-over'); cell.classList.remove('drag-target'); }
@@ -9827,41 +9798,12 @@ async function _dispDropMonthDay(ev, newDateStr) {
   var b = allBookings[ri];
   if (!b) return;
 
-  var oldDate = _dispDateOf(b);
-  if (!newDateStr || newDateStr === oldDate) return; // no change
+  if (!newDateStr || newDateStr === _dispDateOf(b)) return;
 
-  var _riM = parseInt(b._rowIndex, 10);
-  if (!_riM || _riM < 2) _riM = ri + 2;
-  showToast('📅 Moving…');
-  try {
-    var params = new URLSearchParams({
-      action:        'owner_reschedule',
-      rowIndex:      _riM,
-      newDate:       newDateStr,
-      scope:         'single',
-      reason:        'Drag rescheduled',
-      notify:        'no',
-      sendEmail:     'no',
-      expectedEmail: (b.email || '').toLowerCase().trim(),
-      serviceDate:   b.serviceDate || b.serviceDateRaw || '',
-      adminToken:    adminToken,
-    });
-    var res  = await fetch(SCRIPT_URL + '?' + params.toString());
-    var data = await res.json();
-    if (data.success) {
-      b.serviceDate    = newDateStr;
-      b.serviceDateRaw = newDateStr;
-      showToast('📅 Moved to ' + newDateStr);
-      try { renderBookings(); } catch(e) {}
-      try { renderDispatchBoard(); } catch(e) {}
-    } else {
-      showToast('❌ ' + (data.error || 'Could not reschedule'));
-      try { renderDispatchBoard(); } catch(e) {}
-    }
-  } catch(err) {
-    showToast('❌ Network error: ' + err.message);
-    try { renderDispatchBoard(); } catch(e) {}
-  }
+  _dispDragPendingCrew = null;
+  openDispatchResched(ri);
+  var dEl = document.getElementById('dispReschedDate');
+  if (dEl) dEl.value = newDateStr;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -10014,6 +9956,7 @@ function closeDispatchResched() {
   var ov = document.getElementById('dispatchReschedOverlay');
   if (ov) ov.classList.remove('open');
   _dispReschedIdx = -1;
+  _dispDragPendingCrew = null;
 }
 
 async function submitDispatchResched() {
@@ -10046,10 +9989,14 @@ async function submitDispatchResched() {
     if (data.success) {
       allBookings[_dispReschedIdx].serviceDate    = newDate;
       allBookings[_dispReschedIdx].serviceDateRaw = newDate;
+      var _pendingCrew = _dispDragPendingCrew;
+      _dispDragPendingCrew = null;
       closeDispatchResched();
       try { renderBookings(); } catch(e) {}
       try { renderDispatchBoard(); } catch(e) {}
       showToast('📅 Rescheduled!');
+      // Apply any pending crew change from a drag-initiated reschedule
+      if (_pendingCrew) { try { assignCrew(_pendingCrew.ri, _pendingCrew.crew); } catch(e) {} }
       // A scope=all reschedule can shift rows server-side; re-pull to stay accurate.
       if (scope === 'all') { try { loadBookings(); } catch(e) {} }
     } else {
