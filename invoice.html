@@ -878,9 +878,9 @@
   .dispatch-job-block { position:absolute; top:8px; height:calc(100% - 16px); border-radius:8px; cursor:pointer; display:flex; flex-direction:column; justify-content:center; padding:6px 10px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,.12); transition:transform .15s, box-shadow .15s; min-width:90px; }
   .dispatch-job-block:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.18); z-index:5; }
   .dispatch-job-block.status-upcoming  { background:linear-gradient(135deg,#c62828,#d32f2f); color:#fff; }
-  .dispatch-job-block.status-done      { background:linear-gradient(135deg,#e65100,#f9a825); color:#fff; }
-  .dispatch-job-block.status-cash      { background:linear-gradient(135deg,#e65100,#f9a825); color:#fff; }
-  .dispatch-job-block.status-invoiced  { background:linear-gradient(135deg,#e65100,#f9a825); color:#fff; }
+  .dispatch-job-block.status-done      { background:linear-gradient(135deg,#f59f00,#fdd835); color:#1a1a1a; }
+  .dispatch-job-block.status-cash      { background:linear-gradient(135deg,#f59f00,#fdd835); color:#1a1a1a; }
+  .dispatch-job-block.status-invoiced  { background:linear-gradient(135deg,#f59f00,#fdd835); color:#1a1a1a; }
   .dispatch-job-block.status-paid      { background:linear-gradient(135deg,#0d47a1,#1565c0); color:#fff; }
   .dispatch-job-block.status-completed { background:linear-gradient(135deg,#1b5e20,#2e7d32); color:#fff; }
   .dispatch-job-name { font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -922,6 +922,7 @@
     min-height:120px; transition:background .15s;
   }
   .dispatch-week-day-body.drag-target { background:#f0fdf4; }
+  .dispatch-month-cell.drag-target { background:#f0fdf4; outline:2px dashed var(--green-mid); }
   .dispatch-week-card {
     background:linear-gradient(135deg,#c62828,#d32f2f); color:#fff; border-radius:8px; padding:7px 9px;
     font-size:12px; cursor:grab; transition:transform .15s, box-shadow .15s;
@@ -929,9 +930,9 @@
   }
   .dispatch-week-card:hover { transform:translateY(-1px); box-shadow:0 3px 10px rgba(0,0,0,.2); }
   .dispatch-week-card.dragging { opacity:.5; cursor:grabbing; }
-  .dispatch-week-card.status-done      { background:linear-gradient(135deg,#e65100,#f9a825); color:#fff; }
-  .dispatch-week-card.status-cash      { background:linear-gradient(135deg,#e65100,#f9a825); color:#fff; }
-  .dispatch-week-card.status-invoiced  { background:linear-gradient(135deg,#e65100,#f9a825); color:#fff; }
+  .dispatch-week-card.status-done      { background:linear-gradient(135deg,#f59f00,#fdd835); color:#1a1a1a; }
+  .dispatch-week-card.status-cash      { background:linear-gradient(135deg,#f59f00,#fdd835); color:#1a1a1a; }
+  .dispatch-week-card.status-invoiced  { background:linear-gradient(135deg,#f59f00,#fdd835); color:#1a1a1a; }
   .dispatch-week-card.status-paid      { background:linear-gradient(135deg,#0d47a1,#1565c0); color:#fff; }
   .dispatch-week-card.status-completed { background:linear-gradient(135deg,#1b5e20,#2e7d32); color:#fff; }
   .dispatch-week-card.status-upcoming-today { background:linear-gradient(135deg,#f97316,#fb923c); color:#fff; animation:disp-pulse 2.2s ease-in-out infinite; }
@@ -1658,7 +1659,8 @@
           <button onclick="openZoneGuide()" style="padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;background:#fff;font-size:13px;font-family:inherit;cursor:pointer;font-weight:600;color:var(--green-deep);transition:all .15s;" onmouseover="this.style.borderColor='var(--green-mid)'" onmouseout="this.style.borderColor='var(--border)'">🗺 Zone Guide</button>
           <div class="dispatch-legend">
             <span class="dispatch-legend-dot" style="background:#d32f2f;"></span>Upcoming
-            <span class="dispatch-legend-dot" style="background:#f9a825;margin-left:8px;"></span>Done / Invoiced / Cash
+            <span class="dispatch-legend-dot" style="background:#fb923c;margin-left:8px;"></span>Today / Upcoming
+            <span class="dispatch-legend-dot" style="background:#fdd835;margin-left:8px;"></span>Done / Invoiced / Cash
             <span class="dispatch-legend-dot" style="background:#1565c0;margin-left:8px;"></span>Paid (not done)
             <span class="dispatch-legend-dot" style="background:#2e7d32;margin-left:8px;"></span>Completed &amp; Archived
           </div>
@@ -9685,9 +9687,11 @@ async function assignCrew(rowIdx, crew) {
   var prev = b.crew || '';
   b.crew = crew; // optimistic
   try {
+    var _riCrew = parseInt(b._rowIndex, 10);
+    if (!_riCrew || _riCrew < 2) _riCrew = rowIdx + 2;
     var params = new URLSearchParams({
       action:      'set_crew',
-      rowIndex:    b._rowIndex || (rowIdx + 2),
+      rowIndex:    _riCrew,
       email:       b.email || '',
       serviceDate: b.serviceDate || b.serviceDateRaw || '',
       crew:        crew,
@@ -9744,6 +9748,120 @@ function _dispDropDayCrew(ev, crewKey) {
   var newCrew = (crewKey === 'Unassigned' || crewKey === 'unassigned') ? '' : crewKey;
   if ((b.crew || '') === newCrew) return; // no change
   assignCrew(ri, newCrew);
+}
+
+// ── WEEK VIEW DROP: date change + optional crew change ────────────────────
+async function _dispDropWeekDay(ev, newDateStr, newCrewKey) {
+  ev.preventDefault();
+  var row = ev.currentTarget;
+  if (row && row.classList) { row.classList.remove('drag-over'); row.classList.remove('drag-target'); }
+
+  var ri = _dispDragRow;
+  if (ri < 0 || ri == null) { try { ri = parseInt(ev.dataTransfer.getData('text/plain'), 10); } catch(e) {} }
+  _dispDragRow = -1;
+  if (ri < 0 || isNaN(ri)) return;
+  var b = allBookings[ri];
+  if (!b) return;
+
+  var oldDate = _dispDateOf(b);
+  var newCrew = (newCrewKey === 'Unassigned') ? '' : newCrewKey;
+  var dateChanged = newDateStr && newDateStr !== oldDate;
+  var crewChanged = (b.crew || '') !== newCrew;
+
+  if (!dateChanged && !crewChanged) return; // dropped on same cell
+
+  // Reschedule date first if it changed
+  if (dateChanged) {
+    var _riW = parseInt(b._rowIndex, 10);
+    if (!_riW || _riW < 2) _riW = ri + 2;
+    showToast('📅 Moving…');
+    try {
+      var params = new URLSearchParams({
+        action:        'owner_reschedule',
+        rowIndex:      _riW,
+        newDate:       newDateStr,
+        scope:         'single',
+        reason:        'Drag rescheduled',
+        sendEmail:     'false',
+        expectedEmail: (b.email || '').toLowerCase().trim(),
+        serviceDate:   b.serviceDate || b.serviceDateRaw || '',
+        adminToken:    adminToken,
+      });
+      var res  = await fetch(SCRIPT_URL + '?' + params.toString());
+      var data = await res.json();
+      if (data.success) {
+        b.serviceDate    = newDateStr;
+        b.serviceDateRaw = newDateStr;
+        showToast('📅 Moved to ' + newDateStr + (b.email ? '' : ''));
+      } else {
+        showToast('❌ ' + (data.error || 'Could not reschedule'));
+        try { renderDispatchBoard(); } catch(e) {}
+        return;
+      }
+    } catch(err) {
+      showToast('❌ Network error: ' + err.message);
+      try { renderDispatchBoard(); } catch(e) {}
+      return;
+    }
+  }
+
+  // Then reassign crew if it changed
+  if (crewChanged) {
+    await assignCrew(ri, newCrew);
+  } else {
+    try { renderBookings(); } catch(e) {}
+    try { renderDispatchBoard(); } catch(e) {}
+  }
+}
+
+// ── MONTH VIEW DROP: reschedule to a new date ─────────────────────────────
+async function _dispDropMonthDay(ev, newDateStr) {
+  ev.preventDefault();
+  var cell = ev.currentTarget;
+  if (cell && cell.classList) { cell.classList.remove('drag-over'); cell.classList.remove('drag-target'); }
+
+  var ri = _dispDragRow;
+  if (ri < 0 || ri == null) { try { ri = parseInt(ev.dataTransfer.getData('text/plain'), 10); } catch(e) {} }
+  _dispDragRow = -1;
+  if (ri < 0 || isNaN(ri)) return;
+  var b = allBookings[ri];
+  if (!b) return;
+
+  var oldDate = _dispDateOf(b);
+  if (!newDateStr || newDateStr === oldDate) return; // no change
+
+  var _riM = parseInt(b._rowIndex, 10);
+  if (!_riM || _riM < 2) _riM = ri + 2;
+  showToast('📅 Moving…');
+  try {
+    var params = new URLSearchParams({
+      action:        'owner_reschedule',
+      rowIndex:      _riM,
+      newDate:       newDateStr,
+      scope:         'single',
+      reason:        'Drag rescheduled',
+      notify:        'no',
+      sendEmail:     'no',
+      expectedEmail: (b.email || '').toLowerCase().trim(),
+      serviceDate:   b.serviceDate || b.serviceDateRaw || '',
+      adminToken:    adminToken,
+    });
+    var res  = await fetch(SCRIPT_URL + '?' + params.toString());
+    var data = await res.json();
+    if (data.success) {
+      b.serviceDate    = newDateStr;
+      b.serviceDateRaw = newDateStr;
+      showToast('📅 Moved to ' + newDateStr);
+      try { renderBookings(); } catch(e) {}
+      try { renderDispatchBoard(); } catch(e) {}
+    } else {
+      showToast('❌ ' + (data.error || 'Could not reschedule'));
+      try { renderDispatchBoard(); } catch(e) {}
+    }
+  } catch(err) {
+    showToast('❌ Network error: ' + err.message);
+    try { renderDispatchBoard(); } catch(e) {}
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -9919,7 +10037,7 @@ async function submitDispatchResched() {
       newDate:       newDate,
       scope:         scope,
       reason:        reason.trim(),
-      notify:        notify ? 'yes' : 'no',
+      sendEmail:     notify ? 'true' : 'false',
       expectedEmail: (b.email || '').toLowerCase().trim(),  // server verifies — prevents wrong-customer emails
       serviceDate:   b.serviceDate || b.serviceDateRaw || '',
     });
@@ -10020,7 +10138,7 @@ function renderDispatchWeek(dateStr, crewFilt) {
       } else {
         cards = '<div class="dispatch-week-empty">No jobs</div>';
       }
-      html += '<div class="dispatch-week-day-body" ondragover="_dispDragOver(event)" ondragleave="_dispDragLeave(event)" ondrop="_dispDropDayCrew(event,\'' + crewKey + '\')">' + zoneHdr + cards + '</div>';
+      html += '<div class="dispatch-week-day-body" ondragover="_dispDragOver(event)" ondragleave="_dispDragLeave(event)" ondrop="_dispDropWeekDay(event,\'' + ds + '\',\'' + crewKey + '\')">' + zoneHdr + cards + '</div>';
     });
   });
   html += '</div>';
@@ -10058,13 +10176,13 @@ function renderDispatchMonth(dateStr, crewFilt) {
     var other = d.getMonth() !== month;
     var isToday = ds === todayStr;
     var cls = 'dispatch-month-cell' + (other ? ' other-month' : '') + (isToday ? ' is-today' : '');
-    html += '<div class="' + cls + '" onclick="_dispMonthDayClick(\'' + ds + '\')">';
+    html += '<div class="' + cls + '" ondragover="_dispDragOver(event)" ondragleave="_dispDragLeave(event)" ondrop="_dispDropMonthDay(event,\'' + ds + '\')" onclick="_dispMonthDayClick(\'' + ds + '\')">';
     html += '<div class="dispatch-month-day-num">' + d.getDate() + '</div>';
     var jobs = (byDate[ds] || []).slice().sort(function(a, b) { return String(a.jobTime || '99:99').localeCompare(String(b.jobTime || '99:99')); });
     var shown = jobs.slice(0, 3);
     shown.forEach(function(b) {
       var ri = allBookings.indexOf(b);
-      html += '<div class="dispatch-month-job-pill ' + _dispJobClass(b) + '" onclick="event.stopPropagation();openDispatchDetail(' + ri + ')" title="' + esc(b.name || '') + '">' + esc(b.name || '—') + '</div>';
+      html += '<div class="dispatch-month-job-pill ' + _dispJobClass(b) + '" draggable="true" ondragstart="event.stopPropagation();_dispDragStart(event,' + ri + ')" onclick="event.stopPropagation();openDispatchDetail(' + ri + ')" title="' + esc(b.name || '') + '">' + esc(b.name || '—') + '</div>';
     });
     if (jobs.length > shown.length) html += '<div class="dispatch-month-more">+' + (jobs.length - shown.length) + ' more</div>';
     html += '</div>';
