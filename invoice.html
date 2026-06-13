@@ -835,21 +835,6 @@
   .dispatch-legend { display:flex; align-items:center; gap:4px; font-size:12px; color:var(--text-muted); font-weight:500; flex-wrap:wrap; }
   .dispatch-legend-dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
 
-  /* ── Upcoming pipeline ── */
-  .dispatch-upcoming-day { margin-bottom:14px; }
-  .dispatch-upcoming-day-hdr { font-size:12px; font-weight:800; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:7px; display:flex; align-items:center; gap:8px; }
-  .dispatch-upcoming-day-hdr::after { content:''; flex:1; height:1px; background:var(--border); }
-  .dispatch-upcoming-day-hdr.is-tomorrow { color:var(--green-mid); }
-  .dispatch-upcoming-cards { display:flex; flex-wrap:wrap; gap:8px; }
-  .dispatch-upcoming-card { display:flex; align-items:center; gap:10px; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; background:#fff; cursor:pointer; transition:border-color .15s, box-shadow .15s; min-width:200px; flex:1; max-width:320px; }
-  .dispatch-upcoming-card:hover { border-color:var(--green-mid); box-shadow:0 2px 8px rgba(0,0,0,.08); }
-  .dispatch-upcoming-card.crew-a { border-left:3px solid #1976d2; }
-  .dispatch-upcoming-card.crew-b { border-left:3px solid #e91e8c; }
-  .dispatch-upcoming-card.crew-none { border-left:3px solid #d1d5db; }
-  .dispatch-upcoming-name { font-size:13px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .dispatch-upcoming-meta { font-size:11px; color:var(--text-muted); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .dispatch-upcoming-badge { font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px; background:#f3f4f6; color:#6b7280; white-space:nowrap; flex-shrink:0; }
-
   /* ── Stats Ribbon ── */
   .dispatch-stats-ribbon { display:flex; align-items:center; gap:16px; background:linear-gradient(135deg,var(--green-deep) 0%,var(--green-mid) 100%); border-radius:14px; padding:14px 22px; margin-bottom:16px; color:#fff; flex-wrap:wrap; }
   .dispatch-stat-item { display:flex; flex-direction:column; gap:2px; min-width:72px; }
@@ -1713,11 +1698,6 @@
         📭 No jobs scheduled for this date.
       </div>
 
-      <!-- Upcoming appointments pipeline (day view only) -->
-      <div id="dispatchUpcomingWrap" style="display:none;margin-top:24px;">
-        <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:12px;padding:0 2px;">📆 Upcoming Appointments</div>
-        <div id="dispatchUpcomingList"></div>
-      </div>
     </div>
 
     <!-- Job Detail Panel -->
@@ -9479,7 +9459,6 @@ function renderDispatchBoard() {
     if (emptyEl) { emptyEl.style.display='block'; emptyEl.textContent='No jobs scheduled for this date.'; }
     var _srX = document.getElementById('dispatchStatsRibbon'); if (_srX) _srX.style.display = 'none';
     var _tlX = document.getElementById('dispatchTimeLine'); if (_tlX) _tlX.style.display = 'none';
-    renderDispatchUpcoming(dateStr);
     return;
   }
   if (boardEl) boardEl.style.display = '';
@@ -9532,7 +9511,6 @@ function renderDispatchBoard() {
   if (rowsEl) rowsEl.innerHTML = rowsHtml;
   renderDispatchMobileList(dayJobs);
   renderDispatchStats(dateStr, dayJobs);
-  renderDispatchUpcoming(dateStr);
   // Small delay so the board DOM is painted before measuring widths
   setTimeout(renderCurrentTimeLine, 60);
 }
@@ -9602,38 +9580,23 @@ function renderCurrentTimeLine() {
   }, 60000);
 })();
 
-// ── GHOST CARD HELPERS (unscheduled recurring customers) ─────────────────
+// ── GHOST CARD HELPERS ────────────────────────────────────────────────────
+// Derive "expected next appointment" from each customer's most recent booking
+// date + plan frequency. If that date falls in the viewed week and no booking
+// already exists for that customer on that date → show a ghost card.
 
-// Parse any date string → YYYY-MM-DD, or '' on failure
-function _dispParseDate(raw) {
-  if (!raw) return '';
-  var s = String(raw).trim();
-  if (!s) return '';
-  var d = new Date(s.includes('T') ? s : s + 'T12:00');
-  if (isNaN(d)) return '';
-  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+function _freqToDays(freq) {
+  var f = String(freq || '').toLowerCase();
+  if (/bi.?week/i.test(f))  return 14;
+  if (/week/i.test(f))      return 7;
+  if (/month/i.test(f))     return 30;
+  return 0; // one-time / custom / unknown → skip
 }
 
-// Build lookup structures needed to render ghost cards in the week view.
-// Returns { crewOf, bookedSet, ghosts }
-//   crewOf   — email → most recent crew string ('A','B','')
-//   bookedSet — Set of "email::date" strings already in allBookings
-//   ghosts   — Map of date → array of { name, email, plan, city }
-function _buildGhostData(days, dstr) {
-  // Most recent crew per customer (from allBookings)
-  var crewOf = {};
-  (allBookings || []).forEach(function(b) {
-    var em = (b.email || '').toLowerCase().trim();
-    if (!em) return;
-    var ds = _dispDateOf(b);
-    if (!ds) return;
-    // Keep the entry with the most recent date
-    if (!crewOf[em] || ds > (crewOf[em].ds || '')) crewOf[em] = { crew: (b.crew || '').trim(), ds: ds };
-  });
-  var crewMap = {};
-  Object.keys(crewOf).forEach(function(em) { crewMap[em] = crewOf[em].crew; });
+function _buildGhostData(days, dstrFn) {
+  var weekDates = new Set(days.map(function(d) { return dstrFn(d); }));
 
-  // Set of "email::date" combos that already have a real booking
+  // All (email, date) pairs that already have a real booking this week
   var bookedSet = new Set();
   (allBookings || []).forEach(function(b) {
     var em = (b.email || '').toLowerCase().trim();
@@ -9641,109 +9604,52 @@ function _buildGhostData(days, dstr) {
     if (em && ds && !b.rowCancelled) bookedSet.add(em + '::' + ds);
   });
 
-  // Build ghost candidates: active customers with nextSched in the visible week range
-  var weekDates = new Set(days.map(function(d) { return dstr(d); }));
-  var ghosts = {}; // date → [{name,email,plan,city,crew}]
-
-  (allCustomers || []).forEach(function(c) {
-    var status = String(c.Status || c.status || 'Active').toLowerCase();
-    if (status === 'inactive' || status === 'cancelled') return;
-    var plan = String(c.Plan || c.plan || '');
-    if (!plan || /one.time/i.test(plan)) return; // skip one-time customers
-    var em   = String(c.Email || c.email || '').toLowerCase().trim();
+  // Find most recent booking per customer (by service date)
+  var latestByEmail = {};
+  (allBookings || []).forEach(function(b) {
+    if (b.rowCancelled) return;
+    var em = (b.email || '').toLowerCase().trim();
     if (!em) return;
-    var ns   = _dispParseDate(c['Next Scheduled'] || c.nextSched || '');
-    if (!ns || !weekDates.has(ns)) return;          // not this week
-    if (bookedSet.has(em + '::' + ns)) return;      // already scheduled
-    var crew = crewMap[em] || '';
-    var city = String(c.Zip || c.zip || c.Address || c.address || '').trim();
-    if (!ghosts[ns]) ghosts[ns] = [];
-    ghosts[ns].push({ name: String(c.Name || c.name || '—'), email: em, plan: plan, city: city, crew: crew });
+    var interval = _freqToDays(b.frequency);
+    if (!interval) return; // skip one-time / no plan
+    var ds = _dispDateOf(b);
+    if (!ds) return;
+    if (!latestByEmail[em] || ds > latestByEmail[em].ds) {
+      latestByEmail[em] = { ds: ds, b: b };
+    }
   });
 
-  return { crewMap: crewMap, bookedSet: bookedSet, ghosts: ghosts };
+  // For each customer's latest booking, calculate expected next date
+  var ghosts = {}; // date → [{ name, email, frequency, crew, city }]
+  Object.keys(latestByEmail).forEach(function(em) {
+    var entry    = latestByEmail[em];
+    var b        = entry.b;
+    var interval = _freqToDays(b.frequency);
+    var d        = new Date(entry.ds + 'T12:00');
+    d.setDate(d.getDate() + interval);
+    var nextDs   = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+
+    if (!weekDates.has(nextDs)) return;      // not in this week's view
+    if (bookedSet.has(em + '::' + nextDs)) return; // already scheduled
+
+    if (!ghosts[nextDs]) ghosts[nextDs] = [];
+    ghosts[nextDs].push({
+      name:      b.name || '—',
+      email:     em,
+      frequency: b.frequency || '',
+      crew:      (b.crew || '').trim(),
+      city:      (ZIP_CITY && ZIP_CITY[b.zip]) || b.address || b.zip || '',
+    });
+  });
+
+  return { ghosts: ghosts };
 }
 
-// Navigate day view to a date (for "+ Schedule" button)
-function _dispQuickSchedule(dateStr, email) {
+// "+ Schedule" — navigate to that day so the owner can schedule the job
+function _dispQuickSchedule(dateStr) {
   var dEl = document.getElementById('dispatchDate');
   if (dEl) dEl.value = dateStr;
   setDispatchView('day');
-  showToast('📅 ' + dateStr + ' — add a booking for this customer from the Customers tab');
-}
-
-// ── UPCOMING APPOINTMENTS PIPELINE ───────────────────────────────────────
-function renderDispatchUpcoming(dateStr) {
-  var wrap = document.getElementById('dispatchUpcomingWrap');
-  var list = document.getElementById('dispatchUpcomingList');
-  if (!wrap || !list) return;
-
-  if (!allBookings || !allBookings.length || !dateStr) { wrap.style.display = 'none'; return; }
-
-  var crewFilt = (document.getElementById('dispatchCrewFilter') || {}).value || 'all';
-  var todayStr = new Date().toISOString().slice(0, 10);
-
-  // All non-cancelled, non-completed future jobs after the selected date
-  var future = allBookings.filter(function(b) {
-    if (b.rowCancelled || b.rowCompleted || isDone(b)) return false;
-    var ds = _dispDateOf(b);
-    if (!ds || ds <= dateStr) return false;
-    if (crewFilt !== 'all') {
-      var c = (b.crew || '').trim();
-      if (crewFilt === 'unassigned') return !c;
-      return c === crewFilt;
-    }
-    return true;
-  });
-
-  if (!future.length) { wrap.style.display = 'none'; return; }
-
-  // Group by date
-  var byDate = {};
-  future.forEach(function(b) {
-    var ds = _dispDateOf(b);
-    (byDate[ds] = byDate[ds] || []).push(b);
-  });
-  var dates = Object.keys(byDate).sort();
-
-  var tomorrowStr = (function() {
-    var t = new Date(dateStr + 'T12:00'); t.setDate(t.getDate() + 1);
-    return t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0');
-  })();
-
-  var html = '';
-  dates.forEach(function(ds) {
-    var jobs = byDate[ds];
-    var d = new Date(ds + 'T12:00');
-    var isTomorrow = ds === tomorrowStr;
-    var dLabel = isTomorrow ? 'Tomorrow' :
-      (DAYS_OF_WEEK ? DAYS_OF_WEEK[d.getDay()] + ', ' : '') +
-      (d.getMonth()+1) + '/' + d.getDate() + '/' + String(d.getFullYear()).slice(2);
-
-    html += '<div class="dispatch-upcoming-day">';
-    html += '<div class="dispatch-upcoming-day-hdr' + (isTomorrow ? ' is-tomorrow' : '') + '">' + esc(dLabel) + ' <span style="font-weight:500;text-transform:none;letter-spacing:0;">(' + jobs.length + ' job' + (jobs.length !== 1 ? 's' : '') + ')</span></div>';
-    html += '<div class="dispatch-upcoming-cards">';
-    jobs.forEach(function(b) {
-      var ri   = allBookings.indexOf(b);
-      var crew = (b.crew || '').trim();
-      var crewCls = crew === 'A' ? 'crew-a' : crew === 'B' ? 'crew-b' : 'crew-none';
-      var crewLbl = crew ? ('Crew ' + crew) : 'Unassigned';
-      var price   = parseFloat(String(b.price || '').replace(/[^0-9.]/g, '')) || 0;
-      var zone    = getZoneFromZip ? getZoneFromZip(b.zip) : '';
-      var meta    = [b.frequency, zone ? 'Zone ' + zone : '', price ? '$' + price.toFixed(0) : ''].filter(Boolean).join(' · ');
-      html += '<div class="dispatch-upcoming-card ' + crewCls + '" onclick="openDispatchDetail(' + ri + ')">';
-      html += '<div style="flex:1;min-width:0;">';
-      html += '<div class="dispatch-upcoming-name">' + esc(b.name || '—') + '</div>';
-      if (meta) html += '<div class="dispatch-upcoming-meta">' + esc(meta) + '</div>';
-      html += '</div>';
-      html += '<div class="dispatch-upcoming-badge">' + esc(crewLbl) + '</div>';
-      html += '</div>';
-    });
-    html += '</div></div>';
-  });
-
-  list.innerHTML = html;
-  wrap.style.display = '';
 }
 
 function renderDispatchMobileList(dayJobs) {
@@ -10190,7 +10096,6 @@ function renderDispatchWeek(dateStr, crewFilt) {
   // Hide day-view-only elements
   var _sr = document.getElementById('dispatchStatsRibbon'); if (_sr) _sr.style.display = 'none';
   var _tl = document.getElementById('dispatchTimeLine'); if (_tl) _tl.style.display = 'none';
-  var _uw = document.getElementById('dispatchUpcomingWrap'); if (_uw) _uw.style.display = 'none';
   // Classic layout: a crew (rows) x day (columns) matrix. Each cell shows the
   // zone badges that crew services that day, then the day's job cards.
   var axisEl = document.getElementById('dispatchTimeAxis');
@@ -10206,7 +10111,7 @@ function renderDispatchWeek(dateStr, crewFilt) {
   var todayStr = new Date().toISOString().slice(0, 10);
   function dstr(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 
-  // Build ghost card data (unscheduled recurring customers)
+  // Build ghost card data (expected next apts from booking frequency)
   var _ghostData = _buildGhostData(days, dstr);
 
   // Which crew rows to show
@@ -10280,9 +10185,9 @@ function renderDispatchWeek(dateStr, crewFilt) {
           var city = g.city ? '📍 ' + esc(g.city) : '';
           return '<div class="dispatch-ghost-card">' +
             '<div class="dispatch-ghost-name">' + esc(g.name) + '</div>' +
-            (city ? '<div class="dispatch-ghost-meta">' + city + '</div>' : '') +
-            '<div class="dispatch-ghost-meta">' + esc(g.plan) + ' · not scheduled</div>' +
-            '<button class="dispatch-ghost-btn" onclick="event.stopPropagation();_dispQuickSchedule(\'' + esc(ds) + '\',\'' + esc(g.email) + '\')">+ Schedule</button>' +
+            (city ? '<div class="dispatch-ghost-meta">📍 ' + esc(city) + '</div>' : '') +
+            '<div class="dispatch-ghost-meta">' + esc(g.frequency) + ' · not scheduled</div>' +
+            '<button class="dispatch-ghost-btn" onclick="event.stopPropagation();_dispQuickSchedule(\'' + esc(ds) + '\')">+ Schedule</button>' +
             '</div>';
         }).join('');
       }
