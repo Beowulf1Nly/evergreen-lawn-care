@@ -2765,7 +2765,7 @@ function qtFillFromCustomer() {
 
 // ── Set up quote tab UI based on current role ─────────
 function qtSetupForRole() {
-  const isEmployee = adminRole === 'employee';
+  const isEmployee = !window._isAtLeast('manager'); // crew_leader / helper → submit for approval
   const notice   = document.getElementById('qt-employee-notice');
   const sendBtn  = document.getElementById('qt-send-btn');
   if (notice)  notice.style.display  = isEmployee ? 'block' : 'none';
@@ -2792,7 +2792,7 @@ async function qtSend() {
   const btn    = document.getElementById('qt-send-btn');
   const status = document.getElementById('qt-status');
   btn.disabled = true;
-  const isEmployee = adminRole === 'employee';
+  const isEmployee = !window._isAtLeast('manager'); // crew_leader / helper → submit for approval
   btn.textContent  = isEmployee ? '⏳ Submitting…' : '📧 Sending…';
   if (status) { status.textContent = ''; status.style.color = ''; }
 
@@ -4257,7 +4257,11 @@ async function loadBookings() {
     // Re-apply live role from server
     if (data.role) {
       const freshRole = String(data.role).toLowerCase().trim();
-      const validRole = (freshRole === 'owner' || freshRole === 'employee') ? freshRole : 'employee';
+      // Accept all valid roles; normalise legacy 'employee' → 'crew_leader' to match showApp()
+      const KNOWN_ROLES = ['owner', 'manager', 'crew_leader', 'helper'];
+      const validRole = KNOWN_ROLES.includes(freshRole) ? freshRole
+                      : freshRole === 'employee'        ? 'crew_leader'
+                      : adminRole; // unknown → keep current
       if (validRole !== adminRole) {
         adminRole = validRole;
         saveSession(adminToken, adminName, adminEmail, adminRole, adminRole === 'owner' ? 30 : 7);
@@ -4547,9 +4551,10 @@ function cardHTML(b, rowIdx, isToday, tomorrowStr) {
       }
     }
 
-    // ── Step 3: Complete Job — owners only, after job done AND (cash paid OR invoiced/charged OR free) ──
+    // ── Step 3: Complete Job — owners only, after job done AND paid (auto-complete handles this server-side,
+    // but button remains as a manual fallback in case the auto-archive didn't fire) ──
     const jobReadyToComplete = done && !b.rowCompleted &&
-      (isFree || isPaid || invoiced || (cash && isPaid));
+      (isFree || isPaid || cash);
     if (adminRole === 'owner' && jobReadyToComplete) {
       actions += `<button class="btn-action" style="background:#15803d;color:#fff;font-weight:700;margin-top:4px;border-color:#15803d;" onclick="triggerCompleteJob(${rowIdx})">✅ Complete Job</button>`;
     }
@@ -4603,7 +4608,7 @@ function cardHTML(b, rowIdx, isToday, tomorrowStr) {
   }
 
   // ── Employee view: name, address, date, phone, notes, done status only ──
-  if (adminRole === 'employee') {
+  if (!window._isAtLeast('manager')) {
     return `
       <div class="booking-card ${isToday?'today':isTomorrow?'tomorrow':''} ${done?'done':''}">
         <div>
@@ -5047,16 +5052,8 @@ async function executeCashPaid(rowIdx) {
 function triggerCompleteJob(rowIdx) {
   const b = allBookings[rowIdx];
   if (!b) return;
-  // Hide crew/reason rows — not needed for completion
-  const crewRow   = document.getElementById('confirmCrewRow');
-  const reasonRow = document.getElementById('confirmReasonRow');
-  if (crewRow)   crewRow.style.display   = 'none';
-  if (reasonRow) reasonRow.style.display = 'none';
-  openConfirm(
-    `Complete job for "${b.name || 'customer'}"?`,
-    'This marks the job as fully complete and archives it. You can still add notes or photos first.',
-    () => executeCompleteJob(rowIdx)
-  );
+  // No confirmation step — auto-archive immediately
+  executeCompleteJob(rowIdx);
 }
 
 async function executeCompleteJob(rowIdx) {
@@ -9516,12 +9513,12 @@ function renderDispatchBoard() {
 }
 
 // ── STATS RIBBON ──────────────────────────────────────────────────────────
-function renderDispatchStats(dateStr, dayJobs) {
+// revLabel: 'Day' | 'Week' | 'Month'
+function renderDispatchStats(dateStr, dayJobs, revLabel) {
   var el = document.getElementById('dispatchStatsRibbon');
   if (!el) return;
-  // Show ribbon only in day view
-  if (_dispView !== 'day') { el.style.display = 'none'; return; }
   if (!dayJobs || !dayJobs.length) { el.style.display = 'none'; return; }
+  var label = revLabel || 'Day';
 
   var total    = dayJobs.length;
   var done     = dayJobs.filter(function(b) { var cls = _dispJobClass(b); return cls === 'status-completed' || cls === 'status-done'; }).length;
@@ -9539,14 +9536,16 @@ function renderDispatchStats(dateStr, dayJobs) {
     '<div class="dispatch-stat-item"><div class="dispatch-stat-val">' + done + '</div><div class="dispatch-stat-lbl">Completed</div></div>' +
     '<div class="dispatch-stat-divider"></div>' +
     '<div class="dispatch-stat-item"><div class="dispatch-stat-val">' + remaining + '</div><div class="dispatch-stat-lbl">Remaining</div></div>' +
-    (crews ? '<div class="dispatch-stat-divider"></div><div class="dispatch-stat-item"><div class="dispatch-stat-val">' + crews + '</div><div class="dispatch-stat-lbl">Crew' + (crews !== 1 ? 's' : '') + '</div></div>' : '') +
+    (crews && label === 'Day' ? '<div class="dispatch-stat-divider"></div><div class="dispatch-stat-item"><div class="dispatch-stat-val">' + crews + '</div><div class="dispatch-stat-lbl">Crew' + (crews !== 1 ? 's' : '') + '</div></div>' : '') +
     '<div class="dispatch-stat-divider"></div>' +
-    '<div class="dispatch-stat-item"><div class="dispatch-stat-val">$' + revenue.toFixed(0) + '</div><div class="dispatch-stat-lbl">Day Revenue</div></div>' +
-    '<div class="dispatch-stat-divider"></div>' +
-    '<div class="dispatch-stats-progress-wrap">' +
-      '<div style="font-size:11px;font-weight:700;opacity:.85;letter-spacing:.05em;">' + pct + '% Done</div>' +
-      '<div class="dispatch-stats-progress-track"><div class="dispatch-stats-progress-fill" style="width:' + pct + '%;"></div></div>' +
-    '</div>';
+    '<div class="dispatch-stat-item"><div class="dispatch-stat-val">$' + revenue.toFixed(0) + '</div><div class="dispatch-stat-lbl">' + label + ' Revenue</div></div>' +
+    (label === 'Day' ?
+      '<div class="dispatch-stat-divider"></div>' +
+      '<div class="dispatch-stats-progress-wrap">' +
+        '<div style="font-size:11px;font-weight:700;opacity:.85;letter-spacing:.05em;">' + pct + '% Done</div>' +
+        '<div class="dispatch-stats-progress-track"><div class="dispatch-stats-progress-fill" style="width:' + pct + '%;"></div></div>' +
+      '</div>'
+    : '');
 }
 
 // ── CURRENT TIME LINE ─────────────────────────────────────────────────────
@@ -10093,8 +10092,7 @@ async function submitDispatchResched() {
 // DISPATCH — WEEK & MONTH VIEWS  (restored)
 // ═══════════════════════════════════════════════════════
 function renderDispatchWeek(dateStr, crewFilt) {
-  // Hide day-view-only elements
-  var _sr = document.getElementById('dispatchStatsRibbon'); if (_sr) _sr.style.display = 'none';
+  // Hide time-line (day-only), but keep stats ribbon for week summary
   var _tl = document.getElementById('dispatchTimeLine'); if (_tl) _tl.style.display = 'none';
   // Classic layout: a crew (rows) x day (columns) matrix. Each cell shows the
   // zone badges that crew services that day, then the day's job cards.
@@ -10196,11 +10194,17 @@ function renderDispatchWeek(dateStr, crewFilt) {
   });
   html += '</div>';
   rowsEl.innerHTML = html;
+
+  // Stats ribbon — all real (non-ghost) jobs for the 7-day window
+  var weekDates = new Set(days.map(function(d) { return dstr(d); }));
+  var weekJobs = allBookings.filter(function(b) {
+    return !b.rowCancelled && weekDates.has(_dispDateOf(b));
+  });
+  renderDispatchStats(dateStr, weekJobs, 'Week');
 }
 
 function renderDispatchMonth(dateStr, crewFilt) {
-  // Hide day-view-only elements
-  var _sr2 = document.getElementById('dispatchStatsRibbon'); if (_sr2) _sr2.style.display = 'none';
+  // Hide time-line (day-only), but keep stats ribbon for month summary
   var _tl2 = document.getElementById('dispatchTimeLine'); if (_tl2) _tl2.style.display = 'none';
   var grid = document.getElementById('dispatchMonthGrid');
   if (!grid) return;
@@ -10241,6 +10245,16 @@ function renderDispatchMonth(dateStr, crewFilt) {
     html += '</div>';
   }
   grid.innerHTML = html;
+
+  // Stats ribbon — all jobs in the displayed calendar month
+  var monthJobs = allBookings.filter(function(b) {
+    if (b.rowCancelled) return false;
+    var ds = _dispDateOf(b);
+    if (!ds) return false;
+    var d = new Date(ds + 'T12:00');
+    return d.getFullYear() === year && d.getMonth() === month;
+  });
+  renderDispatchStats(dateStr, monthJobs, 'Month');
 }
 
 function _dispMonthDayClick(ds) {
