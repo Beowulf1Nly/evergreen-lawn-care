@@ -3332,6 +3332,7 @@ function renderCustomers() {
       autopay:    String(c.AutopayEnabled || '').toLowerCase() === 'true',
       reviewSent: String(c['Review Sent'] || ''),
       notes:      String(c.Notes      || ''),
+      services:   String(c.Services   || ''),   // "Hedge Trimming:40; Shrub Removal:120"
     }));
   } else {
     // Fallback: deduplicate allBookings (used before Customers sheet is populated)
@@ -3364,6 +3365,7 @@ function renderCustomers() {
       autopay:    false,
       reviewSent: String(b.reviewSent || ''),
       notes:      '',
+      services:   '',
     }));
   }
 
@@ -3505,6 +3507,7 @@ function renderCustomers() {
       (!isInactive && nextRow !== undefined) ? `<button class="cust-dd-item" onclick="closeCustDropdowns();custChangePrice(${custIdx},${nextRow})">💰 Change Price</button>` : '',
                                                `<button class="cust-dd-item" onclick="closeCustDropdowns();openScheduleModal(${custIdx})">📋 Change Plan</button>`,
                                                `<button class="cust-dd-item" onclick="closeCustDropdowns();custViewNotes(${custIdx})">📝 Notes</button>`,
+                                               `<button class="cust-dd-item" onclick="closeCustDropdowns();custEditServices(${custIdx})">🛠 Services &amp; Prices</button>`,
       (c.email && !c.reviewSent && c.totalMows > 0) ? `<button class="cust-dd-item" onclick="closeCustDropdowns();custSendReviewByEmail('${esc(c.email)}')">⭐ Review Email</button>` : '',
       // Danger zone
       ((!isInactive && nextRow !== undefined) || isSub) ? '<div class="cust-dd-sep"></div>' : '',
@@ -3852,6 +3855,85 @@ function custViewNotes(custIdx) {
   );
 }
 
+// ═══════════════════════════════════════════════════════
+// PER-CUSTOMER SERVICE CATALOG (hedge trimming, weed treatment, …)
+// Stored in Customers sheet "Services" column as "Name:price; Name:price".
+// After a mow is marked done, these appear as checkboxes — checking one adds
+// its set price to that job's total automatically.
+// ═══════════════════════════════════════════════════════
+function parseServices(str) {
+  return String(str || '').split(';').map(s => s.trim()).filter(Boolean).map(s => {
+    const m = s.match(/^(.*?):\s*\$?([\d.]+)\s*$/);
+    return m ? { name: m[1].trim(), price: parseFloat(m[2]) || 0 } : null;
+  }).filter(s => s && s.name && s.price > 0);
+}
+function servicesToStr(list) {
+  return list.map(s => s.name.replace(/[;:|]/g, ' ').trim() + ':' + (+s.price || 0)).join('; ');
+}
+function customerServicesFor(email) {
+  const em = String(email || '').toLowerCase().trim();
+  if (!em) return [];
+  const c = (allCustomers || []).find(x => String(x.Email || '').toLowerCase().trim() === em);
+  return parseServices(c ? (c.Services || '') : '');
+}
+
+function _svcRowHTML(name, price) {
+  return `<div class="svc-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+    <input type="text" class="svc-name" value="${esc(name || '')}" placeholder="e.g. Hedge Trimming"
+           style="flex:1;padding:9px 10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;">
+    <span style="font-weight:600;color:#374151;">$</span>
+    <input type="number" class="svc-price" value="${price || ''}" min="0" step="1" placeholder="40"
+           style="width:80px;padding:9px 10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;">
+    <button type="button" onclick="this.parentElement.remove()" title="Remove"
+            style="border:none;background:#fee2e2;color:#991b1b;border-radius:8px;width:30px;height:30px;cursor:pointer;font-weight:700;">✕</button>
+  </div>`;
+}
+function svcAddRow() {
+  document.getElementById('svcRows')?.insertAdjacentHTML('beforeend', _svcRowHTML('', ''));
+}
+
+function custEditServices(custIdx) {
+  const c = (window._custsList || [])[custIdx];
+  if (!c) return;
+  const existing = parseServices(c.services || '');
+  const rowsHtml = (existing.length ? existing : [{ name: '', price: '' }])
+    .map(s => _svcRowHTML(s.name, s.price)).join('');
+  openCustEdit(
+    '🛠 Services & Prices — ' + c.name,
+    'Set prices once. After a mow you can check any of these to add the cost to that job\'s total.',
+    `<div id="svcRows">${rowsHtml}</div>
+     <button type="button" onclick="svcAddRow()"
+             style="border:1.5px dashed #9ca3af;background:#f9fafb;color:#374151;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;width:100%;">＋ Add Service</button>`,
+    async () => {
+      const btn = document.getElementById('custEditSaveBtn');
+      if (btn.disabled) return;
+      const list = [...document.querySelectorAll('#svcRows .svc-row')].map(row => ({
+        name:  row.querySelector('.svc-name').value.trim(),
+        price: parseFloat(row.querySelector('.svc-price').value) || 0,
+      })).filter(s => s.name && s.price > 0);
+      const services = servicesToStr(list);
+      btn.disabled = true; btn.textContent = 'Saving…';
+      try {
+        const params = new URLSearchParams({ action: 'owner_update_services', email: c.email || '', services });
+        const res  = await fetch(SCRIPT_URL + '?' + authParam() + '&' + params);
+        const data = await res.json();
+        if (data.success) {
+          // Mirror locally so checkboxes work immediately without a reload
+          c.services = services;
+          const raw = (allCustomers || []).find(x => String(x.Email || '').toLowerCase().trim() === c.email);
+          if (raw) raw.Services = services;
+          sessionStorage.removeItem('evg_customers_cache');
+          closeCustEdit();
+          showToast(list.length ? '🛠 ' + list.length + ' service' + (list.length !== 1 ? 's' : '') + ' saved for ' + c.name : 'Services cleared.');
+        } else {
+          showToast('Error: ' + (data.error || 'Failed'));
+          btn.disabled = false; btn.textContent = 'Save';
+        }
+      } catch(e) { showToast('Network error'); btn.disabled = false; btn.textContent = 'Save'; }
+    }
+  );
+}
+
 function custChangePrice(custIdx, nextRow) {
   const c = (window._custsList || [])[custIdx];
   if (!c) return;
@@ -3904,8 +3986,22 @@ function custChangeFreq(custIdx) {
       btn.disabled = true; btn.textContent = 'Saving…';
       try {
         const params = new URLSearchParams({ action: 'owner_update_freq', email: c.email || '', freq });
-        const res  = await fetch(SCRIPT_URL + '?' + authParam() + '&' + params);
-        const data = await res.json();
+        // 45s timeout + read body as text first so a non-JSON server reply
+        // (Apps Script error page, auth redirect) shows a REAL message instead
+        // of a generic "Network error".
+        const ctrl  = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 45000);
+        let res, raw;
+        try {
+          res = await fetch(SCRIPT_URL + '?' + authParam() + '&' + params, { signal: ctrl.signal });
+          raw = await res.text();
+        } finally { clearTimeout(timer); }
+        let data;
+        try { data = JSON.parse(raw); }
+        catch(pe) {
+          console.error('owner_update_freq: non-JSON response', res?.status, raw?.slice(0, 300));
+          throw new Error('Server returned an unexpected response (HTTP ' + (res?.status || '?') + '). The plan may still have changed — refresh and check before retrying.');
+        }
         if (data.success) {
           closeCustEdit();
           const cancelledMsg = data.cancelled > 0 ? ` · ${data.cancelled} old appointment${data.cancelled !== 1 ? 's' : ''} cancelled` : '';
@@ -3917,7 +4013,11 @@ function custChangeFreq(custIdx) {
         } else {
           showToast('Error: ' + (data.error || 'Failed'));
         }
-      } catch(e) { showToast('Network error'); }
+      } catch(e) {
+        showToast(e.name === 'AbortError'
+          ? 'Timed out after 45s — check your connection, then refresh and verify before retrying.'
+          : ('Error: ' + e.message));
+      }
       btn.disabled = false; btn.textContent = 'Save';
     }
   );
@@ -4664,6 +4764,9 @@ function closeConfirm() {
   // Always hide crew input on close so it doesn't bleed into non-done confirms
   const crewRow = document.getElementById('confirmCrewRow');
   if (crewRow) crewRow.style.display = 'none';
+  // Same for the add-on services checkboxes
+  const addonsRow = document.getElementById('confirmAddonsRow');
+  if (addonsRow) { addonsRow.style.display = 'none'; addonsRow.innerHTML = ''; }
   var reasonRow = document.getElementById('confirmReasonRow');
   if (reasonRow) reasonRow.style.display = 'none';
   var reasonInput = document.getElementById('confirmReasonInput');
@@ -4700,6 +4803,32 @@ function triggerMarkDone(rowIdx) {
   // Hide reason row — not applicable for mark-done
   var reasonRow = document.getElementById('confirmReasonRow');
   if (reasonRow) reasonRow.style.display = 'none';
+
+  // ── Add-on services: show this customer's saved service catalog as
+  //    checkboxes — checking one adds its set price to THIS job's total ──
+  let addonsRow = document.getElementById('confirmAddonsRow');
+  if (!addonsRow && crewRow && crewRow.parentElement) {
+    addonsRow = document.createElement('div');
+    addonsRow.id = 'confirmAddonsRow';
+    crewRow.parentElement.insertBefore(addonsRow, crewRow);
+  }
+  const svcList = isQuote ? [] : customerServicesFor(b.email);
+  if (addonsRow) {
+    if (svcList.length) {
+      addonsRow.style.display = 'block';
+      addonsRow.style.cssText += ';text-align:left;margin:12px 0;padding:12px 14px;background:#f8faf6;border:1.5px solid #d1fae5;border-radius:10px;';
+      addonsRow.innerHTML =
+        `<div style="font-size:13px;font-weight:700;color:#1a3a1a;margin-bottom:8px;">➕ Extra services done today? (added to this job's total)</div>` +
+        svcList.map(s =>
+          `<label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#374151;padding:5px 0;cursor:pointer;">
+            <input type="checkbox" class="addon-cb" data-name="${esc(s.name)}" data-price="${s.price}" style="width:17px;height:17px;accent-color:#2d6a2d;">
+            <span>${esc(s.name)} — <strong>$${s.price.toFixed(0)}</strong></span>
+          </label>`).join('');
+    } else {
+      addonsRow.style.display = 'none';
+      addonsRow.innerHTML = '';
+    }
+  }
   openConfirm(
     isQuote ? `Mark visit for "${b.name||'customer'}" as done?`
             : `Mark "${b.name||'job'}" as done?`,
@@ -4725,6 +4854,10 @@ async function executeMarkDone(rowIdx) {
   // Read crew from the input (may be "Hunter, Jon" etc.) — fall back to adminName
   const crewInput = document.getElementById('confirmCrewInput');
   const crewValue = crewInput && crewInput.value.trim() ? crewInput.value.trim() : (adminName || adminEmail || 'Staff');
+  // Read checked add-on services BEFORE the confirm modal is wiped
+  const addons = [...document.querySelectorAll('#confirmAddonsRow input.addon-cb:checked')]
+    .map(cb => ({ name: cb.dataset.name, price: parseFloat(cb.dataset.price) || 0 }))
+    .filter(a => a.name && a.price > 0);
   const params = new URLSearchParams({
     action:   'mark_done',
     rowIndex: b._rowIndex || (rowIdx + 2), // prefer server-provided row index
@@ -4741,6 +4874,31 @@ async function executeMarkDone(rowIdx) {
       allBookings[rowIdx].done     = '✓ Done — ' + todayLabel;
       allBookings[rowIdx].markedBy = crewValue;
       allBookings[rowIdx].doneDate = todayLabel;
+      // Apply selected add-on services to this job's total
+      if (addons.length) {
+        try {
+          const ap = new URLSearchParams({
+            action:      'apply_job_addons',
+            rowIndex:    b._rowIndex || (rowIdx + 2),
+            email:       b.email || '',
+            serviceDate: b.serviceDate || b.serviceDateRaw || '',
+            addons:      JSON.stringify(addons),
+            adminToken:  adminToken,
+          });
+          const ares  = await fetch(SCRIPT_URL + '?' + ap.toString());
+          const adata = await ares.json();
+          if (adata.success) {
+            allBookings[rowIdx].price = '$' + adata.newPrice;
+            const tag = 'Add-ons[$' + adata.addTotal + ']: ' + addons.map(a => a.name + ' $' + a.price.toFixed(2)).join(', ');
+            allBookings[rowIdx].notes = (allBookings[rowIdx].notes ? allBookings[rowIdx].notes + ' | ' : '') + tag;
+            showToast('➕ Add-ons applied — new total $' + adata.newPrice);
+          } else {
+            alert('Job marked done, but add-ons failed: ' + (adata.error || 'Unknown') + '\nYou can adjust the price manually with 💰 Change Price.');
+          }
+        } catch(ae) {
+          alert('Job marked done, but add-ons couldn\'t be applied (network). Adjust the price manually with 💰 Change Price.');
+        }
+      }
       renderBookings();
       showToast('✓ ' + (b.name||'Job') + ' marked done!');
     } else {
@@ -4790,6 +4948,8 @@ async function executeCancelJob(rowIdx, skipEmail = false) {
   const params = new URLSearchParams({
     action:     'cancel_job',
     rowIndex:   b._rowIndex || (rowIdx + 2),
+    email:       b.email || '',                                  // server re-finds the row by email+date —
+    serviceDate: b.serviceDate || b.serviceDateRaw || '',        // never cancels/emails the wrong customer
     reason:     (!skipEmail && document.getElementById('confirmReasonInput')) ? document.getElementById('confirmReasonInput').value.trim() : '',
     skipEmail:  skipEmail ? 'true' : 'false',
     adminToken: adminToken,
@@ -4901,9 +5061,21 @@ function triggerAutoCharge(rowIdx) {
   document.getElementById('confirmYesBtn').className = 'btn-confirm-yes danger';
 }
 
+let _chargeInFlight = {};   // rowIdx → true while a charge request is running
 async function executeAutoCharge(rowIdx) {
   const b = allBookings[rowIdx];
   if (!b) return;
+  // ── Double-charge guard: block repeat clicks while a charge is running,
+  //    and block re-charging a job the UI already knows is paid ──
+  const key = (b.email || '') + '|' + (b.serviceDate || b.serviceDateRaw || rowIdx);
+  if (_chargeInFlight[key]) { showToast('⏳ Charge already in progress — hang on…'); return; }
+  const _pv = (String(b.calendarEvent||'') + ' ' + String(b.payMethod||'')).toLowerCase();
+  if (_pv.includes('✅') || (_pv.includes('paid') && !_pv.includes('not paid'))) {
+    showToast('This job is already paid.'); return;
+  }
+  _chargeInFlight[key] = true;
+  // Disable every Charge Card button on screen while the request runs
+  document.querySelectorAll('.btn-charge').forEach(x => x.disabled = true);
   const params = new URLSearchParams({
     action:     'manual_charge',
     rowIndex:   b._rowIndex || (rowIdx + 2),
@@ -4922,7 +5094,13 @@ async function executeAutoCharge(rowIdx) {
     } else {
       alert('Charge failed: ' + (data.error || 'Unknown error'));
     }
-  } catch(err) { alert('Network error: ' + err.message); }
+  } catch(err) {
+    // The request may STILL have gone through server-side — warn instead of inviting a retry
+    alert('⚠️ Couldn\'t confirm the charge (network issue). It MAY have still gone through — refresh the page and check this job before charging again, or check Stripe.');
+  } finally {
+    delete _chargeInFlight[key];
+    document.querySelectorAll('.btn-charge').forEach(x => x.disabled = false);
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -7640,6 +7818,28 @@ function closeContactPopup() {
   if (ov) { ov.style.display = 'none'; }
 }
 
+// ── Waypoint for Google Maps links ───────────────────────────────────────
+// Exact lat,lon beats address text: Maps can't mis-match a coordinate, so
+// routes no longer need addresses manually "fixed" in Google Maps.
+// Priority: stop's geocoded coords → persistent geocode cache → address text.
+function routeWaypoint(s) {
+  if (s && s.lat != null && s.lon != null) {
+    return (+s.lat).toFixed(6) + ',' + (+s.lon).toFixed(6);
+  }
+  const bk = s?.bk || s || {};
+  const city = ZIP_CITY[bk.zip] || '';
+  try {
+    const cache = JSON.parse(localStorage.getItem('evg_geocache_v2') || '{}');
+    const key   = (bk.address || '') + (bk.zip ? ', ' + bk.zip : '') + (city ? ', ' + city : '') + ', FL';
+    const c     = cache[key];
+    if (c && c.lat != null) return (+c.lat).toFixed(6) + ',' + (+c.lon).toFixed(6);
+  } catch(e) {}
+  const base = (bk.address || '').trim();
+  if (city) return base + ', ' + city + ', FL';
+  if (bk.zip) return base + ', ' + bk.zip + ', FL';
+  return base + ', FL';
+}
+
 // ── Route All Stops across every day in the current route ────────────────
 function openRouteAllStops() {
   if (!_routeCustomOrder || !Object.keys(_routeCustomOrder).length) {
@@ -7649,14 +7849,6 @@ function openRouteAllStops() {
 
   const startAddr = (document.getElementById('routeStartAddr')?.value || '').trim();
 
-  function fmtAddr(bk) {
-    const city = ZIP_CITY[bk.zip] || '';
-    const base = (bk.address || '').trim();
-    if (city) return base + ', ' + city + ', FL';
-    if (bk.zip) return base + ', ' + bk.zip + ', FL';
-    return base + ', FL';
-  }
-
   // Collect all stops in date order, all crews, skipping done jobs
   const sortedDates = Object.keys(_routeCustomOrder).sort();
   const allAddrs = [];
@@ -7665,7 +7857,7 @@ function openRouteAllStops() {
     const stops = Array.isArray(dayOrder) ? dayOrder : Object.values(dayOrder).flat();
     for (const s of stops) {
       if (!isDone(s.bk) && (s.bk.address || s.bk.zip)) {
-        allAddrs.push(fmtAddr(s.bk));
+        allAddrs.push(routeWaypoint(s));
       }
     }
   }
@@ -7716,17 +7908,8 @@ function openRouteAllMaps(dateStr) {
   const filtered = stops.filter(s => !isDone(s.bk));
   if (!filtered.length) { showToast('All jobs on this route are already done! 🎉'); return; }
 
-  // Build human-readable addresses with city names for better Maps matching
-  function fmtAddr(bk) {
-    const city = ZIP_CITY[bk.zip] || '';
-    const base = (bk.address || '').trim();
-    if (city) return base + ', ' + city + ', FL';
-    if (bk.zip) return base + ', ' + bk.zip + ', FL';
-    return base + ', FL';
-  }
-
   const startAddr = (document.getElementById('routeStartAddr')?.value || '').trim();
-  const addrs = filtered.map(s => fmtAddr(s.bk));
+  const addrs = filtered.map(s => routeWaypoint(s));
 
   // Google Maps handles up to 10 waypoints in the URL
   const MAX_STOPS = 10;
@@ -8166,7 +8349,38 @@ function nearestNeighbour(startCoord, stops) {
     cur = unvisited[best];
     unvisited.splice(best, 1);
   }
-  return route;
+  // 2-opt refinement: NN alone leaves crossed-over legs when there are many
+  // stops ("route all over the place"). Repeatedly un-cross segment pairs
+  // until no swap shortens the route. n is small (<60 stops) so this is instant.
+  return twoOptImprove(route, startCoord);
+}
+
+// ── 2-opt: iteratively reverse route segments while doing so shortens it ──
+function twoOptImprove(route, origin) {
+  if (!route || route.length < 4) return route;
+  const pts = route.slice();
+  const dd = (a, b) => (a && b && a.lat != null && b.lat != null)
+    ? haversineMiles(a.lat, a.lon, b.lat, b.lon) : 0;
+  const org = (origin && origin.lat != null) ? origin : null;
+  let improved = true, guard = 0;
+  while (improved && guard++ < 40) {
+    improved = false;
+    for (let i = 0; i < pts.length - 1; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        const A = i === 0 ? org : pts[i - 1];
+        const B = pts[i], C = pts[j], D = j + 1 < pts.length ? pts[j + 1] : null;
+        const before = dd(A, B) + dd(C, D);
+        const after  = dd(A, C) + dd(B, D);
+        if (after + 1e-6 < before) {
+          for (let lo = i, hi = j; lo < hi; lo++, hi--) {
+            const t = pts[lo]; pts[lo] = pts[hi]; pts[hi] = t;
+          }
+          improved = true;
+        }
+      }
+    }
+  }
+  return pts;
 }
 
 // ── MAIN: Build & render the optimized route ─────────────────────────────
