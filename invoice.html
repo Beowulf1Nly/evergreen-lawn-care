@@ -835,6 +835,21 @@
   .dispatch-legend { display:flex; align-items:center; gap:4px; font-size:12px; color:var(--text-muted); font-weight:500; flex-wrap:wrap; }
   .dispatch-legend-dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
 
+  /* ── Upcoming pipeline ── */
+  .dispatch-upcoming-day { margin-bottom:14px; }
+  .dispatch-upcoming-day-hdr { font-size:12px; font-weight:800; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:7px; display:flex; align-items:center; gap:8px; }
+  .dispatch-upcoming-day-hdr::after { content:''; flex:1; height:1px; background:var(--border); }
+  .dispatch-upcoming-day-hdr.is-tomorrow { color:var(--green-mid); }
+  .dispatch-upcoming-cards { display:flex; flex-wrap:wrap; gap:8px; }
+  .dispatch-upcoming-card { display:flex; align-items:center; gap:10px; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; background:#fff; cursor:pointer; transition:border-color .15s, box-shadow .15s; min-width:200px; flex:1; max-width:320px; }
+  .dispatch-upcoming-card:hover { border-color:var(--green-mid); box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  .dispatch-upcoming-card.crew-a { border-left:3px solid #1976d2; }
+  .dispatch-upcoming-card.crew-b { border-left:3px solid #e91e8c; }
+  .dispatch-upcoming-card.crew-none { border-left:3px solid #d1d5db; }
+  .dispatch-upcoming-name { font-size:13px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dispatch-upcoming-meta { font-size:11px; color:var(--text-muted); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dispatch-upcoming-badge { font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px; background:#f3f4f6; color:#6b7280; white-space:nowrap; flex-shrink:0; }
+
   /* ── Stats Ribbon ── */
   .dispatch-stats-ribbon { display:flex; align-items:center; gap:16px; background:linear-gradient(135deg,var(--green-deep) 0%,var(--green-mid) 100%); border-radius:14px; padding:14px 22px; margin-bottom:16px; color:#fff; flex-wrap:wrap; }
   .dispatch-stat-item { display:flex; flex-direction:column; gap:2px; min-width:72px; }
@@ -1689,6 +1704,12 @@
 
       <div id="dispatchEmpty" style="display:none;text-align:center;padding:48px 20px;color:var(--text-muted);font-size:15px;">
         📭 No jobs scheduled for this date.
+      </div>
+
+      <!-- Upcoming appointments pipeline (day view only) -->
+      <div id="dispatchUpcomingWrap" style="display:none;margin-top:24px;">
+        <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:12px;padding:0 2px;">📆 Upcoming Appointments</div>
+        <div id="dispatchUpcomingList"></div>
       </div>
     </div>
 
@@ -9451,6 +9472,7 @@ function renderDispatchBoard() {
     if (emptyEl) { emptyEl.style.display='block'; emptyEl.textContent='No jobs scheduled for this date.'; }
     var _srX = document.getElementById('dispatchStatsRibbon'); if (_srX) _srX.style.display = 'none';
     var _tlX = document.getElementById('dispatchTimeLine'); if (_tlX) _tlX.style.display = 'none';
+    renderDispatchUpcoming(dateStr);
     return;
   }
   if (boardEl) boardEl.style.display = '';
@@ -9503,6 +9525,7 @@ function renderDispatchBoard() {
   if (rowsEl) rowsEl.innerHTML = rowsHtml;
   renderDispatchMobileList(dayJobs);
   renderDispatchStats(dateStr, dayJobs);
+  renderDispatchUpcoming(dateStr);
   // Small delay so the board DOM is painted before measuring widths
   setTimeout(renderCurrentTimeLine, 60);
 }
@@ -9571,6 +9594,80 @@ function renderCurrentTimeLine() {
     } catch(e) {}
   }, 60000);
 })();
+
+// ── UPCOMING APPOINTMENTS PIPELINE ───────────────────────────────────────
+function renderDispatchUpcoming(dateStr) {
+  var wrap = document.getElementById('dispatchUpcomingWrap');
+  var list = document.getElementById('dispatchUpcomingList');
+  if (!wrap || !list) return;
+
+  if (!allBookings || !allBookings.length || !dateStr) { wrap.style.display = 'none'; return; }
+
+  var crewFilt = (document.getElementById('dispatchCrewFilter') || {}).value || 'all';
+  var todayStr = new Date().toISOString().slice(0, 10);
+
+  // All non-cancelled, non-completed future jobs after the selected date
+  var future = allBookings.filter(function(b) {
+    if (b.rowCancelled || b.rowCompleted || isDone(b)) return false;
+    var ds = _dispDateOf(b);
+    if (!ds || ds <= dateStr) return false;
+    if (crewFilt !== 'all') {
+      var c = (b.crew || '').trim();
+      if (crewFilt === 'unassigned') return !c;
+      return c === crewFilt;
+    }
+    return true;
+  });
+
+  if (!future.length) { wrap.style.display = 'none'; return; }
+
+  // Group by date
+  var byDate = {};
+  future.forEach(function(b) {
+    var ds = _dispDateOf(b);
+    (byDate[ds] = byDate[ds] || []).push(b);
+  });
+  var dates = Object.keys(byDate).sort();
+
+  var tomorrowStr = (function() {
+    var t = new Date(dateStr + 'T12:00'); t.setDate(t.getDate() + 1);
+    return t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0');
+  })();
+
+  var html = '';
+  dates.forEach(function(ds) {
+    var jobs = byDate[ds];
+    var d = new Date(ds + 'T12:00');
+    var isTomorrow = ds === tomorrowStr;
+    var dLabel = isTomorrow ? 'Tomorrow' :
+      (DAYS_OF_WEEK ? DAYS_OF_WEEK[d.getDay()] + ', ' : '') +
+      (d.getMonth()+1) + '/' + d.getDate() + '/' + String(d.getFullYear()).slice(2);
+
+    html += '<div class="dispatch-upcoming-day">';
+    html += '<div class="dispatch-upcoming-day-hdr' + (isTomorrow ? ' is-tomorrow' : '') + '">' + esc(dLabel) + ' <span style="font-weight:500;text-transform:none;letter-spacing:0;">(' + jobs.length + ' job' + (jobs.length !== 1 ? 's' : '') + ')</span></div>';
+    html += '<div class="dispatch-upcoming-cards">';
+    jobs.forEach(function(b) {
+      var ri   = allBookings.indexOf(b);
+      var crew = (b.crew || '').trim();
+      var crewCls = crew === 'A' ? 'crew-a' : crew === 'B' ? 'crew-b' : 'crew-none';
+      var crewLbl = crew ? ('Crew ' + crew) : 'Unassigned';
+      var price   = parseFloat(String(b.price || '').replace(/[^0-9.]/g, '')) || 0;
+      var zone    = getZoneFromZip ? getZoneFromZip(b.zip) : '';
+      var meta    = [b.frequency, zone ? 'Zone ' + zone : '', price ? '$' + price.toFixed(0) : ''].filter(Boolean).join(' · ');
+      html += '<div class="dispatch-upcoming-card ' + crewCls + '" onclick="openDispatchDetail(' + ri + ')">';
+      html += '<div style="flex:1;min-width:0;">';
+      html += '<div class="dispatch-upcoming-name">' + esc(b.name || '—') + '</div>';
+      if (meta) html += '<div class="dispatch-upcoming-meta">' + esc(meta) + '</div>';
+      html += '</div>';
+      html += '<div class="dispatch-upcoming-badge">' + esc(crewLbl) + '</div>';
+      html += '</div>';
+    });
+    html += '</div></div>';
+  });
+
+  list.innerHTML = html;
+  wrap.style.display = '';
+}
 
 function renderDispatchMobileList(dayJobs) {
   var el = document.getElementById('dispatchMobileList');
@@ -10016,6 +10113,7 @@ function renderDispatchWeek(dateStr, crewFilt) {
   // Hide day-view-only elements
   var _sr = document.getElementById('dispatchStatsRibbon'); if (_sr) _sr.style.display = 'none';
   var _tl = document.getElementById('dispatchTimeLine'); if (_tl) _tl.style.display = 'none';
+  var _uw = document.getElementById('dispatchUpcomingWrap'); if (_uw) _uw.style.display = 'none';
   // Classic layout: a crew (rows) x day (columns) matrix. Each cell shows the
   // zone badges that crew services that day, then the day's job cards.
   var axisEl = document.getElementById('dispatchTimeAxis');
