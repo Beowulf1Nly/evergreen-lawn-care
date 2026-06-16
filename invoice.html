@@ -1203,7 +1203,7 @@
             <input type="text" id="ac-name" placeholder="Jane Smith"/>
           </div>
           <div class="form-field">
-            <label for="ac-email">Email *</label>
+            <label for="ac-email">Email <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
             <input type="email" id="ac-email" placeholder="jane@email.com"/>
           </div>
           <div class="form-field">
@@ -5490,10 +5490,6 @@ async function addClient() {
     errEl.textContent = 'Enter the number of days for the custom plan.';
     errEl.style.display = 'block'; return;
   }
-  if (paymethod === 'card' && !email) {
-    errEl.textContent = 'Email is required for card customers.';
-    errEl.style.display = 'block'; return;
-  }
   if (email && !email.includes('@')) {
     errEl.textContent = 'Enter a valid email.';
     errEl.style.display = 'block'; return;
@@ -5523,10 +5519,12 @@ async function addClient() {
     const data = await res.json();
     if (data.success) {
       okEl.textContent  = isQuoteVisit
-        ? `📋 Quote visit scheduled for ${name}! Confirmation email sent to ${email}.`
+        ? (email ? `📋 Quote visit scheduled for ${name}! Confirmation email sent to ${email}.`
+                 : `📋 Quote visit scheduled for ${name}!`)
         : data.cash
           ? `✅ ${name} added as a cash customer!`
-          : `✅ ${name} added! Welcome email sent to ${email}.`;
+          : (email ? `✅ ${name} added! Welcome email sent to ${email}.`
+                   : `✅ ${name} added! (No email on file — no welcome email sent.)`);
       okEl.style.display = 'block';
       // Clear form
       ['ac-name','ac-email','ac-phone','ac-address','ac-zip','ac-notes'].forEach(id => {
@@ -5768,7 +5766,7 @@ function buildRevProjection(bookings, periodIdx) {
   const bigNum = (n) => '$' + Math.round(n).toLocaleString();
 
   const revTableId = 'revCustTable_' + periodIdx;
-  const rowsHtml = rows.sort((a,b)=>b.projectedRev-a.projectedRev).map(r=>`<tr>
+  const rowsHtml = rows.sort((a,b)=>(a.name||'').localeCompare(b.name||'', undefined, {sensitivity:'base'})).map(r=>`<tr>
     <td style="padding:8px 10px;font-weight:600;border-bottom:1px solid var(--border);">${esc(r.name)}</td>
     <td style="padding:8px 10px;border-bottom:1px solid var(--border);"><span style="background:${r.plan==='Weekly'?'#dcfce7':'#eff6ff'};color:${r.plan==='Weekly'?'#166534':'#1d4ed8'};border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;">${esc(r.plan)}</span></td>
     <td style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);color:var(--text-muted);">${r.isPromo?`<span title="First mow $${r.firstPrice}, then $${r.price}">$${r.firstPrice}→$${r.price}</span>`:`$${r.price.toFixed(0)}`}</td>
@@ -7079,27 +7077,11 @@ async function _jobSubmit() {
   }
 }
 
-// Employee clicks "Clock In & Start Route"
-async function employeeStartRoute() {
-  const btn = document.getElementById('routeClockInBtn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Building route…'; }
-  try {
-    await buildRoute(); // runs the same optimization
-  } catch(e) {}
-  if (btn) { btn.disabled = false; btn.textContent = '🟢 Clock In & Start Route'; }
-
-  // Record clock-in time
-  _clockInTime = new Date();
-  try { localStorage.setItem('evg_clock_in', _clockInTime.toISOString()); } catch(e) {}
-
-  // Show active bar + start timer
-  const bar = document.getElementById('routeActiveBar');
-  if (bar) bar.style.display = 'flex';
-
-  if (_clockInInterval) clearInterval(_clockInInterval);
-  _clockInInterval = setInterval(_updateElapsedTimer, 1000);
-  _updateElapsedTimer();
-}
+// NOTE: A second, older definition of employeeStartRoute() used to live here.
+// It bypassed the crew-selection modal and — because it was defined later — it
+// silently overrode the real one above (line ~6818), so clicking "Clock In &
+// Start Route" never opened the crew picker. Removed so the crew-selection flow
+// (employeeStartRoute → crew modal → confirmCrewAndStartRoute) works again.
 
 function _updateElapsedTimer() {
   if (!_clockInTime) return;
