@@ -886,6 +886,8 @@
   .dispatch-job-name { font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .dispatch-job-time { font-size:10px; opacity:.8; white-space:nowrap; }
   .dispatch-job-plan { font-size:10px; opacity:.75; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* Pay-method icon shown on dispatch cards (💳 card / 💵 cash) */
+  .disp-pay-icon { display:inline-block; margin-right:4px; font-size:.95em; line-height:1; }
 
   /* Job detail panel */
   .dispatch-detail-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1100; align-items:flex-end; justify-content:center; }
@@ -940,6 +942,25 @@
   .dispatch-week-card-meta { font-size:10px; opacity:.85; margin-top:1px; }
   .dispatch-week-card-hint { font-size:10px; margin-top:3px; padding:2px 5px; background:rgba(255,255,255,.25); border-radius:4px; display:inline-block; }
   .dispatch-week-empty { font-size:12px; color:var(--text-muted); font-style:italic; padding:8px 4px; }
+
+  /* ── Dispatch DAY view (vertical crew columns) ── */
+  .dispatch-day-cols { display:flex; gap:14px; padding:14px; align-items:flex-start; }
+  .dispatch-day-col {
+    flex:1 1 0; min-width:210px; background:#f8faf6; border:1.5px solid var(--border);
+    border-radius:12px; padding:10px 10px 12px; transition:background .15s, outline .15s;
+  }
+  .dispatch-day-col.drag-target { background:#f0fdf4; outline:2px dashed var(--green-mid); }
+  .dispatch-day-col-hdr {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:2px 2px 11px; border-bottom:2px solid var(--border); margin-bottom:11px;
+  }
+  .dispatch-day-col-name  { font-size:14px; font-weight:800; color:var(--text); }
+  .dispatch-day-col-count { font-size:11px; font-weight:700; color:var(--text-muted); background:#fff; border:1px solid var(--border); border-radius:20px; padding:2px 9px; }
+  .dispatch-day-col-body  { display:flex; flex-direction:column; gap:9px; min-height:70px; }
+  .dispatch-day-col .dispatch-week-card { padding:9px 11px; font-size:13px; }
+  .dispatch-day-card-top  { display:flex; align-items:center; justify-content:space-between; font-size:11px; font-weight:700; opacity:.92; margin-bottom:3px; }
+  .dispatch-day-empty     { font-size:12px; color:var(--text-muted); font-style:italic; padding:10px 4px; text-align:center; }
+
   /* Ghost / unscheduled customer cards */
   .dispatch-ghost-card { border:1.5px dashed #cbd5e1; border-radius:8px; padding:7px 9px; font-size:12px; background:#fff; cursor:default; }
   .dispatch-ghost-card:hover { border-color:#94a3b8; background:#f8fafc; }
@@ -1099,6 +1120,7 @@
   <!-- Owner tab bar (hidden for employees) -->
   <div class="tab-bar" id="ownerTabs" style="display:none;">
     <button class="tab-btn active" onclick="showTab('jobs')"      data-tab="jobs"      data-min-role="manager">📋 Jobs</button>
+    <button class="tab-btn"        onclick="showTab('quotes')"    data-tab="quotes"    data-min-role="owner">📝 Quotes</button>
     <button class="tab-btn"        onclick="showTab('route')"     data-tab="route"     data-min-role="helper">🗺️ Route</button>
     <button class="tab-btn"        onclick="showTab('dispatch')"  data-tab="dispatch"  data-min-role="manager">📅 Dispatch</button>
     <button class="tab-btn"        onclick="showTab('add')"       data-tab="add"       data-min-role="manager">➕ Add Client</button>
@@ -1124,14 +1146,6 @@
           <option value="autopay">Auto-Pay</option>
           <option value="awaiting-payment">Awaiting Payment</option>
         </select>
-      </div>
-
-      <!-- 📋 Pending Estimates — open quotes sent to customers, auto-expires at validThru (owner only) -->
-      <div id="pendingEstimatesSection" style="margin-bottom:32px;display:none;">
-        <div class="section-label">
-          📋 Pending Estimates <span class="badge" style="background:#7c3aed;" id="pendingEstimatesCount">0</span>
-        </div>
-        <div id="pendingEstimatesList"></div>
       </div>
 
       <!-- 📋 Visited Quotes — quote visits marked done, awaiting scheduling (owner only) -->
@@ -1187,6 +1201,19 @@
         <div id="upcomingList"><div class="empty-state">Loading…</div></div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ── QUOTES TAB (owner only) — pending estimates sent to customers ── -->
+  <div id="pane-quotes" class="tab-pane">
+    <div class="container">
+      <!-- 📋 Pending Estimates — open quotes sent to customers, auto-expires at validThru -->
+      <div id="pendingEstimatesSection" style="margin-top:20px;margin-bottom:32px;">
+        <div class="section-label">
+          📝 Pending Estimates <span class="badge" style="background:#7c3aed;" id="pendingEstimatesCount">0</span>
+        </div>
+        <div id="pendingEstimatesList"><div class="empty-state" style="padding:32px 20px;">Loading…</div></div>
+      </div>
     </div>
   </div>
 
@@ -1665,11 +1692,12 @@
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
           <button onclick="openZoneGuide()" style="padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;background:#fff;font-size:13px;font-family:inherit;cursor:pointer;font-weight:600;color:var(--green-deep);transition:all .15s;" onmouseover="this.style.borderColor='var(--green-mid)'" onmouseout="this.style.borderColor='var(--border)'">🗺 Zone Guide</button>
           <div class="dispatch-legend">
-            <span class="dispatch-legend-dot" style="background:#d32f2f;"></span>Upcoming
-            <span class="dispatch-legend-dot" style="background:#fb923c;margin-left:8px;"></span>Today / Upcoming
-            <span class="dispatch-legend-dot" style="background:#fdd835;margin-left:8px;"></span>Done / Invoiced / Cash
+            <span class="dispatch-legend-dot" style="background:#d32f2f;"></span>Upcoming (unpaid)
+            <span class="dispatch-legend-dot" style="background:#fb923c;margin-left:8px;"></span>Today
+            <span class="dispatch-legend-dot" style="background:#fdd835;margin-left:8px;"></span>Done / Invoiced
             <span class="dispatch-legend-dot" style="background:#1565c0;margin-left:8px;"></span>Paid (not done)
             <span class="dispatch-legend-dot" style="background:#2e7d32;margin-left:8px;"></span>Completed &amp; Archived
+            <span style="margin-left:12px;color:var(--text-muted);">💳 card · 💵 cash</span>
           </div>
         </div>
       </div>
@@ -2574,6 +2602,7 @@ function showTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
   document.getElementById('pane-' + tab).classList.add('active');
+  if (tab === 'quotes')    loadPendingEstimates();
   if (tab === 'stats')     loadStats();
   if (tab === 'analytics') loadAnalytics();
   if (tab === 'route')     initRouteTab();
@@ -4092,12 +4121,14 @@ async function loadPendingEstimates() {
     const estimates = data.estimates || [];
     badge.textContent = estimates.length;
 
+    // Quotes tab: always keep the section visible; show an empty state when there
+    // are no pending estimates rather than blanking the whole tab.
+    section.style.display = 'block';
     if (!estimates.length) {
-      section.style.display = 'none';
+      list.innerHTML = '<div class="empty-state" style="padding:40px 20px;">No pending estimates right now. Estimates you send from the Estimate tab will appear here until the customer accepts or they expire.</div>';
       return;
     }
 
-    section.style.display = 'block';
     list.innerHTML = estimates.map(est => {
       const validThruLabel = est.validThru
         ? `Valid through <strong>${esc(est.validThru)}</strong>`
@@ -4136,7 +4167,8 @@ async function loadPendingEstimates() {
 
   } catch(err) {
     console.error('loadPendingEstimates error:', err);
-    section.style.display = 'none';
+    section.style.display = 'block';
+    list.innerHTML = '<div class="empty-state" style="padding:40px 20px;">⚠️ Couldn\'t load estimates: ' + esc(err.message) + '</div>';
   }
 }
 
@@ -9374,23 +9406,46 @@ function setDispatchView(view) {
   renderDispatchBoard();
 }
 
+// Is this status/payment string an ACTUAL paid marker (money received)?
+// "Autopay pending (card not saved yet)" and "❌ NOT PAID" must NOT count as
+// paid — autopay means a card is on file to charge AFTER the job, not that the
+// customer has paid. Only "✅ PAID" / "paid in full" type strings count.
+function _dispIsPaidStr(s) {
+  s = String(s || '').toLowerCase();
+  if (!s) return false;
+  if (s.includes('not paid') || s.includes('pending')) return false;
+  return s.includes('✅') || s.includes('paid');
+}
+
+// 💳 card / 💵 cash icon based on how the customer is set to pay.
+// Quote visits and free jobs have no payment, so no icon.
+function _dispPayIcon(b) {
+  var freq = String(b.frequency || '').toLowerCase();
+  var svc  = String(b.service || b.serviceType || '').toLowerCase();
+  if (freq.includes('quote') || svc.includes('quote') || freq.includes('free')) return '';
+  var cal  = String(b.calendarEvent || '').toLowerCase();
+  var pm   = String(b.payMethod || '').toLowerCase();
+  var cash = cal.includes('cash') || pm.includes('cash');
+  return cash
+    ? '<span class="disp-pay-icon" title="Pays cash">💵</span>'
+    : '<span class="disp-pay-icon" title="Card on file / autopay">💳</span>';
+}
+
 function _dispJobClass(b) {
   if (b.rowCompleted) return 'status-completed';
   var cal  = String(b.calendarEvent||'').toLowerCase(), pm = String(b.payMethod||'').toLowerCase();
   var inv  = String(b.invoiced||'').toLowerCase();
-  var cash = cal.includes('cash') || pm.includes('cash');
-  var paid = (!cal.includes('not paid') && !cal.includes('pending')) &&
-             (cal.includes('paid') || cal.includes('autopay') || cal.includes('auto-pay') ||
-              pm.includes('autopay') || pm.includes('auto-pay') ||
-              inv.includes('paid') || inv.includes('✅'));
+  // Genuinely paid only — autopay-pending no longer counts (that was turning
+  // unpaid autopay jobs blue on the board).
+  var paid = _dispIsPaidStr(pm) || _dispIsPaidStr(inv) || _dispIsPaidStr(cal);
   var free = String(b.frequency||'').toLowerCase().includes('free');
   // Done + paid/free = green (status-completed). Done but unpaid = yellow (status-done).
   if (isDone(b)) return (paid || free) ? 'status-completed' : 'status-done';
   var invStr = String(b.invoiced||'');
-  if (cash && !paid) return 'status-cash';
   if (paid) return 'status-paid';
-  if (invStr.length > 2) return 'status-invoiced';
-  // Upcoming — pulse if it's today's date
+  if (invStr.length > 2) return 'status-invoiced';   // invoice sent, awaiting payment
+  // Everything else (incl. cash and autopay-pending) is just upcoming/unpaid.
+  // Pulse if it's today's date.
   var todayStr = new Date().toISOString().slice(0,10);
   if (_dispDateOf(b) === todayStr) return 'status-upcoming-today';
   return 'status-upcoming';
@@ -9454,55 +9509,64 @@ function renderDispatchBoard() {
   if (boardEl) boardEl.style.display = '';
   if (emptyEl) emptyEl.style.display = 'none';
 
+  // Vertical day board — the old horizontal time axis + moving time line are
+  // not used in this layout, so hide them.
   var axisEl = document.getElementById('dispatchTimeAxis');
-  if (axisEl) {
-    var ax = '<div class="dispatch-time-axis-label-col">Crew</div><div class="dispatch-time-slots">';
-    for (var h=DISP_START; h<DISP_END; h++) ax += '<div class="dispatch-time-slot">' + (h<12?h+' AM':h===12?'12 PM':(h-12)+' PM') + '</div>';
-    ax += '</div>'; axisEl.innerHTML = ax;
-  }
+  if (axisEl) { axisEl.innerHTML = ''; axisEl.style.display = 'none'; }
+  var _tlDay = document.getElementById('dispatchTimeLine');
+  if (_tlDay) _tlDay.style.display = 'none';
 
   var crews = {};
   dayJobs.forEach(function(b) { var k=b.crew||'Unassigned'; if(!crews[k]) crews[k]=[]; crews[k].push(b); });
   var crewOrder = ['A','B'].concat(Object.keys(crews).filter(function(k){return k!=='A'&&k!=='B';}));
-  var rowsHtml = '';
+
+  var colsHtml = '';
   crewOrder.forEach(function(k) {
     if (!crews[k]) return;
+    var lbl = k==='A'?'🔵 Crew A':k==='B'?'🩷 Crew B':k==='Unassigned'?'⬜ Unassigned':esc(k);
+    // Compute a start time per job (explicit jobTime, else auto sequential), then
+    // order top-to-bottom by that time.
     var cur = 60;
     var timed = crews[k].map(function(b) {
       var start = cur;
       if (b.jobTime) { var pts=b.jobTime.split(':').map(Number); start=(pts[0]-DISP_START)*60+(pts[1]||0); if(start<0) start=0; }
       var dur = _dispMowMin(b); cur = start+dur+15; return {b:b,start:start,dur:dur};
-    });
-    // Resolve overlapping blocks: if a job starts before the previous ends, push it forward
+    }).sort(function(a,z){ return a.start - z.start; });
+    // Stagger any overlaps so auto-times read sensibly
     var resolved = [];
     timed.forEach(function(item) {
       var start = item.start;
       if (resolved.length > 0) {
         var last = resolved[resolved.length - 1];
-        var lastEnd = last.start + last.dur + 5; // 5-min gap
+        var lastEnd = last.start + last.dur + 5;
         if (start < lastEnd) start = lastEnd;
       }
       resolved.push({b:item.b, start:start, dur:item.dur});
     });
-    var blocks = '';
-    resolved.forEach(function(item) {
-      var left  = Math.max(0, (item.start/DISP_TOTAL)*100);
-      var width = Math.min(100-left, Math.max(2, (item.dur/DISP_TOTAL)*100));
-      var ri    = allBookings.indexOf(item.b);
-      blocks += '<div class="dispatch-job-block ' + _dispJobClass(item.b) + '" draggable="true" ondragstart="_dispDragStart(event,' + ri + ')" style="left:' + left.toFixed(2) + '%;width:' + width.toFixed(2) + '%;cursor:grab;" onclick="openDispatchDetail(' + ri + ')" title="' + esc(item.b.name||'') + '">'
-        + '<div class="dispatch-job-name">' + esc(item.b.name||'--') + '</div>'
-        + '<div class="dispatch-job-time">' + _dispFmtTime(item.start) + ' \xb7 ' + item.dur + 'm</div>'
-        + '<div class="dispatch-job-plan">' + esc(item.b.frequency||'') + '</div></div>';
-    });
-    var lbl = k==='A'?'🔵 Crew A':k==='B'?'🩷 Crew B':k==='Unassigned'?'⬜ Unassigned':esc(k);
-    rowsHtml += '<div class="dispatch-crew-row" ondragover="_dispDragOver(event)" ondragleave="_dispDragLeave(event)" ondrop="_dispDropDayCrew(event,\'' + k + '\')"><div class="dispatch-crew-label"><div class="dispatch-crew-name">' + lbl + '</div><div class="dispatch-crew-count">' + crews[k].length + ' job' + (crews[k].length!==1?'s':'') + '</div></div><div class="dispatch-job-track">' + blocks + '</div></div>';
+    var cards = resolved.map(function(item) {
+      var b     = item.b;
+      var ri    = allBookings.indexOf(b);
+      var price = parseFloat(String(b.price||'').replace(/[^0-9.]/g,'')) || 0;
+      var city  = ZIP_CITY[b.zip] || b.address || '';
+      var zone  = b.zone || getZoneFromZip(b.zip) || '';
+      var hint  = (price ? ('$'+price.toFixed(0)) : '') + (b.frequency ? ((price?' · ':'')+esc(b.frequency)) : '');
+      var loc   = city ? ('📍 ' + esc(city) + (zone ? (' · '+esc(zone)) : '')) : (zone ? esc(zone) : '');
+      return '<div class="dispatch-week-card ' + _dispJobClass(b) + '" draggable="true" ondragstart="_dispDragStart(event,' + ri + ')" onclick="openDispatchDetail(' + ri + ')" title="' + esc(b.name||'') + '">'
+        + '<div class="dispatch-day-card-top"><span>⏰ ' + _dispFmtTime(item.start) + '</span><span>' + item.dur + 'm</span></div>'
+        + '<div class="dispatch-week-card-name">' + _dispPayIcon(b) + esc(b.name||'—') + '</div>'
+        + (loc  ? '<div class="dispatch-week-card-meta">' + loc + '</div>' : '')
+        + (hint ? '<div class="dispatch-week-card-hint">' + hint + '</div>' : '')
+        + '</div>';
+    }).join('') || '<div class="dispatch-day-empty">No jobs</div>';
+    colsHtml += '<div class="dispatch-day-col" ondragover="_dispDragOver(event)" ondragleave="_dispDragLeave(event)" ondrop="_dispDropDayCrew(event,\'' + k + '\')">'
+      + '<div class="dispatch-day-col-hdr"><span class="dispatch-day-col-name">' + lbl + '</span><span class="dispatch-day-col-count">' + crews[k].length + ' job' + (crews[k].length!==1?'s':'') + '</span></div>'
+      + '<div class="dispatch-day-col-body">' + cards + '</div>'
+      + '</div>';
   });
   var rowsEl = document.getElementById('dispatchBoardRows');
-  if (rowsEl) rowsEl.innerHTML = rowsHtml;
+  if (rowsEl) rowsEl.innerHTML = '<div class="dispatch-day-cols">' + colsHtml + '</div>';
   renderDispatchMobileList(dayJobs);
   renderDispatchStats(dateStr, dayJobs);
-  // Small delay so the board DOM is painted before measuring widths
-  setTimeout(renderCurrentTimeLine, 60);
 }
 
 // ── STATS RIBBON ──────────────────────────────────────────────────────────
@@ -9542,24 +9606,11 @@ function renderDispatchStats(dateStr, dayJobs, revLabel) {
 }
 
 // ── CURRENT TIME LINE ─────────────────────────────────────────────────────
+// The Day view is now a vertical crew-column board (no horizontal time axis),
+// so the moving "now" line no longer applies — keep it hidden.
 function renderCurrentTimeLine() {
   var tlEl = document.getElementById('dispatchTimeLine');
-  if (!tlEl) return;
-  if (_dispView !== 'day') { tlEl.style.display = 'none'; return; }
-  var dateStr = (document.getElementById('dispatchDate') || {}).value || '';
-  var todayStr = new Date().toISOString().slice(0, 10);
-  if (dateStr !== todayStr) { tlEl.style.display = 'none'; return; }
-  var now = new Date();
-  var nowMin = now.getHours() * 60 + now.getMinutes();
-  if (nowMin < DISP_START * 60 || nowMin > DISP_END * 60) { tlEl.style.display = 'none'; return; }
-  var pct = (nowMin - DISP_START * 60) / DISP_TOTAL;
-  var outer = document.querySelector('.dispatch-board-outer');
-  if (!outer) { tlEl.style.display = 'none'; return; }
-  var labelW = 160;
-  var trackW = Math.max(outer.scrollWidth, labelW + 800) - labelW;
-  var leftPx = labelW + pct * trackW;
-  tlEl.style.display = 'block';
-  tlEl.style.left = leftPx.toFixed(1) + 'px';
+  if (tlEl) tlEl.style.display = 'none';
 }
 
 // Refresh time line every minute while dispatch tab is visible
@@ -9667,7 +9718,7 @@ function renderDispatchMobileList(dayJobs) {
       html += '<div class="dispatch-mobile-card ' + cls + '" onclick="openDispatchDetail(' + ri + ')">'
         + '<div class="dispatch-mobile-dot"></div>'
         + '<div class="dispatch-mobile-body">'
-        + '<div class="dispatch-mobile-name">' + esc(b.name||'—') + '</div>'
+        + '<div class="dispatch-mobile-name">' + _dispPayIcon(b) + esc(b.name||'—') + '</div>'
         + (addr ? '<div class="dispatch-mobile-addr">📍 ' + esc(addr) + '</div>' : '')
         + '<div class="dispatch-mobile-meta">'
         + (timeStr ? '<span class="dispatch-mobile-pill">' + esc(timeStr) + '</span>' : '')
@@ -10090,7 +10141,7 @@ function renderDispatchWeek(dateStr, crewFilt) {
   // Classic layout: a crew (rows) x day (columns) matrix. Each cell shows the
   // zone badges that crew services that day, then the day's job cards.
   var axisEl = document.getElementById('dispatchTimeAxis');
-  if (axisEl) axisEl.innerHTML = '';
+  if (axisEl) { axisEl.innerHTML = ''; axisEl.style.display = 'none'; }
   var rowsEl = document.getElementById('dispatchBoardRows');
   if (!rowsEl) return;
 
@@ -10157,7 +10208,7 @@ function renderDispatchWeek(dateStr, crewFilt) {
           var meta  = (b.jobTime ? ('⏰ ' + esc(b.jobTime) + ' · ') : '') + dur + 'm' + (zone ? (' · ' + esc(zone)) : '');
           var hint  = (price ? ('$' + price.toFixed(0)) : '') + (b.frequency ? ((price ? ' · ' : '') + esc(b.frequency)) : '');
           return '<div class="dispatch-week-card ' + _dispJobClass(b) + '" draggable="true" ondragstart="_dispDragStart(event,' + ri + ')" onclick="openDispatchDetail(' + ri + ')" title="' + esc(b.name || '') + '">' +
-            '<div class="dispatch-week-card-name">' + esc(b.name || '—') + '</div>' +
+            '<div class="dispatch-week-card-name">' + _dispPayIcon(b) + esc(b.name || '—') + '</div>' +
             (city ? '<div class="dispatch-week-card-meta">📍 ' + esc(city) + '</div>' : '') +
             '<div class="dispatch-week-card-meta">' + meta + '</div>' +
             (hint ? '<div class="dispatch-week-card-hint">' + hint + '</div>' : '') +
