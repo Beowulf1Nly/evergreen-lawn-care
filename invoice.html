@@ -4551,10 +4551,12 @@ function cardHTML(b, rowIdx, isToday, tomorrowStr) {
       }
     }
 
-    // ── Step 3: Complete Job — owners only, after job done AND paid (auto-complete handles this server-side,
-    // but button remains as a manual fallback in case the auto-archive didn't fire) ──
-    const jobReadyToComplete = done && !b.rowCompleted &&
-      (isFree || isPaid || cash);
+    // ── Step 3: Complete Job — owners only, once a job is marked done.
+    // Auto-complete handles the paid+done case server-side, but this button is the
+    // manual fallback: it archives the job AND schedules the next appointment.
+    // Show it for ANY done job (paid, cash, invoiced, or free) so a stuck/unpaid
+    // job never just sits idle without scheduling the customer's next visit.
+    const jobReadyToComplete = done && !b.rowCompleted;
     if (adminRole === 'owner' && jobReadyToComplete) {
       actions += `<button class="btn-action" style="background:#15803d;color:#fff;font-weight:700;margin-top:4px;border-color:#15803d;" onclick="triggerCompleteJob(${rowIdx})">✅ Complete Job</button>`;
     }
@@ -8032,14 +8034,11 @@ function mowMinutes(bk) {
   const freq = String(bk.frequency || '').toLowerCase();
   const svc  = String(bk.service || bk.serviceType || '').toLowerCase();
 
-  // 2. Non-mowing jobs — use job duration if set, else flat 60m
-  if (svc && !svc.includes('mow') && !svc.includes('lawn') && !svc.includes('blow')) {
-    const durMatch = n.match(/duration[:\s]+(\d+)\s*(?:min|hr|hour)?/i);
-    if (durMatch) return Math.round(parseFloat(durMatch[1]) * (durMatch[0].includes('hr') || durMatch[0].includes('hour') ? 60 : 1));
-    return 60;
-  }
+  // 2. Quote visits → 15 min
+  if (freq.includes('quote') || svc.includes('quote')) return 15;
 
-  // 3. Scanned lot size: "Lot: 0.25ac" stored by property scanner
+  // 3. Scanned lot size — checked BEFORE service-type fallback so it always wins
+  //    even when service field doesn't contain 'mow'/'lawn'/'blow'
   const lotMatch = n.match(/lot[:\s]+([\d.]+)\s*ac/i);
   if (lotMatch) {
     const acres = parseFloat(lotMatch[1]);
@@ -8053,19 +8052,26 @@ function mowMinutes(bk) {
     if (sqft > 0) return Math.min(120, Math.max(20, Math.round(sqft / 1000) + 15));
   }
 
-  // 4. Yard size keywords (supports e.g. "yard: large", "large yard", "xl lot")
+  // 4. Non-mowing jobs (no lot size stored) — use job duration if set, else flat 60m
+  if (svc && !svc.includes('mow') && !svc.includes('lawn') && !svc.includes('blow')) {
+    const durMatch = n.match(/duration[:\s]+(\d+)\s*(?:min|hr|hour)?/i);
+    if (durMatch) return Math.round(parseFloat(durMatch[1]) * (durMatch[0].includes('hr') || durMatch[0].includes('hour') ? 60 : 1));
+    return 60;
+  }
+
+  // 5. Yard size keywords (supports e.g. "yard: large", "large yard", "xl lot")
   if (/yard[:\s]+(2xl|xxl)|extra[\s-]*extra[\s-]*large|2xl|xxl\s*lot/.test(n)) return 100;
   if (/yard[:\s]+(xl|extra[\s-]*large)|xl\s*(yard|lot)|extra[\s-]*large\s*(yard|lot)/.test(n)) return 80;
   if (/yard[:\s]+large|large\s*(yard|lot)/.test(n)) return 60;
   if (/yard[:\s]+medium|medium\s*(yard|lot)/.test(n)) return 40;
   if (/yard[:\s]+small|small\s*(yard|lot)/.test(n)) return 25;
 
-  // 5. Lot size field or corner lot hint
+  // 6. Corner/double lot hint
   if (/corner\s*lot|double\s*lot/.test(n)) return 65;
 
-  // 6. Service type extras (full service / edge + trim adds ~15 min)
+  // 7. Fallback by frequency (first mow often overgrown → 50 min)
   const hasEdgeTrim = /edg|trim|weed\s*eat|string\s*trim/.test(n);
-  const baseFromFreq = /one.time|first/.test(freq) ? 50 : 40; // first mow often overgrown
+  const baseFromFreq = /one.time|first/.test(freq) ? 50 : 40;
   return baseFromFreq + (hasEdgeTrim ? 10 : 0);
 }
 
@@ -9409,9 +9415,14 @@ function _dispJobClass(b) {
 }
 
 function _dispMowMin(b) {
+  var custom = parseInt(String(b.mowMinutes || b.customMowMins || ''));
+  if (custom > 0) return custom;
+  var freq = String(b.frequency || '').toLowerCase();
+  var svc  = String(b.service || b.serviceType || '').toLowerCase();
+  if (freq.includes('quote') || svc.includes('quote')) return 15;
   var n = String(b.notes||'').toLowerCase();
-  var lotM = n.match(/lot:\s*([\d.]+)ac/i);
-  if (lotM) { var ac = parseFloat(lotM[1]); if (ac<=0.15) return 20; if (ac<=0.25) return 30; if (ac<=0.5) return 40; if (ac<=0.75) return 50; if (ac<=1) return 60; return Math.round(ac*60); }
+  var lotM = n.match(/lot[:\s]+([\d.]+)ac/i);
+  if (lotM) { var ac = parseFloat(lotM[1]); if (ac > 0) return mowMinsFromAcres(ac); }
   if (/yard[:\s]+x?l|extra.large/.test(n)) return 75;
   if (/yard[:\s]+large/.test(n)) return 55;
   if (/yard[:\s]+small/.test(n)) return 25;
