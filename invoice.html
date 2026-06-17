@@ -1312,6 +1312,7 @@
         </div>
         <button class="fm-toggle-btn" id="fmcCashBtn" onclick="fmToggleCash()"></button>
         <button class="fm-mini-link" id="fmcCardCashLink" onclick="fmToggleCash()" style="display:none;">Customer paid cash instead?</button>
+        <button class="fm-toggle-btn" id="fmcInvoiceBtn" onclick="fmSendInvoice()" style="margin-top:10px;background:#1565c0;color:#fff;border-color:#1565c0;">📧 Send Invoice — edit price &amp; tip</button>
       </div>
 
       <!-- Photo block -->
@@ -10952,9 +10953,11 @@ function fmOpenComplete(){
   const bk = stop.bk;
   _fmcStop      = stop;
   _fmcRowIdx    = (allBookings || []).indexOf(bk);
-  _fmcCash      = false;
-  _fmcPhotoB64  = null; _fmcPhotoFile = null;
   _fmcIsCashCust = _fmIsCash(bk);
+  // Cash customers default to "collected" — finishing the job records the cash so
+  // the next visit schedules. (The next visit only books when done AND paid.)
+  _fmcCash      = _fmcIsCashCust;
+  _fmcPhotoB64  = null; _fmcPhotoFile = null;
   const amt = _fmAmt(bk);
 
   document.getElementById('fmcTitle').textContent = 'Finish ' + (bk.name || 'job');
@@ -10963,42 +10966,49 @@ function fmOpenComplete(){
   document.getElementById('fmcPhotoPreview').style.display = 'none';
   document.getElementById('fmcPhotoBtn').textContent = '📷 Take / Add Photo';
 
-  const cashBtn = document.getElementById('fmcCashBtn');
-  const link    = document.getElementById('fmcCardCashLink');
-  cashBtn.className = 'fm-toggle-btn';
-  if (_fmcIsCashCust){
-    document.getElementById('fmcMethod').textContent = '💵 Cash customer — collect $' + amt.toFixed(0) + ' on site';
-    cashBtn.style.display = '';
-    cashBtn.textContent   = '💵 Tap when cash collected';
-    link.style.display    = 'none';
-  } else {
-    document.getElementById('fmcMethod').textContent = '💳 On card / autopay — billed automatically';
-    cashBtn.style.display = 'none';
-    cashBtn.textContent   = '💵 Paid cash instead';
-    link.style.display    = '';
-  }
+  document.getElementById('fmcMethod').textContent = _fmcIsCashCust
+    ? '💵 Cash customer — collect $' + amt.toFixed(0) + '. Next visit books once collected.'
+    : '💳 On card / autopay — next visit books once they\'re billed.';
 
-  const submitBtn = document.getElementById('fmcSubmitBtn');
-  submitBtn.disabled = false;
-  submitBtn.textContent = (_fmViewIdx >= stops.length - 1) ? '✓ Complete & Finish Route' : '✓ Complete & Go to Next House';
+  document.getElementById('fmcSubmitBtn').disabled = false;
+  _fmcRenderCash();
   document.getElementById('fmCompleteSheet').style.display = 'flex';
 }
 
 function fmCloseComplete(){ document.getElementById('fmCompleteSheet').style.display = 'none'; }
 
-function fmToggleCash(){
-  _fmcCash = !_fmcCash;
+// Open the full invoice editor (autofilled price + tip selector) layered above Field Mode.
+function fmSendInvoice(){
+  if (_fmcRowIdx == null || _fmcRowIdx < 0){ showToast('Open a job first.'); return; }
+  const modal = document.getElementById('invoiceModal');
+  if (modal) modal.style.zIndex = '3300';   // sit above the field-mode complete sheet (3100)
+  if (typeof openInvoiceModal === 'function') openInvoiceModal(_fmcRowIdx);
+  else showToast('Invoice form unavailable.');
+}
+
+function fmToggleCash(){ _fmcCash = !_fmcCash; _fmcRenderCash(); }
+
+function _fmcRenderCash(){
   const cashBtn = document.getElementById('fmcCashBtn');
   const link    = document.getElementById('fmcCardCashLink');
   if (_fmcIsCashCust){
     cashBtn.style.display = '';
     cashBtn.className = 'fm-toggle-btn' + (_fmcCash ? ' cash-on' : '');
-    cashBtn.textContent = _fmcCash ? '✓ Cash collected' : '💵 Tap when cash collected';
+    cashBtn.textContent = _fmcCash ? '✓ Cash collected — tap to undo' : '✗ Cash NOT collected — tap when paid';
+    link.style.display = 'none';
   } else {
     cashBtn.style.display = _fmcCash ? '' : 'none';
     cashBtn.className = 'fm-toggle-btn' + (_fmcCash ? ' cash-on' : '');
-    cashBtn.textContent = _fmcCash ? '✓ Paid cash instead' : '💵 Paid cash instead';
+    cashBtn.textContent = _fmcCash ? '✓ Paid cash instead — tap to undo' : '💵 Paid cash instead';
     link.style.display = _fmcCash ? 'none' : '';
+  }
+  // Make it obvious when finishing won't schedule the next visit (done but unpaid)
+  const submitBtn = document.getElementById('fmcSubmitBtn');
+  if (submitBtn){
+    const last = _fmViewIdx >= (_fmStops().length - 1);
+    submitBtn.textContent = (_fmcIsCashCust && !_fmcCash)
+      ? '✓ Complete (unpaid — no next visit yet)'
+      : (last ? '✓ Complete & Finish Route' : '✓ Complete & Go to Next House');
   }
 }
 
