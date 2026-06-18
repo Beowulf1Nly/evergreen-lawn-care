@@ -1202,6 +1202,24 @@
     font-family:inherit; font-size:13px; font-weight:800; display:inline-flex; align-items:center; gap:6px;
     box-shadow:0 3px 12px rgba(22,163,74,.35);
   }
+  /* Field Mode — phase 2: sync, totals, add-ons, photos, skip */
+  .fm-sync { font-size:12px; font-weight:700; padding:5px 10px; border-radius:999px; cursor:pointer; border:none; font-family:inherit; }
+  .fm-sync.pending { background:rgba(251,191,36,.2); color:#fbbf24; }
+  .fm-sync.synced  { background:rgba(134,239,172,.16); color:#86efac; }
+  .fm-sync.offline { background:rgba(248,113,113,.2); color:#fca5a5; }
+  .fm-totals-chip { margin-top:9px; font-size:13px; color:#9ed8b1; font-weight:600; text-align:center; }
+  .fm-totals-chip b { color:#fff; }
+  .fm-addon-row { display:flex; flex-direction:column; gap:8px; }
+  .fm-addon-chip { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; padding:13px 14px; border:2px solid #e2e8f0; border-radius:12px; background:#fff; font-family:inherit; font-size:15px; font-weight:600; color:#14361f; cursor:pointer; text-align:left; }
+  .fm-addon-chip.on { background:#dcfce7; border-color:#16a34a; color:#15803d; }
+  .fm-addon-chip .fm-addon-price { font-weight:800; white-space:nowrap; }
+  .fm-photo-grid { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+  .fm-photo-grid:empty { display:none; }
+  .fm-photo-cell { position:relative; width:76px; height:76px; border-radius:10px; overflow:hidden; border:1.5px solid #e2e8f0; }
+  .fm-photo-cell img { width:100%; height:100%; object-fit:cover; }
+  .fm-photo-cell .fm-photo-x { position:absolute; top:2px; right:2px; background:rgba(0,0,0,.6); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:13px; cursor:pointer; line-height:20px; padding:0; }
+  #fmSkipSheet { display:none; position:fixed; inset:0; z-index:3100; background:rgba(0,0,0,.55); align-items:flex-end; justify-content:center; }
+  .fm-skip-reasons { display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
 </style>
 </head>
 <body>
@@ -1239,7 +1257,10 @@
     <div class="fm-screen" id="fmScreenStart">
       <div class="fm-top">
         <button class="fm-top-exit" onclick="exitFieldMode()">‹ Full portal</button>
-        <div id="fmStartTimerSlot"></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button>
+          <div id="fmStartTimerSlot"></div>
+        </div>
       </div>
       <div class="fm-start-center">
         <div class="fm-start-greet" id="fmGreet">Let's go</div>
@@ -1258,7 +1279,10 @@
     <div class="fm-screen" id="fmScreenJob">
       <div class="fm-top">
         <button class="fm-top-exit" onclick="exitFieldMode()">‹ Exit</button>
-        <div class="fm-top-timer" id="fmJobTimer" style="display:none;"><span class="fm-dot"></span><span id="fmJobTimerVal">0:00:00</span></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button>
+          <div class="fm-top-timer" id="fmJobTimer" style="display:none;"><span class="fm-dot"></span><span id="fmJobTimerVal">0:00:00</span></div>
+        </div>
       </div>
       <div class="fm-progress-wrap">
         <div class="fm-progress-meta">
@@ -1266,11 +1290,15 @@
           <span id="fmDoneCount">0 done</span>
         </div>
         <div class="fm-progress-bar"><div class="fm-progress-fill" id="fmProgressFill" style="width:0%"></div></div>
+        <div class="fm-totals-chip" id="fmTotalsChip"></div>
       </div>
       <div class="fm-body" id="fmJobBody"><!-- job card injected here --></div>
       <div class="fm-foot">
         <button class="fm-btn fm-btn-xl fm-btn-done" id="fmDoneBtn" onclick="fmOpenComplete()">✓ Done — Collect &amp; Next</button>
-        <button class="fm-skip" onclick="fmSkip()">Skip this stop for now ›</button>
+        <div style="display:flex;gap:18px;justify-content:center;margin-top:12px;">
+          <button class="fm-skip" style="margin-top:0;width:auto;" onclick="fmSkip()">Skip for now ›</button>
+          <button class="fm-skip" style="margin-top:0;width:auto;color:#fca5a5;" onclick="fmOpenSkip()">⚠ Couldn't service</button>
+        </div>
       </div>
     </div>
 
@@ -1278,16 +1306,18 @@
     <div class="fm-screen" id="fmScreenDone">
       <div class="fm-top">
         <button class="fm-top-exit" onclick="exitFieldMode()">‹ Full portal</button>
-        <div></div>
+        <button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button>
       </div>
       <div class="fm-done-center">
         <div class="fm-done-emoji">🎉</div>
         <div class="fm-done-title">Route Complete!</div>
         <div class="fm-done-sub" id="fmDoneSub">Nice work today.</div>
         <div class="fm-done-stats">
-          <div class="fm-done-stat"><div class="fm-done-stat-num" id="fmDoneStops">0</div><div class="fm-done-stat-lbl">stops</div></div>
+          <div class="fm-done-stat"><div class="fm-done-stat-num" id="fmDoneStops">0</div><div class="fm-done-stat-lbl">stops done</div></div>
           <div class="fm-done-stat"><div class="fm-done-stat-num" id="fmDoneCash">$0</div><div class="fm-done-stat-lbl">cash collected</div></div>
+          <div class="fm-done-stat"><div class="fm-done-stat-num" id="fmDoneBilled">$0</div><div class="fm-done-stat-lbl">total billed</div></div>
         </div>
+        <div id="fmDoneSkipped" style="color:#fca5a5;font-size:14px;margin-bottom:20px;font-weight:600;min-height:18px;"></div>
         <button class="fm-btn fm-btn-xl fm-btn-start" id="fmFinishBtn" onclick="fmFinishRoute()" style="min-width:260px;">🏁 Finish &amp; Clock Out</button>
         <button class="fm-skip" onclick="fmReviewStops()" style="margin-top:18px;">← Review stops</button>
       </div>
@@ -1299,7 +1329,13 @@
   <div id="fmCompleteSheet" onclick="if(event.target===this)fmCloseComplete()">
     <div class="fm-sheet">
       <div class="fm-sheet-title" id="fmcTitle">Finish job</div>
-      <div class="fm-sheet-sub" id="fmcSub">Collect payment, snap a photo, done.</div>
+      <div class="fm-sheet-sub" id="fmcSub">Add-ons, payment, photos — done.</div>
+
+      <!-- Add-ons block (shown only if the customer has a service catalog) -->
+      <div class="fm-block" id="fmcAddonsBlock" style="display:none;">
+        <div class="fm-block-label">Extra services done today? (added to the total)</div>
+        <div id="fmcAddons" class="fm-addon-row"></div>
+      </div>
 
       <!-- Payment block -->
       <div class="fm-block" id="fmcPayBlock">
@@ -1315,17 +1351,35 @@
         <button class="fm-toggle-btn" id="fmcInvoiceBtn" onclick="fmSendInvoice()" style="margin-top:10px;background:#1565c0;color:#fff;border-color:#1565c0;">📧 Send Invoice — edit price &amp; tip</button>
       </div>
 
-      <!-- Photo block -->
+      <!-- Photos block (multiple — before/after) -->
       <div class="fm-block">
-        <div class="fm-block-label">Photo (optional)</div>
+        <div class="fm-block-label">Photos (optional · before / after)</div>
+        <div id="fmcPhotoList" class="fm-photo-grid"></div>
         <input type="file" id="fmcPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="fmPhotoSelected(this)">
         <button class="fm-toggle-btn fm-btn-purple" id="fmcPhotoBtn" onclick="document.getElementById('fmcPhotoInput').click()" style="background:#7c3aed;color:#fff;border-color:#7c3aed;">📷 Take / Add Photo</button>
-        <div id="fmcPhotoPreview" style="display:none;"><img id="fmcPhotoThumb" class="fm-photo-thumb" src=""></div>
       </div>
 
       <div class="fm-err" id="fmcErr"></div>
       <button class="fm-btn fm-btn-xl fm-btn-done" id="fmcSubmitBtn" onclick="fmSubmitComplete()">✓ Complete &amp; Go to Next House</button>
       <button class="fm-mini-link" onclick="fmCloseComplete()" style="margin-top:14px;">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Field Mode: couldn't-service / skip reason sheet -->
+  <div id="fmSkipSheet" onclick="if(event.target===this)fmCloseSkip()">
+    <div class="fm-sheet">
+      <div class="fm-sheet-title" id="fmSkipTitle">Couldn't service this stop</div>
+      <div class="fm-sheet-sub">The job stays open for follow-up — it won't be marked done or paid. A note is logged for the office.</div>
+      <div class="fm-skip-reasons">
+        <button class="fm-toggle-btn" onclick="fmRecordSkip('Not home')">🚪 Not home</button>
+        <button class="fm-toggle-btn" onclick="fmRecordSkip('Gate locked')">🔒 Gate locked</button>
+        <button class="fm-toggle-btn" onclick="fmRecordSkip('Dog in yard')">🐕 Dog in yard</button>
+        <button class="fm-toggle-btn" onclick="fmRecordSkip('Weather')">🌧 Weather</button>
+        <button class="fm-toggle-btn" onclick="fmRecordSkip('Yard not ready')">🌱 Yard not ready</button>
+        <button class="fm-toggle-btn" onclick="fmPromptSkipOther()">✏️ Other reason…</button>
+      </div>
+      <div class="fm-err" id="fmSkipErr"></div>
+      <button class="fm-mini-link" onclick="fmCloseSkip()" style="margin-top:6px;">Cancel</button>
     </div>
   </div>
 
@@ -10727,10 +10781,72 @@ function _renderZoneGuide() {
 // ═══════════════════════════════════════════════════════════════════════════
 let _fmViewIdx   = null;     // stop currently shown (index into flattened list)
 let _fmCashTotal = 0;        // running cash collected this session
+let _fmBilledTotal = 0;      // running total billed (cash + card/invoice) this session
 let _fmTimerInt  = null;
+let _fmSyncInt   = null;
+let _fmSkipped   = {};        // { stopKey: reason } — couldn't-service stops this session
 // complete-sheet state
 let _fmcStop = null, _fmcRowIdx = -1, _fmcCash = false, _fmcIsCashCust = false;
-let _fmcPhotoB64 = null, _fmcPhotoFile = null;
+let _fmcBase = 0;             // base price of the current job (before add-ons)
+let _fmcAddons = [];          // [{ name, price, on }]
+let _fmcPhotos = [];          // [{ b64, fileName, mimeType, dataUrl }]
+
+// ── Offline action queue ───────────────────────────────────────────────────
+// Completions keep working with no/poor signal: every server action is queued to
+// localStorage and flushed (with retry) when back online, so a tap never silently
+// fails mid-route.
+const FM_QUEUE_KEY = 'evg_fm_sync_queue_v1';
+let _fmFlushing = false;
+function _fmQueueLoad(){ try { return JSON.parse(localStorage.getItem(FM_QUEUE_KEY) || '[]'); } catch(e){ return []; } }
+function _fmQueueSave(q){ try { localStorage.setItem(FM_QUEUE_KEY, JSON.stringify(q)); } catch(e){} }
+function _fmEnqueue(item){
+  const q = _fmQueueLoad();
+  item.tries = 0;
+  q.push(item);
+  _fmQueueSave(q);
+  _fmUpdateSyncBadge();
+}
+async function _fmFlushQueue(){
+  if (_fmFlushing) return;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false){ _fmUpdateSyncBadge(); return; }
+  _fmFlushing = true;
+  try {
+    let q = _fmQueueLoad();
+    while (q.length){
+      const item = q[0];
+      try {
+        let res;
+        if (item.method === 'POST'){
+          res = await fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(item.body), headers:{ 'Content-Type':'application/json' } });
+        } else {
+          res = await fetch(SCRIPT_URL + '?' + new URLSearchParams(item.params).toString());
+        }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        // Any resolved response dequeues (a server-side success:false won't fix on retry).
+        q.shift(); _fmQueueSave(q);
+      } catch(netErr){
+        // Network still down — keep the item, retry later. Drop only after many tries.
+        item.tries = (item.tries || 0) + 1;
+        if (item.tries > 12){ q.shift(); } // give up to avoid a stuck queue
+        _fmQueueSave(q);
+        break;
+      }
+    }
+  } finally {
+    _fmFlushing = false;
+    _fmUpdateSyncBadge();
+  }
+}
+function _fmUpdateSyncBadge(){
+  const n = _fmQueueLoad().length;
+  const online = !(typeof navigator !== 'undefined' && navigator.onLine === false);
+  document.querySelectorAll('.fm-sync').forEach(el => {
+    if (n === 0){ el.style.display = 'none'; return; }
+    el.style.display = '';
+    if (!online){ el.className = 'fm-sync offline'; el.textContent = '📴 ' + n + ' to sync'; }
+    else        { el.className = 'fm-sync pending'; el.textContent = '⏳ Syncing ' + n + '…'; }
+  });
+}
 
 function _fmTodayStr(){ return (typeof todayISOStr === 'function') ? todayISOStr() : new Date().toISOString().slice(0,10); }
 
@@ -10792,17 +10908,32 @@ function enterFieldMode(){
     const a = document.getElementById('fmJobTimerVal');   if (a) a.textContent = v;
     const b = document.getElementById('fmStartTimerVal'); if (b) b.textContent = v;
   }, 1000);
+  // Background sync: flush any queued actions now + on a timer + when connectivity returns
+  if (_fmSyncInt) clearInterval(_fmSyncInt);
+  _fmSyncInt = setInterval(_fmFlushQueue, 20000);
+  window.addEventListener('online', _fmOnlineHandler);
+  _fmUpdateSyncBadge();
+  _fmFlushQueue();
   _fmRender();
 }
+function _fmOnlineHandler(){ _fmUpdateSyncBadge(); _fmFlushQueue(); }
 
 function exitFieldMode(){
   const fm = document.getElementById('fieldMode');
   if (fm) fm.style.display = 'none';
   document.body.style.overflow = '';
   if (_fmTimerInt){ clearInterval(_fmTimerInt); _fmTimerInt = null; }
+  if (_fmSyncInt){ clearInterval(_fmSyncInt); _fmSyncInt = null; }
+  window.removeEventListener('online', _fmOnlineHandler);
+  _fmFlushQueue();   // best-effort flush on the way out
   try { sessionStorage.removeItem('evg_fm_active'); } catch(e){}
   if (window._isAtLeast && !window._isAtLeast('manager')){ try { showTab('route'); } catch(e){} }
 }
+
+// ── Skipped / couldn't-service helpers ──────────────────────────────────────
+function _fmStopKey(bk){ return String(bk.email||'').toLowerCase().trim() + '|' + (bk.serviceDate || bk.serviceDateRaw || ''); }
+function _fmIsSkipped(bk){ return !!_fmSkipped[_fmStopKey(bk)]; }
+function _fmResolved(s){ return isDone(s.bk) || _fmIsSkipped(s.bk); }
 
 function _fmActive(){
   const fm = document.getElementById('fieldMode');
@@ -10821,11 +10952,11 @@ function _fmRender(){
   const stops = _fmStops();
   if (!routeBuilt || !stops.length){ _fmRenderStart(stops); return; }
   const total = stops.length;
-  const doneCount = stops.filter(s => isDone(s.bk)).length;
-  if (doneCount >= total){ _fmRenderDone(stops); return; }
+  const resolved = stops.filter(_fmResolved).length;
+  if (resolved >= total){ _fmRenderDone(stops); return; }
   let idx = _fmViewIdx;
-  if (idx == null || idx < 0 || idx >= total || isDone(stops[idx].bk)){
-    idx = stops.findIndex(s => !isDone(s.bk));
+  if (idx == null || idx < 0 || idx >= total || _fmResolved(stops[idx])){
+    idx = stops.findIndex(s => !_fmResolved(s));
   }
   _fmViewIdx = idx;
   _fmRenderJob(stops, idx);
@@ -10876,19 +11007,22 @@ async function fmStart(){
 function _fmRenderJob(stops, idx){
   _fmShow('fmScreenJob');
   const total = stops.length;
-  const doneCount = stops.filter(s => isDone(s.bk)).length;
+  const doneCount    = stops.filter(s => isDone(s.bk)).length;
+  const skippedCount = stops.filter(s => !isDone(s.bk) && _fmIsSkipped(s.bk)).length;
   const stop = stops[idx];
   if (!stop){ _fmRender(); return; }
   const bk = stop.bk;
 
   document.getElementById('fmStopPos').textContent   = idx + 1;
   document.getElementById('fmStopTotal').textContent = total;
-  document.getElementById('fmDoneCount').textContent = doneCount + ' done';
-  document.getElementById('fmProgressFill').style.width = Math.round((doneCount/total)*100) + '%';
+  document.getElementById('fmDoneCount').textContent = doneCount + ' done' + (skippedCount ? ' · ' + skippedCount + ' skipped' : '');
+  document.getElementById('fmProgressFill').style.width = Math.round(((doneCount + skippedCount)/total)*100) + '%';
+  _fmUpdateTotalsChip();
 
   const amt    = _fmAmt(bk);
   const isCash = _fmIsCash(bk);
   const done   = isDone(bk);
+  const skipped = _fmIsSkipped(bk);
   const mow    = (typeof mowMinutes === 'function') ? mowMinutes(bk) : 40;
   const drive  = (stop.distFromPrev != null && !stop.geocodeFailed) ? Math.round((stop.distFromPrev/25)*60) : null;
   const lotM   = String(bk.notes || '').match(/lot:\s*([\d.]+)ac/i);
@@ -10901,6 +11035,7 @@ function _fmRenderJob(stops, idx){
   pills += `<span class="fm-pill muted">⏱ ~${mow}m</span>`;
   if (stop.geocodeFailed) pills += `<span class="fm-pill warn">⚠️ Not mapped</span>`;
   if (done)         pills += `<span class="fm-pill">✓ Done</span>`;
+  else if (skipped) pills += `<span class="fm-pill warn">⤼ Skipped: ${esc(_fmSkipped[_fmStopKey(bk)] || 'follow up')}</span>`;
 
   const em   = String(bk.email || '').toLowerCase().trim();
   const cust = (allCustomers || []).find(c => String(c.Email || '').toLowerCase().trim() === em);
@@ -10921,7 +11056,10 @@ function _fmRenderJob(stops, idx){
       ${noteHtml}
       <div class="fm-card-actions">
         <button class="fm-btn fm-btn-lg fm-btn-nav" onclick="fmNavigate(${idx})">🧭 Navigate Here</button>
-        ${phoneRow}
+        <div class="fm-secondary-row">
+          ${phoneRow}
+          <button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmRemainingMap()">🗺 Remaining</button>
+        </div>
       </div>
     </div>
     <div class="fm-jobnav">
@@ -10931,21 +11069,65 @@ function _fmRenderJob(stops, idx){
 
   const doneBtn = document.getElementById('fmDoneBtn');
   if (doneBtn){
-    doneBtn.style.display = done ? 'none' : '';
+    doneBtn.style.display = (done || skipped) ? 'none' : '';
     doneBtn.textContent = (idx >= total - 1) ? '✓ Done — Finish Route' : '✓ Done — Collect & Next';
   }
   _fmSyncTimerSlots();
+}
+
+function _fmUpdateTotalsChip(){
+  const el = document.getElementById('fmTotalsChip');
+  if (el) el.innerHTML = `Collected <b>$${(_fmCashTotal||0).toFixed(0)}</b> cash · Billed <b>$${(_fmBilledTotal||0).toFixed(0)}</b> today`;
 }
 
 function fmNavigate(idx){
   const s = _fmStops(); const bk = s[idx] && s[idx].bk; if (!bk) return;
   window.open(_fmMapsUrl(bk), '_blank');
 }
+// Open all remaining (not done / not skipped) stops as one multi-stop Google Maps route.
+function fmRemainingMap(){
+  const left = _fmStops().filter(s => !_fmResolved(s)).map(s => s.bk);
+  if (!left.length){ showToast('No stops left.'); return; }
+  const addrs = left.map(bk => encodeURIComponent((bk.address||'') + (bk.zip?', '+bk.zip:'') + ', FL'));
+  let url = 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=' + addrs[addrs.length-1];
+  const mids = addrs.slice(0, -1).slice(0, 9); // Maps caps waypoints; keep it sane
+  if (mids.length) url += '&waypoints=' + mids.join('|');
+  window.open(url, '_blank');
+}
 function fmPrevStop(){ const s = _fmStops(); if (_fmViewIdx > 0){ _fmViewIdx--; _fmRenderJob(s, _fmViewIdx); } }
 function fmNextStop(){ const s = _fmStops(); if (_fmViewIdx < s.length - 1){ _fmViewIdx++; _fmRenderJob(s, _fmViewIdx); } }
 function fmSkip(){ fmNextStop(); }
 
-// ── Complete sheet: collect + photo + done in one pass ──
+// ── Skip / couldn't service ──
+function fmOpenSkip(){
+  const stop = _fmStops()[_fmViewIdx];
+  if (!stop){ return; }
+  document.getElementById('fmSkipErr').style.display = 'none';
+  document.getElementById('fmSkipTitle').textContent = "Couldn't service " + (stop.bk.name || 'this stop');
+  document.getElementById('fmSkipSheet').style.display = 'flex';
+}
+function fmCloseSkip(){ document.getElementById('fmSkipSheet').style.display = 'none'; }
+function fmPromptSkipOther(){ const r = prompt('Reason you couldn\'t service this stop:'); if (r && r.trim()) fmRecordSkip(r.trim()); }
+function fmRecordSkip(reason){
+  const stop = _fmStops()[_fmViewIdx];
+  if (!stop){ fmCloseSkip(); return; }
+  const bk = stop.bk;
+  const rowIndex = bk._rowIndex || ((allBookings||[]).indexOf(bk) + 2);
+  const today = new Date().toLocaleDateString('en-US', { month:'short', day:'numeric' });
+  const existing = String(bk.employeeNotes || '').trim();
+  const note = (existing ? existing + ' | ' : '') + "⚠️ Couldn't service (" + reason + ') — ' + today + ' by ' + (adminName || 'crew');
+  // Log a note for the office — queued so it survives a bad signal
+  _fmEnqueue({ kind:'skip', method:'GET', params:{ action:'set_employee_note', rowIndex, note, adminToken } });
+  _fmFlushQueue();
+  bk.employeeNotes = note;
+  _fmSkipped[_fmStopKey(bk)] = reason;
+  fmCloseSkip();
+  showToast('⤼ Skipped: ' + reason + ' — flagged for follow-up');
+  _fmViewIdx = null;
+  _fmRender();
+}
+
+// ── Complete sheet: add-ons + collect + photos + done in one pass ──
 function fmOpenComplete(){
   const stops = _fmStops();
   const stop  = stops[_fmViewIdx];
@@ -10954,36 +11136,71 @@ function fmOpenComplete(){
   _fmcStop      = stop;
   _fmcRowIdx    = (allBookings || []).indexOf(bk);
   _fmcIsCashCust = _fmIsCash(bk);
-  // Cash customers default to "collected" — finishing the job records the cash so
-  // the next visit schedules. (The next visit only books when done AND paid.)
+  // Cash customers default to "collected" — finishing records the cash so the next
+  // visit schedules. (The next visit only books when done AND paid.)
   _fmcCash      = _fmcIsCashCust;
-  _fmcPhotoB64  = null; _fmcPhotoFile = null;
-  const amt = _fmAmt(bk);
+  _fmcBase      = _fmAmt(bk);
+  _fmcPhotos    = [];
+  const svc = (typeof customerServicesFor === 'function') ? customerServicesFor(bk.email) : [];
+  _fmcAddons = (svc || []).map(s => ({ name: s.name, price: +s.price || 0, on: false }));
 
   document.getElementById('fmcTitle').textContent = 'Finish ' + (bk.name || 'job');
-  document.getElementById('fmcAmt').textContent   = '$' + amt.toFixed(0);
   document.getElementById('fmcErr').style.display = 'none';
-  document.getElementById('fmcPhotoPreview').style.display = 'none';
   document.getElementById('fmcPhotoBtn').textContent = '📷 Take / Add Photo';
-
-  document.getElementById('fmcMethod').textContent = _fmcIsCashCust
-    ? '💵 Cash customer — collect $' + amt.toFixed(0) + '. Next visit books once collected.'
-    : '💳 On card / autopay — next visit books once they\'re billed.';
-
   document.getElementById('fmcSubmitBtn').disabled = false;
+
+  _fmcRenderAddons();
+  _fmcRenderPhotos();
+  _fmcRenderAmount();
   _fmcRenderCash();
   document.getElementById('fmCompleteSheet').style.display = 'flex';
 }
 
 function fmCloseComplete(){ document.getElementById('fmCompleteSheet').style.display = 'none'; }
 
+// ── Add-ons ──
+function _fmcAddonTotal(){ return (_fmcAddons||[]).filter(a=>a.on).reduce((s,a)=>s+(+a.price||0),0); }
+function _fmcGrand(){ return (_fmcBase||0) + _fmcAddonTotal(); }
+function _fmcRenderAddons(){
+  const block = document.getElementById('fmcAddonsBlock');
+  const wrap  = document.getElementById('fmcAddons');
+  if (!block || !wrap) return;
+  if (!_fmcAddons.length){ block.style.display = 'none'; wrap.innerHTML = ''; return; }
+  block.style.display = '';
+  wrap.innerHTML = _fmcAddons.map((a,i) =>
+    `<button class="fm-addon-chip${a.on?' on':''}" onclick="fmToggleAddon(${i})">
+       <span>${a.on?'✓ ':'＋ '}${esc(a.name)}</span>
+       <span class="fm-addon-price">$${(+a.price||0).toFixed(0)}</span>
+     </button>`).join('');
+}
+function fmToggleAddon(i){
+  if (!_fmcAddons[i]) return;
+  _fmcAddons[i].on = !_fmcAddons[i].on;
+  _fmcRenderAddons();
+  _fmcRenderAmount();
+  _fmcRenderCash();
+}
+function _fmcRenderAmount(){
+  const amt = _fmcGrand();
+  const amtEl = document.getElementById('fmcAmt'); if (amtEl) amtEl.textContent = '$' + amt.toFixed(0);
+  const addTot = _fmcAddonTotal();
+  const m = document.getElementById('fmcMethod');
+  if (m) m.textContent = _fmcIsCashCust
+    ? '💵 Cash — collect $' + amt.toFixed(0) + (addTot ? ' (incl. $' + addTot.toFixed(0) + ' add-ons)' : '') + '. Next visit books once collected.'
+    : '💳 On card / autopay' + (addTot ? ' — $' + addTot.toFixed(0) + ' add-ons added' : '') + '. Next visit books once billed.';
+}
+
 // Open the full invoice editor (autofilled price + tip selector) layered above Field Mode.
 function fmSendInvoice(){
   if (_fmcRowIdx == null || _fmcRowIdx < 0){ showToast('Open a job first.'); return; }
   const modal = document.getElementById('invoiceModal');
   if (modal) modal.style.zIndex = '3300';   // sit above the field-mode complete sheet (3100)
-  if (typeof openInvoiceModal === 'function') openInvoiceModal(_fmcRowIdx);
-  else showToast('Invoice form unavailable.');
+  if (typeof openInvoiceModal === 'function'){
+    openInvoiceModal(_fmcRowIdx);
+    // Prefill with the base + any add-ons selected on the spot
+    const amtEl = document.getElementById('invoiceAmount');
+    if (amtEl){ amtEl.value = _fmcGrand().toFixed(0); if (typeof updateInvoicePreview === 'function') updateInvoicePreview(); }
+  } else showToast('Invoice form unavailable.');
 }
 
 function fmToggleCash(){ _fmcCash = !_fmcCash; _fmcRenderCash(); }
@@ -11002,7 +11219,6 @@ function _fmcRenderCash(){
     cashBtn.textContent = _fmcCash ? '✓ Paid cash instead — tap to undo' : '💵 Paid cash instead';
     link.style.display = _fmcCash ? 'none' : '';
   }
-  // Make it obvious when finishing won't schedule the next visit (done but unpaid)
   const submitBtn = document.getElementById('fmcSubmitBtn');
   if (submitBtn){
     const last = _fmViewIdx >= (_fmStops().length - 1);
@@ -11012,17 +11228,25 @@ function _fmcRenderCash(){
   }
 }
 
+// ── Photos (multiple) ──
 function fmPhotoSelected(input){
   const file = input.files[0]; if (!file) return;
-  _fmcPhotoFile = file;
   const reader = new FileReader();
   reader.onload = e => {
-    _fmcPhotoB64 = e.target.result.split(',')[1];
-    document.getElementById('fmcPhotoThumb').src = e.target.result;
-    document.getElementById('fmcPhotoPreview').style.display = 'block';
-    document.getElementById('fmcPhotoBtn').textContent = '📷 Retake photo';
+    _fmcPhotos.push({ b64: e.target.result.split(',')[1], fileName: file.name, mimeType: file.type, dataUrl: e.target.result });
+    _fmcRenderPhotos();
   };
   reader.readAsDataURL(file);
+  input.value = '';   // allow adding another right away
+}
+function fmRemovePhoto(i){ _fmcPhotos.splice(i, 1); _fmcRenderPhotos(); }
+function _fmcRenderPhotos(){
+  const list = document.getElementById('fmcPhotoList');
+  if (!list) return;
+  list.innerHTML = _fmcPhotos.map((p,i) =>
+    `<div class="fm-photo-cell"><img src="${p.dataUrl}"><button class="fm-photo-x" onclick="fmRemovePhoto(${i})">×</button></div>`).join('');
+  const btn = document.getElementById('fmcPhotoBtn');
+  if (btn) btn.textContent = _fmcPhotos.length ? '📷 Add another photo' : '📷 Take / Add Photo';
 }
 
 async function fmSubmitComplete(){
@@ -11030,67 +11254,88 @@ async function fmSubmitComplete(){
   const errEl = document.getElementById('fmcErr');
   const submitBtn = document.getElementById('fmcSubmitBtn');
   if (!bk){ fmCloseComplete(); return; }
-  submitBtn.disabled = true; submitBtn.textContent = 'Submitting…';
+  submitBtn.disabled = true; submitBtn.textContent = 'Saving…';
   errEl.style.display = 'none';
-  const rowIndex = bk._rowIndex || ((_fmcRowIdx >= 0 ? _fmcRowIdx : 0) + 2);
-  try {
-    // 1. Mark done
-    const doneParams = new URLSearchParams({
-      action: 'mark_done', rowIndex,
-      email: bk.email || '', serviceDate: bk.serviceDate || bk.serviceDateRaw || '',
-      markedBy: adminName || adminEmail || 'Staff', adminToken
-    });
-    const doneRes  = await fetch(SCRIPT_URL + '?' + doneParams);
-    const doneData = await doneRes.json();
-    if (!doneData.success) throw new Error(doneData.error || 'Mark done failed');
 
-    // 2. Cash collected (cash customer, or card customer who paid cash)
-    if (_fmcCash){
-      const cashParams = new URLSearchParams({
-        action: 'mark_cash_paid', rowIndex,
-        email: bk.email || '', serviceDate: bk.serviceDate || bk.serviceDateRaw || '',
-        adminToken, markedBy: adminName || 'Crew'
-      });
-      await fetch(SCRIPT_URL + '?' + cashParams).catch(() => {});
-      _fmCashTotal += _fmAmt(bk);
-    }
+  const rowIndex  = bk._rowIndex || ((_fmcRowIdx >= 0 ? _fmcRowIdx : 0) + 2);
+  const email     = bk.email || '';
+  const svcDate   = bk.serviceDate || bk.serviceDateRaw || '';
+  const selAddons = (_fmcAddons||[]).filter(a => a.on && a.price > 0).map(a => ({ name:a.name, price:a.price }));
+  const grand     = _fmcGrand();
+  const cash      = _fmcCash;
 
-    // 3. Photo (optional)
-    if (_fmcPhotoB64 && _fmcPhotoFile){
-      const photoPayload = {
-        action: 'upload_job_photo', base64Data: _fmcPhotoB64,
-        fileName: _fmcPhotoFile.name, mimeType: _fmcPhotoFile.type,
-        rowIndex, jobLabel: (bk.name || '') + ' - ' + (bk.serviceDate || ''),
-        markedBy: adminName || 'Crew', adminToken
-      };
-      await fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(photoPayload),
-        headers: { 'Content-Type':'application/json' } }).catch(() => {});
-    }
+  const doneItem = { kind:'done', method:'GET', params:{
+    action:'mark_done', rowIndex, email, serviceDate: svcDate,
+    markedBy: adminName || adminEmail || 'Staff', adminToken
+  }};
+  const extraItems = [];
+  if (selAddons.length) extraItems.push({ kind:'addons', method:'GET', params:{
+    action:'apply_job_addons', rowIndex, email, serviceDate: svcDate, addons: JSON.stringify(selAddons), adminToken
+  }});
+  if (cash) extraItems.push({ kind:'cash', method:'GET', params:{
+    action:'mark_cash_paid', rowIndex, email, serviceDate: svcDate, adminToken, markedBy: adminName || 'Crew'
+  }});
+  _fmcPhotos.forEach((p, i) => extraItems.push({ kind:'photo', method:'POST', body:{
+    action:'upload_job_photo', base64Data: p.b64, fileName: p.fileName, mimeType: p.mimeType,
+    rowIndex, jobLabel: (bk.name||'') + ' - ' + svcDate + (_fmcPhotos.length > 1 ? ' (' + (i+1) + ')' : ''),
+    markedBy: adminName || 'Crew', adminToken
+  }}));
 
-    // Local state so the route reflects done immediately
+  const finish = (offline) => {
     const todayLabel = new Date().toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
-    if (_fmcRowIdx >= 0){ allBookings[_fmcRowIdx].done = '✓ Done — ' + todayLabel; allBookings[_fmcRowIdx].markedBy = adminName; }
-    else { bk.done = '✓ Done — ' + todayLabel; }
-
+    if (_fmcRowIdx >= 0){
+      allBookings[_fmcRowIdx].done = '✓ Done — ' + todayLabel;
+      allBookings[_fmcRowIdx].markedBy = adminName;
+      if (selAddons.length) allBookings[_fmcRowIdx].price = '$' + grand.toFixed(0);
+    } else { bk.done = '✓ Done — ' + todayLabel; }
+    if (cash) _fmCashTotal += grand;
+    _fmBilledTotal += grand;
     fmCloseComplete();
-    showToast('✅ ' + (bk.name || 'Job') + ' done!');
-    _fmViewIdx = null;   // advance to next incomplete (or done screen)
+    showToast(offline ? '📴 Saved — will sync when back online' : '✅ ' + (bk.name || 'Job') + ' done!');
+    _fmViewIdx = null;
     _fmRender();
-  } catch(err){
-    errEl.textContent = '❌ ' + err.message; errEl.style.display = 'block';
-    submitBtn.disabled = false; submitBtn.textContent = '✓ Complete & Go to Next House';
+  };
+
+  const online = !(typeof navigator !== 'undefined' && navigator.onLine === false);
+  if (online){
+    try {
+      const res = await fetch(SCRIPT_URL + '?' + new URLSearchParams(doneItem.params).toString());
+      if (!res.ok) throw new Error('HTTP ' + res.status);   // transient → offline queue
+      let data = null; try { data = await res.json(); } catch(_p){}
+      if (data && data.success === false){
+        // Real server error (e.g. row not found) — surface it, don't advance.
+        errEl.textContent = '❌ ' + (data.error || 'Mark done failed'); errEl.style.display = 'block';
+        submitBtn.disabled = false; _fmcRenderCash();
+        return;
+      }
+      extraItems.forEach(_fmEnqueue);
+      _fmFlushQueue();
+      finish(false);
+      return;
+    } catch(netErr){ /* network blip — fall through to offline queue */ }
   }
+  // Offline / network failed: queue everything (done first) and advance optimistically.
+  _fmEnqueue(doneItem);
+  extraItems.forEach(_fmEnqueue);
+  _fmFlushQueue();
+  finish(true);
 }
 
 function _fmRenderDone(stops){
   _fmShow('fmScreenDone');
-  const n = stops.length;
-  document.getElementById('fmDoneStops').textContent = n;
-  document.getElementById('fmDoneCash').textContent  = '$' + (_fmCashTotal || 0).toFixed(0);
+  const total = stops.length;
+  const doneN = stops.filter(s => isDone(s.bk)).length;
+  const skipN = stops.filter(s => !isDone(s.bk) && _fmIsSkipped(s.bk)).length;
+  document.getElementById('fmDoneStops').textContent  = doneN;
+  document.getElementById('fmDoneCash').textContent   = '$' + (_fmCashTotal || 0).toFixed(0);
+  const billedEl = document.getElementById('fmDoneBilled'); if (billedEl) billedEl.textContent = '$' + (_fmBilledTotal || 0).toFixed(0);
+  const skipEl = document.getElementById('fmDoneSkipped');
+  if (skipEl) skipEl.textContent = skipN ? ('⤼ ' + skipN + ' stop' + (skipN!==1?'s':'') + ' skipped — flagged for follow-up') : '';
   document.getElementById('fmDoneSub').textContent =
-    'All ' + n + ' stop' + (n!==1?'s':'') + ' complete. Nice work, ' + ((adminName||'').split(' ')[0] || 'crew') + '!';
+    doneN + ' of ' + total + ' stop' + (total!==1?'s':'') + ' done. Nice work, ' + ((adminName||'').split(' ')[0] || 'crew') + '!';
   const finishBtn = document.getElementById('fmFinishBtn');
   if (finishBtn) finishBtn.style.display = _clockInTime ? '' : 'none';
+  _fmUpdateSyncBadge();
   _fmSyncTimerSlots();
 }
 
