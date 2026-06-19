@@ -378,6 +378,13 @@ async function loadData(refreshToast){
     ]);
     if(bRes&&bRes.success&&Array.isArray(bRes.bookings)){ allBookings=bRes.bookings; try{ localStorage.setItem('evg_field_bookings', JSON.stringify(allBookings)); }catch(e){} }
     else if(Array.isArray(bRes)){ allBookings=bRes; }
+    // Refresh role + crew assignment LIVE from the server (the booking fetch returns them),
+    // so editing the Crews column in the sheet takes effect on next refresh — no re-login needed.
+    if(bRes&&bRes.success){
+      if(typeof bRes.role==='string' && bRes.role) adminRole=bRes.role;
+      if(typeof bRes.crews==='string') adminCrews=bRes.crews;
+      saveSession(adminToken,adminName,adminEmail,adminRole, adminRole==='owner'?30:7);
+    }
     if(cRes&&cRes.success&&Array.isArray(cRes.customers)){ allCustomers=cRes.customers; try{ localStorage.setItem('evg_field_customers', JSON.stringify(allCustomers)); }catch(e){} }
     _savedOrderKeys=_extractRouteKeys(rRes);
     if(!allBookings.length) _hydrateFromCache();
