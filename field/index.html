@@ -316,7 +316,7 @@ function _seeMoney(bk){ return _isMoneyRole() || (bk && _payType(bk)==='cash'); 
 function _uuid(){ try{ if(crypto&&crypto.randomUUID) return crypto.randomUUID(); }catch(e){} return 'x'+Date.now().toString(36)+Math.random().toString(36).slice(2,10); }
 
 /* ───────── Crew assignment filter ───────── */
-function _assignedCrews(){ const set=new Set(String(adminCrews||'').toUpperCase().split(/[,\s]+/).map(s=>s.trim()).filter(Boolean)); return set; }
+function _assignedCrews(){ const set=new Set(String(adminCrews||'').toUpperCase().split(/[^A-Z0-9]+/).map(s=>s.trim()).filter(Boolean)); return set; }
 function _crewOk(bk){ const set=_assignedCrews(); if(set.size===0) return true; const c=String(bk.crew||'').toUpperCase().trim(); if(!c) return true; /* unassigned visible to all */ return set.has(c); }
 
 /* ───────── Session ───────── */
@@ -370,7 +370,7 @@ function _restoreState(){
 async function loadData(refreshToast){
   if(navigator.onLine===false){ _hydrateFromCache(); if(refreshToast) showToast('📴 Offline — showing saved jobs'); _fmRender(); return; }
   try{
-    const crewQ = adminCrews ? '&crew='+encodeURIComponent(String(adminCrews).split(/[,\s]+/)[0]||'') : '';
+    const _crews=[..._assignedCrews()]; const crewQ = _crews.length===1 ? '&crew='+encodeURIComponent(_crews[0]) : '';
     const [bRes,cRes,rRes]=await Promise.all([
       fetch(SCRIPT_URL+'?action=bookings&'+authParam()).then(r=>r.json()).catch(()=>null),
       fetch(SCRIPT_URL+'?action=customers_list&'+authParam()).then(r=>r.json()).catch(()=>null),
