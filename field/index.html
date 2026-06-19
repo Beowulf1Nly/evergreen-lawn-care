@@ -112,6 +112,7 @@
   .fm-textarea{ width:100%; min-height:64px; padding:12px; border:2px solid #e2e8f0; border-radius:12px; font-family:inherit; font-size:15px; resize:vertical; box-sizing:border-box; color:#14361f; }
   /* checklists */
   .fm-checklist{ display:flex; flex-direction:column; gap:8px; }
+  .fm-helper-list{ display:flex; flex-direction:column; gap:8px; margin-bottom:6px; }
   .fm-check{ display:flex; align-items:center; gap:12px; width:100%; padding:14px 15px; border:2px solid #e2e8f0; border-radius:13px; background:#fff; font-family:inherit; font-size:15px; font-weight:700; color:#14361f; cursor:pointer; text-align:left; }
   .fm-check.on{ background:#dcfce7; border-color:#16a34a; color:#15803d; }
   .fm-check .box{ width:24px; height:24px; border-radius:7px; border:2px solid #cbd5e1; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:14px; color:transparent; }
@@ -177,7 +178,13 @@
     <div class="fm-top"><button class="fm-top-exit" onclick="fmBackToStart()">‹ Back</button><div id="fmStartTimerSlot2"></div></div>
     <div class="fm-section-title">Gear check</div>
     <div class="fm-section-sub">Tap each item to confirm before you roll out.</div>
-    <div class="fm-body"><div class="fm-checklist" id="fmStartChecklist"></div></div>
+    <div class="fm-body">
+      <div class="fm-block-label" style="color:#9ed8b1;">Who's with you today? (optional)</div>
+      <div id="fmHelperList" class="fm-helper-list"></div>
+      <button class="fm-check" style="justify-content:center;color:#15803d;" onclick="fmAddHelper()"><span>＋ Add a helper</span></button>
+      <div class="fm-block-label" style="color:#9ed8b1;margin-top:18px;">Gear check</div>
+      <div class="fm-checklist" id="fmStartChecklist"></div>
+    </div>
     <div class="fm-foot"><button class="fm-btn fm-btn-xl fm-btn-start" id="fmStartGoBtn" onclick="fmBeginRoute()" disabled>Confirm gear to start →</button></div>
   </div>
   <!-- JOB -->
@@ -198,6 +205,7 @@
         <button class="fm-skip" style="margin-top:0;width:auto;" onclick="fmSkip()">Skip for now ›</button>
         <button class="fm-skip" style="margin-top:0;width:auto;color:#fca5a5;" onclick="fmOpenSkip()">⚠ Couldn't service</button>
       </div>
+      <button class="fm-skip" style="color:#fca5a5;margin-top:10px;" onclick="fmEmergencyEnd()">🚨 End my route now (emergency)</button>
     </div>
   </div>
   <!-- DONE -->
@@ -286,8 +294,8 @@ const END_CHECKLIST   = ['Walked the yard','Closed all gates','Leaf blowed'];
 
 let adminToken='', adminName='', adminEmail='', adminRole='employee', adminCrews='';
 let allBookings=[], allCustomers=[], _savedOrderKeys=null;
-let _clockInTime=null, _clockOutTime=null, _clockedOut=false, _fmTimerInt=null, _fmSyncInt=null;
-let _fmStarted=false, _fmViewIdx=null, _fmCashTotal=0, _fmBilledTotal=0, _fmSkipped={}, _startChkState=[], _jobTimers={};
+let _clockInTime=null, _clockOutTime=null, _clockedOut=false, _fmTimerInt=null, _fmSyncInt=null, _fmPollInt=null;
+let _fmStarted=false, _fmViewIdx=null, _fmCashTotal=0, _fmBilledTotal=0, _fmSkipped={}, _startChkState=[], _jobTimers={}, _helpers=[];
 // complete-sheet state
 let _fmcStop=null, _fmcRowIdx=-1, _fmcPayType='invoice', _fmcCash=false, _fmcInvoiceSent=false, _fmcBase=0, _fmcAddons=[], _fmcPhotos=[], _fmcEndChk={};
 
@@ -344,7 +352,7 @@ async function verifyCode(){
   finally{ btn.disabled=false; btn.textContent='Sign In →'; }
 }
 function backToEmail(){ document.getElementById('loginStep2').style.display='none'; document.getElementById('loginStep1').style.display='block'; document.getElementById('codeInput').value=''; showLoginError(''); }
-function logout(){ try{ localStorage.removeItem(SESSION_KEY); localStorage.removeItem(STATE_KEY); }catch(e){} adminToken=''; _fmStarted=false; _clockInTime=null; _clockedOut=false; document.getElementById('fieldMode').classList.remove('show'); document.getElementById('loginScreen').style.display='flex'; }
+function logout(){ try{ localStorage.removeItem(SESSION_KEY); localStorage.removeItem(STATE_KEY); }catch(e){} if(_fmPollInt) clearInterval(_fmPollInt); adminToken=''; _fmStarted=false; _clockInTime=null; _clockedOut=false; document.getElementById('fieldMode').classList.remove('show'); document.getElementById('loginScreen').style.display='flex'; }
 function showApp(){ document.getElementById('loginScreen').style.display='none'; document.getElementById('fieldMode').classList.add('show'); _startTimers(); _fmRender(); }
 
 /* ───────── State persistence (resume where left off) ───────── */
@@ -352,7 +360,7 @@ function _persist(){
   try{ localStorage.setItem(STATE_KEY, JSON.stringify({
     dayISO: todayISOStr(), started:_fmStarted, viewIdx:_fmViewIdx,
     clockInTime:_clockInTime?_clockInTime.toISOString():null, clockOutTime:_clockOutTime?_clockOutTime.toISOString():null, clockedOut:_clockedOut,
-    cashTotal:_fmCashTotal, billedTotal:_fmBilledTotal, skipped:_fmSkipped, startChk:_startChkState, jobTimers:_jobTimers
+    cashTotal:_fmCashTotal, billedTotal:_fmBilledTotal, skipped:_fmSkipped, startChk:_startChkState, jobTimers:_jobTimers, helpers:_helpers
   })); }catch(e){}
 }
 function _restoreState(){
@@ -362,7 +370,7 @@ function _restoreState(){
     if(s.dayISO!==todayISOStr()){ localStorage.removeItem(STATE_KEY); return; }  // new day → fresh start
     _fmStarted=!!s.started; _fmViewIdx=(s.viewIdx==null?null:s.viewIdx);
     _clockInTime=s.clockInTime?new Date(s.clockInTime):null; _clockOutTime=s.clockOutTime?new Date(s.clockOutTime):null; _clockedOut=!!s.clockedOut;
-    _fmCashTotal=+s.cashTotal||0; _fmBilledTotal=+s.billedTotal||0; _fmSkipped=s.skipped||{}; _startChkState=Array.isArray(s.startChk)?s.startChk:[]; _jobTimers=s.jobTimers||{};
+    _fmCashTotal=+s.cashTotal||0; _fmBilledTotal=+s.billedTotal||0; _fmSkipped=s.skipped||{}; _startChkState=Array.isArray(s.startChk)?s.startChk:[]; _jobTimers=s.jobTimers||{}; _helpers=Array.isArray(s.helpers)?s.helpers:[];
   }catch(e){}
 }
 
@@ -452,12 +460,15 @@ function _startTimers(){
   _fmTimerInt=setInterval(()=>{ if(!_clockInTime||_clockedOut) return; const v=_fmTimerStr(); const a=document.getElementById('fmJobTimerVal'); if(a)a.textContent=v; document.querySelectorAll('.fmTimerVal').forEach(e=>e.textContent=v); },1000);
   if(_fmSyncInt) clearInterval(_fmSyncInt);
   _fmSyncInt=setInterval(_fmFlushQueue,20000);
+  // Live route sync: pull owner's reorder/cancel/move changes while on the clock
+  if(_fmPollInt) clearInterval(_fmPollInt);
+  _fmPollInt=setInterval(function(){ if(_fmStarted && navigator.onLine!==false && !_anySheetOpen()) loadData(); },30000);
 }
 function _autoClockOut(){
   if(!_clockInTime||_clockedOut) return;
   _clockOutTime=new Date(); _clockedOut=true;
   const hours=Math.max(0,(_clockOutTime.getTime()-_clockInTime.getTime())/3600000);
-  _fmEnqueue({ kind:'clockout', idemKey:'clockout:'+todayISOStr(), method:'GET', params:{ action:'employee_clock_out', hours:hours.toFixed(2), date:todayISOStr(), markedBy:adminName||'Crew', adminToken } });
+  _fmEnqueue({ kind:'clockout', idemKey:'clockout:'+todayISOStr(), method:'GET', params:{ action:'employee_clock_out', hours:hours.toFixed(2), date:todayISOStr(), markedBy:adminName||'Crew', helpers:JSON.stringify((_helpers||[]).map(function(n){return {name:n};})), adminToken } });
   _fmFlushQueue(); _persist();
 }
 
@@ -509,7 +520,7 @@ function fmStartTapped(){
   // already clocked in & gear confirmed earlier today → jump straight back into the route
   if(_clockInTime&&!_clockedOut&&_startChkState.length===START_CHECKLIST.length&&_startChkState.every(Boolean)){ _fmStarted=true; _persist(); _fmRender(); return; }
   if(_startChkState.length!==START_CHECKLIST.length) _startChkState=START_CHECKLIST.map(()=>false);
-  _renderStartChecklist(); _fmShow('fmScreenChecklist'); _fmSyncTimerSlots();
+  _renderStartChecklist(); _renderHelpers(); _fmShow('fmScreenChecklist'); _fmSyncTimerSlots();
 }
 function _renderStartChecklist(){
   const wrap=document.getElementById('fmStartChecklist');
@@ -518,6 +529,17 @@ function _renderStartChecklist(){
   const btn=document.getElementById('fmStartGoBtn'); btn.disabled=!all; btn.textContent=all?'Start Working →':'Confirm all gear to start →';
 }
 function _toggleStartChk(i){ _startChkState[i]=!_startChkState[i]; _persist(); _renderStartChecklist(); }
+function _renderHelpers(){ const w=document.getElementById('fmHelperList'); if(!w) return; w.innerHTML=_helpers.map((h,i)=>'<button class="fm-check on" onclick="fmRemoveHelper('+i+')"><span class="box">✓</span><span>'+esc(h)+'  ✕</span></button>').join(''); }
+function fmAddHelper(){ const n=prompt('Helper name (someone riding along today):'); if(n&&n.trim()){ _helpers.push(n.trim()); _persist(); _renderHelpers(); } }
+function fmRemoveHelper(i){ _helpers.splice(i,1); _persist(); _renderHelpers(); }
+function _anySheetOpen(){ const c=document.getElementById('fmCompleteSheet'), k=document.getElementById('fmSkipSheet'); return (c&&c.style.display==='flex')||(k&&k.style.display==='flex'); }
+function fmEmergencyEnd(){
+  if(!confirm('End your route now? You\'ll be clocked out and your hours logged. Any stops left stay open for follow-up.')) return;
+  _autoClockOut();
+  showToast('🚨 Route ended — clocked out');
+  _fmStarted=false; _fmViewIdx=null; _persist();
+  _fmRenderDone(_fmStops());
+}
 function fmBeginRoute(){
   if(!(_startChkState.length===START_CHECKLIST.length&&_startChkState.every(Boolean))) return;
   if(!_clockInTime){ _clockInTime=new Date(); _clockedOut=false; _clockOutTime=null; }
@@ -725,7 +747,7 @@ function fmFinishRoute(){
   _autoClockOut(); _fmFlushQueue();
   showToast('🏁 Logged out — great work!');
   // reset the day's session so a fresh start is clean
-  _fmStarted=false; _fmViewIdx=null; _clockInTime=null; _clockOutTime=null; _clockedOut=false; _fmCashTotal=0; _fmBilledTotal=0; _startChkState=[]; _jobTimers={};
+  _fmStarted=false; _fmViewIdx=null; _clockInTime=null; _clockOutTime=null; _clockedOut=false; _fmCashTotal=0; _fmBilledTotal=0; _startChkState=[]; _jobTimers={}; _helpers=[];
   try{ localStorage.removeItem(STATE_KEY); }catch(e){}
   _fmShow('fmScreenStart'); _fmRenderStart();
 }
