@@ -15,31 +15,13 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
 <link rel="icon" href="icon-192.png"/>
 <style>
-  :root{
-    --green-deep:#0f2417; --green:#15803d; --green-bright:#22c55e;
-    --border:#e2e8f0; --text-muted:#64748b; --red:#dc2626;
-    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  }
+  :root{ --green-deep:#0f2417; --green:#15803d; --border:#e2e8f0; --text-muted:#64748b; --red:#dc2626; --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
   *{ box-sizing:border-box; }
   html,body{ margin:0; padding:0; height:100%; }
-  body{
-    font-family:var(--font); background:#0f2417; color:#14361f;
-    -webkit-font-smoothing:antialiased; overscroll-behavior:none;
-    -webkit-tap-highlight-color:transparent;
-  }
-  /* ── Offline / sync banner ── */
-  #netBanner{
-    position:fixed; left:0; right:0; top:0; z-index:4000; display:none;
-    text-align:center; font-size:13px; font-weight:700; padding:max(6px,env(safe-area-inset-top)) 10px 6px;
-    background:#b45309; color:#fff;
-  }
+  body{ font-family:var(--font); background:#0f2417; color:#14361f; -webkit-font-smoothing:antialiased; overscroll-behavior:none; -webkit-tap-highlight-color:transparent; }
+  #netBanner{ position:fixed; left:0; right:0; top:0; z-index:4000; display:none; text-align:center; font-size:13px; font-weight:700; padding:max(6px,env(safe-area-inset-top)) 10px 6px; background:#b45309; color:#fff; }
   #netBanner.show{ display:block; }
-
-  /* ── Login ── */
-  #loginScreen{
-    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
-    background:linear-gradient(170deg,#0f2417,#14361f 55%,#0c2a18); padding:24px;
-  }
+  #loginScreen{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:linear-gradient(170deg,#0f2417,#14361f 55%,#0c2a18); padding:24px; }
   .login-card{ background:#fff; border-radius:22px; padding:30px 24px; width:100%; max-width:380px; box-shadow:0 20px 60px rgba(0,0,0,.35); }
   .login-card h1{ font-size:28px; margin:0 0 6px; color:var(--green-deep); }
   .login-card p{ font-size:14px; color:var(--text-muted); margin:0 0 16px; line-height:1.5; }
@@ -47,19 +29,12 @@
   .login-input:focus{ border-color:var(--green); }
   .login-btn{ width:100%; padding:15px; border:none; border-radius:12px; background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; font-size:16px; font-weight:800; font-family:inherit; cursor:pointer; }
   .login-btn:disabled{ opacity:.6; }
-
-  /* ════ FIELD MODE ════ */
-  #fieldMode{
-    display:none; position:fixed; inset:0; z-index:3000;
-    background:linear-gradient(170deg,#0f2417 0%,#14361f 45%,#0c2a18 100%);
-    color:#fff; flex-direction:column; overscroll-behavior:contain;
-  }
+  #fieldMode{ display:none; position:fixed; inset:0; z-index:3000; background:linear-gradient(170deg,#0f2417 0%,#14361f 45%,#0c2a18 100%); color:#fff; flex-direction:column; overscroll-behavior:contain; }
   #fieldMode.show{ display:flex; }
   .fm-screen{ display:none; flex-direction:column; height:100%; }
   .fm-screen.active{ display:flex; }
   .fm-top{ display:flex; align-items:center; justify-content:space-between; padding:max(14px,env(safe-area-inset-top)) 16px 12px; gap:10px; flex-shrink:0; }
   .fm-top-exit{ background:rgba(255,255,255,.12); color:#dcfce7; border:none; border-radius:10px; padding:8px 12px; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; }
-  .fm-top-exit:active{ background:rgba(255,255,255,.22); }
   .fm-top-timer{ font-variant-numeric:tabular-nums; font-size:14px; font-weight:700; color:#86efac; background:rgba(134,239,172,.14); padding:6px 11px; border-radius:999px; display:inline-flex; align-items:center; gap:6px; }
   .fm-dot{ width:8px; height:8px; border-radius:50%; background:#22c55e; animation:fmPulse 1.6s infinite; }
   @keyframes fmPulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
@@ -77,6 +52,8 @@
   .fm-start-stat-num{ font-size:54px; font-weight:800; line-height:1; }
   .fm-start-stat-lbl{ font-size:14px; color:#9ed8b1; margin-top:6px; text-transform:uppercase; letter-spacing:.08em; }
   .fm-start-sub{ color:#9ed8b1; font-size:14px; margin-bottom:30px; }
+  .fm-section-title{ font-size:22px; font-weight:800; padding:4px 16px 2px; }
+  .fm-section-sub{ color:#9ed8b1; font-size:14px; padding:0 16px 14px; }
   .fm-card{ background:#fff; color:#14361f; border-radius:22px; padding:22px 20px; box-shadow:0 12px 40px rgba(0,0,0,.3); margin-top:4px; }
   .fm-card-stopno{ display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:10px; background:#14361f; color:#fff; font-weight:800; font-size:16px; margin-bottom:12px; }
   .fm-card-name{ font-size:26px; font-weight:800; color:#14361f; line-height:1.15; margin-bottom:4px; }
@@ -88,7 +65,7 @@
   .fm-pill.muted{ background:#f1f5f9; color:#475569; border-color:#e2e8f0; }
   .fm-note-box{ background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:11px 13px; font-size:14px; color:#92400e; margin-bottom:16px; line-height:1.5; }
   .fm-note-box b{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:.06em; margin-bottom:3px; color:#b45309; }
-  .fm-btn{ display:flex; align-items:center; justify-content:center; gap:9px; width:100%; border:none; border-radius:15px; font-family:inherit; font-weight:800; cursor:pointer; transition:transform .08s, opacity .15s; text-decoration:none; }
+  .fm-btn{ display:flex; align-items:center; justify-content:center; gap:9px; width:100%; border:none; border-radius:15px; font-family:inherit; font-weight:800; cursor:pointer; transition:transform .08s,opacity .15s; text-decoration:none; }
   .fm-btn:active{ transform:scale(.98); }
   .fm-btn-lg{ padding:18px; font-size:17px; }
   .fm-btn-xl{ padding:20px; font-size:19px; }
@@ -97,7 +74,7 @@
   .fm-btn-done{ background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; box-shadow:0 6px 22px rgba(22,163,74,.45); }
   .fm-btn-start{ background:linear-gradient(135deg,#22c55e,#15803d); color:#fff; box-shadow:0 8px 28px rgba(34,197,94,.5); }
   .fm-btn-ghost{ background:#fff; color:#14361f; border:2px solid #14361f; }
-  .fm-btn:disabled{ opacity:.55; cursor:not-allowed; }
+  .fm-btn:disabled{ opacity:.5; cursor:not-allowed; box-shadow:none; }
   .fm-card-actions{ display:flex; flex-direction:column; gap:10px; }
   .fm-secondary-row{ display:flex; gap:10px; }
   .fm-secondary-row .fm-btn{ flex:1; }
@@ -111,12 +88,16 @@
   .fm-sheet-title{ font-size:22px; font-weight:800; margin-bottom:2px; }
   .fm-sheet-sub{ color:#64748b; font-size:14px; margin-bottom:18px; }
   .fm-block{ border:1.5px solid #e2e8f0; border-radius:14px; padding:14px; margin-bottom:14px; }
-  .fm-block-label{ font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.07em; color:#94a3b8; margin-bottom:10px; }
+  .fm-block-label{ font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.07em; color:#94a3b8; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; }
+  .fm-block-label .req{ color:#b45309; }
+  .fm-block-label .ok{ color:#15803d; }
   .fm-pay-amt{ font-size:30px; font-weight:800; color:#14361f; }
-  .fm-pay-method{ font-size:14px; color:#64748b; margin-top:2px; }
+  .fm-pay-method{ font-size:14px; color:#64748b; margin:2px 0 12px; }
   .fm-toggle-btn{ width:100%; padding:15px; border-radius:13px; border:2px solid #e2e8f0; background:#fff; font-family:inherit; font-size:15px; font-weight:700; cursor:pointer; color:#14361f; display:flex; align-items:center; justify-content:center; gap:8px; margin-top:10px; }
   .fm-toggle-btn:first-child{ margin-top:0; }
   .fm-toggle-btn.cash-on{ background:#fef3c7; border-color:#b45309; color:#92400e; }
+  .fm-toggle-btn.sent{ background:#dcfce7; border-color:#16a34a; color:#15803d; }
+  .fm-toggle-btn.invoice{ background:#1565c0; color:#fff; border-color:#1565c0; }
   .fm-mini-link{ background:none; border:none; color:#64748b; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; margin-top:14px; text-decoration:underline; width:100%; text-align:center; }
   .fm-err{ color:#dc2626; font-size:14px; margin-bottom:10px; display:none; font-weight:600; }
   .fm-addon-row{ display:flex; flex-direction:column; gap:8px; }
@@ -128,6 +109,13 @@
   .fm-photo-cell{ position:relative; width:76px; height:76px; border-radius:10px; overflow:hidden; border:1.5px solid #e2e8f0; }
   .fm-photo-cell img{ width:100%; height:100%; object-fit:cover; }
   .fm-photo-x{ position:absolute; top:2px; right:2px; background:rgba(0,0,0,.6); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:13px; cursor:pointer; line-height:20px; padding:0; }
+  .fm-textarea{ width:100%; min-height:64px; padding:12px; border:2px solid #e2e8f0; border-radius:12px; font-family:inherit; font-size:15px; resize:vertical; box-sizing:border-box; color:#14361f; }
+  /* checklists */
+  .fm-checklist{ display:flex; flex-direction:column; gap:8px; }
+  .fm-check{ display:flex; align-items:center; gap:12px; width:100%; padding:14px 15px; border:2px solid #e2e8f0; border-radius:13px; background:#fff; font-family:inherit; font-size:15px; font-weight:700; color:#14361f; cursor:pointer; text-align:left; }
+  .fm-check.on{ background:#dcfce7; border-color:#16a34a; color:#15803d; }
+  .fm-check .box{ width:24px; height:24px; border-radius:7px; border:2px solid #cbd5e1; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:14px; color:transparent; }
+  .fm-check.on .box{ background:#16a34a; border-color:#16a34a; color:#fff; }
   .fm-skip-reasons{ display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
   .fm-sync{ font-size:12px; font-weight:700; padding:5px 10px; border-radius:999px; border:none; font-family:inherit; cursor:pointer; }
   .fm-sync.pending{ background:rgba(251,191,36,.2); color:#fbbf24; }
@@ -146,23 +134,20 @@
 </style>
 </head>
 <body>
-
 <div id="netBanner"></div>
 
-<!-- ══ LOGIN ══ -->
+<!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
     <h1>🌿 Evergreen</h1>
     <div id="loginStep1">
       <p>Crew access — enter your work email for a login code.</p>
-      <input type="email" id="emailInput" class="login-input" placeholder="Your work email" autocomplete="email"
-             onkeydown="if(event.key==='Enter')requestCode()"/>
+      <input type="email" id="emailInput" class="login-input" placeholder="Your work email" autocomplete="email" onkeydown="if(event.key==='Enter')requestCode()"/>
       <button class="login-btn" id="requestCodeBtn" onclick="requestCode()">Send Login Code →</button>
     </div>
     <div id="loginStep2" style="display:none;">
       <p id="loginMsg">Enter the 6-digit code we just emailed you.</p>
-      <input type="text" id="codeInput" class="login-input" placeholder="000000" maxlength="6" inputmode="numeric"
-             oninput="this.value=this.value.replace(/\D/g,'')" onkeydown="if(event.key==='Enter')verifyCode()"/>
+      <input type="text" id="codeInput" class="login-input" placeholder="000000" maxlength="6" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" onkeydown="if(event.key==='Enter')verifyCode()"/>
       <button class="login-btn" id="verifyBtn" onclick="verifyCode()">Sign In →</button>
       <button onclick="backToEmail()" style="background:none;border:none;color:var(--text-muted);font-size:13px;cursor:pointer;margin-top:10px;width:100%;">← Different email</button>
     </div>
@@ -170,37 +155,36 @@
   </div>
 </div>
 
-<!-- ══ FIELD MODE ══ -->
+<!-- FIELD MODE -->
 <div id="fieldMode">
   <!-- START -->
   <div class="fm-screen" id="fmScreenStart">
     <div class="fm-top">
       <button class="fm-top-exit" onclick="logout()">Sign out</button>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button>
-        <div id="fmStartTimerSlot"></div>
-      </div>
+      <div style="display:flex;align-items:center;gap:8px;"><button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button><div id="fmStartTimerSlot"></div></div>
     </div>
     <div class="fm-start-center">
       <div class="fm-start-greet" id="fmGreet">Let's go</div>
       <div class="fm-start-date" id="fmStartDate"></div>
-      <div class="fm-start-stat">
-        <div class="fm-start-stat-num" id="fmStartCount">—</div>
-        <div class="fm-start-stat-lbl">stops today</div>
-      </div>
+      <div class="fm-start-stat"><div class="fm-start-stat-num" id="fmStartCount">—</div><div class="fm-start-stat-lbl">stops today</div></div>
       <div class="fm-start-sub" id="fmStartSub"></div>
-      <button class="fm-btn fm-btn-xl fm-btn-start" id="fmStartBtn" onclick="fmStart()" style="min-width:260px;">🟢 Start My Route</button>
+      <button class="fm-btn fm-btn-xl fm-btn-start" id="fmStartBtn" onclick="fmStartTapped()" style="min-width:260px;">🟢 Start My Route</button>
       <button class="fm-skip" onclick="loadData(true)" style="color:#9ed8b1;margin-top:18px;">↻ Refresh jobs</button>
     </div>
+  </div>
+  <!-- START-OF-ROUTE CHECKLIST -->
+  <div class="fm-screen" id="fmScreenChecklist">
+    <div class="fm-top"><button class="fm-top-exit" onclick="fmBackToStart()">‹ Back</button><div id="fmStartTimerSlot2"></div></div>
+    <div class="fm-section-title">Gear check</div>
+    <div class="fm-section-sub">Tap each item to confirm before you roll out.</div>
+    <div class="fm-body"><div class="fm-checklist" id="fmStartChecklist"></div></div>
+    <div class="fm-foot"><button class="fm-btn fm-btn-xl fm-btn-start" id="fmStartGoBtn" onclick="fmBeginRoute()" disabled>Confirm gear to start →</button></div>
   </div>
   <!-- JOB -->
   <div class="fm-screen" id="fmScreenJob">
     <div class="fm-top">
-      <button class="fm-top-exit" onclick="fmBackToStart()">‹ Back</button>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button>
-        <div class="fm-top-timer" id="fmJobTimer" style="display:none;"><span class="fm-dot"></span><span id="fmJobTimerVal">0:00:00</span></div>
-      </div>
+      <button class="fm-top-exit" onclick="fmBackToStart()">‹ Route</button>
+      <div style="display:flex;align-items:center;gap:8px;"><button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button><div class="fm-top-timer" id="fmJobTimer" style="display:none;"><span class="fm-dot"></span><span id="fmJobTimerVal">0:00:00</span></div></div>
     </div>
     <div class="fm-progress-wrap">
       <div class="fm-progress-meta"><span>Stop <b id="fmStopPos">1</b> of <span id="fmStopTotal">1</span></span><span id="fmDoneCount">0 done</span></div>
@@ -218,10 +202,7 @@
   </div>
   <!-- DONE -->
   <div class="fm-screen" id="fmScreenDone">
-    <div class="fm-top">
-      <button class="fm-top-exit" onclick="fmBackToStart()">‹ Start</button>
-      <button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button>
-    </div>
+    <div class="fm-top"><button class="fm-top-exit" onclick="fmBackToStart()">‹ Start</button><button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button></div>
     <div class="fm-done-center">
       <div class="fm-done-emoji">🎉</div>
       <div class="fm-done-title">Route Complete!</div>
@@ -231,8 +212,9 @@
         <div class="fm-done-stat"><div class="fm-done-stat-num" id="fmDoneCash">$0</div><div class="fm-done-stat-lbl">cash collected</div></div>
         <div class="fm-done-stat"><div class="fm-done-stat-num" id="fmDoneBilled">$0</div><div class="fm-done-stat-lbl">total billed</div></div>
       </div>
-      <div id="fmDoneSkipped" style="color:#fca5a5;font-size:14px;margin-bottom:20px;font-weight:600;min-height:18px;"></div>
-      <button class="fm-btn fm-btn-xl fm-btn-start" onclick="fmFinishRoute()" style="min-width:260px;">🏁 Finish &amp; Clock Out</button>
+      <div id="fmDoneSkipped" style="color:#fca5a5;font-size:14px;margin-bottom:14px;font-weight:600;min-height:18px;"></div>
+      <div id="fmClockSummary" style="color:#9ed8b1;font-size:14px;margin-bottom:20px;font-weight:600;"></div>
+      <button class="fm-btn fm-btn-xl fm-btn-start" onclick="fmFinishRoute()" style="min-width:260px;">🏁 Done for the day</button>
       <button class="fm-skip" onclick="fmReviewStops()" style="margin-top:18px;">← Review stops</button>
     </div>
   </div>
@@ -242,25 +224,33 @@
 <div id="fmCompleteSheet" onclick="if(event.target===this)fmCloseComplete()">
   <div class="fm-sheet">
     <div class="fm-sheet-title" id="fmcTitle">Finish job</div>
-    <div class="fm-sheet-sub">Add-ons, payment, photos — done.</div>
+    <div class="fm-sheet-sub">Take payment, snap a photo, run the checklist.</div>
     <div class="fm-block" id="fmcAddonsBlock" style="display:none;">
-      <div class="fm-block-label">Extra services done today? (added to the total)</div>
+      <div class="fm-block-label">Extra services done today?</div>
       <div id="fmcAddons" class="fm-addon-row"></div>
     </div>
     <div class="fm-block">
-      <div class="fm-block-label">Payment</div>
+      <div class="fm-block-label"><span>Payment</span><span id="fmcPayState" class="req">required</span></div>
       <div class="fm-pay-amt" id="fmcAmt">$0</div>
       <div class="fm-pay-method" id="fmcMethod"></div>
-      <button class="fm-toggle-btn" id="fmcCashBtn" onclick="fmToggleCash()"></button>
+      <div id="fmcPayControls"></div>
     </div>
     <div class="fm-block">
-      <div class="fm-block-label">Photos (optional · before / after)</div>
+      <div class="fm-block-label"><span>Photo</span><span style="color:#94a3b8;">optional</span></div>
       <div id="fmcPhotoList" class="fm-photo-grid"></div>
       <input type="file" id="fmcPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="fmPhotoSelected(this)">
       <button class="fm-toggle-btn" id="fmcPhotoBtn" onclick="document.getElementById('fmcPhotoInput').click()" style="background:#7c3aed;color:#fff;border-color:#7c3aed;">📷 Take / Add Photo</button>
     </div>
+    <div class="fm-block">
+      <div class="fm-block-label"><span>Notes for owner</span><span style="color:#94a3b8;">optional</span></div>
+      <textarea class="fm-textarea" id="fmcOwnerNote" placeholder="Anything Hunter should know about this yard…"></textarea>
+    </div>
+    <div class="fm-block">
+      <div class="fm-block-label"><span>Before you leave</span><span id="fmcCheckState" class="req">required</span></div>
+      <div class="fm-checklist" id="fmcChecklist"></div>
+    </div>
     <div class="fm-err" id="fmcErr"></div>
-    <button class="fm-btn fm-btn-xl fm-btn-done" id="fmcSubmitBtn" onclick="fmSubmitComplete()">✓ Complete &amp; Go to Next House</button>
+    <button class="fm-btn fm-btn-xl fm-btn-done" id="fmcSubmitBtn" onclick="fmSubmitComplete()" disabled>Take payment to finish</button>
     <button class="fm-mini-link" onclick="fmCloseComplete()">Cancel</button>
   </div>
 </div>
@@ -286,42 +276,45 @@
 <div id="toast"></div>
 <script>
 /* ════════════════════════════════════════════════════════════════════
-   Evergreen Field Mode — standalone PWA (Phase 1)
-   Self-contained: shares the staff session + backend with the admin portal.
+   Evergreen Field Mode — standalone PWA (Phase 2 hardening)
    ════════════════════════════════════════════════════════════════════ */
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
-const SESSION_KEY = 'eg_staff_session';   // shared with the main portal (same origin)
+const SESSION_KEY = 'eg_staff_session';
+const STATE_KEY   = 'evg_field_state_v1';
+const START_CHECKLIST = ['Mower full on gas','Gas cans full','Leaf blower','Mower','Whacker','String','Knife','Water'];
+const END_CHECKLIST   = ['Walked the yard','Closed all gates','Leaf blowed'];
 
-// ── Auth + data state ──
 let adminToken='', adminName='', adminEmail='', adminRole='employee', adminCrews='';
-let allBookings=[], allCustomers=[];
-let _clockInTime=null, _fmTimerInt=null, _fmSyncInt=null;
+let allBookings=[], allCustomers=[], _savedOrderKeys=null;
+let _clockInTime=null, _clockOutTime=null, _clockedOut=false, _fmTimerInt=null, _fmSyncInt=null;
+let _fmStarted=false, _fmViewIdx=null, _fmCashTotal=0, _fmBilledTotal=0, _fmSkipped={}, _startChkState=[];
+// complete-sheet state
+let _fmcStop=null, _fmcRowIdx=-1, _fmcPayType='invoice', _fmcCash=false, _fmcInvoiceSent=false, _fmcBase=0, _fmcAddons=[], _fmcPhotos=[], _fmcEndChk={};
 
-// ── Field-mode session state ──
-let _fmStarted=false, _fmViewIdx=null, _fmCashTotal=0, _fmBilledTotal=0, _fmSkipped={};
-let _fmcStop=null, _fmcRowIdx=-1, _fmcIsCashCust=false, _fmcCash=false, _fmcBase=0, _fmcAddons=[], _fmcPhotos=[];
-
-/* ───────── Helpers (mirrors of the portal's) ───────── */
+/* ───────── Helpers ───────── */
 function esc(s){ return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function todayISOStr(){ const t=new Date(); return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); }
 function dateOf(b){ const raw=b.serviceDate||b.serviceDateRaw||''; if(!raw) return ''; const s=String(raw).trim(); if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; const d=new Date(s); if(isNaN(d)) return s; return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function isDone(b){ if(b.rowCompleted) return true; const d=String(b.done||''); return d.includes('Done')||d.startsWith('✓'); }
 function _fmAmt(bk){ return parseFloat(String(bk.price||'0').replace(/[^0-9.]/g,''))||0; }
-function _fmIsCash(bk){ return String(bk.calendarEvent||'').toLowerCase().includes('cash') || String(bk.payMethod||'').toLowerCase().includes('cash'); }
-function mowMinutes(bk){
-  const custom=parseInt(String(bk.mowMinutes||bk.customMowMins||'')); if(custom>0) return custom;
-  const n=String(bk.notes||'').toLowerCase(), freq=String(bk.frequency||'').toLowerCase();
-  if(freq.includes('quote')) return 15;
-  const m=n.match(/lot[:\s]+([\d.]+)\s*ac/i);
-  if(m){ const a=parseFloat(m[1]); if(a>0) return Math.min(120, Math.max(25, Math.round(20+a*45))); }
-  return 40;
+// Payment type: 'cash' | 'autopay' (card on file, auto-bills) | 'invoice' (card pay-after, needs invoice)
+function _payType(bk){
+  const s=(String(bk.payMethod||'')+' '+String(bk.calendarEvent||'')).toLowerCase();
+  if(s.includes('cash')) return 'cash';
+  if((s.includes('auto')||s.includes('stripe')) && !s.includes('not paid') && !s.includes('pending')) return 'autopay';
+  return 'invoice';
 }
+function mowMinutes(bk){ const c=parseInt(String(bk.mowMinutes||bk.customMowMins||'')); if(c>0) return c; const n=String(bk.notes||'').toLowerCase(); if(String(bk.frequency||'').toLowerCase().includes('quote')) return 15; const m=n.match(/lot[:\s]+([\d.]+)\s*ac/i); if(m){ const a=parseFloat(m[1]); if(a>0) return Math.min(120,Math.max(25,Math.round(20+a*45))); } return 40; }
 function parseServices(str){ return String(str||'').split(';').map(s=>s.trim()).filter(Boolean).map(s=>{ const m=s.match(/^(.*?):\s*\$?([\d.]+)\s*$/); return m?{name:m[1].trim(),price:parseFloat(m[2])||0}:null; }).filter(s=>s&&s.name&&s.price>0); }
 function customerServicesFor(email){ const em=String(email||'').toLowerCase().trim(); if(!em) return []; const c=(allCustomers||[]).find(x=>String(x.Email||'').toLowerCase().trim()===em); return parseServices(c?(c.Services||''):''); }
 function _fmMapsUrl(bk){ return 'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent((bk.address||'')+(bk.zip?', '+bk.zip:'')+', FL'); }
-let _toastT=null;
-function showToast(msg){ const t=document.getElementById('toast'); if(!t) return; t.textContent=msg; t.classList.add('show'); clearTimeout(_toastT); _toastT=setTimeout(()=>t.classList.remove('show'),3200); }
+let _toastT=null; function showToast(msg){ const t=document.getElementById('toast'); if(!t) return; t.textContent=msg; t.classList.add('show'); clearTimeout(_toastT); _toastT=setTimeout(()=>t.classList.remove('show'),3200); }
 function authParam(){ return 'adminToken='+encodeURIComponent(adminToken); }
+function _uuid(){ try{ if(crypto&&crypto.randomUUID) return crypto.randomUUID(); }catch(e){} return 'x'+Date.now().toString(36)+Math.random().toString(36).slice(2,10); }
+
+/* ───────── Crew assignment filter ───────── */
+function _assignedCrews(){ const set=new Set(String(adminCrews||'').toUpperCase().split(/[,\s]+/).map(s=>s.trim()).filter(Boolean)); return set; }
+function _crewOk(bk){ const set=_assignedCrews(); if(set.size===0) return true; const c=String(bk.crew||'').toUpperCase().trim(); if(!c) return true; /* unassigned visible to all */ return set.has(c); }
 
 /* ───────── Session ───────── */
 function loadSavedSession(){ try{ const raw=localStorage.getItem(SESSION_KEY); if(!raw) return null; const s=JSON.parse(raw); const exp=s.expiry||s.exp; if(!s.token||!exp) return null; if(new Date()>new Date(exp)){ localStorage.removeItem(SESSION_KEY); return null; } return {...s,expiry:exp}; }catch(e){ return null; } }
@@ -330,76 +323,88 @@ function showLoginError(m){ const el=document.getElementById('loginError'); if(!
 
 /* ───────── Auth ───────── */
 async function requestCode(){
-  const email=document.getElementById('emailInput').value.trim().toLowerCase();
-  if(!email) return;
+  const email=document.getElementById('emailInput').value.trim().toLowerCase(); if(!email) return;
   const btn=document.getElementById('requestCodeBtn'); btn.disabled=true; btn.textContent='Sending…'; showLoginError('');
-  try{
-    const res=await fetch(SCRIPT_URL+'?action=admin_request_code&email='+encodeURIComponent(email));
-    const data=await res.json();
+  try{ const res=await fetch(SCRIPT_URL+'?action=admin_request_code&email='+encodeURIComponent(email)); const data=await res.json();
     if(data.success){ adminEmail=email; document.getElementById('loginStep1').style.display='none'; document.getElementById('loginStep2').style.display='block'; document.getElementById('loginMsg').textContent='Hey '+(data.firstName||'there')+'! Check your email for a 6-digit code.'; document.getElementById('codeInput').focus(); }
     else showLoginError(data.error||'Not on the staff list. Contact Hunter.');
   }catch(e){ showLoginError('Network error — try again.'); }
   finally{ btn.disabled=false; btn.textContent='Send Login Code →'; }
 }
 async function verifyCode(){
-  const code=document.getElementById('codeInput').value.trim();
-  if(code.length!==6){ showLoginError('Enter the full 6-digit code.'); return; }
+  const code=document.getElementById('codeInput').value.trim(); if(code.length!==6){ showLoginError('Enter the full 6-digit code.'); return; }
   const btn=document.getElementById('verifyBtn'); btn.disabled=true; btn.textContent='Checking…'; showLoginError('');
-  try{
-    const res=await fetch(SCRIPT_URL+'?action=admin_verify_code&email='+encodeURIComponent(adminEmail)+'&code='+encodeURIComponent(code));
-    const data=await res.json();
+  try{ const res=await fetch(SCRIPT_URL+'?action=admin_verify_code&email='+encodeURIComponent(adminEmail)+'&code='+encodeURIComponent(code)); const data=await res.json();
     if(data.success){ adminToken=data.token; adminName=data.name; adminRole=data.role||'employee'; adminCrews=data.crews||''; saveSession(adminToken,adminName,adminEmail,adminRole,adminRole==='owner'?30:7); showApp(); loadData(); }
     else { showLoginError(data.error||'Invalid code. Try again.'); document.getElementById('codeInput').value=''; document.getElementById('codeInput').focus(); }
   }catch(e){ showLoginError('Network error — try again.'); }
   finally{ btn.disabled=false; btn.textContent='Sign In →'; }
 }
 function backToEmail(){ document.getElementById('loginStep2').style.display='none'; document.getElementById('loginStep1').style.display='block'; document.getElementById('codeInput').value=''; showLoginError(''); }
-function logout(){ try{ localStorage.removeItem(SESSION_KEY); }catch(e){} adminToken=''; adminName=''; _fmStarted=false; _clockInTime=null; document.getElementById('fieldMode').classList.remove('show'); document.getElementById('loginScreen').style.display='flex'; }
+function logout(){ try{ localStorage.removeItem(SESSION_KEY); localStorage.removeItem(STATE_KEY); }catch(e){} adminToken=''; _fmStarted=false; _clockInTime=null; _clockedOut=false; document.getElementById('fieldMode').classList.remove('show'); document.getElementById('loginScreen').style.display='flex'; }
+function showApp(){ document.getElementById('loginScreen').style.display='none'; document.getElementById('fieldMode').classList.add('show'); _startTimers(); _fmRender(); }
 
-function showApp(){ document.getElementById('loginScreen').style.display='none'; document.getElementById('fieldMode').classList.add('show'); _fmShow('fmScreenStart'); _startTimers(); _fmRender(); }
+/* ───────── State persistence (resume where left off) ───────── */
+function _persist(){
+  try{ localStorage.setItem(STATE_KEY, JSON.stringify({
+    dayISO: todayISOStr(), started:_fmStarted, viewIdx:_fmViewIdx,
+    clockInTime:_clockInTime?_clockInTime.toISOString():null, clockOutTime:_clockOutTime?_clockOutTime.toISOString():null, clockedOut:_clockedOut,
+    cashTotal:_fmCashTotal, billedTotal:_fmBilledTotal, skipped:_fmSkipped, startChk:_startChkState
+  })); }catch(e){}
+}
+function _restoreState(){
+  try{
+    const raw=localStorage.getItem(STATE_KEY); if(!raw) return;
+    const s=JSON.parse(raw);
+    if(s.dayISO!==todayISOStr()){ localStorage.removeItem(STATE_KEY); return; }  // new day → fresh start
+    _fmStarted=!!s.started; _fmViewIdx=(s.viewIdx==null?null:s.viewIdx);
+    _clockInTime=s.clockInTime?new Date(s.clockInTime):null; _clockOutTime=s.clockOutTime?new Date(s.clockOutTime):null; _clockedOut=!!s.clockedOut;
+    _fmCashTotal=+s.cashTotal||0; _fmBilledTotal=+s.billedTotal||0; _fmSkipped=s.skipped||{}; _startChkState=Array.isArray(s.startChk)?s.startChk:[];
+  }catch(e){}
+}
 
 /* ───────── Data load ───────── */
 async function loadData(refreshToast){
   if(navigator.onLine===false){ _hydrateFromCache(); if(refreshToast) showToast('📴 Offline — showing saved jobs'); _fmRender(); return; }
   try{
-    const [bRes,cRes]=await Promise.all([
+    const crewQ = adminCrews ? '&crew='+encodeURIComponent(String(adminCrews).split(/[,\s]+/)[0]||'') : '';
+    const [bRes,cRes,rRes]=await Promise.all([
       fetch(SCRIPT_URL+'?action=bookings&'+authParam()).then(r=>r.json()).catch(()=>null),
-      fetch(SCRIPT_URL+'?action=customers_list&'+authParam()).then(r=>r.json()).catch(()=>null)
+      fetch(SCRIPT_URL+'?action=customers_list&'+authParam()).then(r=>r.json()).catch(()=>null),
+      fetch(SCRIPT_URL+'?action=get_route&date='+todayISOStr()+crewQ+'&'+authParam()).then(r=>r.json()).catch(()=>null)
     ]);
     if(bRes&&bRes.success&&Array.isArray(bRes.bookings)){ allBookings=bRes.bookings; try{ localStorage.setItem('evg_field_bookings', JSON.stringify(allBookings)); }catch(e){} }
-    else if(bRes&&Array.isArray(bRes)){ allBookings=bRes; }
+    else if(Array.isArray(bRes)){ allBookings=bRes; }
     if(cRes&&cRes.success&&Array.isArray(cRes.customers)){ allCustomers=cRes.customers; try{ localStorage.setItem('evg_field_customers', JSON.stringify(allCustomers)); }catch(e){} }
-    if((!bRes||!allBookings.length)) _hydrateFromCache();
+    _savedOrderKeys=_extractRouteKeys(rRes);
+    if(!allBookings.length) _hydrateFromCache();
     if(refreshToast) showToast('↻ Jobs updated');
   }catch(e){ _hydrateFromCache(); }
   _fmRender();
 }
 function _hydrateFromCache(){ try{ const b=localStorage.getItem('evg_field_bookings'); if(b) allBookings=JSON.parse(b); const c=localStorage.getItem('evg_field_customers'); if(c) allCustomers=JSON.parse(c); }catch(e){} }
+// Build an ordered list of stop keys (email|serviceDate) from a get_route response, if present.
+function _extractRouteKeys(rRes){
+  try{
+    if(!rRes||!rRes.success||!Array.isArray(rRes.routes)||!rRes.routes.length) return null;
+    const keys=[];
+    rRes.routes.forEach(rt=>{ (rt.stops||[]).forEach(st=>{ const em=String(st.email||st.Email||'').toLowerCase().trim(); const d=String(st.serviceDate||st.date||'').trim(); if(em) keys.push(em+'|'+d); }); });
+    return keys.length?keys:null;
+  }catch(e){ return null; }
+}
 
-/* ════════════════════════════════════════════════════════════════════
-   OFFLINE ACTION QUEUE + IDEMPOTENCY
-   Every server write is queued to localStorage and flushed (with retry)
-   when online. Each item carries a client-generated idempotency key so a
-   reconnect replay can never double-charge / double-complete. The backend
-   dedupes on the same key (see Phase-1 backend snippets).
-   ════════════════════════════════════════════════════════════════════ */
-const FM_QUEUE_KEY='evg_fm_sync_queue_v2';
-const FM_DONEKEYS_KEY='evg_fm_done_keys_v1';
+/* ───────── Offline queue + idempotency ───────── */
+const FM_QUEUE_KEY='evg_fm_sync_queue_v2', FM_DONEKEYS_KEY='evg_fm_done_keys_v1';
 let _fmFlushing=false;
-function _uuid(){ try{ if(crypto&&crypto.randomUUID) return crypto.randomUUID(); }catch(e){} return 'x'+Date.now().toString(36)+Math.random().toString(36).slice(2,10); }
 function _fmQueueLoad(){ try{ return JSON.parse(localStorage.getItem(FM_QUEUE_KEY)||'[]'); }catch(e){ return []; } }
 function _fmQueueSave(q){ try{ localStorage.setItem(FM_QUEUE_KEY, JSON.stringify(q)); }catch(e){} }
 function _fmDoneKeys(){ try{ return new Set(JSON.parse(localStorage.getItem(FM_DONEKEYS_KEY)||'[]')); }catch(e){ return new Set(); } }
-function _fmMarkKeyDone(k){ try{ const s=_fmDoneKeys(); s.add(k); const arr=[...s].slice(-500); localStorage.setItem(FM_DONEKEYS_KEY, JSON.stringify(arr)); }catch(e){} }
-
-// Enqueue a write. item: { kind, idemKey, method:'GET'|'POST', params|body }
-// idemKey de-dupes against (a) already-acknowledged keys and (b) items still queued.
+function _fmMarkKeyDone(k){ try{ const s=_fmDoneKeys(); s.add(k); localStorage.setItem(FM_DONEKEYS_KEY, JSON.stringify([...s].slice(-500))); }catch(e){} }
 function _fmEnqueue(item){
   if(!item.idemKey) item.idemKey=item.kind+':'+_uuid();
-  if(_fmDoneKeys().has(item.idemKey)) return false;            // already confirmed server-side
+  if(_fmDoneKeys().has(item.idemKey)) return false;
   const q=_fmQueueLoad();
-  if(q.some(x=>x.idemKey===item.idemKey)) return false;        // already waiting in queue
-  // stamp the key onto the outgoing request so the server dedupes too
+  if(q.some(x=>x.idemKey===item.idemKey)) return false;
   if(item.method==='POST'){ item.body=item.body||{}; item.body.idemKey=item.idemKey; }
   else { item.params=item.params||{}; item.params.idemKey=item.idemKey; }
   item.tries=0; q.push(item); _fmQueueSave(q); _fmUpdateSyncBadge();
@@ -418,88 +423,102 @@ async function _fmFlushQueue(){
         if(item.method==='POST') res=await fetch(SCRIPT_URL,{ method:'POST', body:JSON.stringify(item.body), headers:{'Content-Type':'application/json'} });
         else res=await fetch(SCRIPT_URL+'?'+new URLSearchParams(item.params).toString());
         if(!res.ok) throw new Error('HTTP '+res.status);
-        _fmMarkKeyDone(item.idemKey);     // server accepted (or idempotently ignored) → never resend
-        q.shift(); _fmQueueSave(q);
-      }catch(netErr){
-        item.tries=(item.tries||0)+1;
-        if(item.tries>12) q.shift();      // give up after many retries to avoid a stuck queue
-        _fmQueueSave(q); break;
-      }
+        _fmMarkKeyDone(item.idemKey); q.shift(); _fmQueueSave(q);
+      }catch(netErr){ item.tries=(item.tries||0)+1; if(item.tries>12) q.shift(); _fmQueueSave(q); break; }
     }
   } finally { _fmFlushing=false; _fmUpdateSyncBadge(); }
 }
 function _fmUpdateSyncBadge(){
   const n=_fmQueueLoad().length, online=navigator.onLine!==false;
-  document.querySelectorAll('.fm-sync').forEach(el=>{
-    if(n===0){ el.style.display='none'; return; }
-    el.style.display='';
-    if(!online){ el.className='fm-sync offline'; el.textContent='📴 '+n+' to sync'; }
-    else { el.className='fm-sync pending'; el.textContent='⏳ Syncing '+n+'…'; }
-  });
-  _updateNetBanner();
-}
-function _updateNetBanner(){
-  const b=document.getElementById('netBanner'); if(!b) return;
-  const n=_fmQueueLoad().length;
-  if(navigator.onLine===false){ b.className='show'; b.textContent='📴 Offline — your work is being saved and will sync automatically'+(n?(' ('+n+' pending)'):''); }
-  else if(n>0){ b.className='show'; b.style.background='#15803d'; b.textContent='⏳ Syncing '+n+' update'+(n!==1?'s':'')+'…'; }
-  else { b.className=''; b.style.background='#b45309'; }
+  document.querySelectorAll('.fm-sync').forEach(el=>{ if(n===0){ el.style.display='none'; return; } el.style.display=''; if(!online){ el.className='fm-sync offline'; el.textContent='📴 '+n+' to sync'; } else { el.className='fm-sync pending'; el.textContent='⏳ Syncing '+n+'…'; } });
+  const b=document.getElementById('netBanner'); if(b){ if(navigator.onLine===false){ b.className='show'; b.style.background='#b45309'; b.textContent='📴 Offline — work is saved and will sync automatically'+(n?(' ('+n+' pending)'):''); } else if(n>0){ b.className='show'; b.style.background='#15803d'; b.textContent='⏳ Syncing '+n+' update'+(n!==1?'s':'')+'…'; } else b.className=''; }
 }
 
-/* ───────── Timers ───────── */
-function _fmTimerStr(){ if(!_clockInTime) return '0:00:00'; const s=Math.floor((Date.now()-_clockInTime.getTime())/1000); const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=s%60; return h+':'+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0'); }
-function _fmSyncTimerSlots(){ const on=!!_clockInTime; const jt=document.getElementById('fmJobTimer'); if(jt) jt.style.display=on?'':'none'; const slot=document.getElementById('fmStartTimerSlot'); if(slot) slot.innerHTML=on?'<div class="fm-top-timer"><span class="fm-dot"></span><span id="fmStartTimerVal">'+_fmTimerStr()+'</span></div>':''; }
+/* ───────── Timers + clock ───────── */
+function _fmTimerStr(){ if(!_clockInTime) return '0:00:00'; const end=_clockOutTime||new Date(); const s=Math.max(0,Math.floor((end.getTime()-_clockInTime.getTime())/1000)); const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=s%60; return h+':'+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0'); }
+function _fmSyncTimerSlots(){ const on=!!_clockInTime&&!_clockedOut; const jt=document.getElementById('fmJobTimer'); if(jt) jt.style.display=on?'':'none'; ['fmStartTimerSlot','fmStartTimerSlot2'].forEach(id=>{ const slot=document.getElementById(id); if(slot) slot.innerHTML=on?'<div class="fm-top-timer"><span class="fm-dot"></span><span class="fmTimerVal">'+_fmTimerStr()+'</span></div>':''; }); }
 function _startTimers(){
   if(_fmTimerInt) clearInterval(_fmTimerInt);
-  _fmTimerInt=setInterval(()=>{ if(!_clockInTime) return; const v=_fmTimerStr(); const a=document.getElementById('fmJobTimerVal'); if(a)a.textContent=v; const b=document.getElementById('fmStartTimerVal'); if(b)b.textContent=v; },1000);
+  _fmTimerInt=setInterval(()=>{ if(!_clockInTime||_clockedOut) return; const v=_fmTimerStr(); const a=document.getElementById('fmJobTimerVal'); if(a)a.textContent=v; document.querySelectorAll('.fmTimerVal').forEach(e=>e.textContent=v); },1000);
   if(_fmSyncInt) clearInterval(_fmSyncInt);
   _fmSyncInt=setInterval(_fmFlushQueue,20000);
 }
+function _autoClockOut(){
+  if(!_clockInTime||_clockedOut) return;
+  _clockOutTime=new Date(); _clockedOut=true;
+  const hours=Math.max(0,(_clockOutTime.getTime()-_clockInTime.getTime())/3600000);
+  _fmEnqueue({ kind:'clockout', idemKey:'clockout:'+todayISOStr(), method:'GET', params:{ action:'employee_clock_out', hours:hours.toFixed(2), date:todayISOStr(), markedBy:adminName||'Crew', adminToken } });
+  _fmFlushQueue(); _persist();
+}
 
-/* ───────── Stops / render ───────── */
-function _fmTodayRawJobs(){ const ds=todayISOStr(); return (allBookings||[]).filter(b=>!b.rowCancelled&&!b.rowCompleted&&dateOf(b)===ds); }
-// Phase 1: today's jobs ordered by jobTime if present (Phase 2 will pull the canonical
-// route order from the backend get_route single-source record).
+/* ───────── Stops / ordering ───────── */
+function _stopKey(bk){ return String(bk.email||'').toLowerCase().trim()+'|'+dateOf(bk); }
+function _fmTodayRawJobs(){ const ds=todayISOStr(); return (allBookings||[]).filter(b=>!b.rowCancelled&&!b.rowCompleted&&dateOf(b)===ds&&_crewOk(b)); }
 function _fmStops(){
   const jobs=_fmTodayRawJobs().map(bk=>({bk}));
-  jobs.sort((a,b)=>{ const ta=a.bk.jobTime||'99:99', tb=b.bk.jobTime||'99:99'; return ta<tb?-1:ta>tb?1:0; });
+  if(_savedOrderKeys&&_savedOrderKeys.length){
+    const pos=k=>{ const i=_savedOrderKeys.indexOf(k); return i<0?9999:i; };          // saved/custom order wins
+    jobs.sort((a,b)=>pos(_stopKey(a.bk))-pos(_stopKey(b.bk)));
+  } else {
+    jobs.sort((a,b)=>{ const ta=a.bk.jobTime||'99:99', tb=b.bk.jobTime||'99:99'; return ta<tb?-1:ta>tb?1:0; }); // else scheduled time
+  }
   return jobs;
 }
-function _fmStopKey(bk){ return String(bk.email||'').toLowerCase().trim()+'|'+(bk.serviceDate||bk.serviceDateRaw||''); }
-function _fmIsSkipped(bk){ return !!_fmSkipped[_fmStopKey(bk)]; }
+function _fmIsSkipped(bk){ return !!_fmSkipped[_stopKey(bk)]; }
 function _fmResolved(s){ return isDone(s.bk)||_fmIsSkipped(s.bk); }
 function _fmShow(screen){ document.querySelectorAll('#fieldMode .fm-screen').forEach(s=>s.classList.remove('active')); const el=document.getElementById(screen); if(el) el.classList.add('active'); }
-function fmBackToStart(){ _fmStarted=false; _fmShow('fmScreenStart'); _fmRender(); }
+function fmBackToStart(){ _fmShow('fmScreenStart'); _fmRenderStart(); }
 
+/* ───────── Render router ───────── */
 function _fmRender(){
   if(!document.getElementById('fieldMode').classList.contains('show')) return;
   const stops=_fmStops();
-  if(!_fmStarted || !stops.length){ _fmRenderStart(stops); return; }
+  if(!_fmStarted||!stops.length){ _fmRenderStart(stops); return; }
   const total=stops.length, resolved=stops.filter(_fmResolved).length;
-  if(resolved>=total){ _fmRenderDone(stops); return; }
+  if(resolved>=total){ _autoClockOut(); _fmRenderDone(stops); return; }
   let idx=_fmViewIdx;
   if(idx==null||idx<0||idx>=total||_fmResolved(stops[idx])) idx=stops.findIndex(s=>!_fmResolved(s));
-  _fmViewIdx=idx; _fmRenderJob(stops,idx);
+  _fmViewIdx=idx; _persist(); _fmRenderJob(stops,idx);
 }
-function _fmRenderStart(stops){
+function _fmRenderStart(){
   _fmShow('fmScreenStart');
   const hr=new Date().getHours(); const greet=hr<12?'Good morning':hr<17?'Good afternoon':'Good evening';
   document.getElementById('fmGreet').textContent=greet+', '+((adminName||'').split(' ')[0]||'crew');
   document.getElementById('fmStartDate').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
   const raw=_fmTodayRawJobs(), n=raw.length;
   document.getElementById('fmStartCount').textContent=n;
-  const total=raw.reduce((s,b)=>s+_fmAmt(b),0), cashN=raw.filter(b=>_fmIsCash(b)).length;
-  document.getElementById('fmStartSub').textContent=n?('~$'+total.toFixed(0)+' on the books'+(cashN?' · '+cashN+' cash stop'+(cashN!==1?'s':''):'')):'No jobs scheduled for today.';
-  const btn=document.getElementById('fmStartBtn'); if(btn){ btn.style.display=n?'':'none'; btn.textContent=_clockInTime?'▶ Continue Route':'🟢 Start My Route'; }
+  const total=raw.reduce((s,b)=>s+_fmAmt(b),0), cashN=raw.filter(b=>_payType(b)==='cash').length;
+  document.getElementById('fmStartSub').textContent=n?('~$'+total.toFixed(0)+' on the books'+(cashN?' · '+cashN+' cash stop'+(cashN!==1?'s':''):'')):'No jobs scheduled'+(adminCrews?(' for crew '+adminCrews):'')+' today.';
+  const btn=document.getElementById('fmStartBtn'); if(btn){ btn.style.display=n?'':'none'; btn.textContent=_clockInTime&&!_clockedOut?'▶ Continue Route':'🟢 Start My Route'; }
   _fmSyncTimerSlots();
 }
-function fmStart(){ if(!_clockInTime) _clockInTime=new Date(); _fmStarted=true; _fmViewIdx=null; _fmRender(); }
 
+/* ───────── Start-of-route checklist ───────── */
+function fmStartTapped(){
+  // already clocked in & gear confirmed earlier today → jump straight back into the route
+  if(_clockInTime&&!_clockedOut&&_startChkState.length===START_CHECKLIST.length&&_startChkState.every(Boolean)){ _fmStarted=true; _persist(); _fmRender(); return; }
+  if(_startChkState.length!==START_CHECKLIST.length) _startChkState=START_CHECKLIST.map(()=>false);
+  _renderStartChecklist(); _fmShow('fmScreenChecklist'); _fmSyncTimerSlots();
+}
+function _renderStartChecklist(){
+  const wrap=document.getElementById('fmStartChecklist');
+  wrap.innerHTML=START_CHECKLIST.map((label,i)=>'<button class="fm-check'+(_startChkState[i]?' on':'')+'" onclick="_toggleStartChk('+i+')"><span class="box">✓</span><span>'+esc(label)+'</span></button>').join('');
+  const all=_startChkState.length===START_CHECKLIST.length&&_startChkState.every(Boolean);
+  const btn=document.getElementById('fmStartGoBtn'); btn.disabled=!all; btn.textContent=all?'Start Working →':'Confirm all gear to start →';
+}
+function _toggleStartChk(i){ _startChkState[i]=!_startChkState[i]; _persist(); _renderStartChecklist(); }
+function fmBeginRoute(){
+  if(!(_startChkState.length===START_CHECKLIST.length&&_startChkState.every(Boolean))) return;
+  if(!_clockInTime){ _clockInTime=new Date(); _clockedOut=false; _clockOutTime=null; }
+  _fmEnqueue({ kind:'startchk', idemKey:'startchk:'+todayISOStr(), method:'GET', params:{ action:'log_checklist', type:'start_route', date:todayISOStr(), crew:adminCrews||'', by:adminName||'Crew', items:JSON.stringify(START_CHECKLIST), adminToken } });
+  _fmFlushQueue();
+  _fmStarted=true; _fmViewIdx=null; _persist(); _fmRender();
+}
+
+/* ───────── Job card ───────── */
 function _fmRenderJob(stops,idx){
   _fmShow('fmScreenJob');
-  const total=stops.length;
-  const doneCount=stops.filter(s=>isDone(s.bk)).length;
-  const skippedCount=stops.filter(s=>!isDone(s.bk)&&_fmIsSkipped(s.bk)).length;
+  const total=stops.length, doneCount=stops.filter(s=>isDone(s.bk)).length, skippedCount=stops.filter(s=>!isDone(s.bk)&&_fmIsSkipped(s.bk)).length;
   const stop=stops[idx]; if(!stop){ _fmRender(); return; }
   const bk=stop.bk;
   document.getElementById('fmStopPos').textContent=idx+1;
@@ -507,15 +526,15 @@ function _fmRenderJob(stops,idx){
   document.getElementById('fmDoneCount').textContent=doneCount+' done'+(skippedCount?' · '+skippedCount+' skipped':'');
   document.getElementById('fmProgressFill').style.width=Math.round(((doneCount+skippedCount)/total)*100)+'%';
   _fmUpdateTotalsChip();
-  const amt=_fmAmt(bk), isCash=_fmIsCash(bk), done=isDone(bk), skipped=_fmIsSkipped(bk);
-  const mow=mowMinutes(bk); const lotM=String(bk.notes||'').match(/lot:\s*([\d.]+)ac/i);
+  const amt=_fmAmt(bk), pt=_payType(bk), done=isDone(bk), skipped=_fmIsSkipped(bk), mow=mowMinutes(bk);
+  const lotM=String(bk.notes||'').match(/lot:\s*([\d.]+)ac/i);
   let pills='';
-  if(amt) pills+='<span class="fm-pill amt">$'+amt.toFixed(0)+' '+(isCash?'cash':'card')+'</span>';
+  if(amt) pills+='<span class="fm-pill amt">$'+amt.toFixed(0)+' '+(pt==='cash'?'cash':pt==='autopay'?'autopay':'invoice')+'</span>';
   if(bk.frequency) pills+='<span class="fm-pill muted">'+esc(bk.frequency)+'</span>';
+  if(bk.crew) pills+='<span class="fm-pill muted">Crew '+esc(bk.crew)+'</span>';
   if(lotM) pills+='<span class="fm-pill">📐 '+lotM[1]+' ac</span>';
   pills+='<span class="fm-pill muted">⏱ ~'+mow+'m</span>';
-  if(done) pills+='<span class="fm-pill">✓ Done</span>';
-  else if(skipped) pills+='<span class="fm-pill warn">⤼ Skipped: '+esc(_fmSkipped[_fmStopKey(bk)]||'follow up')+'</span>';
+  if(done) pills+='<span class="fm-pill">✓ Done</span>'; else if(skipped) pills+='<span class="fm-pill warn">⤼ Skipped</span>';
   const em=String(bk.email||'').toLowerCase().trim();
   const cust=(allCustomers||[]).find(c=>String(c.Email||'').toLowerCase().trim()===em);
   const notes=(cust&&String(cust.Notes||'').trim())||String(bk.notes||'').replace(/\blot:\s*[\d.]+ac\b/gi,'').replace(/\s*\|\s*$/,'').trim();
@@ -523,53 +542,48 @@ function _fmRenderJob(stops,idx){
   const phone=String(bk.phone||'').trim();
   const phoneRow=phone?'<a class="fm-btn fm-btn-sm fm-btn-ghost" href="tel:'+esc(phone.replace(/[^0-9+]/g,''))+'">📞 Call '+esc(bk.name?bk.name.split(' ')[0]:'customer')+'</a>':'';
   document.getElementById('fmJobBody').innerHTML=
-    '<div class="fm-card"><div class="fm-card-stopno">'+(idx+1)+'</div>'+
-    '<div class="fm-card-name">'+esc(bk.name||'Customer')+'</div>'+
-    '<div class="fm-card-addr">📍 '+esc(bk.address||'—')+(bk.zip?', '+esc(bk.zip):'')+'</div>'+
-    '<div class="fm-pills">'+pills+'</div>'+noteHtml+
+    '<div class="fm-card"><div class="fm-card-stopno">'+(idx+1)+'</div><div class="fm-card-name">'+esc(bk.name||'Customer')+'</div>'+
+    '<div class="fm-card-addr">📍 '+esc(bk.address||'—')+(bk.zip?', '+esc(bk.zip):'')+'</div><div class="fm-pills">'+pills+'</div>'+noteHtml+
     '<div class="fm-card-actions"><button class="fm-btn fm-btn-lg fm-btn-nav" onclick="fmNavigate('+idx+')">🧭 Navigate Here</button>'+
     '<div class="fm-secondary-row">'+phoneRow+'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmRemainingMap()">🗺 Remaining</button></div></div></div>'+
-    '<div class="fm-jobnav"><button onclick="fmPrevStop()" '+(idx===0?'disabled':'')+'>‹ Prev</button>'+
-    '<button onclick="fmNextStop()" '+(idx>=total-1?'disabled':'')+'>Next ›</button></div>';
-  const doneBtn=document.getElementById('fmDoneBtn');
-  if(doneBtn){ doneBtn.style.display=(done||skipped)?'none':''; doneBtn.textContent=(idx>=total-1)?'✓ Done — Finish Route':'✓ Done — Collect & Next'; }
+    '<div class="fm-jobnav"><button onclick="fmPrevStop()" '+(idx===0?'disabled':'')+'>‹ Prev</button><button onclick="fmNextStop()" '+(idx>=total-1?'disabled':'')+'>Next ›</button></div>';
+  const doneBtn=document.getElementById('fmDoneBtn'); if(doneBtn){ doneBtn.style.display=(done||skipped)?'none':''; doneBtn.textContent=(idx>=total-1)?'✓ Done — Finish Route':'✓ Done — Collect & Next'; }
   _fmSyncTimerSlots();
 }
 function _fmUpdateTotalsChip(){ const el=document.getElementById('fmTotalsChip'); if(el) el.innerHTML='Collected <b>$'+(_fmCashTotal||0).toFixed(0)+'</b> cash · Billed <b>$'+(_fmBilledTotal||0).toFixed(0)+'</b> today'; }
 function fmNavigate(idx){ const s=_fmStops(), bk=s[idx]&&s[idx].bk; if(!bk) return; window.open(_fmMapsUrl(bk),'_blank'); }
 function fmRemainingMap(){ const left=_fmStops().filter(s=>!_fmResolved(s)).map(s=>s.bk); if(!left.length){ showToast('No stops left.'); return; } const addrs=left.map(bk=>encodeURIComponent((bk.address||'')+(bk.zip?', '+bk.zip:'')+', FL')); let url='https://www.google.com/maps/dir/?api=1&travelmode=driving&destination='+addrs[addrs.length-1]; const mids=addrs.slice(0,-1).slice(0,9); if(mids.length) url+='&waypoints='+mids.join('|'); window.open(url,'_blank'); }
-function fmPrevStop(){ const s=_fmStops(); if(_fmViewIdx>0){ _fmViewIdx--; _fmRenderJob(s,_fmViewIdx); } }
-function fmNextStop(){ const s=_fmStops(); if(_fmViewIdx<s.length-1){ _fmViewIdx++; _fmRenderJob(s,_fmViewIdx); } }
+function fmPrevStop(){ const s=_fmStops(); if(_fmViewIdx>0){ _fmViewIdx--; _persist(); _fmRenderJob(s,_fmViewIdx); } }
+function fmNextStop(){ const s=_fmStops(); if(_fmViewIdx<s.length-1){ _fmViewIdx++; _persist(); _fmRenderJob(s,_fmViewIdx); } }
 function fmSkip(){ fmNextStop(); }
 
-/* ───────── Skip / couldn't service ───────── */
+/* ───────── Skip ───────── */
 function fmOpenSkip(){ const stop=_fmStops()[_fmViewIdx]; if(!stop) return; document.getElementById('fmSkipErr').style.display='none'; document.getElementById('fmSkipTitle').textContent="Couldn't service "+(stop.bk.name||'this stop'); document.getElementById('fmSkipSheet').style.display='flex'; }
 function fmCloseSkip(){ document.getElementById('fmSkipSheet').style.display='none'; }
 function fmPromptSkipOther(){ const r=prompt("Reason you couldn't service this stop:"); if(r&&r.trim()) fmRecordSkip(r.trim()); }
 function fmRecordSkip(reason){
   const stop=_fmStops()[_fmViewIdx]; if(!stop){ fmCloseSkip(); return; }
-  const bk=stop.bk;
-  const rowIndex=bk._rowIndex||((allBookings||[]).indexOf(bk)+2);
-  const svcDate=bk.serviceDate||bk.serviceDateRaw||'';
+  const bk=stop.bk, rowIndex=bk._rowIndex||((allBookings||[]).indexOf(bk)+2), svcDate=dateOf(bk);
   const today=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
-  const existing=String(bk.employeeNotes||'').trim();
-  const note=(existing?existing+' | ':'')+"⚠️ Couldn't service ("+reason+') — '+today+' by '+(adminName||'crew');
+  const note=(String(bk.employeeNotes||'').trim()?bk.employeeNotes+' | ':'')+"⚠️ Couldn't service ("+reason+') — '+today+' by '+(adminName||'crew');
   _fmEnqueue({ kind:'skip', idemKey:'skip:'+rowIndex+':'+svcDate+':'+_uuid(), method:'GET', params:{ action:'set_employee_note', rowIndex, note, adminToken } });
-  _fmFlushQueue();
-  bk.employeeNotes=note; _fmSkipped[_fmStopKey(bk)]=reason;
-  fmCloseSkip(); showToast('⤼ Skipped: '+reason+' — flagged for follow-up'); _fmViewIdx=null; _fmRender();
+  _fmFlushQueue(); bk.employeeNotes=note; _fmSkipped[_stopKey(bk)]=reason; _persist();
+  fmCloseSkip(); showToast('⤼ Skipped: '+reason); _fmViewIdx=null; _fmRender();
 }
 
 /* ───────── Complete sheet ───────── */
 function fmOpenComplete(){
   const stop=_fmStops()[_fmViewIdx]; if(!stop) return;
   const bk=stop.bk;
-  _fmcStop=stop; _fmcRowIdx=(allBookings||[]).indexOf(bk); _fmcIsCashCust=_fmIsCash(bk); _fmcCash=_fmcIsCashCust; _fmcBase=_fmAmt(bk); _fmcPhotos=[];
+  _fmcStop=stop; _fmcRowIdx=(allBookings||[]).indexOf(bk); _fmcPayType=_payType(bk);
+  _fmcCash=false; _fmcInvoiceSent=false; _fmcBase=_fmAmt(bk); _fmcPhotos=[];
   _fmcAddons=(customerServicesFor(bk.email)||[]).map(s=>({name:s.name,price:+s.price||0,on:false}));
+  _fmcEndChk={}; END_CHECKLIST.forEach(l=>_fmcEndChk[l]=false);
+  if(_fmcPayType==='cash') _fmcEndChk['Collected cash']=false;
   document.getElementById('fmcTitle').textContent='Finish '+(bk.name||'job');
   document.getElementById('fmcErr').style.display='none';
-  document.getElementById('fmcSubmitBtn').disabled=false;
-  _fmcRenderAddons(); _fmcRenderPhotos(); _fmcRenderAmount(); _fmcRenderCash();
+  document.getElementById('fmcOwnerNote').value='';
+  _fmcRenderAddons(); _fmcRenderPhotos(); _fmcRenderAmount(); _fmcRenderPay(); _fmcRenderEndChk();
   document.getElementById('fmCompleteSheet').style.display='flex';
 }
 function fmCloseComplete(){ document.getElementById('fmCompleteSheet').style.display='none'; }
@@ -581,21 +595,51 @@ function _fmcRenderAddons(){
   block.style.display='';
   wrap.innerHTML=_fmcAddons.map((a,i)=>'<button class="fm-addon-chip'+(a.on?' on':'')+'" onclick="fmToggleAddon('+i+')"><span>'+(a.on?'✓ ':'＋ ')+esc(a.name)+'</span><span class="fm-addon-price">$'+(+a.price||0).toFixed(0)+'</span></button>').join('');
 }
-function fmToggleAddon(i){ if(!_fmcAddons[i]) return; _fmcAddons[i].on=!_fmcAddons[i].on; _fmcRenderAddons(); _fmcRenderAmount(); _fmcRenderCash(); }
+function fmToggleAddon(i){ if(!_fmcAddons[i]) return; _fmcAddons[i].on=!_fmcAddons[i].on; _fmcRenderAddons(); _fmcRenderAmount(); _fmcRenderPay(); }
 function _fmcRenderAmount(){
-  const amt=_fmcGrand(); document.getElementById('fmcAmt').textContent='$'+amt.toFixed(0);
+  document.getElementById('fmcAmt').textContent='$'+_fmcGrand().toFixed(0);
   const addTot=_fmcAddonTotal();
-  document.getElementById('fmcMethod').textContent=_fmcIsCashCust
-    ?'💵 Cash — collect $'+amt.toFixed(0)+(addTot?' (incl. $'+addTot.toFixed(0)+' add-ons)':'')+'. Next visit books once collected.'
-    :'💳 On card / autopay'+(addTot?' — $'+addTot.toFixed(0)+' add-ons added':'')+'. Next visit books once billed.';
+  const m={ cash:'💵 Cash — collect from the customer.', autopay:'💳 On autopay — completing charges the card on file automatically.', invoice:'🧾 Card / pay-after — send an invoice to collect.' }[_fmcPayType];
+  document.getElementById('fmcMethod').textContent=m+(addTot?' (incl. $'+addTot.toFixed(0)+' add-ons)':'');
 }
-function fmToggleCash(){ _fmcCash=!_fmcCash; _fmcRenderCash(); }
-function _fmcRenderCash(){
-  const cashBtn=document.getElementById('fmcCashBtn');
-  if(_fmcIsCashCust){ cashBtn.style.display=''; cashBtn.className='fm-toggle-btn'+(_fmcCash?' cash-on':''); cashBtn.textContent=_fmcCash?'✓ Cash collected — tap to undo':'✗ Cash NOT collected — tap when paid'; }
-  else { cashBtn.style.display=''; cashBtn.className='fm-toggle-btn'+(_fmcCash?' cash-on':''); cashBtn.textContent=_fmcCash?'✓ Paid cash instead — tap to undo':'💵 Paid cash instead'; }
-  const submitBtn=document.getElementById('fmcSubmitBtn');
-  if(submitBtn){ const last=_fmViewIdx>=(_fmStops().length-1); submitBtn.textContent=(_fmcIsCashCust&&!_fmcCash)?'✓ Complete (unpaid — no next visit yet)':(last?'✓ Complete & Finish Route':'✓ Complete & Go to Next House'); }
+// Whether payment is satisfied for this customer type
+function _fmcPayResolved(){ if(_fmcPayType==='autopay') return true; if(_fmcPayType==='cash') return _fmcCash; return _fmcInvoiceSent; }
+function _fmcRenderPay(){
+  const wrap=document.getElementById('fmcPayControls'); const grand=_fmcGrand();
+  const state=document.getElementById('fmcPayState');
+  if(_fmcPayType==='autopay'){
+    wrap.innerHTML='<div style="background:#dcfce7;border:1.5px solid #16a34a;border-radius:12px;padding:12px;font-size:14px;font-weight:700;color:#15803d;">✅ Auto-charges $'+grand.toFixed(0)+' on complete. Hunter is emailed if it fails.</div>';
+  } else if(_fmcPayType==='cash'){
+    wrap.innerHTML='<button class="fm-toggle-btn'+(_fmcCash?' cash-on':'')+'" onclick="fmToggleCash()">'+(_fmcCash?'✓ Collected $'+grand.toFixed(0)+' cash — tap to undo':'💵 Collect $'+grand.toFixed(0)+' cash')+'</button>';
+  } else {
+    wrap.innerHTML='<button class="fm-toggle-btn '+(_fmcInvoiceSent?'sent':'invoice')+'" onclick="fmSendInvoice()" '+(_fmcInvoiceSent?'disabled':'')+'>'+(_fmcInvoiceSent?'✓ Invoice sent for $'+grand.toFixed(0):'🧾 Send invoice for $'+grand.toFixed(0)+' →')+'</button>';
+  }
+  if(state){ const ok=_fmcPayResolved(); state.textContent=ok?'✓ done':'required'; state.className=ok?'ok':'req'; }
+  _fmcUpdateSubmit();
+}
+function fmToggleCash(){ _fmcCash=!_fmcCash; if('Collected cash' in _fmcEndChk) _fmcEndChk['Collected cash']=_fmcCash; _fmcRenderPay(); _fmcRenderEndChk(); }
+function fmSendInvoice(){
+  if(_fmcInvoiceSent) return;
+  const bk=_fmcStop&&_fmcStop.bk; if(!bk) return;
+  const rowIndex=bk._rowIndex||((_fmcRowIdx>=0?_fmcRowIdx:0)+2), svcDate=dateOf(bk);
+  _fmEnqueue({ kind:'invoice', idemKey:'invoice:'+rowIndex+':'+svcDate, method:'GET', params:{ action:'send_invoice', rowIndex, email:bk.email||'', serviceDate:svcDate, amount:_fmcGrand().toFixed(2), adminToken } });
+  _fmFlushQueue(); _fmcInvoiceSent=true; showToast('🧾 Invoice queued for '+(bk.name||'customer')); _fmcRenderPay();
+}
+function _fmcRenderEndChk(){
+  const wrap=document.getElementById('fmcChecklist'); const items=Object.keys(_fmcEndChk);
+  wrap.innerHTML=items.map(l=>'<button class="fm-check'+(_fmcEndChk[l]?' on':'')+'" onclick="fmToggleEndChk(\''+l.replace(/'/g,"\\'")+'\')"><span class="box">✓</span><span>'+esc(l)+'</span></button>').join('');
+  const allChecked=items.every(l=>_fmcEndChk[l]);
+  const st=document.getElementById('fmcCheckState'); if(st){ st.textContent=allChecked?'✓ done':'required'; st.className=allChecked?'ok':'req'; }
+  _fmcUpdateSubmit();
+}
+function fmToggleEndChk(label){ _fmcEndChk[label]=!_fmcEndChk[label]; if(label==='Collected cash') _fmcCash=_fmcEndChk[label], _fmcRenderPay(); _fmcRenderEndChk(); }
+function _fmcEndChkDone(){ return Object.keys(_fmcEndChk).every(l=>_fmcEndChk[l]); }
+function _fmcCanFinish(){ return _fmcPayResolved()&&_fmcEndChkDone(); }
+function _fmcUpdateSubmit(){
+  const btn=document.getElementById('fmcSubmitBtn'); if(!btn) return;
+  const ok=_fmcCanFinish(); btn.disabled=!ok;
+  const last=_fmViewIdx>=(_fmStops().length-1);
+  btn.textContent=ok?(last?'✓ Complete & Finish Route':'✓ Complete & Go to Next House'):(!_fmcPayResolved()?'Take payment to finish':'Finish the checklist');
 }
 function fmPhotoSelected(input){ const file=input.files[0]; if(!file) return; const reader=new FileReader(); reader.onload=e=>{ _fmcPhotos.push({ b64:e.target.result.split(',')[1], fileName:file.name, mimeType:file.type, dataUrl:e.target.result }); _fmcRenderPhotos(); }; reader.readAsDataURL(file); input.value=''; }
 function fmRemovePhoto(i){ _fmcPhotos.splice(i,1); _fmcRenderPhotos(); }
@@ -604,44 +648,44 @@ function _fmcRenderPhotos(){ const list=document.getElementById('fmcPhotoList');
 async function fmSubmitComplete(){
   const bk=_fmcStop&&_fmcStop.bk; const errEl=document.getElementById('fmcErr'); const submitBtn=document.getElementById('fmcSubmitBtn');
   if(!bk){ fmCloseComplete(); return; }
+  if(!_fmcCanFinish()){ errEl.textContent='Take payment and finish the checklist first.'; errEl.style.display='block'; return; }
   submitBtn.disabled=true; submitBtn.textContent='Saving…'; errEl.style.display='none';
-  const rowIndex=bk._rowIndex||((_fmcRowIdx>=0?_fmcRowIdx:0)+2);
-  const email=bk.email||'', svcDate=bk.serviceDate||bk.serviceDateRaw||'';
+  const rowIndex=bk._rowIndex||((_fmcRowIdx>=0?_fmcRowIdx:0)+2), email=bk.email||'', svcDate=dateOf(bk), base=rowIndex+':'+svcDate;
   const selAddons=(_fmcAddons||[]).filter(a=>a.on&&a.price>0).map(a=>({name:a.name,price:a.price}));
-  const grand=_fmcGrand(), cash=_fmcCash;
-  // Stable idempotency keys: one done & one cash per job+date; add-ons keyed by content; photos by uuid.
-  const base=rowIndex+':'+svcDate;
-  const doneItem={ kind:'done', idemKey:'done:'+base, method:'GET', params:{ action:'mark_done', rowIndex, email, serviceDate:svcDate, markedBy:adminName||adminEmail||'Staff', adminToken } };
-  const extraItems=[];
-  if(selAddons.length){ const tag=selAddons.map(a=>a.name+'='+a.price).join(','); extraItems.push({ kind:'addons', idemKey:'addons:'+base+':'+tag, method:'GET', params:{ action:'apply_job_addons', rowIndex, email, serviceDate:svcDate, addons:JSON.stringify(selAddons), adminToken } }); }
-  if(cash){ extraItems.push({ kind:'cash', idemKey:'cash:'+base, method:'GET', params:{ action:'mark_cash_paid', rowIndex, email, serviceDate:svcDate, adminToken, markedBy:adminName||'Crew' } }); }
-  _fmcPhotos.forEach((p,i)=>extraItems.push({ kind:'photo', idemKey:'photo:'+base+':'+_uuid(), method:'POST', body:{ action:'upload_job_photo', base64Data:p.b64, fileName:p.fileName, mimeType:p.mimeType, rowIndex, jobLabel:(bk.name||'')+' - '+svcDate+(_fmcPhotos.length>1?' ('+(i+1)+')':''), markedBy:adminName||'Crew', adminToken } }));
+  const grand=_fmcGrand(), ownerNote=String(document.getElementById('fmcOwnerNote').value||'').trim();
+  // Done action: autopay uses field_complete (marks done + charges + emails owner on fail); others mark_done.
+  const doneAction=_fmcPayType==='autopay'?'field_complete':'mark_done';
+  const doneItem={ kind:'done', idemKey:'done:'+base, method:'GET', params:{ action:doneAction, rowIndex, email, serviceDate:svcDate, amount:grand.toFixed(2), markedBy:adminName||adminEmail||'Staff', adminToken } };
+  const extra=[];
+  if(selAddons.length){ const tag=selAddons.map(a=>a.name+'='+a.price).join(','); extra.push({ kind:'addons', idemKey:'addons:'+base+':'+tag, method:'GET', params:{ action:'apply_job_addons', rowIndex, email, serviceDate:svcDate, addons:JSON.stringify(selAddons), adminToken } }); }
+  if(_fmcPayType==='cash') extra.push({ kind:'cash', idemKey:'cash:'+base, method:'GET', params:{ action:'mark_cash_paid', rowIndex, email, serviceDate:svcDate, adminToken, markedBy:adminName||'Crew' } });
+  if(ownerNote){ const noteLine='📝 '+ownerNote+' — '+(adminName||'crew'); extra.push({ kind:'note', idemKey:'note:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex, note:(String(bk.employeeNotes||'').trim()?bk.employeeNotes+' | ':'')+noteLine, adminToken } }); }
+  extra.push({ kind:'endchk', idemKey:'endck:'+base, method:'GET', params:{ action:'log_checklist', type:'end_job', date:svcDate, rowIndex, by:adminName||'Crew', items:JSON.stringify(Object.keys(_fmcEndChk)), adminToken } });
+  _fmcPhotos.forEach((p,i)=>extra.push({ kind:'photo', idemKey:'photo:'+base+':'+_uuid(), method:'POST', body:{ action:'upload_job_photo', base64Data:p.b64, fileName:p.fileName, mimeType:p.mimeType, rowIndex, jobLabel:(bk.name||'')+' - '+svcDate+(_fmcPhotos.length>1?' ('+(i+1)+')':''), markedBy:adminName||'Crew', adminToken } }));
 
   const finish=(offline)=>{
-    const todayLabel=new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
-    if(_fmcRowIdx>=0){ allBookings[_fmcRowIdx].done='✓ Done — '+todayLabel; allBookings[_fmcRowIdx].markedBy=adminName; if(selAddons.length) allBookings[_fmcRowIdx].price='$'+grand.toFixed(0); }
-    else { bk.done='✓ Done — '+todayLabel; }
-    if(cash) _fmCashTotal+=grand;
+    const lbl=new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+    if(_fmcRowIdx>=0){ allBookings[_fmcRowIdx].done='✓ Done — '+lbl; allBookings[_fmcRowIdx].markedBy=adminName; if(selAddons.length) allBookings[_fmcRowIdx].price='$'+grand.toFixed(0); } else bk.done='✓ Done — '+lbl;
+    if(_fmcPayType==='cash') _fmCashTotal+=grand;
     _fmBilledTotal+=grand;
     try{ localStorage.setItem('evg_field_bookings', JSON.stringify(allBookings)); }catch(e){}
     fmCloseComplete(); showToast(offline?'📴 Saved — will sync when back online':'✅ '+(bk.name||'Job')+' done!');
-    _fmViewIdx=null; _fmRender();
+    _fmViewIdx=null; _persist(); _fmRender();
   };
   const online=navigator.onLine!==false;
   if(online){
     try{
-      const res=await fetch(SCRIPT_URL+'?'+new URLSearchParams({...doneItem.params, idemKey:doneItem.idemKey}).toString());
+      const res=await fetch(SCRIPT_URL+'?'+new URLSearchParams(doneItem.params).toString());
       if(!res.ok) throw new Error('HTTP '+res.status);
       let data=null; try{ data=await res.json(); }catch(_p){}
-      if(data&&data.success===false){ errEl.textContent='❌ '+(data.error||'Mark done failed'); errEl.style.display='block'; submitBtn.disabled=false; _fmcRenderCash(); return; }
-      _fmMarkKeyDone(doneItem.idemKey);
-      extraItems.forEach(_fmEnqueue); _fmFlushQueue(); finish(false); return;
-    }catch(netErr){ /* fall through to offline queue */ }
+      if(data&&data.success===false){ errEl.textContent='❌ '+(data.error||'Mark done failed'); errEl.style.display='block'; submitBtn.disabled=false; _fmcUpdateSubmit(); return; }
+      _fmMarkKeyDone(doneItem.idemKey); extra.forEach(_fmEnqueue); _fmFlushQueue(); finish(false); return;
+    }catch(netErr){ /* offline fallback */ }
   }
-  _fmEnqueue(doneItem); extraItems.forEach(_fmEnqueue); _fmFlushQueue(); finish(true);
+  _fmEnqueue(doneItem); extra.forEach(_fmEnqueue); _fmFlushQueue(); finish(true);
 }
 
-/* ───────── Done screen ───────── */
+/* ───────── Done ───────── */
 function _fmRenderDone(stops){
   _fmShow('fmScreenDone');
   const total=stops.length, doneN=stops.filter(s=>isDone(s.bk)).length, skipN=stops.filter(s=>!isDone(s.bk)&&_fmIsSkipped(s.bk)).length;
@@ -650,14 +694,17 @@ function _fmRenderDone(stops){
   document.getElementById('fmDoneBilled').textContent='$'+(_fmBilledTotal||0).toFixed(0);
   document.getElementById('fmDoneSkipped').textContent=skipN?('⤼ '+skipN+' stop'+(skipN!==1?'s':'')+' skipped — flagged for follow-up'):'';
   document.getElementById('fmDoneSub').textContent=doneN+' of '+total+' stop'+(total!==1?'s':'')+' done. Nice work, '+((adminName||'').split(' ')[0]||'crew')+'!';
+  document.getElementById('fmClockSummary').textContent=(_clockInTime?('🕒 On the clock '+_fmTimerStr()+(_clockedOut?' — clocked out':'')):'');
   _fmUpdateSyncBadge(); _fmSyncTimerSlots();
 }
-function fmReviewStops(){ const s=_fmStops(); _fmStarted=true; _fmViewIdx=0; _fmRenderJob(s,0); }
+function fmReviewStops(){ const s=_fmStops(); _fmStarted=true; _fmViewIdx=0; _persist(); _fmRenderJob(s,0); }
 function fmFinishRoute(){
-  _fmFlushQueue();
-  _clockInTime=null; _fmStarted=false; _fmCashTotal=0; _fmBilledTotal=0;
-  showToast('🏁 Route finished — great work!');
-  _fmShow('fmScreenStart'); _fmRender();
+  _autoClockOut(); _fmFlushQueue();
+  showToast('🏁 Logged out — great work!');
+  // reset the day's session so a fresh start is clean
+  _fmStarted=false; _fmViewIdx=null; _clockInTime=null; _clockOutTime=null; _clockedOut=false; _fmCashTotal=0; _fmBilledTotal=0; _startChkState=[];
+  try{ localStorage.removeItem(STATE_KEY); }catch(e){}
+  _fmShow('fmScreenStart'); _fmRenderStart();
 }
 
 /* ───────── Init ───────── */
@@ -666,7 +713,7 @@ window.addEventListener('offline', _fmUpdateSyncBadge);
 window.addEventListener('DOMContentLoaded', ()=>{
   if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
   const saved=loadSavedSession();
-  if(saved){ adminToken=saved.token; adminName=saved.name; adminEmail=saved.email; adminRole=saved.role||'employee'; adminCrews=saved.crews||''; _hydrateFromCache(); showApp(); loadData(); }
+  if(saved){ adminToken=saved.token; adminName=saved.name; adminEmail=saved.email; adminRole=saved.role||'employee'; adminCrews=saved.crews||''; _hydrateFromCache(); _restoreState(); showApp(); loadData(); }
   else { document.getElementById('loginScreen').style.display='flex'; }
   _fmUpdateSyncBadge();
 });
