@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>Evergreen — Live Ops</title>
+<meta name="robots" content="noindex,nofollow"/>
+<meta name="theme-color" content="#0f2417"/>
+<link rel="apple-touch-icon" href="/field/apple-touch-icon.png"/>
+<link rel="icon" href="/field/icon-192.png"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+  :root{ --green-deep:#0f2417; --green:#15803d; --border:#e2e8f0; --muted:#64748b; --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; }
+  body{ font-family:var(--font); background:#0b1f13; color:#e8f3ec; -webkit-font-smoothing:antialiased; }
+  /* login */
+  #login{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:linear-gradient(170deg,#0f2417,#14361f 55%,#0c2a18); padding:24px; }
+  .card{ background:#fff; color:#14361f; border-radius:20px; padding:28px 24px; width:100%; max-width:380px; box-shadow:0 20px 60px rgba(0,0,0,.4); }
+  .card h1{ font-size:24px; margin:0 0 6px; } .card p{ font-size:14px; color:var(--muted); margin:0 0 14px; }
+  .inp{ width:100%; padding:13px; border:2px solid var(--border); border-radius:11px; font-size:16px; font-family:inherit; margin-bottom:10px; outline:none; }
+  .btn{ width:100%; padding:14px; border:none; border-radius:11px; background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; font-size:16px; font-weight:800; font-family:inherit; cursor:pointer; }
+  .btn:disabled{ opacity:.6; }
+  #err{ color:#dc2626; font-size:13px; margin-top:8px; display:none; }
+  /* app */
+  #app{ display:none; flex-direction:column; height:100%; }
+  header{ display:flex; align-items:center; justify-content:space-between; padding:max(12px,env(safe-area-inset-top)) 16px 12px; background:#0f2417; border-bottom:1px solid rgba(255,255,255,.08); flex-shrink:0; }
+  header .brand{ font-size:17px; font-weight:800; } header .brand small{ display:block; font-size:11px; color:#9ed8b1; font-weight:600; }
+  header .acts{ display:flex; gap:8px; align-items:center; }
+  .hbtn{ background:rgba(255,255,255,.12); color:#dcfce7; border:none; border-radius:9px; padding:8px 12px; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+  .stats{ display:flex; gap:10px; padding:12px 16px; flex-wrap:wrap; flex-shrink:0; }
+  .stat{ background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); border-radius:14px; padding:12px 16px; flex:1; min-width:120px; }
+  .stat .n{ font-size:24px; font-weight:800; } .stat .l{ font-size:11px; color:#9ed8b1; text-transform:uppercase; letter-spacing:.06em; margin-top:2px; }
+  #map{ height:42vh; min-height:280px; margin:0 16px; border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,.1); flex-shrink:0; background:#10261a; }
+  .leaflet-popup-content{ font-family:var(--font); font-size:13px; }
+  .roster{ flex:1; overflow-y:auto; padding:14px 16px 28px; }
+  .roster h2{ font-size:13px; text-transform:uppercase; letter-spacing:.07em; color:#9ed8b1; margin:0 0 10px; }
+  .crewcard{ background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); border-radius:16px; padding:14px 16px; margin-bottom:12px; cursor:pointer; }
+  .crewcard.stale{ opacity:.5; }
+  .crewhead{ display:flex; align-items:center; gap:10px; }
+  .dot{ width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .fresh{ background:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.25); } .old{ background:#f59e0b; } .dead{ background:#ef4444; }
+  .crewname{ font-size:17px; font-weight:800; }
+  .badge{ font-size:11px; font-weight:800; padding:3px 9px; border-radius:999px; background:rgba(134,239,172,.18); color:#86efac; }
+  .crewmeta{ font-size:13px; color:#cdebd9; margin-top:8px; line-height:1.6; }
+  .crewmeta b{ color:#fff; }
+  .bar{ height:7px; border-radius:999px; background:rgba(255,255,255,.12); overflow:hidden; margin-top:8px; }
+  .fill{ height:100%; background:linear-gradient(90deg,#4ade80,#22c55e); }
+  .routelist{ margin-top:10px; display:none; }
+  .routelist.open{ display:block; }
+  .rstop{ display:flex; gap:8px; align-items:baseline; font-size:13px; padding:4px 0; border-top:1px dashed rgba(255,255,255,.08); }
+  .rstop .i{ color:#9ed8b1; width:18px; } .rstop.done{ color:#86efac; } .rstop.done .nm{ text-decoration:line-through; opacity:.7; }
+  .empty{ text-align:center; color:#9ed8b1; padding:30px 16px; font-size:14px; }
+  .grow{ flex:1; }
+</style>
+</head>
+<body>
+<div id="login">
+  <div class="card">
+    <h1>🌿 Live Ops</h1>
+    <div id="step1"><p>Owner / manager access.</p>
+      <input id="email" class="inp" type="email" placeholder="Your work email" onkeydown="if(event.key==='Enter')reqCode()"/>
+      <button class="btn" id="b1" onclick="reqCode()">Send Login Code →</button></div>
+    <div id="step2" style="display:none;"><p id="msg">Enter the 6-digit code.</p>
+      <input id="code" class="inp" inputmode="numeric" maxlength="6" placeholder="000000" oninput="this.value=this.value.replace(/\D/g,'')" onkeydown="if(event.key==='Enter')verify()"/>
+      <button class="btn" id="b2" onclick="verify()">Sign In →</button></div>
+    <div id="err"></div>
+  </div>
+</div>
+
+<div id="app">
+  <header>
+    <div class="brand">🌿 Live Operations<small id="today"></small></div>
+    <div class="acts"><span class="hbtn" id="refreshState">live</span><button class="hbtn" onclick="logout()">Sign out</button></div>
+  </header>
+  <div class="stats">
+    <div class="stat"><div class="n" id="sCrews">—</div><div class="l">crews working</div></div>
+    <div class="stat"><div class="n" id="sDone">—</div><div class="l">stops done today</div></div>
+    <div class="stat"><div class="n" id="sLeft">—</div><div class="l">stops remaining</div></div>
+    <div class="stat"><div class="n" id="sHours">—</div><div class="l">hours on clock now</div></div>
+  </div>
+  <div id="map"></div>
+  <div class="roster"><h2 id="rosterTitle">Crews</h2><div id="rosterList"></div></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const SCRIPT_URL='https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
+const SESSION_KEY='eg_staff_session';
+let token='', myEmail='', myName='', myRole='', myCrews='';
+let map=null, markers={}, _crews=[], _bookings=[], _expanded={}, _tick=null;
+const CREW_COLORS={ A:'#22c55e', B:'#3b82f6', C:'#f59e0b', D:'#a855f7' };
+
+function esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function showErr(m){ const e=document.getElementById('err'); e.textContent=m||''; e.style.display=m?'block':'none'; }
+function todayISO(){ const t=new Date(); return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); }
+function dateOf(b){ const raw=b.serviceDate||b.serviceDateRaw||''; if(!raw) return ''; const s=String(raw).trim(); if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; const d=new Date(s); if(isNaN(d)) return s; return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function isDone(b){ if(b.rowCompleted) return true; const d=String(b.done||''); return d.includes('Done')||d.startsWith('✓'); }
+function durStr(fromIso){ if(!fromIso) return '—'; const ms=Date.now()-new Date(fromIso).getTime(); if(isNaN(ms)||ms<0) return '—'; const m=Math.floor(ms/60000); return Math.floor(m/60)+'h '+(m%60)+'m'; }
+
+/* auth */
+function loadSession(){ try{ const r=localStorage.getItem(SESSION_KEY); if(!r) return null; const s=JSON.parse(r); const e=s.expiry||s.exp; if(!s.token||!e||new Date()>new Date(e)) return null; return s; }catch(e){ return null; } }
+async function reqCode(){ const em=document.getElementById('email').value.trim().toLowerCase(); if(!em) return; const b=document.getElementById('b1'); b.disabled=true; b.textContent='Sending…'; showErr('');
+  try{ const d=await(await fetch(SCRIPT_URL+'?action=admin_request_code&email='+encodeURIComponent(em))).json();
+    if(d.success){ myEmail=em; document.getElementById('step1').style.display='none'; document.getElementById('step2').style.display='block'; document.getElementById('msg').textContent='Hey '+(d.firstName||'there')+'! Check your email for a code.'; document.getElementById('code').focus(); }
+    else showErr(d.error||'Not authorized.'); }catch(e){ showErr('Network error.'); } finally{ b.disabled=false; b.textContent='Send Login Code →'; } }
+async function verify(){ const c=document.getElementById('code').value.trim(); if(c.length!==6){ showErr('Enter the 6-digit code.'); return; } const b=document.getElementById('b2'); b.disabled=true; b.textContent='Checking…'; showErr('');
+  try{ const d=await(await fetch(SCRIPT_URL+'?action=admin_verify_code&email='+encodeURIComponent(myEmail)+'&code='+encodeURIComponent(c))).json();
+    if(d.success){ const role=String(d.role||'').toLowerCase(); if(role!=='owner'&&role!=='manager'){ showErr('Owners and managers only.'); b.disabled=false; b.textContent='Sign In →'; return; }
+      token=d.token; myName=d.name; myRole=role; myCrews=d.crews||''; try{ localStorage.setItem(SESSION_KEY, JSON.stringify({token,name:myName,email:myEmail,role:myRole,crews:myCrews,expiry:new Date(Date.now()+30*864e5).toISOString()})); }catch(e){}
+      enterApp(); }
+    else { showErr(d.error||'Invalid code.'); document.getElementById('code').value=''; } }catch(e){ showErr('Network error.'); } finally{ b.disabled=false; b.textContent='Sign In →'; } }
+function logout(){ try{ localStorage.removeItem(SESSION_KEY); }catch(e){} location.reload(); }
+
+function enterApp(){
+  document.getElementById('login').style.display='none';
+  document.getElementById('app').style.display='flex';
+  document.getElementById('today').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  if(!map){
+    map=L.map('map',{ zoomControl:true, attributionControl:false }).setView([28.9,-82.4],10);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ maxZoom:19 }).addTo(map);
+  }
+  refresh();
+  setInterval(refresh, 20000);
+  if(_tick) clearInterval(_tick);
+  _tick=setInterval(updateClocks, 1000);
+}
+
+async function refresh(){
+  const rb=document.getElementById('refreshState'); rb.textContent='updating…';
+  try{
+    const [st,bk]=await Promise.all([
+      fetch(SCRIPT_URL+'?action=get_field_status&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null),
+      fetch(SCRIPT_URL+'?action=bookings&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null)
+    ]);
+    if(st&&st.success) _crews=(st.crews||[]).filter(c=>c.staleMin<=120); // hide >2h stale from the board
+    if(bk&&bk.success&&Array.isArray(bk.bookings)) _bookings=bk.bookings;
+    render();
+    rb.textContent='live · '+new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  }catch(e){ rb.textContent='offline'; }
+}
+
+function routeFor(crewLetter){
+  const t=todayISO();
+  return (_bookings||[]).filter(b=>!b.rowCancelled&&!b.rowCompleted&&dateOf(b)===t&&String(b.crew||'').toUpperCase().trim()===String(crewLetter||'').toUpperCase().trim())
+    .sort((a,b)=>{ const x=a.jobTime||'99:99', y=b.jobTime||'99:99'; return x<y?-1:x>y?1:0; });
+}
+
+function render(){
+  // stats
+  const t=todayISO();
+  const todays=(_bookings||[]).filter(b=>!b.rowCancelled&&dateOf(b)===t);
+  const doneN=todays.filter(b=>isDone(b)).length;
+  const leftN=todays.filter(b=>!isDone(b)).length;
+  document.getElementById('sCrews').textContent=_crews.length;
+  document.getElementById('sDone').textContent=doneN;
+  document.getElementById('sLeft').textContent=leftN;
+  // markers
+  Object.values(markers).forEach(m=>map.removeLayer(m)); markers={};
+  const pts=[];
+  _crews.forEach(c=>{
+    if(c.lat==null||c.lon==null) return;
+    const col=CREW_COLORS[String(c.crew||'').toUpperCase().split(/[^A-Z0-9]+/)[0]]||'#22c55e';
+    const mk=L.circleMarker([c.lat,c.lon],{ radius:11, color:'#fff', weight:2, fillColor:col, fillOpacity:.95 }).addTo(map);
+    mk.bindPopup('<b>'+esc(c.name)+'</b>'+(c.crew?' · Crew '+esc(c.crew):'')+'<br>'+(c.stopName?('📍 '+esc(c.stopName)):'—')+'<br>Stop '+(c.stopIndex||'—')+' of '+(c.totalStops||'—')+' · on clock '+durStr(c.clockIn));
+    markers[c.email]=mk; pts.push([c.lat,c.lon]);
+  });
+  if(pts.length){ try{ map.fitBounds(pts,{ padding:[40,40], maxZoom:14 }); }catch(e){} }
+  // roster
+  const list=document.getElementById('rosterList');
+  if(!_crews.length){ list.innerHTML='<div class="empty">No crews are clocked in right now.<br>They appear here once they start a route.</div>'; document.getElementById('sHours').textContent='0'; return; }
+  let totalMs=0;
+  list.innerHTML=_crews.map(c=>{
+    const crewKey=String(c.crew||'').toUpperCase().split(/[^A-Z0-9]+/)[0];
+    const col=CREW_COLORS[crewKey]||'#22c55e';
+    const freshClass=c.staleMin<=3?'fresh':c.staleMin<=15?'old':'dead';
+    if(c.clockIn) totalMs+=Math.max(0,Date.now()-new Date(c.clockIn).getTime());
+    const pct=c.totalStops?Math.round((c.doneCount/c.totalStops)*100):0;
+    const route=routeFor(crewKey);
+    const open=_expanded[c.email]?'open':'';
+    const routeHtml=route.length?route.map((b,i)=>'<div class="rstop'+(isDone(b)?' done':'')+'"><span class="i">'+(i+1)+'</span><span class="nm">'+esc(b.name||'Customer')+'</span><span class="grow"></span><span>'+esc(b.jobTime||'')+'</span></div>').join(''):'<div class="rstop">No mapped route stops for crew '+esc(crewKey||'?')+' today.</div>';
+    return '<div class="crewcard '+(c.staleMin>15?'stale':'')+'" onclick="toggle(\''+esc(c.email)+'\')">'
+      +'<div class="crewhead"><span class="dot '+freshClass+'" style="background:'+col+'"></span><span class="crewname">'+esc(c.name||'Crew')+'</span>'+(c.crew?'<span class="badge">Crew '+esc(c.crew)+'</span>':'')+'<span class="grow"></span><span class="clk" data-clk="'+esc(c.clockIn||'')+'" style="font-weight:800;">'+durStr(c.clockIn)+'</span></div>'
+      +'<div class="crewmeta">📍 '+(c.stopName?('At <b>'+esc(c.stopName)+'</b>'):'<b>Between stops</b>')+' · stop <b>'+(c.stopIndex||'—')+'</b> of <b>'+(c.totalStops||'—')+'</b>'
+      +(+c.helpers>0?(' · 🧍 +'+c.helpers+' helper'+(+c.helpers!==1?'s':'')):'')
+      +(c.staleMin>3?(' · <span style="color:#fbbf24;">last ping '+c.staleMin+'m ago</span>'):'')+'</div>'
+      +'<div class="bar"><div class="fill" style="width:'+pct+'%"></div></div>'
+      +'<div class="routelist '+open+'">'+routeHtml+'</div></div>';
+  }).join('');
+  const hrs=totalMs/3600000;
+  document.getElementById('sHours').textContent=hrs.toFixed(1);
+}
+
+function toggle(email){ _expanded[email]=!_expanded[email]; render(); const c=_crews.find(x=>x.email===email); if(c&&c.lat!=null) map.setView([c.lat,c.lon],14); }
+function updateClocks(){ document.querySelectorAll('.clk').forEach(el=>{ el.textContent=durStr(el.getAttribute('data-clk')); }); }
+
+window.addEventListener('DOMContentLoaded', ()=>{
+  const s=loadSession();
+  if(s && (String(s.role||'').toLowerCase()==='owner'||String(s.role||'').toLowerCase()==='manager')){ token=s.token; myName=s.name; myEmail=s.email; myRole=String(s.role).toLowerCase(); myCrews=s.crews||''; enterApp(); }
+  else { document.getElementById('login').style.display='flex'; }
+});
+</script>
+</body>
+</html>

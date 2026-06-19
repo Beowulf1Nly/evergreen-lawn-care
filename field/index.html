@@ -455,6 +455,32 @@ function _fmUpdateSyncBadge(){
 /* ───────── Timers + clock ───────── */
 function _fmTimerStr(){ if(!_clockInTime) return '0:00:00'; const end=_clockOutTime||new Date(); const s=Math.max(0,Math.floor((end.getTime()-_clockInTime.getTime())/1000)); const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=s%60; return h+':'+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0'); }
 function _fmSyncTimerSlots(){ const on=!!_clockInTime&&!_clockedOut; const jt=document.getElementById('fmJobTimer'); if(jt) jt.style.display=on?'':'none'; ['fmStartTimerSlot','fmStartTimerSlot2'].forEach(id=>{ const slot=document.getElementById(id); if(slot) slot.innerHTML=on?'<div class="fm-top-timer"><span class="fm-dot"></span><span class="fmTimerVal">'+_fmTimerStr()+'</span></div>':''; }); }
+// Live heartbeat → owner dashboard. Best-effort: posts position + progress while
+// clocked in and online. Geolocation is cached (maximumAge) to spare battery; if the
+// crew denies location we still report progress (just no pin).
+function _fmHeartbeat(){
+  if(!_fmStarted || _clockedOut || navigator.onLine===false || !adminToken) return;
+  const stops=_fmStops(); const total=stops.length;
+  const done=stops.filter(function(x){return isDone(x.bk);}).length;
+  const cur=stops[_fmViewIdx]||stops.find(function(x){return !_fmResolved(x);});
+  const bk=cur&&cur.bk;
+  const send=function(lat,lon){
+    const params=new URLSearchParams({ action:'update_field_status', adminToken:adminToken,
+      clockIn:_clockInTime?_clockInTime.toISOString():'', crew:adminCrews||'',
+      stopName: bk?(bk.name||''):'', stopAddr: bk?((bk.address||'')+(bk.zip?', '+bk.zip:'')):'',
+      stopIndex: cur?(stops.indexOf(cur)+1):0, totalStops: total, doneCount: done,
+      helpers: String((_helpers||[]).length) });
+    if(lat!=null){ params.set('lat', String(lat)); params.set('lon', String(lon)); }
+    fetch(SCRIPT_URL+'?'+params.toString()).catch(function(){});
+  };
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(
+      function(pos){ send(pos.coords.latitude, pos.coords.longitude); },
+      function(){ send(null,null); },
+      { enableHighAccuracy:false, timeout:8000, maximumAge:60000 }
+    );
+  } else send(null,null);
+}
 function _startTimers(){
   if(_fmTimerInt) clearInterval(_fmTimerInt);
   _fmTimerInt=setInterval(()=>{ if(!_clockInTime||_clockedOut) return; const v=_fmTimerStr(); const a=document.getElementById('fmJobTimerVal'); if(a)a.textContent=v; document.querySelectorAll('.fmTimerVal').forEach(e=>e.textContent=v); },1000);
@@ -462,7 +488,7 @@ function _startTimers(){
   _fmSyncInt=setInterval(_fmFlushQueue,20000);
   // Live route sync: pull owner's reorder/cancel/move changes while on the clock
   if(_fmPollInt) clearInterval(_fmPollInt);
-  _fmPollInt=setInterval(function(){ if(_fmStarted && navigator.onLine!==false && !_anySheetOpen()) loadData(); },30000);
+  _fmPollInt=setInterval(function(){ if(_fmStarted && navigator.onLine!==false){ _fmHeartbeat(); if(!_anySheetOpen()) loadData(); } },30000);
 }
 function _autoClockOut(){
   if(!_clockInTime||_clockedOut) return;
@@ -584,7 +610,7 @@ function _fmRenderJob(stops,idx){
     '<div class="fm-secondary-row">'+phoneRow+'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmRemainingMap()">🗺 Remaining</button></div></div></div>'+
     '<div class="fm-jobnav"><button onclick="fmPrevStop()" '+(idx===0?'disabled':'')+'>‹ Prev</button><button onclick="fmNextStop()" '+(idx>=total-1?'disabled':'')+'>Next ›</button></div>';
   const doneBtn=document.getElementById('fmDoneBtn'); if(doneBtn){ doneBtn.style.display=(done||skipped)?'none':''; doneBtn.textContent=(idx>=total-1)?'✓ Done — Finish Route':'✓ Done — Collect & Next'; }
-  _fmSyncTimerSlots();
+  _fmSyncTimerSlots(); _fmHeartbeat();
 }
 function _fmUpdateTotalsChip(){ const el=document.getElementById('fmTotalsChip'); if(!el) return; el.innerHTML='Collected <b>$'+(_fmCashTotal||0).toFixed(0)+'</b> cash'+(_isMoneyRole()?(' · Billed <b>$'+(_fmBilledTotal||0).toFixed(0)+'</b> today'):''); }
 function fmNavigate(idx){ const s=_fmStops(), bk=s[idx]&&s[idx].bk; if(!bk) return; window.open(_fmMapsUrl(bk),'_blank'); }
