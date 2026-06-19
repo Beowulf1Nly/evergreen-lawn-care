@@ -2098,17 +2098,6 @@
         <div id="q-date-error" style="color:#e53e3e;font-size:13px;margin-top:6px;display:none;">Please select a start date.</div>
       </div>
 
-      <!-- Preferred time — only shown for free quote visit (XL) flow -->
-      <div id="q-preferred-time-row" class="form-row" style="display:none;margin-top:4px;">
-        <label>Preferred Time of Day</label>
-        <select id="q-preferred-time" onchange="qState.preferredTime=this.value" style="width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:10px;font-family:inherit;font-size:14px;background:#fff;outline:none;">
-          <option value="" disabled selected>— Select a preference —</option>
-          <option value="Morning (8am–12pm)">Morning (8am–12pm)</option>
-          <option value="Afternoon (12pm–4pm)">Afternoon (12pm–4pm)</option>
-          <option value="Late Afternoon (4pm–6pm)">Late Afternoon (4pm–6pm)</option>
-          <option value="Any time works">Any time works</option>
-        </select>
-      </div>
 
       <div id="q-step3-error" style="color:#e53e3e;font-size:13px;margin-bottom:12px;display:none;"></div>
       <button class="btn-primary" onclick="quoteStep3Submit()" style="width:100%;font-size:16px;padding:16px;border:none;cursor:pointer;">
@@ -3511,7 +3500,6 @@ let qState = {
   detectedAcreage: null,
   selectedPlan: 'biweekly',
   startDate: '',
-  preferredTime: '',
   stripeCustomerId: '',
 };
 let _lotLookupPromise = null;
@@ -3856,9 +3844,6 @@ function buildStep3() {
     const calLabel = allLabels[0];
     calLabel.textContent = isXL ? 'Select a Date for Your Free Quote Visit' : 'Select Your Start Date';
   }
-  // Show preferred time picker only for XL
-  const timeRow = document.getElementById('q-preferred-time-row');
-  if (timeRow) timeRow.style.display = isXL ? 'block' : 'none';
 }
 
 function updateLotDisplay() {
@@ -4062,7 +4047,6 @@ async function submitXLQuoteVisit() {
       zip:           qState.zip,
       quoteDateRaw:  qState.startDate,
       quoteDate:     dateFmt,
-      preferredTime: qState.preferredTime || '',
     });
     fetch(SHEETS_SCRIPT_URL + '?' + params.toString(), { method: 'GET', mode: 'no-cors' }).catch(() => {});
   } catch(e) { /* fire and forget */ }
@@ -4095,11 +4079,9 @@ function buildOrderSummary() {
   if (xlSection)  xlSection.style.display  = isXL ? 'block' : 'none';
 
   if (isXL) {
-    const timePref = qState.preferredTime || 'Not specified';
     document.getElementById('quoteOrderSummary').innerHTML =
       '<div class="quote-order-row"><span>Visit Type</span><span style="font-weight:600;color:var(--green-deep)">Free On-Site Quote</span></div>' +
       '<div class="quote-order-row"><span>Date Requested</span><span style="font-weight:600;color:var(--green-deep)">' + dateFmt + '</span></div>' +
-      '<div class="quote-order-row"><span>Preferred Time</span><span style="font-weight:600;color:var(--green-deep)">' + timePref + '</span></div>' +
       '<div class="quote-order-total"><span>Cost</span><span class="quote-order-amount" style="font-size:18px;">FREE</span></div>';
     return;
   }

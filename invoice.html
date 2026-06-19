@@ -1762,7 +1762,7 @@
         </div>
 
         <!-- Row 4: optimize button (owners) / clock-in button (employees) -->
-        <button class="route-optimize-btn" id="routeOptBtn"    onclick="buildRoute()"         style="display:none;">⚡ Optimize Route</button>
+        <button class="route-optimize-btn" id="routeOptBtn"    onclick="buildRoute(true)"         style="display:none;">⚡ Optimize Route</button>
         <button class="route-optimize-btn" id="routeClockInBtn" onclick="employeeStartRoute()" style="display:none;background:linear-gradient(135deg,#15803d,#166534);">🟢 Clock In &amp; Start Route</button>
 
         <!-- Employee: active route bar (shown after clock-in) -->
@@ -7708,7 +7708,7 @@ function moveRouteStop(dateStr, crew, fromIdx, dir) {
     const _b = document.createElement('div');
     _b.id = 'routeReorderBanner';
     _b.style.cssText = 'background:#fff8e1;border:1.5px solid #fde047;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#78350f;display:flex;align-items:center;justify-content:space-between;gap:12px;';
-    _b.innerHTML = '<span>📌 Pinned stops stay fixed. ⚡ Re-optimize fills the rest around them.</span><button onclick="buildRoute()" style="background:#1a3a1a;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;">⚡ Re-optimize</button>';
+    _b.innerHTML = '<span>📌 Pinned stops stay fixed. ⚡ Re-optimize fills the rest around them.</span><button onclick="buildRoute(true)" style="background:#1a3a1a;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;">⚡ Re-optimize</button>';
     _tl.prepend(_b);
   }
 
@@ -8681,6 +8681,60 @@ function addMin(date, mins) {
 }
 
 // ── Nearest-neighbour route optimizer ────────────────────────────────────
+// ── Total straight-line length of an ordered stop list from an origin ──
+function _routeLen(arr, origin) {
+  const dd = (a, b) => (a && b && a.lat != null && b.lat != null)
+    ? haversineMiles(a.lat, a.lon, b.lat, b.lon) : 0;
+  let total = 0;
+  let prev = (origin && origin.lat != null) ? origin : null;
+  for (const s of arr) {
+    if (s && s.lat != null) { if (prev) total += dd(prev, s); prev = s; }
+  }
+  return total;
+}
+
+// ── Or-opt: relocate runs of 1–3 consecutive stops to a better position. ──
+// 2-opt cannot move a single stop out of a bad slot (only reverse segments),
+// so it gets stuck in local minima that a person beats by dragging one stop.
+// First-improvement; n is small (<60) so the O(n^2) rebuilds are instant.
+function orOptImprove(route, origin) {
+  if (!route || route.length < 3) return route;
+  let pts = route.slice();
+  const org = (origin && origin.lat != null) ? origin : null;
+  let improved = true, guard = 0;
+  while (improved && guard++ < 60) {
+    improved = false;
+    const baseLen = _routeLen(pts, org);
+    outer:
+    for (let segLen = 1; segLen <= 3 && segLen < pts.length; segLen++) {
+      for (let i = 0; i + segLen <= pts.length; i++) {
+        const seg  = pts.slice(i, i + segLen);
+        const rest = pts.slice(0, i).concat(pts.slice(i + segLen));
+        for (let j = 0; j <= rest.length; j++) {
+          const cand = rest.slice(0, j).concat(seg, rest.slice(j));
+          let same = true;
+          for (let k = 0; k < cand.length; k++) { if (cand[k] !== pts[k]) { same = false; break; } }
+          if (same) continue;
+          if (_routeLen(cand, org) + 1e-6 < baseLen) { pts = cand; improved = true; break outer; }
+        }
+      }
+    }
+  }
+  return pts;
+}
+
+// ── Combined local search: alternate 2-opt and Or-opt until neither helps. ──
+function _localSearchRoute(route, origin) {
+  let r = route;
+  for (let pass = 0; pass < 8; pass++) {
+    const before = _routeLen(r, origin);
+    r = twoOptImprove(r, origin);
+    r = orOptImprove(r, origin);
+    if (_routeLen(r, origin) + 1e-9 >= before) break; // converged
+  }
+  return r;
+}
+
 function nearestNeighbour(startCoord, stops) {
   const unvisited = [...stops];
   const route = [];
@@ -8695,10 +8749,10 @@ function nearestNeighbour(startCoord, stops) {
     cur = unvisited[best];
     unvisited.splice(best, 1);
   }
-  // 2-opt refinement: NN alone leaves crossed-over legs when there are many
-  // stops ("route all over the place"). Repeatedly un-cross segment pairs
-  // until no swap shortens the route. n is small (<60 stops) so this is instant.
-  return twoOptImprove(route, startCoord);
+  // Local search: alternate 2-opt (un-cross legs) and Or-opt (relocate 1-3
+  // stop runs) until neither shortens the route. 2-opt alone gets stuck in
+  // local minima a human beats by moving one stop — Or-opt closes that gap.
+  return _localSearchRoute(route, startCoord);
 }
 
 // ── 2-opt: iteratively reverse route segments while doing so shortens it ──
@@ -8730,7 +8784,7 @@ function twoOptImprove(route, origin) {
 }
 
 // ── MAIN: Build & render the optimized route ─────────────────────────────
-async function buildRoute() {
+async function buildRoute(forceFresh) {
   const startVal  = (document.getElementById('routeStartAddr')?.value || '').trim();
   const startTime = (document.getElementById('routeStartTime')?.value || '08:00');
   const syncCal   = false; // Calendar sync removed — use Dispatch Board tab instead
@@ -9074,8 +9128,34 @@ async function buildRoute() {
       const crewOrders = {};
       const crewKeys   = Object.keys(crewGroups).sort(); // A, B, unassigned
       for (const crew of crewKeys) {
-        const savedOrder = _prevRouteOrder[dateStr]?.[crew] || null;
+        // Fix C: explicit Optimize / Re-optimize (forceFresh) recomputes from
+        // scratch; pinned stops still hold position because they were converted
+        // to time anchors above. Passive rebuilds keep the manual order.
+        const savedOrder = forceFresh ? null : (_prevRouteOrder[dateStr]?.[crew] || null);
         crewOrders[crew] = optimizeCrewStops(crewGroups[crew], geoCache, savedOrder);
+
+        // Safety net (Fix B): never return a route longer than the user's prior
+        // manual order over the same set of stops. If the manual order is strictly
+        // shorter by the route's own distance metric, keep it — guards against any
+        // optimizer local-minimum regression.
+        const _prevBk = _prevRouteOrder[dateStr]?.[crew];
+        if (_prevBk && _prevBk.length > 1) {
+          const _coordOf = (bk) => {
+            const _c = ZIP_CITY[bk.zip] || '';
+            const _fa = (bk.address||'') + (bk.zip?', '+bk.zip:'') + (_c?', '+_c:'') + ', FL';
+            return geoCache[_fa];
+          };
+          const _man = _prevBk.map(bk => { const c = _coordOf(bk); return { bk, lat: c?.lat, lon: c?.lon }; })
+                              .filter(s => s.lat != null && s.lon != null);
+          const _opt = crewOrders[crew].filter(s => s.lat != null && s.lon != null);
+          const _sameSet = _man.length === _opt.length && _man.length > 1 &&
+                           _man.every(s => _opt.some(o => o.bk === s.bk));
+          if (_sameSet && _routeLen(_man, startCoord) + 1e-6 < _routeLen(_opt, startCoord)) {
+            _calcDist(_man);
+            const _failed = crewOrders[crew].filter(s => s.geocodeFailed);
+            crewOrders[crew] = _man.concat(_failed);
+          }
+        }
       }
 
       _routeCustomOrder[dateStr] = crewOrders;
