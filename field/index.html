@@ -790,9 +790,23 @@ function fmFinishRoute(){
 /* ───────── Init ───────── */
 window.addEventListener('online', ()=>{ _fmUpdateSyncBadge(); _fmFlushQueue(); });
 window.addEventListener('offline', _fmUpdateSyncBadge);
-document.addEventListener('visibilitychange', function(){
-  if(document.visibilityState==='visible' && _fmStarted){ _requestWake(); _fmHeartbeat(); _fmFlushQueue(); if(navigator.onLine!==false) loadData(); }
-});
+// When the app is reopened/foregrounded, force a fresh update right away.
+// iOS fires this through several events depending on cold/warm resume, so cover them all.
+function _fmResume(){
+  if(!_fmStarted) return;
+  _requestWake(); _startGeo();
+  _fmHeartbeat();                       // immediate: progress + last-known position
+  if(navigator.geolocation){            // then a fresh GPS fix → second ping (newer ts wins)
+    navigator.geolocation.getCurrentPosition(
+      function(pos){ _lastPos={ lat:pos.coords.latitude, lon:pos.coords.longitude }; _fmHeartbeat(); },
+      function(){}, { enableHighAccuracy:true, timeout:8000, maximumAge:0 });
+  }
+  _fmFlushQueue();
+  if(navigator.onLine!==false) loadData();
+}
+document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible') _fmResume(); });
+window.addEventListener('pageshow', function(){ _fmResume(); });
+window.addEventListener('focus', function(){ _fmResume(); });
 window.addEventListener('DOMContentLoaded', ()=>{
   if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
   const saved=loadSavedSession();
