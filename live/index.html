@@ -134,7 +134,7 @@ async function refresh(){
       fetch(SCRIPT_URL+'?action=bookings&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null)
     ]);
     _statusBad = !(st&&st.success);
-    if(st&&st.success) _crews=(st.crews||[]).filter(c=>c.staleMin<=120); // hide >2h stale from the board
+    if(st&&st.success) _crews=(st.crews||[]).filter(c=>c.staleMin<=120 && String(c.active)!=='0'); // hide stale + clocked-out
     if(bk&&bk.success&&Array.isArray(bk.bookings)) _bookings=bk.bookings;
     render();
     rb.textContent='live · '+new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});

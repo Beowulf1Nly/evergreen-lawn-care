@@ -475,6 +475,15 @@ function _stopGeo(){ try{ if(_geoWatch!=null && navigator.geolocation){ navigato
 // Keep the screen awake during a route so timers/GPS don't get suspended mid-route.
 async function _requestWake(){ if(_wakeLock||!_fmStarted||_clockedOut) return; try{ if('wakeLock' in navigator){ _wakeLock=await navigator.wakeLock.request('screen'); _wakeLock.addEventListener('release',function(){ _wakeLock=null; }); } }catch(e){} }
 function _releaseWake(){ try{ if(_wakeLock) _wakeLock.release(); }catch(e){} _wakeLock=null; }
+function _fmSendClockedOut(){
+  if(!adminToken || navigator.onLine===false) return;
+  try{
+    const stops=_fmStops(); const total=stops.length; const done=stops.filter(function(x){return isDone(x.bk);}).length;
+    const params=new URLSearchParams({ action:'update_field_status', adminToken:adminToken, ts:String(Date.now()), active:'0',
+      clockIn:_clockInTime?_clockInTime.toISOString():'', crew:adminCrews||'', totalStops:total, doneCount:done, helpers:String((_helpers||[]).length) });
+    fetch(SCRIPT_URL+'?'+params.toString()).catch(function(){});
+  }catch(e){}
+}
 function _fmHeartbeat(){
   if(!_fmStarted) return;
   if(_clockedOut){ _lastSync={ok:false,ts:Date.now(),msg:'clocked out'}; _renderSyncStatus(); return; }
@@ -486,7 +495,7 @@ function _fmHeartbeat(){
     const done=stops.filter(function(x){return isDone(x.bk);}).length;
     const cur=stops[_fmViewIdx]||stops.find(function(x){return !_fmResolved(x);});
     const bk=cur&&cur.bk;
-    const params=new URLSearchParams({ action:'update_field_status', adminToken:adminToken, ts:String(Date.now()),
+    const params=new URLSearchParams({ action:'update_field_status', adminToken:adminToken, ts:String(Date.now()), active:'1',
       clockIn:_clockInTime?_clockInTime.toISOString():'', crew:adminCrews||'',
       stopName: bk?(bk.name||''):'', stopAddr: bk?((bk.address||'')+(bk.zip?', '+bk.zip:'')):'',
       stopIndex: cur?(stops.indexOf(cur)+1):0, totalStops: total, doneCount: done,
@@ -526,7 +535,7 @@ function _autoClockOut(){
   const hours=Math.max(0,(_clockOutTime.getTime()-_clockInTime.getTime())/3600000);
   const _coKey='clockout:'+(_clockInTime?_clockInTime.toISOString():todayISOStr());
   _fmEnqueue({ kind:'clockout', idemKey:_coKey, method:'GET', params:{ action:'employee_clock_out', hours:hours.toFixed(2), date:todayISOStr(), markedBy:adminName||'Crew', helpers:JSON.stringify((_helpers||[]).map(function(n){return {name:n};})), adminToken } });
-  _fmFlushQueue(); _persist(); _stopGeo(); _releaseWake();
+  _fmSendClockedOut(); _fmFlushQueue(); _persist(); _stopGeo(); _releaseWake();
 }
 
 /* ───────── Stops / ordering ───────── */
