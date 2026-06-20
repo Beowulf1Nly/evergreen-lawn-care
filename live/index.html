@@ -141,10 +141,17 @@ async function refresh(){
   }catch(e){ rb.textContent='offline'; }
 }
 
-function routeFor(crewLetter){
+function routeFor(crewStr){
+  const set=new Set(String(crewStr||'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean));
   const t=todayISO();
-  return (_bookings||[]).filter(b=>!b.rowCancelled&&!b.rowCompleted&&dateOf(b)===t&&String(b.crew||'').toUpperCase().trim()===String(crewLetter||'').toUpperCase().trim())
-    .sort((a,b)=>{ const x=a.jobTime||'99:99', y=b.jobTime||'99:99'; return x<y?-1:x>y?1:0; });
+  return (_bookings||[]).filter(function(b){
+    if(b.rowCancelled||b.rowCompleted) return false;
+    if(dateOf(b)!==t) return false;
+    const bc=String(b.crew||'').toUpperCase().trim();
+    if(set.size===0) return true;   // employee with no crew assignment sees all
+    if(!bc) return true;            // unassigned job is visible to every crew
+    return set.has(bc);
+  }).sort(function(a,b){ const x=a.jobTime||'99:99', y=b.jobTime||'99:99'; return x<y?-1:x>y?1:0; });
 }
 
 function render(){
@@ -171,20 +178,23 @@ function render(){
   const list=document.getElementById('rosterList');
   if(!_crews.length){ list.innerHTML=_statusBad ? '<div class="empty">Live status couldn\'t load.<br>Make sure the updated Apps Script backend is deployed (get_field_status).</div>' : '<div class="empty">No crews are clocked in right now.<br>They appear here once a crew starts a route and allows location.</div>'; document.getElementById('sHours').textContent='0'; return; }
   let totalMs=0;
-  list.innerHTML=_crews.map(c=>{
-    const crewKey=String(c.crew||'').toUpperCase().split(/[^A-Z0-9]+/)[0];
-    const col=CREW_COLORS[crewKey]||'#22c55e';
+  list.innerHTML=_crews.map(function(c){
+    const route=routeFor(c.crew);                         // live bookings = source of truth
+    const total=route.length;
+    const done=route.filter(isDone).length;
+    const current=route.find(function(b){ return !isDone(b); });
+    const pct=total?Math.round((done/total)*100):0;
+    const crewBadge=String(c.crew||'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean).join(', ');
     const freshClass=c.staleMin<=3?'fresh':c.staleMin<=15?'old':'dead';
     if(c.clockIn){ const _ms=Date.now()-new Date(c.clockIn).getTime(); if(!isNaN(_ms)&&_ms>0) totalMs+=_ms; }
-    const pct=c.totalStops?Math.round((c.doneCount/c.totalStops)*100):0;
-    const route=routeFor(crewKey);
     const open=_expanded[c.email]?'open':'';
-    const routeHtml=route.length?route.map((b,i)=>'<div class="rstop'+(isDone(b)?' done':'')+'"><span class="i">'+(i+1)+'</span><span class="nm">'+esc(b.name||'Customer')+'</span><span class="grow"></span><span>'+esc(b.jobTime||'')+'</span></div>').join(''):'<div class="rstop">No mapped route stops for crew '+esc(crewKey||'?')+' today.</div>';
+    const where=total?(done>=total?'✅ <b>Route complete</b>':('📍 At <b>'+esc(current?current.name:'next stop')+'</b>')):'📍 <b>No stops today</b>';
+    const routeHtml=route.length?route.map(function(b,i){ return '<div class="rstop'+(isDone(b)?' done':'')+'"><span class="i">'+(i+1)+'</span><span class="nm">'+esc(b.name||'Customer')+'</span><span class="grow"></span><span>'+esc(b.jobTime||'')+'</span></div>'; }).join(''):'<div class="rstop">No stops assigned to this crew today.</div>';
     return '<div class="crewcard '+(c.staleMin>15?'stale':'')+'" onclick="toggle(\''+esc(c.email)+'\')">'
-      +'<div class="crewhead"><span class="dot '+freshClass+'" style="background:'+col+'"></span><span class="crewname">'+esc(c.name||'Crew')+'</span>'+(c.crew?'<span class="badge">Crew '+esc(c.crew)+'</span>':'')+'<span class="grow"></span><span class="clk" data-clk="'+esc(c.clockIn||'')+'" style="font-weight:800;">'+durStr(c.clockIn)+'</span></div>'
-      +'<div class="crewmeta">📍 '+(c.stopName?('At <b>'+esc(c.stopName)+'</b>'):'<b>Between stops</b>')+' · <b>'+(c.doneCount||0)+'</b> of <b>'+(c.totalStops||'—')+'</b> done'
+      +'<div class="crewhead"><span class="dot '+freshClass+'"></span><span class="crewname">'+esc(c.name||'Crew')+'</span>'+(crewBadge?'<span class="badge">Crew '+esc(crewBadge)+'</span>':'')+'<span class="grow"></span><span class="clk" data-clk="'+esc(c.clockIn||'')+'" style="font-weight:800;">'+durStr(c.clockIn)+'</span></div>'
+      +'<div class="crewmeta">'+where+' · <b>'+done+'</b> of <b>'+total+'</b> done'
       +(+c.helpers>0?(' · 🧍 +'+c.helpers+' helper'+(+c.helpers!==1?'s':'')):'')
-      +(c.staleMin>3?(' · <span style="color:#fbbf24;">last ping '+c.staleMin+'m ago</span>'):'')+'</div>'
+      +(c.staleMin>3?(' · <span style="color:#fbbf24;">⚠ last ping '+c.staleMin+'m ago</span>'):'')+'</div>'
       +'<div class="bar"><div class="fill" style="width:'+pct+'%"></div></div>'
       +'<div class="routelist '+open+'">'+routeHtml+'</div></div>';
   }).join('');
