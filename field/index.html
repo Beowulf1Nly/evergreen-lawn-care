@@ -294,7 +294,7 @@ const END_CHECKLIST   = ['Walked the yard','Closed all gates','Leaf blowed'];
 
 let adminToken='', adminName='', adminEmail='', adminRole='employee', adminCrews='';
 let allBookings=[], allCustomers=[], _savedOrderKeys=null;
-let _clockInTime=null, _clockOutTime=null, _clockedOut=false, _fmTimerInt=null, _fmSyncInt=null, _fmPollInt=null, _geoWatch=null, _lastPos=null;
+let _clockInTime=null, _clockOutTime=null, _clockedOut=false, _fmTimerInt=null, _fmSyncInt=null, _fmPollInt=null, _geoWatch=null, _lastPos=null, _wakeLock=null;
 let _fmStarted=false, _fmViewIdx=null, _fmCashTotal=0, _fmBilledTotal=0, _fmSkipped={}, _startChkState=[], _jobTimers={}, _helpers=[];
 // complete-sheet state
 let _fmcStop=null, _fmcRowIdx=-1, _fmcPayType='invoice', _fmcCash=false, _fmcInvoiceSent=false, _fmcBase=0, _fmcAddons=[], _fmcPhotos=[], _fmcEndChk={};
@@ -352,7 +352,7 @@ async function verifyCode(){
   finally{ btn.disabled=false; btn.textContent='Sign In →'; }
 }
 function backToEmail(){ document.getElementById('loginStep2').style.display='none'; document.getElementById('loginStep1').style.display='block'; document.getElementById('codeInput').value=''; showLoginError(''); }
-function logout(){ try{ localStorage.removeItem(SESSION_KEY); localStorage.removeItem(STATE_KEY); }catch(e){} if(_fmPollInt) clearInterval(_fmPollInt); _stopGeo(); adminToken=''; _fmStarted=false; _clockInTime=null; _clockedOut=false; document.getElementById('fieldMode').classList.remove('show'); document.getElementById('loginScreen').style.display='flex'; }
+function logout(){ try{ localStorage.removeItem(SESSION_KEY); localStorage.removeItem(STATE_KEY); }catch(e){} if(_fmPollInt) clearInterval(_fmPollInt); _stopGeo(); _releaseWake(); adminToken=''; _fmStarted=false; _clockInTime=null; _clockedOut=false; document.getElementById('fieldMode').classList.remove('show'); document.getElementById('loginScreen').style.display='flex'; }
 function showApp(){ document.getElementById('loginScreen').style.display='none'; document.getElementById('fieldMode').classList.add('show'); _startTimers(); _fmRender(); }
 
 /* ───────── State persistence (resume where left off) ───────── */
@@ -471,9 +471,12 @@ function _startGeo(){
   }catch(e){}
 }
 function _stopGeo(){ try{ if(_geoWatch!=null && navigator.geolocation){ navigator.geolocation.clearWatch(_geoWatch); } }catch(e){} _geoWatch=null; }
+// Keep the screen awake during a route so timers/GPS don't get suspended mid-route.
+async function _requestWake(){ if(_wakeLock||!_fmStarted||_clockedOut) return; try{ if('wakeLock' in navigator){ _wakeLock=await navigator.wakeLock.request('screen'); _wakeLock.addEventListener('release',function(){ _wakeLock=null; }); } }catch(e){} }
+function _releaseWake(){ try{ if(_wakeLock) _wakeLock.release(); }catch(e){} _wakeLock=null; }
 function _fmHeartbeat(){
   if(!_fmStarted || _clockedOut || navigator.onLine===false || !adminToken) return;
-  _startGeo();
+  _startGeo(); _requestWake();
   const stops=_fmStops(); const total=stops.length;
   const done=stops.filter(function(x){return isDone(x.bk);}).length;
   const cur=stops[_fmViewIdx]||stops.find(function(x){return !_fmResolved(x);});
@@ -501,7 +504,7 @@ function _autoClockOut(){
   const hours=Math.max(0,(_clockOutTime.getTime()-_clockInTime.getTime())/3600000);
   const _coKey='clockout:'+(_clockInTime?_clockInTime.toISOString():todayISOStr());
   _fmEnqueue({ kind:'clockout', idemKey:_coKey, method:'GET', params:{ action:'employee_clock_out', hours:hours.toFixed(2), date:todayISOStr(), markedBy:adminName||'Crew', helpers:JSON.stringify((_helpers||[]).map(function(n){return {name:n};})), adminToken } });
-  _fmFlushQueue(); _persist(); _stopGeo();
+  _fmFlushQueue(); _persist(); _stopGeo(); _releaseWake();
 }
 
 /* ───────── Stops / ordering ───────── */
@@ -569,7 +572,7 @@ function fmEmergencyEnd(){
   if(!confirm('End your route now? You\'ll be clocked out and your hours logged. Any stops left stay open for follow-up.')) return;
   _autoClockOut();
   showToast('🚨 Route ended — clocked out');
-  _fmStarted=false; _fmViewIdx=null; _persist(); _stopGeo();
+  _fmStarted=false; _fmViewIdx=null; _persist(); _stopGeo(); _releaseWake();
   _fmRenderDone(_fmStops());
 }
 function fmBeginRoute(){
@@ -787,6 +790,9 @@ function fmFinishRoute(){
 /* ───────── Init ───────── */
 window.addEventListener('online', ()=>{ _fmUpdateSyncBadge(); _fmFlushQueue(); });
 window.addEventListener('offline', _fmUpdateSyncBadge);
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState==='visible' && _fmStarted){ _requestWake(); _fmHeartbeat(); _fmFlushQueue(); if(navigator.onLine!==false) loadData(); }
+});
 window.addEventListener('DOMContentLoaded', ()=>{
   if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
   const saved=loadSavedSession();
