@@ -294,7 +294,7 @@ const END_CHECKLIST   = ['Walked the yard','Closed all gates','Leaf blowed'];
 
 let adminToken='', adminName='', adminEmail='', adminRole='employee', adminCrews='';
 let allBookings=[], allCustomers=[], _savedOrderKeys=null;
-let _clockInTime=null, _clockOutTime=null, _clockedOut=false, _fmTimerInt=null, _fmSyncInt=null, _fmPollInt=null;
+let _clockInTime=null, _clockOutTime=null, _clockedOut=false, _fmTimerInt=null, _fmSyncInt=null, _fmPollInt=null, _geoWatch=null, _lastPos=null;
 let _fmStarted=false, _fmViewIdx=null, _fmCashTotal=0, _fmBilledTotal=0, _fmSkipped={}, _startChkState=[], _jobTimers={}, _helpers=[];
 // complete-sheet state
 let _fmcStop=null, _fmcRowIdx=-1, _fmcPayType='invoice', _fmcCash=false, _fmcInvoiceSent=false, _fmcBase=0, _fmcAddons=[], _fmcPhotos=[], _fmcEndChk={};
@@ -352,7 +352,7 @@ async function verifyCode(){
   finally{ btn.disabled=false; btn.textContent='Sign In →'; }
 }
 function backToEmail(){ document.getElementById('loginStep2').style.display='none'; document.getElementById('loginStep1').style.display='block'; document.getElementById('codeInput').value=''; showLoginError(''); }
-function logout(){ try{ localStorage.removeItem(SESSION_KEY); localStorage.removeItem(STATE_KEY); }catch(e){} if(_fmPollInt) clearInterval(_fmPollInt); adminToken=''; _fmStarted=false; _clockInTime=null; _clockedOut=false; document.getElementById('fieldMode').classList.remove('show'); document.getElementById('loginScreen').style.display='flex'; }
+function logout(){ try{ localStorage.removeItem(SESSION_KEY); localStorage.removeItem(STATE_KEY); }catch(e){} if(_fmPollInt) clearInterval(_fmPollInt); _stopGeo(); adminToken=''; _fmStarted=false; _clockInTime=null; _clockedOut=false; document.getElementById('fieldMode').classList.remove('show'); document.getElementById('loginScreen').style.display='flex'; }
 function showApp(){ document.getElementById('loginScreen').style.display='none'; document.getElementById('fieldMode').classList.add('show'); _startTimers(); _fmRender(); }
 
 /* ───────── State persistence (resume where left off) ───────── */
@@ -458,26 +458,33 @@ function _fmSyncTimerSlots(){ const on=!!_clockInTime&&!_clockedOut; const jt=do
 // Live heartbeat → owner dashboard. Best-effort: posts position + progress while
 // clocked in and online. Geolocation is cached (maximumAge) to spare battery; if the
 // crew denies location we still report progress (just no pin).
+// Continuous location: watchPosition keeps _lastPos fresh as the crew drives,
+// so each heartbeat carries their latest fix (no stale one-shot caching).
+function _startGeo(){
+  if(_geoWatch!=null || !navigator.geolocation) return;
+  try{
+    _geoWatch=navigator.geolocation.watchPosition(
+      function(pos){ _lastPos={ lat:pos.coords.latitude, lon:pos.coords.longitude }; },
+      function(){},
+      { enableHighAccuracy:true, maximumAge:10000, timeout:25000 }
+    );
+  }catch(e){}
+}
+function _stopGeo(){ try{ if(_geoWatch!=null && navigator.geolocation){ navigator.geolocation.clearWatch(_geoWatch); } }catch(e){} _geoWatch=null; }
 function _fmHeartbeat(){
   if(!_fmStarted || _clockedOut || navigator.onLine===false || !adminToken) return;
+  _startGeo();
   const stops=_fmStops(); const total=stops.length;
   const done=stops.filter(function(x){return isDone(x.bk);}).length;
   const cur=stops[_fmViewIdx]||stops.find(function(x){return !_fmResolved(x);});
   const bk=cur&&cur.bk;
-  const base={ action:'update_field_status', adminToken:adminToken,
+  const params=new URLSearchParams({ action:'update_field_status', adminToken:adminToken, ts:String(Date.now()),
     clockIn:_clockInTime?_clockInTime.toISOString():'', crew:adminCrews||'',
     stopName: bk?(bk.name||''):'', stopAddr: bk?((bk.address||'')+(bk.zip?', '+bk.zip:'')):'',
     stopIndex: cur?(stops.indexOf(cur)+1):0, totalStops: total, doneCount: done,
-    helpers: String((_helpers||[]).length) };
-  const send=function(extra){ const pr=new URLSearchParams(Object.assign({}, base, extra||{})); fetch(SCRIPT_URL+'?'+pr.toString()).catch(function(){}); };
-  send(); // immediate progress ping so the crew shows on the dashboard even before/without GPS
-  if(navigator.geolocation){
-    navigator.geolocation.getCurrentPosition(
-      function(pos){ send({ lat:String(pos.coords.latitude), lon:String(pos.coords.longitude) }); },
-      function(){},
-      { enableHighAccuracy:false, timeout:8000, maximumAge:60000 }
-    );
-  }
+    helpers: String((_helpers||[]).length) });
+  if(_lastPos){ params.set('lat', String(_lastPos.lat)); params.set('lon', String(_lastPos.lon)); }
+  fetch(SCRIPT_URL+'?'+params.toString()).catch(function(){});
 }
 function _startTimers(){
   if(_fmTimerInt) clearInterval(_fmTimerInt);
@@ -486,7 +493,7 @@ function _startTimers(){
   _fmSyncInt=setInterval(_fmFlushQueue,20000);
   // Live route sync: pull owner's reorder/cancel/move changes while on the clock
   if(_fmPollInt) clearInterval(_fmPollInt);
-  _fmPollInt=setInterval(function(){ if(_fmStarted && navigator.onLine!==false){ _fmHeartbeat(); if(!_anySheetOpen()) loadData(); } },30000);
+  _fmPollInt=setInterval(function(){ if(_fmStarted && navigator.onLine!==false){ _fmHeartbeat(); if(!_anySheetOpen()) loadData(); } },20000);
 }
 function _autoClockOut(){
   if(!_clockInTime||_clockedOut) return;
@@ -494,7 +501,7 @@ function _autoClockOut(){
   const hours=Math.max(0,(_clockOutTime.getTime()-_clockInTime.getTime())/3600000);
   const _coKey='clockout:'+(_clockInTime?_clockInTime.toISOString():todayISOStr());
   _fmEnqueue({ kind:'clockout', idemKey:_coKey, method:'GET', params:{ action:'employee_clock_out', hours:hours.toFixed(2), date:todayISOStr(), markedBy:adminName||'Crew', helpers:JSON.stringify((_helpers||[]).map(function(n){return {name:n};})), adminToken } });
-  _fmFlushQueue(); _persist();
+  _fmFlushQueue(); _persist(); _stopGeo();
 }
 
 /* ───────── Stops / ordering ───────── */
@@ -562,7 +569,7 @@ function fmEmergencyEnd(){
   if(!confirm('End your route now? You\'ll be clocked out and your hours logged. Any stops left stay open for follow-up.')) return;
   _autoClockOut();
   showToast('🚨 Route ended — clocked out');
-  _fmStarted=false; _fmViewIdx=null; _persist();
+  _fmStarted=false; _fmViewIdx=null; _persist(); _stopGeo();
   _fmRenderDone(_fmStops());
 }
 function fmBeginRoute(){

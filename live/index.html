@@ -121,7 +121,7 @@ function enterApp(){
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ maxZoom:19 }).addTo(map);
   }
   refresh();
-  setInterval(refresh, 20000);
+  setInterval(refresh, 15000);
   if(_tick) clearInterval(_tick);
   _tick=setInterval(updateClocks, 1000);
 }
@@ -163,7 +163,7 @@ function render(){
     if(c.lat==null||c.lon==null) return;
     const col=CREW_COLORS[String(c.crew||'').toUpperCase().split(/[^A-Z0-9]+/)[0]]||'#22c55e';
     const mk=L.circleMarker([c.lat,c.lon],{ radius:11, color:'#fff', weight:2, fillColor:col, fillOpacity:.95 }).addTo(map);
-    mk.bindPopup('<b>'+esc(c.name)+'</b>'+(c.crew?' · Crew '+esc(c.crew):'')+'<br>'+(c.stopName?('📍 '+esc(c.stopName)):'—')+'<br>Stop '+(c.stopIndex||'—')+' of '+(c.totalStops||'—')+' · on clock '+durStr(c.clockIn));
+    mk.bindPopup('<b>'+esc(c.name)+'</b>'+(c.crew?' · Crew '+esc(c.crew):'')+'<br>'+(c.stopName?('📍 '+esc(c.stopName)):'—')+'<br>'+(c.doneCount||0)+' of '+(c.totalStops||'—')+' done · on clock '+durStr(c.clockIn));
     markers[c.email]=mk; pts.push([c.lat,c.lon]);
   });
   if(pts.length){ try{ map.fitBounds(pts,{ padding:[40,40], maxZoom:14 }); }catch(e){} }
@@ -182,7 +182,7 @@ function render(){
     const routeHtml=route.length?route.map((b,i)=>'<div class="rstop'+(isDone(b)?' done':'')+'"><span class="i">'+(i+1)+'</span><span class="nm">'+esc(b.name||'Customer')+'</span><span class="grow"></span><span>'+esc(b.jobTime||'')+'</span></div>').join(''):'<div class="rstop">No mapped route stops for crew '+esc(crewKey||'?')+' today.</div>';
     return '<div class="crewcard '+(c.staleMin>15?'stale':'')+'" onclick="toggle(\''+esc(c.email)+'\')">'
       +'<div class="crewhead"><span class="dot '+freshClass+'" style="background:'+col+'"></span><span class="crewname">'+esc(c.name||'Crew')+'</span>'+(c.crew?'<span class="badge">Crew '+esc(c.crew)+'</span>':'')+'<span class="grow"></span><span class="clk" data-clk="'+esc(c.clockIn||'')+'" style="font-weight:800;">'+durStr(c.clockIn)+'</span></div>'
-      +'<div class="crewmeta">📍 '+(c.stopName?('At <b>'+esc(c.stopName)+'</b>'):'<b>Between stops</b>')+' · stop <b>'+(c.stopIndex||'—')+'</b> of <b>'+(c.totalStops||'—')+'</b>'
+      +'<div class="crewmeta">📍 '+(c.stopName?('At <b>'+esc(c.stopName)+'</b>'):'<b>Between stops</b>')+' · <b>'+(c.doneCount||0)+'</b> of <b>'+(c.totalStops||'—')+'</b> done'
       +(+c.helpers>0?(' · 🧍 +'+c.helpers+' helper'+(+c.helpers!==1?'s':'')):'')
       +(c.staleMin>3?(' · <span style="color:#fbbf24;">last ping '+c.staleMin+'m ago</span>'):'')+'</div>'
       +'<div class="bar"><div class="fill" style="width:'+pct+'%"></div></div>'
