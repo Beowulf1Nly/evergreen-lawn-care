@@ -145,7 +145,7 @@ function routeFor(crewStr){
   const set=new Set(String(crewStr||'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean));
   const t=todayISO();
   return (_bookings||[]).filter(function(b){
-    if(b.rowCancelled||b.rowCompleted) return false;
+    if(b.rowCancelled) return false;   // keep completed jobs so they count as done
     if(dateOf(b)!==t) return false;
     const bc=String(b.crew||'').toUpperCase().trim();
     if(set.size===0) return true;   // employee with no crew assignment sees all
