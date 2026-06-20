@@ -476,32 +476,40 @@ function _stopGeo(){ try{ if(_geoWatch!=null && navigator.geolocation){ navigato
 async function _requestWake(){ if(_wakeLock||!_fmStarted||_clockedOut) return; try{ if('wakeLock' in navigator){ _wakeLock=await navigator.wakeLock.request('screen'); _wakeLock.addEventListener('release',function(){ _wakeLock=null; }); } }catch(e){} }
 function _releaseWake(){ try{ if(_wakeLock) _wakeLock.release(); }catch(e){} _wakeLock=null; }
 function _fmHeartbeat(){
-  if(!_fmStarted || _clockedOut || navigator.onLine===false || !adminToken) return;
-  _startGeo(); _requestWake();
-  const stops=_fmStops(); const total=stops.length;
-  const done=stops.filter(function(x){return isDone(x.bk);}).length;
-  const cur=stops[_fmViewIdx]||stops.find(function(x){return !_fmResolved(x);});
-  const bk=cur&&cur.bk;
-  const params=new URLSearchParams({ action:'update_field_status', adminToken:adminToken, ts:String(Date.now()),
-    clockIn:_clockInTime?_clockInTime.toISOString():'', crew:adminCrews||'',
-    stopName: bk?(bk.name||''):'', stopAddr: bk?((bk.address||'')+(bk.zip?', '+bk.zip:'')):'',
-    stopIndex: cur?(stops.indexOf(cur)+1):0, totalStops: total, doneCount: done,
-    helpers: String((_helpers||[]).length) });
-  if(_lastPos){ params.set('lat', String(_lastPos.lat)); params.set('lon', String(_lastPos.lon)); }
-  fetch(SCRIPT_URL+'?'+params.toString())
-    .then(function(r){ return r.json(); })
-    .then(function(d){ _lastSync={ ok:!!(d&&d.success===true), ts:Date.now(), msg:(d&&d.success===true)?'':((d&&d.error)||'unexpected response') }; _renderSyncStatus(); })
-    .catch(function(){ _lastSync={ ok:false, ts:Date.now(), msg:'network' }; _renderSyncStatus(); });
+  if(!_fmStarted) return;
+  if(_clockedOut){ _lastSync={ok:false,ts:Date.now(),msg:'clocked out'}; _renderSyncStatus(); return; }
+  if(!adminToken){ _lastSync={ok:false,ts:Date.now(),msg:'not signed in'}; _renderSyncStatus(); return; }
+  if(navigator.onLine===false){ _lastSync={ok:false,ts:Date.now(),msg:'offline'}; _renderSyncStatus(); return; }
+  try{
+    _startGeo(); _requestWake();
+    const stops=_fmStops(); const total=stops.length;
+    const done=stops.filter(function(x){return isDone(x.bk);}).length;
+    const cur=stops[_fmViewIdx]||stops.find(function(x){return !_fmResolved(x);});
+    const bk=cur&&cur.bk;
+    const params=new URLSearchParams({ action:'update_field_status', adminToken:adminToken, ts:String(Date.now()),
+      clockIn:_clockInTime?_clockInTime.toISOString():'', crew:adminCrews||'',
+      stopName: bk?(bk.name||''):'', stopAddr: bk?((bk.address||'')+(bk.zip?', '+bk.zip:'')):'',
+      stopIndex: cur?(stops.indexOf(cur)+1):0, totalStops: total, doneCount: done,
+      helpers: String((_helpers||[]).length) });
+    if(_lastPos){ params.set('lat', String(_lastPos.lat)); params.set('lon', String(_lastPos.lon)); }
+    if(_lastSync.ts===0){ _lastSync={ok:null,ts:Date.now(),msg:'sending'}; _renderSyncStatus(); }
+    fetch(SCRIPT_URL+'?'+params.toString())
+      .then(function(r){ return r.json(); })
+      .then(function(d){ _lastSync={ ok:!!(d&&d.success===true), ts:Date.now(), msg:(d&&d.success===true)?'':((d&&d.error)||'unexpected response') }; _renderSyncStatus(); })
+      .catch(function(e){ _lastSync={ ok:false, ts:Date.now(), msg:'network: '+((e&&e.message)||'fail') }; _renderSyncStatus(); });
+  }catch(err){ _lastSync={ok:false,ts:Date.now(),msg:'err: '+((err&&err.message)||err)}; _renderSyncStatus(); }
 }
 function _renderSyncStatus(){
   const el=document.getElementById('fmSyncStatus'); if(!el) return;
   if(!_fmStarted){ el.textContent=''; return; }
   if(_lastSync.ts===0){ el.textContent='📡 Live tracking: starting…'; el.style.color='#9ed8b1'; return; }
+  const m=_lastSync.msg||'';
   const secs=Math.max(0,Math.round((Date.now()-_lastSync.ts)/1000));
   const ago=secs<60?(secs+'s ago'):(Math.floor(secs/60)+'m ago');
   if(_lastSync.ok){ el.textContent='📡 Live tracking on · synced '+ago; el.style.color='#86efac'; }
-  else if(/missing required|unknown|not a function|no function/i.test(_lastSync.msg||'')){ el.textContent='⚠ Live tracking OFF — backend needs redeploy'; el.style.color='#fca5a5'; }
-  else { el.textContent='📡 Live: last try '+ago+(_lastSync.msg?(' · '+_lastSync.msg):''); el.style.color='#fbbf24'; }
+  else if(m==='sending'){ el.textContent='📡 sending…'; el.style.color='#9ed8b1'; }
+  else if(/missing required|unknown|not a function|no function|unexpected response/i.test(m)){ el.textContent='⚠ Live tracking OFF — redeploy the backend (Apps Script)'; el.style.color='#fca5a5'; }
+  else { el.textContent='📡 sync issue: '+m+' · '+ago; el.style.color='#fbbf24'; }
 }
 function _startTimers(){
   if(_fmTimerInt) clearInterval(_fmTimerInt);
