@@ -599,7 +599,7 @@ function fmEmergencyEnd(){
 }
 function fmBeginRoute(){
   if(!(_startChkState.length===START_CHECKLIST.length&&_startChkState.every(Boolean))) return;
-  if(!_clockInTime){ _clockInTime=new Date(); _clockedOut=false; _clockOutTime=null; }
+  if(!_clockInTime || _clockedOut){ _clockInTime=new Date(); _clockedOut=false; _clockOutTime=null; }
   _fmEnqueue({ kind:'startchk', idemKey:'startchk:'+todayISOStr(), method:'GET', params:{ action:'log_checklist', type:'start_route', date:todayISOStr(), crew:adminCrews||'', by:adminName||'Crew', items:JSON.stringify(START_CHECKLIST), adminToken } });
   _fmFlushQueue();
   _fmStarted=true; _fmViewIdx=null; _persist(); _fmRender();
@@ -617,8 +617,9 @@ function _fmRenderJob(stops,idx){
   document.getElementById('fmProgressFill').style.width=Math.round(((doneCount+skippedCount)/total)*100)+'%';
   _fmUpdateTotalsChip();
   const amt=_fmAmt(bk), pt=_payType(bk), done=isDone(bk), skipped=_fmIsSkipped(bk), mow=mowMinutes(bk);
-  // Clock starts the moment work begins; per-yard timer starts when the address/card is shown.
-  if(!_clockInTime){ _clockInTime=new Date(); _clockedOut=false; _clockOutTime=null; }
+  // Working an unresolved stop means you're clocked IN — clear any stale "clocked out"
+  // flag left over from a previously finished route (this was blocking live tracking).
+  if(!done && !skipped && (!_clockInTime || _clockedOut)){ _clockInTime=new Date(); _clockedOut=false; _clockOutTime=null; _persist(); }
   if(!done && !skipped && !_jobTimers[_stopKey(bk)]){ _jobTimers[_stopKey(bk)]=new Date().toISOString(); _persist(); }
   const lotM=String(bk.notes||'').match(/lot:\s*([\d.]+)ac/i);
   let pills='';
