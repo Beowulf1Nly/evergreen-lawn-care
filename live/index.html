@@ -88,7 +88,7 @@
 const SCRIPT_URL='https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
 const SESSION_KEY='eg_staff_session';
 let token='', myEmail='', myName='', myRole='', myCrews='';
-let map=null, markers={}, _crews=[], _bookings=[], _expanded={}, _tick=null;
+let map=null, markers={}, _crews=[], _bookings=[], _expanded={}, _tick=null, _statusBad=false;
 const CREW_COLORS={ A:'#22c55e', B:'#3b82f6', C:'#f59e0b', D:'#a855f7' };
 
 function esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -133,6 +133,7 @@ async function refresh(){
       fetch(SCRIPT_URL+'?action=get_field_status&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null),
       fetch(SCRIPT_URL+'?action=bookings&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null)
     ]);
+    _statusBad = !(st&&st.success);
     if(st&&st.success) _crews=(st.crews||[]).filter(c=>c.staleMin<=120); // hide >2h stale from the board
     if(bk&&bk.success&&Array.isArray(bk.bookings)) _bookings=bk.bookings;
     render();
@@ -168,13 +169,13 @@ function render(){
   if(pts.length){ try{ map.fitBounds(pts,{ padding:[40,40], maxZoom:14 }); }catch(e){} }
   // roster
   const list=document.getElementById('rosterList');
-  if(!_crews.length){ list.innerHTML='<div class="empty">No crews are clocked in right now.<br>They appear here once they start a route.</div>'; document.getElementById('sHours').textContent='0'; return; }
+  if(!_crews.length){ list.innerHTML=_statusBad ? '<div class="empty">Live status couldn\'t load.<br>Make sure the updated Apps Script backend is deployed (get_field_status).</div>' : '<div class="empty">No crews are clocked in right now.<br>They appear here once a crew starts a route and allows location.</div>'; document.getElementById('sHours').textContent='0'; return; }
   let totalMs=0;
   list.innerHTML=_crews.map(c=>{
     const crewKey=String(c.crew||'').toUpperCase().split(/[^A-Z0-9]+/)[0];
     const col=CREW_COLORS[crewKey]||'#22c55e';
     const freshClass=c.staleMin<=3?'fresh':c.staleMin<=15?'old':'dead';
-    if(c.clockIn) totalMs+=Math.max(0,Date.now()-new Date(c.clockIn).getTime());
+    if(c.clockIn){ const _ms=Date.now()-new Date(c.clockIn).getTime(); if(!isNaN(_ms)&&_ms>0) totalMs+=_ms; }
     const pct=c.totalStops?Math.round((c.doneCount/c.totalStops)*100):0;
     const route=routeFor(crewKey);
     const open=_expanded[c.email]?'open':'';

@@ -464,22 +464,20 @@ function _fmHeartbeat(){
   const done=stops.filter(function(x){return isDone(x.bk);}).length;
   const cur=stops[_fmViewIdx]||stops.find(function(x){return !_fmResolved(x);});
   const bk=cur&&cur.bk;
-  const send=function(lat,lon){
-    const params=new URLSearchParams({ action:'update_field_status', adminToken:adminToken,
-      clockIn:_clockInTime?_clockInTime.toISOString():'', crew:adminCrews||'',
-      stopName: bk?(bk.name||''):'', stopAddr: bk?((bk.address||'')+(bk.zip?', '+bk.zip:'')):'',
-      stopIndex: cur?(stops.indexOf(cur)+1):0, totalStops: total, doneCount: done,
-      helpers: String((_helpers||[]).length) });
-    if(lat!=null){ params.set('lat', String(lat)); params.set('lon', String(lon)); }
-    fetch(SCRIPT_URL+'?'+params.toString()).catch(function(){});
-  };
+  const base={ action:'update_field_status', adminToken:adminToken,
+    clockIn:_clockInTime?_clockInTime.toISOString():'', crew:adminCrews||'',
+    stopName: bk?(bk.name||''):'', stopAddr: bk?((bk.address||'')+(bk.zip?', '+bk.zip:'')):'',
+    stopIndex: cur?(stops.indexOf(cur)+1):0, totalStops: total, doneCount: done,
+    helpers: String((_helpers||[]).length) };
+  const send=function(extra){ const pr=new URLSearchParams(Object.assign({}, base, extra||{})); fetch(SCRIPT_URL+'?'+pr.toString()).catch(function(){}); };
+  send(); // immediate progress ping so the crew shows on the dashboard even before/without GPS
   if(navigator.geolocation){
     navigator.geolocation.getCurrentPosition(
-      function(pos){ send(pos.coords.latitude, pos.coords.longitude); },
-      function(){ send(null,null); },
+      function(pos){ send({ lat:String(pos.coords.latitude), lon:String(pos.coords.longitude) }); },
+      function(){},
       { enableHighAccuracy:false, timeout:8000, maximumAge:60000 }
     );
-  } else send(null,null);
+  }
 }
 function _startTimers(){
   if(_fmTimerInt) clearInterval(_fmTimerInt);
@@ -494,7 +492,8 @@ function _autoClockOut(){
   if(!_clockInTime||_clockedOut) return;
   _clockOutTime=new Date(); _clockedOut=true;
   const hours=Math.max(0,(_clockOutTime.getTime()-_clockInTime.getTime())/3600000);
-  _fmEnqueue({ kind:'clockout', idemKey:'clockout:'+todayISOStr(), method:'GET', params:{ action:'employee_clock_out', hours:hours.toFixed(2), date:todayISOStr(), markedBy:adminName||'Crew', helpers:JSON.stringify((_helpers||[]).map(function(n){return {name:n};})), adminToken } });
+  const _coKey='clockout:'+(_clockInTime?_clockInTime.toISOString():todayISOStr());
+  _fmEnqueue({ kind:'clockout', idemKey:_coKey, method:'GET', params:{ action:'employee_clock_out', hours:hours.toFixed(2), date:todayISOStr(), markedBy:adminName||'Crew', helpers:JSON.stringify((_helpers||[]).map(function(n){return {name:n};})), adminToken } });
   _fmFlushQueue(); _persist();
 }
 
