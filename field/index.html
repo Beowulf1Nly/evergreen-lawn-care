@@ -794,6 +794,7 @@ window.addEventListener('offline', _fmUpdateSyncBadge);
 // iOS fires this through several events depending on cold/warm resume, so cover them all.
 function _fmResume(){
   if(!_fmStarted) return;
+  _startTimers();                       // re-arm the ~20s heartbeat loop in case iOS suspended it
   _requestWake(); _startGeo();
   _fmHeartbeat();                       // immediate: progress + last-known position
   if(navigator.geolocation){            // then a fresh GPS fix → second ping (newer ts wins)
