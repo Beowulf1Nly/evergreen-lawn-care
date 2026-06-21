@@ -379,7 +379,7 @@ function _restoreState(){
 async function loadData(refreshToast){
   if(navigator.onLine===false){ _hydrateFromCache(); if(refreshToast) showToast('📴 Offline — showing saved jobs'); _fmRender(); return; }
   try{
-    const _crews=[..._assignedCrews()]; const crewQ = _crews.length===1 ? '&crew='+encodeURIComponent(_crews[0]) : '';
+    const crewQ='';  // pull the whole day's saved order; we order our visible stops by it
     const [bRes,cRes,rRes]=await Promise.all([
       fetch(SCRIPT_URL+'?action=bookings&'+authParam()).then(r=>r.json()).catch(()=>null),
       fetch(SCRIPT_URL+'?action=customers_list&'+authParam()).then(r=>r.json()).catch(()=>null),

@@ -7715,9 +7715,27 @@ function moveRouteStop(dateStr, crew, fromIdx, dir) {
   // Sync times to dispatch board then update bookings
   _syncRouteOrderToDispatch(dateStr);
 
-  showToast('↕ Stop moved · Times recalculated · ⚡ Re-optimize for exact times');
+  _putRouteForDate(dateStr);
+  showToast('↕ Stop moved · saved · ⚡ Re-optimize for exact times');
 }
 
+// Persist the owner's route order to the shared record so the field app shows the same order.
+function _putRouteForDate(dateStr){
+  try{
+    const dayOrder=_routeCustomOrder[dateStr]; if(!dayOrder) return;
+    const crews = Array.isArray(dayOrder) ? {'': dayOrder} : dayOrder;
+    Object.keys(crews).forEach(function(crew){
+      const arr=crews[crew]||[];
+      const stops=arr.filter(function(s){return s&&s.bk&&s.bk.email;})
+                     .map(function(s){ return { email:String(s.bk.email).toLowerCase().trim(), serviceDate:dateStr }; });
+      if(!stops.length) return;
+      const params=new URLSearchParams({ action:'put_route', date:dateStr,
+        crew:(crew==='unassigned'?'':crew), stops:JSON.stringify(stops),
+        updatedBy:(adminName||'owner'), idemKey:'putroute:'+dateStr+':'+crew+':'+Date.now(), adminToken:adminToken });
+      fetch(SCRIPT_URL+'?'+params.toString()).catch(function(){});
+    });
+  }catch(e){}
+}
 function _syncRouteOrderToDispatch(dateStr) {
   const dayOrder = _routeCustomOrder[dateStr];
   if (!dayOrder || !allBookings) return;
@@ -8068,6 +8086,7 @@ function routeDrop(ev, dateStr, crew, idx) {
   order.splice(idx, 0, moved);
   _dragSrc = null;
   renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
+  _putRouteForDate(dateStr);
 }
 function routeDragEnd(ev) {
   ev.currentTarget.classList.remove('dragging');
@@ -9159,6 +9178,7 @@ async function buildRoute(forceFresh) {
       }
 
       _routeCustomOrder[dateStr] = crewOrders;
+      _putRouteForDate(dateStr);
 
       // Accumulate stats across all crews
       for (const stops of Object.values(crewOrders)) {
