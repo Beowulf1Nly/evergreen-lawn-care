@@ -48,6 +48,23 @@
   .fill{ height:100%; background:linear-gradient(90deg,#4ade80,#22c55e); }
   .routelist{ margin-top:10px; display:none; }
   .routelist.open{ display:block; }
+  .sec{ font-size:12px; text-transform:uppercase; letter-spacing:.07em; color:#9ed8b1; margin:16px 0 8px; font-weight:800; }
+  .crewcard.exp{ background:rgba(255,255,255,.09); }
+  .crewhead{ cursor:pointer; }
+  .dot.done{ background:#64748b; box-shadow:none; }
+  .mapbtn{ width:100%; background:#1565c0; color:#fff; border:none; border-radius:10px; padding:9px; font-family:inherit; font-weight:700; font-size:13px; cursor:pointer; margin-bottom:10px; }
+  .rstop2{ border-top:1px dashed rgba(255,255,255,.1); padding:8px 0; }
+  .rstop2.done{ opacity:.65; }
+  .rs-top{ display:flex; align-items:center; gap:8px; font-size:14px; }
+  .rs-top .i{ color:#9ed8b1; width:18px; } .rs-top .nm{ font-weight:700; }
+  .chip{ font-size:11px; font-weight:800; padding:2px 8px; border-radius:999px; white-space:nowrap; }
+  .chip.ok{ background:rgba(34,197,94,.2); color:#86efac; }
+  .amt{ font-weight:800; color:#fff; font-size:13px; }
+  .rs-addr{ font-size:12px; color:#9ed8b1; margin:3px 0 0 26px; }
+  .rs-note{ font-size:13px; color:#cdebd9; margin:4px 0 0 26px; background:rgba(255,255,255,.05); border-radius:8px; padding:6px 9px; line-height:1.5; }
+  .rs-note.crew{ color:#fde68a; }
+  .rs-photos{ margin:5px 0 0 26px; display:flex; gap:8px; } .rs-photos a{ text-decoration:none; font-size:20px; }
+  .leaflet-tooltip.rt-num{ background:transparent; border:none; box-shadow:none; color:#fff; font-weight:800; font-size:11px; padding:0; }
   .rstop{ display:flex; gap:8px; align-items:baseline; font-size:13px; padding:4px 0; border-top:1px dashed rgba(255,255,255,.08); }
   .rstop .i{ color:#9ed8b1; width:18px; } .rstop.done{ color:#86efac; } .rstop.done .nm{ text-decoration:line-through; opacity:.7; }
   .empty{ text-align:center; color:#9ed8b1; padding:30px 16px; font-size:14px; }
@@ -88,7 +105,7 @@
 const SCRIPT_URL='https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
 const SESSION_KEY='eg_staff_session';
 let token='', myEmail='', myName='', myRole='', myCrews='';
-let map=null, markers={}, _crews=[], _bookings=[], _expanded={}, _tick=null, _statusBad=false;
+let map=null, markers={}, _crews=[], _bookings=[], _expanded={}, _tick=null, _statusBad=false, _routeLayers=[];
 const CREW_COLORS={ A:'#22c55e', B:'#3b82f6', C:'#f59e0b', D:'#a855f7' };
 
 function esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -134,7 +151,7 @@ async function refresh(){
       fetch(SCRIPT_URL+'?action=bookings&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null)
     ]);
     _statusBad = !(st&&st.success);
-    if(st&&st.success) _crews=(st.crews||[]).filter(c=>c.staleMin<=120 && String(c.active)!=='0'); // hide stale + clocked-out
+    if(st&&st.success) _crews=(st.crews||[]).filter(c=>c.staleMin<=720); // today's crews incl. clocked-out
     if(bk&&bk.success&&Array.isArray(bk.bookings)) _bookings=bk.bookings;
     render();
     rb.textContent='live · '+new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
@@ -155,54 +172,124 @@ function routeFor(crewStr){
 }
 
 function render(){
-  // stats
   const t=todayISO();
-  const todays=(_bookings||[]).filter(b=>!b.rowCancelled&&dateOf(b)===t);
-  const doneN=todays.filter(b=>isDone(b)).length;
-  const leftN=todays.filter(b=>!isDone(b)).length;
-  document.getElementById('sCrews').textContent=_crews.length;
-  document.getElementById('sDone').textContent=doneN;
-  document.getElementById('sLeft').textContent=leftN;
-  // markers
-  Object.values(markers).forEach(m=>map.removeLayer(m)); markers={};
+  const todays=(_bookings||[]).filter(function(b){return !b.rowCancelled&&dateOf(b)===t;});
+  document.getElementById('sDone').textContent=todays.filter(isDone).length;
+  document.getElementById('sLeft').textContent=todays.filter(function(b){return !isDone(b);}).length;
+
+  const working=_crews.filter(function(c){return String(c.active)!=='0';});
+  const doneCrews=_crews.filter(function(c){return String(c.active)==='0';});
+  document.getElementById('sCrews').textContent=working.length;
+
+  Object.values(markers).forEach(function(m){map.removeLayer(m);}); markers={};
   const pts=[];
-  _crews.forEach(c=>{
+  working.forEach(function(c){
     if(c.lat==null||c.lon==null) return;
     const col=CREW_COLORS[String(c.crew||'').toUpperCase().split(/[^A-Z0-9]+/)[0]]||'#22c55e';
-    const mk=L.circleMarker([c.lat,c.lon],{ radius:11, color:'#fff', weight:2, fillColor:col, fillOpacity:.95 }).addTo(map);
-    mk.bindPopup('<b>'+esc(c.name)+'</b>'+(c.crew?' · Crew '+esc(c.crew):'')+'<br>'+(c.stopName?('📍 '+esc(c.stopName)):'—')+'<br>'+(c.doneCount||0)+' of '+(c.totalStops||'—')+' done · on clock '+durStr(c.clockIn));
+    const mk=L.circleMarker([c.lat,c.lon],{radius:11,color:'#fff',weight:2,fillColor:col,fillOpacity:.95}).addTo(map);
+    mk.bindPopup('<b>'+esc(c.name)+'</b>'+(c.crew?' · Crew '+esc(c.crew):'')+'<br>'+(c.stopName?('📍 '+esc(c.stopName)):'—'));
     markers[c.email]=mk; pts.push([c.lat,c.lon]);
   });
-  if(pts.length){ try{ map.fitBounds(pts,{ padding:[40,40], maxZoom:14 }); }catch(e){} }
-  // roster
-  const list=document.getElementById('rosterList');
-  if(!_crews.length){ list.innerHTML=_statusBad ? '<div class="empty">Live status couldn\'t load.<br>Make sure the updated Apps Script backend is deployed (get_field_status).</div>' : '<div class="empty">No crews are clocked in right now.<br>They appear here once a crew starts a route and allows location.</div>'; document.getElementById('sHours').textContent='0'; return; }
+  if(pts.length && !_routeLayers.length){ try{ map.fitBounds(pts,{padding:[40,40],maxZoom:14}); }catch(e){} }
+
   let totalMs=0;
-  list.innerHTML=_crews.map(function(c){
-    const route=routeFor(c.crew);                         // live bookings = source of truth
-    const total=route.length;
-    const done=route.filter(isDone).length;
-    const current=route.find(function(b){ return !isDone(b); });
-    const pct=total?Math.round((done/total)*100):0;
-    const crewBadge=String(c.crew||'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean).join(', ');
-    const freshClass=c.staleMin<=3?'fresh':c.staleMin<=15?'old':'dead';
-    if(c.clockIn){ const _ms=Date.now()-new Date(c.clockIn).getTime(); if(!isNaN(_ms)&&_ms>0) totalMs+=_ms; }
-    const open=_expanded[c.email]?'open':'';
-    const where=total?(done>=total?'✅ <b>Route complete</b>':('📍 At <b>'+esc(current?current.name:'next stop')+'</b>')):'📍 <b>No stops today</b>';
-    const routeHtml=route.length?route.map(function(b,i){ return '<div class="rstop'+(isDone(b)?' done':'')+'"><span class="i">'+(i+1)+'</span><span class="nm">'+esc(b.name||'Customer')+'</span><span class="grow"></span><span>'+esc(b.jobTime||'')+'</span></div>'; }).join(''):'<div class="rstop">No stops assigned to this crew today.</div>';
-    return '<div class="crewcard '+(c.staleMin>15?'stale':'')+'" onclick="toggle(\''+esc(c.email)+'\')">'
-      +'<div class="crewhead"><span class="dot '+freshClass+'"></span><span class="crewname">'+esc(c.name||'Crew')+'</span>'+(crewBadge?'<span class="badge">Crew '+esc(crewBadge)+'</span>':'')+'<span class="grow"></span><span class="clk" data-clk="'+esc(c.clockIn||'')+'" style="font-weight:800;">'+durStr(c.clockIn)+'</span></div>'
-      +'<div class="crewmeta">'+where+' · <b>'+done+'</b> of <b>'+total+'</b> done'
-      +(+c.helpers>0?(' · 🧍 +'+c.helpers+' helper'+(+c.helpers!==1?'s':'')):'')
-      +(c.staleMin>3?(' · <span style="color:#fbbf24;">⚠ last ping '+c.staleMin+'m ago</span>'):'')+'</div>'
-      +'<div class="bar"><div class="fill" style="width:'+pct+'%"></div></div>'
-      +'<div class="routelist '+open+'">'+routeHtml+'</div></div>';
-  }).join('');
-  const hrs=totalMs/3600000;
-  document.getElementById('sHours').textContent=hrs.toFixed(1);
+  working.forEach(function(c){ if(c.clockIn){ const ms=Date.now()-new Date(c.clockIn).getTime(); if(!isNaN(ms)&&ms>0) totalMs+=ms; } });
+  document.getElementById('sHours').textContent=(totalMs/3600000).toFixed(1);
+
+  const listEl=document.getElementById('rosterList');
+  if(!working.length && !doneCrews.length){
+    listEl.innerHTML=_statusBad?'<div class="empty">Live status couldn\'t load — make sure the backend is deployed.</div>':'<div class="empty">No crews clocked in yet today.</div>';
+    return;
+  }
+  let html='';
+  if(working.length){ html+='<div class="sec">On the clock ('+working.length+')</div>'+working.map(function(c){return crewCard(c,true);}).join(''); }
+  if(doneCrews.length){ html+='<div class="sec">Clocked out today ('+doneCrews.length+')</div>'+doneCrews.map(function(c){return crewCard(c,false);}).join(''); }
+  listEl.innerHTML=html;
 }
 
-function toggle(email){ _expanded[email]=!_expanded[email]; render(); const c=_crews.find(x=>x.email===email); if(c&&c.lat!=null) map.setView([c.lat,c.lon],14); }
+function payBadge(b){
+  const pm=(String(b.payMethod||'')+' '+String(b.calendarEvent||'')).toLowerCase();
+  const inv=String(b.invoiced||'').toLowerCase();
+  if(pm.indexOf('✅')>=0||(pm.indexOf('paid')>=0&&pm.indexOf('not paid')<0)||inv.indexOf('paid')>=0) return {t:'Paid',c:'#22c55e'};
+  if(pm.indexOf('cash')>=0) return {t:'Cash',c:'#f59e0b'};
+  if(inv.indexOf('invoiced')>=0) return {t:'Invoiced',c:'#3b82f6'};
+  if(pm.indexOf('autopay')>=0||pm.indexOf('stripe')>=0) return {t:'Autopay',c:'#3b82f6'};
+  return {t:'Unpaid',c:'#ef4444'};
+}
+function stopDetail(b,i){
+  const done=isDone(b); const pb=payBadge(b);
+  const photos=String(b.photos||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
+  const eNotes=String(b.employeeNotes||'').trim();
+  const cNotes=String(b.notes||'').replace(/\blot:\s*[\d.]+ac\b/gi,'').replace(/\s*\|\s*$/,'').trim();
+  return '<div class="rstop2'+(done?' done':'')+'">'
+    +'<div class="rs-top"><span class="i">'+(i+1)+'</span><span class="nm">'+esc(b.name||'Customer')+'</span><span class="grow"></span>'
+    +(done?'<span class="chip ok">✓ done</span>':'')
+    +'<span class="chip" style="background:'+pb.c+'33;color:'+pb.c+'">'+pb.t+'</span>'
+    +(b.price?'<span class="amt">'+esc(b.price)+'</span>':'')+'</div>'
+    +'<div class="rs-addr">📍 '+esc(b.address||'')+(b.zip?', '+esc(b.zip):'')+(b.jobTime?(' · '+esc(b.jobTime)):'')+'</div>'
+    +(cNotes?'<div class="rs-note">📝 '+esc(cNotes)+'</div>':'')
+    +(eNotes?'<div class="rs-note crew">👷 '+esc(eNotes)+'</div>':'')
+    +(photos.length?'<div class="rs-photos">'+photos.map(function(u){return '<a href="'+esc(u)+'" target="_blank" title="photo">📷</a>';}).join('')+'</div>':'')
+    +'</div>';
+}
+function crewCard(c, isWorking){
+  const route=routeFor(c.crew);
+  const total=route.length, done=route.filter(isDone).length;
+  const current=route.find(function(b){return !isDone(b);});
+  const pct=total?Math.round((done/total)*100):0;
+  const crewBadge=String(c.crew||'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean).join(', ');
+  const freshClass=!isWorking?'done':(c.staleMin<=3?'fresh':c.staleMin<=15?'old':'dead');
+  const open=_expanded[c.email];
+  const where=!isWorking?('🏁 Finished · '+done+' of '+total+' done')
+    :(total?(done>=total?'✅ Route complete':('📍 At '+esc(current?current.name:'next stop')+' · '+done+' of '+total+' done')):'📍 No stops today');
+  const detail=route.length?route.map(function(b,i){return stopDetail(b,i);}).join(''):'<div class="rstop2">No stops for this crew today.</div>';
+  return '<div class="crewcard'+(open?' exp':'')+'">'
+    +'<div class="crewhead" onclick="toggle(\''+esc(c.email)+'\')"><span class="dot '+freshClass+'"></span><span class="crewname">'+esc(c.name||'Crew')+'</span>'+(crewBadge?'<span class="badge">Crew '+esc(crewBadge)+'</span>':'')+'<span class="grow"></span><span class="clk" data-clk="'+esc(c.clockIn||'')+'" style="font-weight:800;">'+durStr(c.clockIn)+'</span></div>'
+    +'<div class="crewmeta">'+where+(+c.helpers>0?(' · 🧍 +'+c.helpers):'')+(isWorking&&c.staleMin>3?(' · <span style="color:#fbbf24;">⚠ '+c.staleMin+'m ago</span>'):'')+'</div>'
+    +'<div class="bar"><div class="fill" style="width:'+pct+'%"></div></div>'
+    +(open?('<div class="routelist open"><button class="mapbtn" onclick="showRouteOnMap(\''+esc(c.email)+'\')">🗺 Show route lines on map</button>'+detail+'</div>'):'')
+    +'</div>';
+}
+
+function toggle(email){ _expanded[email]=!_expanded[email]; render(); }
+
+// ── Route lines on the map (geocode via OpenStreetMap, cached) ──
+function clearRouteLayers(){ _routeLayers.forEach(function(l){ try{map.removeLayer(l);}catch(e){} }); _routeLayers=[]; }
+function geoGet(){ try{return JSON.parse(localStorage.getItem('evg_live_geocache')||'{}');}catch(e){return {};} }
+function geoSet(c){ try{localStorage.setItem('evg_live_geocache',JSON.stringify(c));}catch(e){} }
+async function geocode(addr){
+  const cache=geoGet(); if(cache[addr]) return cache[addr];
+  try{
+    const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(addr));
+    const d=await r.json();
+    if(d&&d[0]){ const p={lat:+d[0].lat,lon:+d[0].lon}; cache[addr]=p; geoSet(cache); return p; }
+  }catch(e){}
+  return null;
+}
+async function showRouteOnMap(email){
+  clearRouteLayers();
+  const c=_crews.find(function(x){return x.email===email;}); if(!c) return;
+  const route=routeFor(c.crew);
+  const col=CREW_COLORS[String(c.crew||'').toUpperCase().split(/[^A-Z0-9]+/)[0]]||'#22c55e';
+  const rb=document.getElementById('refreshState'); rb.textContent='mapping route…';
+  const pts=[];
+  for(let i=0;i<route.length;i++){
+    const b=route[i];
+    const g=await geocode((b.address||'')+(b.zip?', '+b.zip:'')+', FL');
+    if(g){
+      pts.push([g.lat,g.lon]);
+      const mk=L.circleMarker([g.lat,g.lon],{radius:10,color:'#fff',weight:2,fillColor:(isDone(b)?'#22c55e':col),fillOpacity:.95}).addTo(map)
+        .bindTooltip(String(pts.length),{permanent:true,direction:'center',className:'rt-num'})
+        .bindPopup((pts.length)+'. '+esc(b.name||'')+(isDone(b)?' ✓':''));
+      _routeLayers.push(mk);
+    }
+    if(i<route.length-1) await new Promise(function(r){setTimeout(r,1100);}); // be polite to OSM
+  }
+  if(pts.length>1){ const pl=L.polyline(pts,{color:col,weight:4,opacity:.8,dashArray:'6,6'}).addTo(map); _routeLayers.push(pl); try{map.fitBounds(pts,{padding:[50,50]});}catch(e){} }
+  else if(pts.length===1){ map.setView(pts[0],14); }
+  rb.textContent='route mapped';
+}
+
 function updateClocks(){ document.querySelectorAll('.clk').forEach(el=>{ el.textContent=durStr(el.getAttribute('data-clk')); }); }
 
 window.addEventListener('DOMContentLoaded', ()=>{
