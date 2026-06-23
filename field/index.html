@@ -294,7 +294,7 @@ const START_CHECKLIST = ['Mower full on gas','Gas cans full','Leaf blower','Mowe
 const END_CHECKLIST   = ['Walked the yard','Closed all gates','Leaf blowed'];
 
 let adminToken='', adminName='', adminEmail='', adminRole='employee', adminCrews='';
-let allBookings=[], allCustomers=[], _savedOrderKeys=null;
+let allBookings=[], allCustomers=[], _savedOrderKeys=null, _optOrderKeys=null;
 let _clockInTime=null, _clockOutTime=null, _clockedOut=false, _fmTimerInt=null, _fmSyncInt=null, _fmPollInt=null, _geoWatch=null, _lastPos=null, _wakeLock=null;
 let _fmStarted=false, _fmViewIdx=null, _fmCashTotal=0, _fmBilledTotal=0, _fmSkipped={}, _startChkState=[], _jobTimers={}, _helpers=[]; let _lastSync={ok:null,ts:0,msg:''};
 // complete-sheet state
@@ -397,11 +397,14 @@ async function loadData(refreshToast){
     if(cRes&&cRes.success&&Array.isArray(cRes.customers)){ allCustomers=cRes.customers; try{ localStorage.setItem('evg_field_customers', JSON.stringify(allCustomers)); }catch(e){} }
     _savedOrderKeys=_extractRouteKeys(rRes);
     if(!allBookings.length) _hydrateFromCache();
+    if(_savedOrderKeys&&_savedOrderKeys.length){ _optOrderKeys=null; }   // (a) canonical route from backend wins; drop any stale self-optimized order
+    else { _optOrderKeys=_loadOptOrderCache();                           // (b) no canonical route → self-optimize (show cached order instantly, refine in background)
+      if(navigator.onLine!==false){ _fmComputeOptimizedOrder().then(function(changed){ if(changed&&!_fmStarted) _fmRender(); }).catch(function(){}); } }
     if(refreshToast) showToast('↻ Jobs updated');
   }catch(e){ _hydrateFromCache(); }
   _fmRender();
 }
-function _hydrateFromCache(){ try{ const b=localStorage.getItem('evg_field_bookings'); if(b) allBookings=JSON.parse(b); const c=localStorage.getItem('evg_field_customers'); if(c) allCustomers=JSON.parse(c); }catch(e){} }
+function _hydrateFromCache(){ try{ const b=localStorage.getItem('evg_field_bookings'); if(b) allBookings=JSON.parse(b); const c=localStorage.getItem('evg_field_customers'); if(c) allCustomers=JSON.parse(c); if(!(_savedOrderKeys&&_savedOrderKeys.length)) _optOrderKeys=_loadOptOrderCache(); }catch(e){} }
 // Build an ordered list of stop keys (email|serviceDate) from a get_route response, if present.
 function _extractRouteKeys(rRes){
   try{
@@ -410,6 +413,76 @@ function _extractRouteKeys(rRes){
     rRes.routes.forEach(rt=>{ (rt.stops||[]).forEach(st=>{ const em=String(st.email||st.Email||'').toLowerCase().trim(); const d=String(st.serviceDate||st.date||'').trim(); if(em) keys.push(em+'|'+d); }); });
     return keys.length?keys:null;
   }catch(e){ return null; }
+}
+
+/* ───────── Self-optimize fallback (Phase-2 safety net) ─────────
+   When get_route returns no canonical route (backend handler not deployed yet,
+   or the owner hasn't optimized today), the phone optimizes the day ITSELF with
+   the SAME algorithm /invoice uses — geocode (cached) → nearest-neighbour →
+   2-opt → Or-opt — so stops are driven in a sensible order instead of by raw
+   job time. Preference: (a) saved canonical route > (b) self-optimized > (c) job time.
+   Geocoding needs a signal; with none we fall back gracefully to the cached
+   optimized order, then to job time — never breaking the route view. */
+const _GEO_CACHE_KEY='evg_geocache_v2';      // shared with /invoice on this origin (free cache hits)
+const _OPT_ORDER_KEY='evg_field_optorder_v1';
+const ZIP_CITY={ '34428':'Crystal River','34429':'Crystal River','34450':'Inverness','34451':'Inverness','34452':'Inverness','34453':'Inverness','34460':'Lecanto','34461':'Lecanto','34431':'Dunnellon','34432':'Dunnellon','34433':'Dunnellon','34434':'Citrus Springs','34436':'Floral City','34442':'Hernando','34423':'Crystal River','34464':'Beverly Hills','34465':'Beverly Hills','34449':'Inglis','34498':'Yankeetown','34480':'Ocala','34481':'Ocala','34482':'Ocala','34476':'Ocala','34474':'Ocala','34472':'Ocala','34470':'Ocala','34471':'Ocala','34479':'Ocala','34475':'Ocala','34478':'Ocala','34491':'Summerfield','34488':'Silver Springs','32626':'Chiefland','32668':'Morriston','34601':'Brooksville','34602':'Brooksville','34604':'Brooksville' };
+function _geoCacheLoad(){ try{ return JSON.parse(localStorage.getItem(_GEO_CACHE_KEY)||'{}'); }catch(e){ return {}; } }
+function _geoCacheSave(c){ try{ localStorage.setItem(_GEO_CACHE_KEY, JSON.stringify(c)); }catch(e){} }
+function _loadOptOrderCache(){ try{ const o=JSON.parse(localStorage.getItem(_OPT_ORDER_KEY)||'null'); if(o&&o.date===todayISOStr()&&Array.isArray(o.keys)&&o.keys.length) return o.keys; }catch(e){} return null; }
+function _saveOptOrderCache(keys){ try{ localStorage.setItem(_OPT_ORDER_KEY, JSON.stringify({date:todayISOStr(), keys:keys})); }catch(e){} }
+
+function haversineMiles(lat1,lon1,lat2,lon2){ const R=3958.8; const dLat=(lat2-lat1)*Math.PI/180; const dLon=(lon2-lon1)*Math.PI/180; const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2; return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); }
+function _routeLen(arr,origin){ const dd=(a,b)=>(a&&b&&a.lat!=null&&b.lat!=null)?haversineMiles(a.lat,a.lon,b.lat,b.lon):0; let total=0; let prev=(origin&&origin.lat!=null)?origin:null; for(const s of arr){ if(s&&s.lat!=null){ if(prev) total+=dd(prev,s); prev=s; } } return total; }
+function _twoOptImprove(route,origin){ if(!route||route.length<4) return route; const pts=route.slice(); const dd=(a,b)=>(a&&b&&a.lat!=null&&b.lat!=null)?haversineMiles(a.lat,a.lon,b.lat,b.lon):0; const org=(origin&&origin.lat!=null)?origin:null; let improved=true,guard=0; while(improved&&guard++<40){ improved=false; for(let i=0;i<pts.length-1;i++){ for(let j=i+1;j<pts.length;j++){ const A=i===0?org:pts[i-1]; const B=pts[i],C=pts[j],D=j+1<pts.length?pts[j+1]:null; const before=dd(A,B)+dd(C,D); const after=dd(A,C)+dd(B,D); if(after+1e-6<before){ for(let lo=i,hi=j;lo<hi;lo++,hi--){ const t=pts[lo]; pts[lo]=pts[hi]; pts[hi]=t; } improved=true; } } } } return pts; }
+function _orOptImprove(route,origin){ if(!route||route.length<3) return route; let pts=route.slice(); const org=(origin&&origin.lat!=null)?origin:null; let improved=true,guard=0; while(improved&&guard++<60){ improved=false; const baseLen=_routeLen(pts,org); outer: for(let segLen=1;segLen<=3&&segLen<pts.length;segLen++){ for(let i=0;i+segLen<=pts.length;i++){ const seg=pts.slice(i,i+segLen); const rest=pts.slice(0,i).concat(pts.slice(i+segLen)); for(let j=0;j<=rest.length;j++){ const cand=rest.slice(0,j).concat(seg,rest.slice(j)); let same=true; for(let k=0;k<cand.length;k++){ if(cand[k]!==pts[k]){ same=false; break; } } if(same) continue; if(_routeLen(cand,org)+1e-6<baseLen){ pts=cand; improved=true; break outer; } } } } } return pts; }
+function _localSearchRoute(route,origin){ let r=route; for(let pass=0;pass<8;pass++){ const before=_routeLen(r,origin); r=_twoOptImprove(r,origin); r=_orOptImprove(r,origin); if(_routeLen(r,origin)+1e-9>=before) break; } return r; }
+function _nearestNeighbour(startCoord,stops){ const unvisited=[...stops]; const route=[]; let cur=startCoord; while(unvisited.length){ let best=-1,bestDist=Infinity; for(let i=0;i<unvisited.length;i++){ const d=haversineMiles(cur.lat,cur.lon,unvisited[i].lat,unvisited[i].lon); if(d<bestDist){ bestDist=d; best=i; } } route.push(Object.assign({},unvisited[best],{distFromPrev:bestDist})); cur=unvisited[best]; unvisited.splice(best,1); } return _localSearchRoute(route,startCoord); }
+
+// Multi-provider geocoder (ported from /invoice): Photon + Nominatim with rural-FL fallbacks.
+async function _geocodeAddr(addr){
+  const zipMatch=addr.match(/,\s*(\d{5})/); const zip=zipMatch?zipMatch[1]:''; const city=ZIP_CITY[zip]||'';
+  const streetOnly=addr.replace(/,\s*\d{5}/,'');
+  let streetNoState=streetOnly.replace(/,\s*FL\s*$/i,'').replace(/,\s*Florida\s*$/i,'').trim();
+  if(city&&streetNoState.toLowerCase().endsWith(', '+city.toLowerCase())) streetNoState=streetNoState.slice(0,streetNoState.length-city.length-2).trim();
+  const addrByCity=city?streetNoState+', '+city+', FL':''; const streetFL=streetNoState+', Florida';
+  function fetchWithTimeout(url,opts,ms){ ms=ms||4000; const ctrl=new AbortController(); const timer=setTimeout(function(){ctrl.abort();},ms); return fetch(url,Object.assign({},opts,{signal:ctrl.signal})).finally(function(){clearTimeout(timer);}); }
+  async function tryPhoton(q){ const r=await fetchWithTimeout('https://photon.komoot.io/api/?q='+encodeURIComponent(q)+'&limit=1&countrycode=us',{},4000); const d=await r.json(); const f=d&&d.features&&d.features[0]; if(f) return { lat:f.geometry.coordinates[1], lon:f.geometry.coordinates[0] }; return null; }
+  async function tryNominatim(q){ const r=await fetchWithTimeout('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q='+encodeURIComponent(q),{headers:{'Accept-Language':'en'}},4000); const d=await r.json(); if(d&&d[0]) return { lat:parseFloat(d[0].lat), lon:parseFloat(d[0].lon) }; return null; }
+  try{ const r=await tryPhoton(addr); if(r) return r; }catch(e){}
+  try{ const r=await tryNominatim(addr); if(r) return r; }catch(e){}
+  if(addrByCity){ try{ const r=await tryPhoton(addrByCity); if(r) return r; }catch(e){} try{ const r=await tryNominatim(addrByCity); if(r) return r; }catch(e){} }
+  try{ const r=await tryNominatim(streetFL); if(r) return r; }catch(e){}
+  try{ const r=await tryPhoton(streetFL); if(r) return r; }catch(e){}
+  if(zip&&!city){ const withCounty=streetOnly.replace(/, FL$/i,'').trim()+', Citrus County, FL'; try{ const r=await tryNominatim(withCounty); if(r) return r; }catch(e){} try{ const r=await tryPhoton(withCounty); if(r) return r; }catch(e){} }
+  return null;
+}
+
+// Geocode today's stops (cached) and compute an optimized visiting order.
+// Returns true if it produced/updated an order; false if it couldn't (offline,
+// <2 stops, or geocoding failed) so the caller keeps the existing fallback.
+async function _fmComputeOptimizedOrder(){
+  try{
+    if(navigator.onLine===false) return false;             // no signal → keep cached order / job time
+    const jobs=_fmTodayRawJobs(); if(jobs.length<2) return false;
+    const cache=_geoCacheLoad(); let dirty=false; const geo=[];
+    for(const bk of jobs){
+      const city=ZIP_CITY[bk.zip]||'';
+      const fullAddr=(bk.address||'')+(bk.zip?', '+bk.zip:'')+(city?', '+city:'')+', FL';
+      let coord=cache[fullAddr];
+      if(coord===undefined){ coord=await _geocodeAddr(fullAddr); cache[fullAddr]=coord; dirty=true; }
+      geo.push({ bk:bk, lat:coord?coord.lat:undefined, lon:coord?coord.lon:undefined, failed:!coord });
+    }
+    if(dirty) _geoCacheSave(cache);
+    const valid=geo.filter(s=>!s.failed&&s.lat!=null); const failed=geo.filter(s=>s.failed||s.lat==null);
+    if(valid.length<2) return false;                       // not enough geocoded → keep job-time fallback
+    const ordered=_nearestNeighbour(valid[0], valid);      // start near the first stop (no fixed depot on the phone)
+    const all=ordered.concat(failed);                      // geocode-failed stops trail at the end
+    const keys=all.filter(s=>s&&s.bk&&s.bk.email).map(s=>_stopKey(s.bk));
+    if(!keys.length) return false;
+    const changed=!_optOrderKeys||_optOrderKeys.join('~')!==keys.join('~');
+    _optOrderKeys=keys; _saveOptOrderCache(keys);
+    return changed;
+  }catch(e){ return false; }
 }
 
 /* ───────── Offline queue + idempotency ───────── */
@@ -543,11 +616,13 @@ function _stopKey(bk){ return String(bk.email||'').toLowerCase().trim()+'|'+date
 function _fmTodayRawJobs(){ const ds=todayISOStr(); return (allBookings||[]).filter(b=>!b.rowCancelled&&dateOf(b)===ds&&_crewOk(b)); } // completed jobs stay so progress counts them as done
 function _fmStops(){
   const jobs=_fmTodayRawJobs().map(bk=>({bk}));
-  if(_savedOrderKeys&&_savedOrderKeys.length){
-    const pos=k=>{ const i=_savedOrderKeys.indexOf(k); return i<0?9999:i; };          // saved/custom order wins
+  const order=(_savedOrderKeys&&_savedOrderKeys.length)?_savedOrderKeys
+             :(_optOrderKeys&&_optOrderKeys.length)?_optOrderKeys:null;
+  if(order){
+    const pos=k=>{ const i=order.indexOf(k); return i<0?9999:i; };   // (a) saved canonical route, else (b) self-optimized order
     jobs.sort((a,b)=>pos(_stopKey(a.bk))-pos(_stopKey(b.bk)));
   } else {
-    jobs.sort((a,b)=>{ const ta=a.bk.jobTime||'99:99', tb=b.bk.jobTime||'99:99'; return ta<tb?-1:ta>tb?1:0; }); // else scheduled time
+    jobs.sort((a,b)=>{ const ta=a.bk.jobTime||'99:99', tb=b.bk.jobTime||'99:99'; return ta<tb?-1:ta>tb?1:0; }); // (c) job time last resort
   }
   return jobs;
 }
