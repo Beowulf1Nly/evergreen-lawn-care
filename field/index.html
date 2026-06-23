@@ -169,6 +169,16 @@
       <div class="fm-start-date" id="fmStartDate"></div>
       <div class="fm-start-stat"><div class="fm-start-stat-num" id="fmStartCount">—</div><div class="fm-start-stat-lbl">stops today</div></div>
       <div class="fm-start-sub" id="fmStartSub"></div>
+      <div class="fm-route-setup" style="width:100%;max-width:380px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:14px 14px 12px;margin:6px auto 16px;text-align:left;">
+        <div id="fmCrewChips" style="display:none;margin-bottom:12px;"></div>
+        <div style="font-size:12px;font-weight:800;color:#9ed8b1;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Route start point</div>
+        <div style="display:flex;gap:8px;">
+          <input id="fmStartAddr" class="login-input" placeholder="Type a start address…" style="margin-bottom:0;flex:1;padding:11px;font-size:14px;" onkeydown="if(event.key==='Enter'){event.preventDefault();fmApplyStartAddr();}">
+          <button onclick="fmUseMyLocation()" title="Use my current location" style="flex:0 0 auto;background:rgba(134,239,172,.16);color:#dcfce7;border:1px solid rgba(134,239,172,.3);border-radius:12px;padding:0 13px;font-size:18px;cursor:pointer;">📍</button>
+        </div>
+        <button onclick="fmApplyStartAddr()" style="width:100%;margin-top:9px;background:rgba(255,255,255,.12);color:#dcfce7;border:none;border-radius:12px;padding:11px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;">Set start &amp; optimize route</button>
+        <div id="fmStartPtNote" style="font-size:12.5px;color:#9ed8b1;margin-top:9px;line-height:1.4;"></div>
+      </div>
       <button class="fm-btn fm-btn-xl fm-btn-start" id="fmStartBtn" onclick="fmStartTapped()" style="min-width:260px;">🟢 Start My Route</button>
       <button class="fm-skip" onclick="loadData(true)" style="color:#9ed8b1;margin-top:18px;">↻ Refresh jobs</button>
     </div>
@@ -295,6 +305,7 @@ const END_CHECKLIST   = ['Walked the yard','Closed all gates','Leaf blowed'];
 
 let adminToken='', adminName='', adminEmail='', adminRole='employee', adminCrews='';
 let allBookings=[], allCustomers=[], _savedOrderKeys=null, _optOrderKeys=null;
+let _startPoint=null, _crewSel=null;   // employee-chosen route origin + crew override
 let _clockInTime=null, _clockOutTime=null, _clockedOut=false, _fmTimerInt=null, _fmSyncInt=null, _fmPollInt=null, _geoWatch=null, _lastPos=null, _wakeLock=null;
 let _fmStarted=false, _fmViewIdx=null, _fmCashTotal=0, _fmBilledTotal=0, _fmSkipped={}, _startChkState=[], _jobTimers={}, _helpers=[]; let _lastSync={ok:null,ts:0,msg:''};
 // complete-sheet state
@@ -354,7 +365,7 @@ async function verifyCode(){
 }
 function backToEmail(){ document.getElementById('loginStep2').style.display='none'; document.getElementById('loginStep1').style.display='block'; document.getElementById('codeInput').value=''; showLoginError(''); }
 function logout(){ try{ localStorage.removeItem(SESSION_KEY); localStorage.removeItem(STATE_KEY); }catch(e){} if(_fmPollInt) clearInterval(_fmPollInt); _stopGeo(); _releaseWake(); adminToken=''; _fmStarted=false; _clockInTime=null; _clockedOut=false; document.getElementById('fieldMode').classList.remove('show'); document.getElementById('loginScreen').style.display='flex'; }
-function showApp(){ document.getElementById('loginScreen').style.display='none'; document.getElementById('fieldMode').classList.add('show'); _startTimers(); _fmRender(); }
+function showApp(){ document.getElementById('loginScreen').style.display='none'; document.getElementById('fieldMode').classList.add('show'); _startPoint=_loadStartPoint(); _crewSel=_loadCrewSel(); _startTimers(); _fmRender(); }
 
 /* ───────── State persistence (resume where left off) ───────── */
 function _persist(){
@@ -475,7 +486,8 @@ async function _fmComputeOptimizedOrder(){
     if(dirty) _geoCacheSave(cache);
     const valid=geo.filter(s=>!s.failed&&s.lat!=null); const failed=geo.filter(s=>s.failed||s.lat==null);
     if(valid.length<2) return false;                       // not enough geocoded → keep job-time fallback
-    const ordered=_nearestNeighbour(valid[0], valid);      // start near the first stop (no fixed depot on the phone)
+    const origin=(_startPoint&&_startPoint.lat!=null&&_startPoint.lon!=null)?_startPoint:valid[0]; // employee's chosen start point is the route depot
+    const ordered=_nearestNeighbour(origin, valid);
     const all=ordered.concat(failed);                      // geocode-failed stops trail at the end
     const keys=all.filter(s=>s&&s.bk&&s.bk.email).map(s=>_stopKey(s.bk));
     if(!keys.length) return false;
@@ -483,6 +495,82 @@ async function _fmComputeOptimizedOrder(){
     _optOrderKeys=keys; _saveOptOrderCache(keys);
     return changed;
   }catch(e){ return false; }
+}
+
+/* ───────── Start point + crew picker (drive route from where the crew is) ───────── */
+const _START_PT_KEY='evg_field_startpt_v1';
+const _CREW_SEL_KEY='evg_field_crew_v1';
+function _loadStartPoint(){ try{ const o=JSON.parse(localStorage.getItem(_START_PT_KEY)||'null'); if(o&&o.lat!=null&&o.lon!=null) return o; }catch(e){} return null; }
+function _saveStartPoint(sp){ try{ if(sp) localStorage.setItem(_START_PT_KEY, JSON.stringify(sp)); else localStorage.removeItem(_START_PT_KEY); }catch(e){} }
+function _loadCrewSel(){ try{ const v=localStorage.getItem(_CREW_SEL_KEY); return v||null; }catch(e){ return null; } }
+function _saveCrewSel(c){ try{ if(c) localStorage.setItem(_CREW_SEL_KEY, c); else localStorage.removeItem(_CREW_SEL_KEY); }catch(e){} }
+
+// Distinct crews present in today's jobs (before crew filtering), e.g. ['A','B'] (+UNASSIGNED flag).
+function _availableCrews(){
+  const ds=todayISOStr(); const set=new Set(); let hasUnassigned=false;
+  (allBookings||[]).forEach(b=>{ if(b.rowCancelled||dateOf(b)!==ds) return; const c=String(b.crew||'').toUpperCase().trim(); if(c) set.add(c); else hasUnassigned=true; });
+  String(adminCrews||'').toUpperCase().split(/[^A-Z0-9]+/).forEach(c=>{ if(c) set.add(c); });
+  return { crews:[...set].sort(), hasUnassigned };
+}
+
+// Re-run optimization right away when the start point or crew changes.
+async function _reoptimizeNow(){
+  if(_savedOrderKeys&&_savedOrderKeys.length){ _fmRender(); showToast("Owner's saved route is in use"); return; }
+  showToast('🧭 Optimizing route…');
+  const ok=await _fmComputeOptimizedOrder();
+  _fmRender();
+  if(!ok){ if(navigator.onLine===false) showToast('📴 Offline — using last saved order'); else showToast('Could not optimize — check addresses/signal'); }
+  else showToast('✅ Route optimized from your start point');
+}
+
+// Employee taps 📍 — use device GPS as the route origin (works offline; geocoding of stops may not).
+function fmUseMyLocation(){
+  if(!navigator.geolocation){ showToast('Location not supported on this device'); return; }
+  showToast('📍 Getting your location…');
+  navigator.geolocation.getCurrentPosition(
+    function(pos){ _startPoint={ lat:pos.coords.latitude, lon:pos.coords.longitude, label:'My current location', src:'gps' }; _saveStartPoint(_startPoint); const i=document.getElementById('fmStartAddr'); if(i) i.value=''; _fmRenderRouteSetup(); _reoptimizeNow(); },
+    function(err){ showToast(err&&err.code===1?'Location permission denied — type a start address instead':'Could not get location — type a start address'); },
+    { enableHighAccuracy:true, maximumAge:60000, timeout:15000 }
+  );
+}
+
+// Employee typed a start address — geocode it (same pipeline as /invoice) and use as origin.
+async function fmApplyStartAddr(){
+  const i=document.getElementById('fmStartAddr'); const raw=i?i.value.trim():'';
+  if(!raw){ showToast('Type a start address or tap 📍'); return; }
+  if(navigator.onLine===false){ showToast('📴 Offline — can\'t look up an address. Tap 📍 to use GPS.'); return; }
+  showToast('🔎 Looking up address…');
+  const q=/,\s*(FL|Florida)\b/i.test(raw)?raw:(raw+', FL');
+  const coord=await _geocodeAddr(q);
+  if(!coord){ showToast('Couldn\'t find that address — try adding city/zip'); return; }
+  _startPoint={ lat:coord.lat, lon:coord.lon, label:raw, src:'address' }; _saveStartPoint(_startPoint);
+  _fmRenderRouteSetup(); _reoptimizeNow();
+}
+
+function fmSelectCrew(c){ _crewSel=c; _saveCrewSel(c); _fmRenderStart(); _reoptimizeNow(); }
+
+// Render the start-point note + crew chips on the start screen.
+function _fmRenderRouteSetup(){
+  const note=document.getElementById('fmStartPtNote');
+  if(note){
+    if(_savedOrderKeys&&_savedOrderKeys.length){ note.innerHTML='✅ Following the route your owner set. Start point only matters if no owner route exists.'; }
+    else if(_startPoint){ note.innerHTML='Starting from: <strong>'+esc(_startPoint.label||'set point')+'</strong>'+(_startPoint.src==='gps'?' (GPS)':'')+'. Stops are optimized from here.'; }
+    else { note.innerHTML='Set a start point to optimize your driving order. Until then, stops show in a sensible default order.'; }
+  }
+  const addr=document.getElementById('fmStartAddr');
+  if(addr && _startPoint && _startPoint.src==='address' && !addr.value) addr.value=_startPoint.label||'';
+  // crew chips: only when there's a real choice (multiple crews today, or no staff assignment)
+  const wrap=document.getElementById('fmCrewChips'); if(!wrap) return;
+  const av=_availableCrews(); const opts=[];
+  av.crews.forEach(c=>opts.push({v:c,label:'Crew '+c}));
+  if(av.hasUnassigned) opts.push({v:'UNASSIGNED',label:'Unassigned'});
+  opts.push({v:'ALL',label:'All'});
+  const meaningful = opts.length>2 || !adminCrews;
+  if(!meaningful){ wrap.style.display='none'; return; }
+  wrap.style.display='';
+  const eff=_crewSel||(String(adminCrews||'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean)[0])||'ALL';
+  const chip=(o)=>'<button onclick="fmSelectCrew(\''+o.v+'\')" style="border:1px solid '+(o.v===eff?'#22c55e':'rgba(255,255,255,.2)')+';background:'+(o.v===eff?'rgba(34,197,94,.22)':'rgba(255,255,255,.06)')+';color:#dcfce7;border-radius:999px;padding:7px 13px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;margin:0 6px 6px 0;">'+esc(o.label)+'</button>';
+  wrap.innerHTML='<div style="font-size:12px;font-weight:800;color:#9ed8b1;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Your crew</div>'+opts.map(chip).join('');
 }
 
 /* ───────── Offline queue + idempotency ───────── */
@@ -613,7 +701,8 @@ function _autoClockOut(){
 
 /* ───────── Stops / ordering ───────── */
 function _stopKey(bk){ return String(bk.email||'').toLowerCase().trim()+'|'+dateOf(bk); }
-function _fmTodayRawJobs(){ const ds=todayISOStr(); return (allBookings||[]).filter(b=>!b.rowCancelled&&dateOf(b)===ds&&_crewOk(b)); } // completed jobs stay so progress counts them as done
+function _crewMatch(bk){ if(_crewSel){ if(_crewSel==='ALL') return true; const c=String(bk.crew||'').toUpperCase().trim(); if(_crewSel==='UNASSIGNED') return !c; return c===_crewSel||!c; } return _crewOk(bk); } // explicit override else staff assignment
+function _fmTodayRawJobs(){ const ds=todayISOStr(); return (allBookings||[]).filter(b=>!b.rowCancelled&&dateOf(b)===ds&&_crewMatch(b)); } // completed jobs stay so progress counts them as done
 function _fmStops(){
   const jobs=_fmTodayRawJobs().map(bk=>({bk}));
   const order=(_savedOrderKeys&&_savedOrderKeys.length)?_savedOrderKeys
@@ -653,6 +742,7 @@ function _fmRenderStart(){
   const moneyPart=_isMoneyRole()?('~$'+total.toFixed(0)+' on the books'):(n+' stop'+(n!==1?'s':''));
   document.getElementById('fmStartSub').textContent=n?(moneyPart+(cashN?' · '+cashN+' cash stop'+(cashN!==1?'s':''):'')):'No jobs scheduled'+(adminCrews?(' for crew '+adminCrews):'')+' today.';
   const btn=document.getElementById('fmStartBtn'); if(btn){ btn.style.display=n?'':'none'; btn.textContent=_clockInTime&&!_clockedOut?'▶ Continue Route':'🟢 Start My Route'; }
+  _fmRenderRouteSetup();
   _fmSyncTimerSlots();
 }
 
