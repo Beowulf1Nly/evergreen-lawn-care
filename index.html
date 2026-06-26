@@ -144,7 +144,7 @@
 <!-- DNS prefetch for the Google Apps Script backend -->
 <link rel="dns-prefetch" href="https://script.google.com"/>
 <link rel="preconnect" href="https://script.google.com"/>
-<link rel="preload" as="image" href="Photos/image1.png">
+<link rel="preload" as="image" href="hero.png">
 <link rel="icon" type="image/x-icon" href="favicon.ico"/>
 <link rel="icon" type="image/png" href="favicon.png"/>
 <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
@@ -2293,7 +2293,7 @@ function renderCalendar() {
     const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const dateLabel = date.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
     const dow     = date.getDay();
-    const isWknd  = (dow === 0);  // Block Sundays
+    const isWknd  = (dow === 0 || dow === 6);  // Block weekends (Sat + Sun)
     const isPast  = date < tomorrow;
     const isFar   = date > maxDate;
     const isBlock = BLOCKED_DATES.has(dateStr);
@@ -3539,7 +3539,7 @@ function renderQCal() {
     const dateStr = `${qCalYear}-${String(qCalMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const dateLabel = date.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
     const dow     = date.getDay();
-    const isWknd  = (dow === 0);  // Block Sundays
+    const isWknd  = (dow === 0 || dow === 6);  // Block weekends (Sat + Sun)
     const isPast  = date < earliest;
     const isFar   = date > maxDate;
     const isBlock = BLOCKED_DATES.has(dateStr);
