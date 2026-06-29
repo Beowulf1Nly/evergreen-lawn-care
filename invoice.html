@@ -8978,13 +8978,10 @@ async function buildRoute() {
     return;
   }
 
-  // ── PMCS gate at the single chokepoint every route start flows through ──────
-  // (owner "Optimize", helper auto-build, re-optimize, employee clock-in). The
-  // clock-in / Field-Mode paths already ran the gate + load-out in the right
-  // order and set _skipBuildRouteGate, so they don't double-prompt here.
-  if (!_skipGateThisBuild) {
-    try { if (typeof pmcsGateForClockIn === 'function') await pmcsGateForClockIn(); } catch(e){}
-  }
+  // NOTE: PMCS is intentionally NOT gated here. The portal "Optimize Route" must
+  // not pop the checklist. PMCS only appears in Field Mode (fmStart) and the
+  // employee clock-in (confirmCrewAndStartRoute), which run the gate themselves.
+  void _skipGateThisBuild;
 
   // Group by date
   const byDate = {};
