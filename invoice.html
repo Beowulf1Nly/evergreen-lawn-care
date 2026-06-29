@@ -8756,20 +8756,9 @@ async function osrmTableMatrix(points){
   } catch(e){ return null; } finally { clearTimeout(timer); }
 }
 
-// Nearest-neighbour + 2-opt over a real-road duration matrix.
-// stopPts[k] = matrix index of stop k; originPt = matrix index of depot, or null.
-// Returns stop indices (0..n-1) in optimized order.
-function _matrixOrder(dur, stopPts, originPt){
-  const order = [];
-  const unv = stopPts.map((_,k)=>k);
-  let cur;
-  if (originPt != null){ cur = originPt; }
-  else { order.push(unv.shift()); cur = stopPts[order[0]]; }
-  while (unv.length){
-    let best=-1, bestD=Infinity;
-    for (let i=0;i<unv.length;i++){ const d=dur[cur][stopPts[unv[i]]]; if (d<bestD){ bestD=d; best=i; } }
-    order.push(unv[best]); cur=stopPts[unv[best]]; unv.splice(best,1);
-  }
+// 2-opt refinement over a real-road duration matrix for an OPEN path (no forced
+// return to start). Works with or without a fixed depot (originPt).
+function _twoOptMatrix(order, dur, stopPts, originPt){
   const D=(a,b)=>dur[a][b];
   let improved=true, guard=0;
   while (improved && guard++<60){
@@ -8777,11 +8766,12 @@ function _matrixOrder(dur, stopPts, originPt){
     for (let i=0;i<order.length-1;i++){
       for (let j=i+1;j<order.length;j++){
         const Apt = (i===0) ? originPt : stopPts[order[i-1]];
-        if (Apt == null) continue;
-        const Bpt=stopPts[order[i]], Cpt=stopPts[order[j]];
+        const Bpt = stopPts[order[i]], Cpt = stopPts[order[j]];
         const Ept = (j+1<order.length) ? stopPts[order[j+1]] : null;
-        const before = D(Apt,Bpt) + (Ept!=null?D(Cpt,Ept):0);
-        const after  = D(Apt,Cpt) + (Ept!=null?D(Bpt,Ept):0);
+        let before=0, after=0;
+        if (Apt != null){ before += D(Apt,Bpt); after += D(Apt,Cpt); }
+        if (Ept != null){ before += D(Cpt,Ept); after += D(Bpt,Ept); }
+        if (Apt == null && Ept == null) continue;
         if (after + 1e-6 < before){
           for (let lo=i,hi=j; lo<hi; lo++,hi--){ const t=order[lo]; order[lo]=order[hi]; order[hi]=t; }
           improved=true;
@@ -8790,6 +8780,48 @@ function _matrixOrder(dur, stopPts, originPt){
     }
   }
   return order;
+}
+
+// Nearest-neighbour + 2-opt over a real-road duration matrix.
+// stopPts[k] = matrix index of stop k; originPt = matrix index of depot, or null.
+// With no depot, tries EVERY starting stop and keeps the shortest open path —
+// this is what stops a route from zig-zagging back past where it started.
+// Returns stop indices (0..n-1) in optimized order.
+function _matrixOrder(dur, stopPts, originPt){
+  const n = stopPts.length;
+  const nnFrom = (startK) => {
+    const order = [startK];
+    const unv = stopPts.map((_,k)=>k).filter(k => k !== startK);
+    let cur = stopPts[startK];
+    while (unv.length){
+      let best=-1, bestD=Infinity;
+      for (let i=0;i<unv.length;i++){ const d=dur[cur][stopPts[unv[i]]]; if (d<bestD){ bestD=d; best=i; } }
+      order.push(unv[best]); cur=stopPts[unv[best]]; unv.splice(best,1);
+    }
+    return order;
+  };
+  const tourLen = (order) => {
+    let s = 0;
+    if (originPt != null) s += dur[originPt][stopPts[order[0]]];
+    for (let i=0;i<order.length-1;i++) s += dur[stopPts[order[i]]][stopPts[order[i+1]]];
+    return s;
+  };
+  // Candidate starting stops: nearest-to-depot if we have one, else try them all.
+  let starts;
+  if (originPt != null){
+    let best=0, bd=Infinity;
+    for (let k=0;k<n;k++){ const d=dur[originPt][stopPts[k]]; if (d<bd){ bd=d; best=k; } }
+    starts = [best];
+  } else {
+    starts = stopPts.map((_,k)=>k);
+  }
+  let bestOrder=null, bestLen=Infinity;
+  for (const st of starts){
+    const o = _twoOptMatrix(nnFrom(st), dur, stopPts, originPt);
+    const L = tourLen(o);
+    if (L < bestLen){ bestLen = L; bestOrder = o; }
+  }
+  return bestOrder || stopPts.map((_,k)=>k);
 }
 
 // Background pass: RE-ORDER each crew's route by the real road network (OSRM
