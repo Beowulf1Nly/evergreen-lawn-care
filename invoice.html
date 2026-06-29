@@ -7082,6 +7082,17 @@ function loadRouteFromStorage() {
     if (!raw) return null;
     const data = JSON.parse(raw);
     if (!data?.serializable || !data?.dates) return null;
+    // Persistent geocode cache → lets us restore each stop's coordinates so the
+    // real-road pass can re-optimize a reloaded route (saved orders only store
+    // distances, not lat/lon).
+    let _geo = {};
+    try { _geo = JSON.parse(localStorage.getItem('evg_geocache_v2') || '{}'); } catch(e){}
+    const _coordFor = (bk) => {
+      if (!bk) return null;
+      const city = (typeof ZIP_CITY !== 'undefined' && ZIP_CITY[bk.zip]) ? ZIP_CITY[bk.zip] : '';
+      const fullAddr = (bk.address || '') + (bk.zip ? ', ' + bk.zip : '') + (city ? ', ' + city : '') + ', FL';
+      return _geo[fullAddr] || null;
+    };
     // Reconstruct customOrder using rowIndex pointers into allBookings
     const customOrder = {};
     for (const [date, crewData] of Object.entries(data.serializable)) {
@@ -7091,7 +7102,10 @@ function loadRouteFromStorage() {
         customOrder[date][realCrew] = (stops||[]).map(s => {
           const bk = allBookings[s.rowIndex];
           if (!bk) return null;
-          return { bk, distFromPrev: s.distFromPrev, driveMinReal: (s.driveMinReal != null ? s.driveMinReal : undefined), geocodeFailed: !!s.geocodeFailed };
+          const c = _coordFor(bk);
+          return { bk, lat: c ? c.lat : undefined, lon: c ? c.lon : undefined,
+                   distFromPrev: s.distFromPrev, driveMinReal: (s.driveMinReal != null ? s.driveMinReal : undefined),
+                   geocodeFailed: !!s.geocodeFailed };
         }).filter(Boolean);
       }
     }
@@ -7570,6 +7584,15 @@ function initRouteTab() {
     document.getElementById('routeClearSavedBtn').style.display = '';
     renderSavedRoute(saved);
     _updateRouteAllBtn();
+    // If this saved route was built before real-road routing (no driveMinReal) but
+    // we restored coordinates for it, re-optimize it by the road network once.
+    try {
+      const needsRoad = Object.values(saved.customOrder).some(cr => {
+        const arr = Array.isArray(cr) ? cr : Object.values(cr).flat();
+        return arr.some(s => s && s.lat != null && s.driveMinReal == null);
+      });
+      if (needsRoad) setTimeout(() => { try { applyRealRoadDistances(); } catch(e){} }, 400);
+    } catch(e){}
   } else {
     // No saved route — just clear
     const tl = document.getElementById('routeTimeline');
@@ -8716,65 +8739,105 @@ function routeDriveMin(stop){
   return Math.round((d / 25) * 60);
 }
 
-// Per-leg real driving distance (miles) + duration (minutes) along ordered
-// {lat,lon} points. Returns array length points.length-1, or null on failure.
-async function osrmRouteLegs(points){
+// OSRM table service: real driving distance (m) + duration (s) matrices for an
+// ordered list of {lat,lon} points. Returns { dur, dist } (NxN), or null on failure.
+async function osrmTableMatrix(points){
   if (!Array.isArray(points) || points.length < 2) return null;
   const coords = points.map(p => p.lon + ',' + p.lat).join(';');
-  const url = 'https://router.project-osrm.org/route/v1/driving/' + coords +
-              '?overview=false&steps=false&annotations=false';
+  const url = 'https://router.project-osrm.org/table/v1/driving/' + coords +
+              '?annotations=duration,distance';
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 8000);
+  const timer = setTimeout(() => ctrl.abort(), 9000);
   try {
     const r = await fetch(url, { signal: ctrl.signal });
     const d = await r.json();
-    if (!d || d.code !== 'Ok' || !d.routes || !d.routes[0] || !d.routes[0].legs) return null;
-    return d.routes[0].legs.map(leg => ({
-      miles: (leg.distance || 0) / 1609.344,
-      mins:  (leg.duration || 0) / 60,
-    }));
+    if (!d || d.code !== 'Ok' || !d.durations) return null;
+    return { dur: d.durations, dist: d.distances || null };
   } catch(e){ return null; } finally { clearTimeout(timer); }
 }
 
-// Background pass: walk the just-built route, ask OSRM for real road
-// distance/time per crew per day, write them onto the stops, then re-render +
-// refresh the stats bar. Fire-and-forget — never blocks the initial render.
+// Nearest-neighbour + 2-opt over a real-road duration matrix.
+// stopPts[k] = matrix index of stop k; originPt = matrix index of depot, or null.
+// Returns stop indices (0..n-1) in optimized order.
+function _matrixOrder(dur, stopPts, originPt){
+  const order = [];
+  const unv = stopPts.map((_,k)=>k);
+  let cur;
+  if (originPt != null){ cur = originPt; }
+  else { order.push(unv.shift()); cur = stopPts[order[0]]; }
+  while (unv.length){
+    let best=-1, bestD=Infinity;
+    for (let i=0;i<unv.length;i++){ const d=dur[cur][stopPts[unv[i]]]; if (d<bestD){ bestD=d; best=i; } }
+    order.push(unv[best]); cur=stopPts[unv[best]]; unv.splice(best,1);
+  }
+  const D=(a,b)=>dur[a][b];
+  let improved=true, guard=0;
+  while (improved && guard++<60){
+    improved=false;
+    for (let i=0;i<order.length-1;i++){
+      for (let j=i+1;j<order.length;j++){
+        const Apt = (i===0) ? originPt : stopPts[order[i-1]];
+        if (Apt == null) continue;
+        const Bpt=stopPts[order[i]], Cpt=stopPts[order[j]];
+        const Ept = (j+1<order.length) ? stopPts[order[j+1]] : null;
+        const before = D(Apt,Bpt) + (Ept!=null?D(Cpt,Ept):0);
+        const after  = D(Apt,Cpt) + (Ept!=null?D(Bpt,Ept):0);
+        if (after + 1e-6 < before){
+          for (let lo=i,hi=j; lo<hi; lo++,hi--){ const t=order[lo]; order[lo]=order[hi]; order[hi]=t; }
+          improved=true;
+        }
+      }
+    }
+  }
+  return order;
+}
+
+// Background pass: RE-ORDER each crew's route by the real road network (OSRM
+// distance matrix), write real per-leg distance/time onto the stops, then
+// re-render + refresh stats. Fire-and-forget. Falls back to the existing
+// straight-line order if OSRM is unreachable or the crew has manually-pinned
+// stops (pins keep their order; distances are still relabeled with real values).
 async function applyRealRoadDistances(){
   const order = _routeCustomOrder || {};
   let anyUpdated = false;
+  const hasOrigin = !!(_routeStartCoord && _routeStartCoord.lat != null);
   for (const dateStr of Object.keys(order)){
     const crews = order[dateStr];
     if (!crews) continue;
-    const crewMap = Array.isArray(crews) ? { _legacy: crews } : crews;
+    const isLegacy = Array.isArray(crews);
+    const crewMap = isLegacy ? { _legacy: crews } : crews;
     for (const crew of Object.keys(crewMap)){
       const stops = crewMap[crew] || [];
-      const geoStops = stops.filter(s => s && s.lat != null && s.lon != null && !s.geocodeFailed);
-      if (geoStops.length < 1) continue;
-      // points = [origin?, ...stops]; leg i is the drive INTO points[i+1]
+      const geoStops  = stops.filter(s => s && s.lat != null && s.lon != null && !s.geocodeFailed);
+      const failStops = stops.filter(s => !(s && s.lat != null && s.lon != null) || s.geocodeFailed);
+      if (geoStops.length < 2) continue;
       const points = [];
-      const hasOrigin = !!(_routeStartCoord && _routeStartCoord.lat != null);
       if (hasOrigin) points.push({ lat:_routeStartCoord.lat, lon:_routeStartCoord.lon });
+      const baseIdx = points.length;
       for (const s of geoStops) points.push({ lat:s.lat, lon:s.lon });
-      if (points.length < 2) continue;
-      const legs = await osrmRouteLegs(points);
-      if (!legs) continue;   // OSRM unavailable for this route → keep haversine
-      // Map legs back onto the geocoded stops in order.
-      for (let i = 0; i < geoStops.length; i++){
-        const legIdx = hasOrigin ? i : i - 1;   // first stop has no inbound leg when no origin
-        if (legIdx >= 0 && legs[legIdx]){
-          geoStops[i].distFromPrev = legs[legIdx].miles;
-          geoStops[i].driveMinReal = legs[legIdx].mins;
-        } else {
-          geoStops[i].distFromPrev = 0;
-          geoStops[i].driveMinReal = 0;
-        }
+      const M = await osrmTableMatrix(points);
+      if (!M) continue;                       // OSRM down → keep current order
+      const stopPts  = geoStops.map((_,k)=> baseIdx + k);
+      const originPt = hasOrigin ? 0 : null;
+      const pinned   = geoStops.some(s => s.bk && s.bk._routePinned);
+      const ordered  = pinned ? geoStops.map((_,k)=>k) : _matrixOrder(M.dur, stopPts, originPt);
+      const newStops = [];
+      let prevPt = hasOrigin ? 0 : null;
+      for (let idx=0; idx<ordered.length; idx++){
+        const s  = geoStops[ordered[idx]];
+        const pt = baseIdx + ordered[idx];
+        s.distFromPrev = (prevPt != null && M.dist) ? (M.dist[prevPt][pt]||0)/1609.344 : 0;
+        s.driveMinReal = (prevPt != null) ? (M.dur[prevPt][pt]||0)/60 : 0;
+        newStops.push(s);
+        prevPt = pt;
       }
+      const finalStops = newStops.concat(failStops);
+      if (isLegacy) order[dateStr] = finalStops; else order[dateStr][crew] = finalStops;
       anyUpdated = true;
       await new Promise(r => setTimeout(r, 150));  // be polite to the public server
     }
   }
   if (!anyUpdated) return;
-  // Re-render whatever's on screen + refresh the stats bar with real numbers.
   try { _recalcRouteStatsBar(); } catch(e){}
   try {
     const cur = (typeof _routeViewDates !== 'undefined' && _routeViewDates)
@@ -8787,7 +8850,7 @@ async function applyRealRoadDistances(){
     }
   } catch(e){}
   try { saveRouteToStorage(_routeCustomOrder, null, _routeViewDates); } catch(e){}
-  if (typeof showToast === 'function') showToast('🛰️ Route updated with real road distances & times');
+  if (typeof showToast === 'function') showToast('🛰️ Route re-optimized by real road network');
 }
 
 // Recompute the top stats bar (miles + drive time) from current stop values.
