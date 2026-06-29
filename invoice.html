@@ -11122,7 +11122,14 @@ async function fmStart(){
     if (typeof employeeStartRoute === 'function') employeeStartRoute();
     return;
   }
-  // Helper / manager preview / resuming: just (re)build the route
+  // Helper / manager preview / resuming.
+  // PMCS gate first (no-op if nothing is due today). On the first start of the
+  // day (not yet clocked in), also run the "Got everything?" load-out check.
+  // This is the path Field Mode uses, so without it employees never see PMCS.
+  if (!_clockInTime){
+    try { if (typeof pmcsGateForClockIn === 'function') await pmcsGateForClockIn(); } catch(e){}
+    try { if (typeof loadoutGate === 'function') await loadoutGate(); } catch(e){}
+  }
   if (btn){ btn.disabled = true; btn.textContent = '⏳ Building route…'; }
   try { await buildRoute(); } catch(e){}
   if (btn){ btn.disabled = false; }
