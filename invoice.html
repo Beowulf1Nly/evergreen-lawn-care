@@ -1271,7 +1271,8 @@
         </div>
         <div class="fm-start-sub" id="fmStartSub"></div>
         <button class="fm-btn fm-btn-xl fm-btn-start" id="fmStartBtn" onclick="fmStart()" style="min-width:260px;">🟢 Start My Route</button>
-        <button class="fm-skip" onclick="loadBookings()" style="color:#9ed8b1;margin-top:18px;">↻ Refresh jobs</button>
+        <button class="fm-skip" onclick="pmcsOpenMenu()" style="color:#9ed8b1;margin-top:18px;">🔧 PMCS / Maintenance Checks</button>
+        <button class="fm-skip" onclick="loadBookings()" style="color:#9ed8b1;margin-top:10px;">↻ Refresh jobs</button>
       </div>
     </div>
 
@@ -1280,6 +1281,7 @@
       <div class="fm-top">
         <button class="fm-top-exit" onclick="exitFieldMode()">‹ Exit</button>
         <div style="display:flex;align-items:center;gap:8px;">
+          <button class="fm-top-exit" onclick="pmcsOpenMenu()" title="PMCS / Maintenance">🔧 PMCS</button>
           <button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button>
           <div class="fm-top-timer" id="fmJobTimer" style="display:none;"><span class="fm-dot"></span><span id="fmJobTimerVal">0:00:00</span></div>
         </div>
@@ -7224,6 +7226,7 @@ async function confirmCrewAndStartRoute() {
   try { if (typeof loadoutGate === 'function') await loadoutGate(); } catch(e) {}
   const btn = document.getElementById('routeClockInBtn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Building route…'; }
+  _skipBuildRouteGate = true;   // gate already shown above — don't double-prompt
   try { await buildRoute(); } catch(e) {}
   if (btn) { btn.disabled = false; btn.textContent = '🟢 Clock In & Start Route'; }
 
@@ -8702,6 +8705,9 @@ function addMin(date, mins) {
 // the public OSRM server, then re-render. Everything degrades gracefully to the
 // straight-line estimate if OSRM is unreachable (offline, rate-limited, etc.).
 let _routeStartCoord = null;
+// When true, buildRoute() skips its PMCS gate once (the caller already ran the
+// gate + load-out in the correct order — clock-in / Field-Mode start).
+let _skipBuildRouteGate = false;
 
 // Drive minutes for a stop: prefer the real OSRM duration, else haversine ÷ 25mph.
 function routeDriveMin(stop){
@@ -8852,6 +8858,9 @@ function twoOptImprove(route, origin) {
 
 // ── MAIN: Build & render the optimized route ─────────────────────────────
 async function buildRoute() {
+  // Consume the "gate already shown" flag up front so it's cleared even if we
+  // bail early below (e.g. no jobs).
+  const _skipGateThisBuild = _skipBuildRouteGate; _skipBuildRouteGate = false;
   const startVal  = (document.getElementById('routeStartAddr')?.value || '').trim();
   const startTime = (document.getElementById('routeStartTime')?.value || '08:00');
   const syncCal   = false; // Calendar sync removed — use Dispatch Board tab instead
@@ -8872,6 +8881,14 @@ async function buildRoute() {
   if (!allUpcoming.length) {
     if (errEl) { errEl.textContent = 'No jobs scheduled for ' + rangeLabel + '.'; errEl.style.display = 'block'; }
     return;
+  }
+
+  // ── PMCS gate at the single chokepoint every route start flows through ──────
+  // (owner "Optimize", helper auto-build, re-optimize, employee clock-in). The
+  // clock-in / Field-Mode paths already ran the gate + load-out in the right
+  // order and set _skipBuildRouteGate, so they don't double-prompt here.
+  if (!_skipGateThisBuild) {
+    try { if (typeof pmcsGateForClockIn === 'function') await pmcsGateForClockIn(); } catch(e){}
   }
 
   // Group by date
@@ -11131,6 +11148,7 @@ async function fmStart(){
     try { if (typeof loadoutGate === 'function') await loadoutGate(); } catch(e){}
   }
   if (btn){ btn.disabled = true; btn.textContent = '⏳ Building route…'; }
+  _skipBuildRouteGate = true;   // gate handled above (or resuming) — don't re-prompt in buildRoute
   try { await buildRoute(); } catch(e){}
   if (btn){ btn.disabled = false; }
   _fmViewIdx = null;
@@ -11793,6 +11811,70 @@ function pmcsRenderTab(){
   body.innerHTML = html;
 }
 
+// ── On-demand PMCS menu (used inside Field Mode, where there's no tab) ───────
+// Lets a crew pull up the machine list and run any check anytime, not just at
+// route start. Reuses the same per-machine runner as the tab/gate.
+function _pmcsInjectMenuOverlay(){
+  if (document.getElementById('pmcsMenuOverlay')) return;
+  _pmcsInjectStyle();
+  const o = document.createElement('div');
+  o.className = 'pmcs-overlay'; o.id = 'pmcsMenuOverlay';
+  o.innerHTML = `
+    <div class="pmcs-panel">
+      <div class="pmcs-head">
+        <div class="pmcs-head-row">
+          <div class="pmcs-head-title">🔧 PMCS</div>
+          <button class="pmcs-head-close" onclick="pmcsCloseMenu()">×</button>
+        </div>
+        <div class="pmcs-head-sub">Run a maintenance check on any machine.</div>
+      </div>
+      <div class="pmcs-body" id="pmcsMenuBody"></div>
+    </div>`;
+  document.body.appendChild(o);
+}
+async function pmcsOpenMenu(){
+  _pmcsInjectStyle(); _pmcsInjectOverlay(); _pmcsInjectMenuOverlay();
+  const body = document.getElementById('pmcsMenuBody');
+  if (body) body.innerHTML = '<div style="text-align:center;padding:34px;color:#64748b;">Loading PMCS status…</div>';
+  const ov = document.getElementById('pmcsMenuOverlay');
+  if (ov) ov.classList.add('open');
+  await pmcsLoadStatus(true);
+  pmcsRenderMenu();
+}
+function pmcsCloseMenu(){
+  const ov = document.getElementById('pmcsMenuOverlay');
+  if (ov) ov.classList.remove('open');
+}
+function pmcsRenderMenu(){
+  const body = document.getElementById('pmcsMenuBody');
+  if (!body) return;
+  let html = '';
+  for (const eq of PMCS_EQUIPMENT){
+    const due = _pmcsDue(eq.key);
+    const st  = _pmcsState.status[eq.key] || {};
+    const badge = (cad,lbl) => due[cad]
+      ? `<span class="pmcs-badge due">${lbl} due</span>`
+      : `<span class="pmcs-badge ok">${lbl} ✓</span>`;
+    const anyDue = due.daily || due.weekly || due.monthly;
+    const lastTxt = st.daily ? `Last daily: ${st.daily}` : 'No daily logged yet';
+    html += `
+      <div class="pmcs-card">
+        <div class="pmcs-card-top">
+          <div class="pmcs-card-icon">${eq.icon}</div>
+          <div style="flex:1;">
+            <div class="pmcs-card-name">${esc(eq.name)}</div>
+            <div class="pmcs-card-sub">${esc(lastTxt)}</div>
+          </div>
+        </div>
+        <div class="pmcs-badges">${badge('daily','Daily')}${badge('weekly','Weekly')}${badge('monthly','Monthly')}</div>
+        <button class="pmcs-start-btn ${anyDue?'':'allok'}" onclick="pmcsOpenSingle('${eq.key}')">
+          ${anyDue ? '▶ Start '+esc(eq.name)+' PMCS' : '↻ Re-run '+esc(eq.name)+' PMCS'}
+        </button>
+      </div>`;
+  }
+  body.innerHTML = html;
+}
+
 function pmcsOpenSingle(eqKey){
   _pmcsInjectStyle(); _pmcsInjectOverlay();
   _pmcsMode = 'single';
@@ -11969,6 +12051,7 @@ function pmcsFinishRunner(){
   const ov = document.getElementById('pmcsOverlay');
   if (ov) ov.classList.remove('open');
   try { pmcsRenderTab(); } catch(e){}
+  try { if (document.getElementById('pmcsMenuOverlay')) pmcsRenderMenu(); } catch(e){}
   if (_pmcsMode === 'gate' && typeof _pmcsResolveGate === 'function'){
     const r = _pmcsResolveGate; _pmcsResolveGate = null; r();
   }
@@ -11978,6 +12061,7 @@ function pmcsCloseRunner(){
   const ov = document.getElementById('pmcsOverlay');
   if (ov) ov.classList.remove('open');
   try { pmcsRenderTab(); } catch(e){}
+  try { if (document.getElementById('pmcsMenuOverlay')) pmcsRenderMenu(); } catch(e){}
 }
 function _pmcsSend(params){
   try {
