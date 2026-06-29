@@ -6,6 +6,40 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Evergreen — Staff Portal</title>
 <meta name="robots" content="noindex, nofollow"/>
+<!-- Tell the browser to revalidate the HTML instead of serving a stale cached copy -->
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<!-- Auto-updater: pulls the latest version in the background and reloads once when a new
+     deploy is live, so phones never get stuck on an old cached build. Loop-guarded. -->
+<script>
+/* APP_VER:2026-06-29.7 */
+(function(){
+  var V = '2026-06-29.7';
+  window.__APP_VER = V;
+  var reloads = 0, lastCheck = 0;
+  function check(){
+    if (document.hidden) return;
+    if (reloads >= 2) return;                 // hard cap per page session — no runaway loops
+    var now = Date.now();
+    if (now - lastCheck < 60000) return;      // throttle: at most one check per minute
+    lastCheck = now;
+    fetch(location.pathname + '?_=' + now, { cache:'no-store' })
+      .then(function(r){ return r.ok ? r.text() : null; })
+      .then(function(html){
+        if (!html) return;
+        var m = html.match(/APP_VER:([0-9.\-]+)/);
+        var last = +(sessionStorage.getItem('evg_ver_reload')||0);
+        if (m && m[1] && m[1] !== V && (now - last) > 60000){
+          reloads++;
+          try { sessionStorage.setItem('evg_ver_reload', String(now)); } catch(e){}
+          location.replace(location.pathname + '?_=' + now);   // fresh, cache-busted load
+        }
+      }).catch(function(){});
+  }
+  setTimeout(check, 5000);
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) check(); });
+})();
+</script>
 <!-- Fonts load asynchronously — no render block, no persistent connection -->
 <link rel="dns-prefetch" href="https://fonts.googleapis.com"/>
 <link rel="dns-prefetch" href="https://fonts.gstatic.com"/>
