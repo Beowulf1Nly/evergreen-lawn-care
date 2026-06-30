@@ -481,6 +481,10 @@ function _fmAmt(bk){ return parseFloat(String(bk.price||'0').replace(/[^0-9.]/g,
 function _payType(bk){
   const s=(String(bk.payMethod||'')+' '+String(bk.calendarEvent||'')).toLowerCase();
   if(s.includes('cash')) return 'cash';
+  // Customer turned on autopay in the portal (card on file) — charge it on complete,
+  // even if the booking was originally created as pay-after / invoice. The backend
+  // attaches portalAutopay + cardLast4 to every booking from the Customers sheet.
+  if(bk.portalAutopay===true && String(bk.cardLast4||'').trim()) return 'autopay';
   if((s.includes('auto')||s.includes('stripe')) && !s.includes('not paid') && !s.includes('pending')) return 'autopay';
   return 'invoice';
 }
