@@ -598,7 +598,7 @@ function _extractRouteKeys(rRes){
    job time. Preference: (a) saved canonical route > (b) self-optimized > (c) job time.
    Geocoding needs a signal; with none we fall back gracefully to the cached
    optimized order, then to job time — never breaking the route view. */
-const _GEO_CACHE_KEY='evg_geocache_v2';      // shared with /invoice on this origin (free cache hits)
+const _GEO_CACHE_KEY='evg_geocache_v3';      // v3: POI-rejecting geocoder — shared with /invoice (free cache hits)
 const _OPT_ORDER_KEY='evg_field_optorder_v1';
 const ZIP_CITY={ '34428':'Crystal River','34429':'Crystal River','34450':'Inverness','34451':'Inverness','34452':'Inverness','34453':'Inverness','34460':'Lecanto','34461':'Lecanto','34431':'Dunnellon','34432':'Dunnellon','34433':'Dunnellon','34434':'Citrus Springs','34436':'Floral City','34442':'Hernando','34423':'Crystal River','34464':'Beverly Hills','34465':'Beverly Hills','34449':'Inglis','34498':'Yankeetown','34480':'Ocala','34481':'Ocala','34482':'Ocala','34476':'Ocala','34474':'Ocala','34472':'Ocala','34470':'Ocala','34471':'Ocala','34479':'Ocala','34475':'Ocala','34478':'Ocala','34491':'Summerfield','34488':'Silver Springs','32626':'Chiefland','32668':'Morriston','34601':'Brooksville','34602':'Brooksville','34604':'Brooksville' };
 function _geoCacheLoad(){ try{ return JSON.parse(localStorage.getItem(_GEO_CACHE_KEY)||'{}'); }catch(e){ return {}; } }
@@ -620,9 +620,35 @@ async function _geocodeAddr(addr){
   let streetNoState=streetOnly.replace(/,\s*FL\s*$/i,'').replace(/,\s*Florida\s*$/i,'').trim();
   if(city&&streetNoState.toLowerCase().endsWith(', '+city.toLowerCase())) streetNoState=streetNoState.slice(0,streetNoState.length-city.length-2).trim();
   const addrByCity=city?streetNoState+', '+city+', FL':''; const streetFL=streetNoState+', Florida';
+  // Reject POI / area matches (parks, communities, subdivision centroids) that
+  // otherwise hijack rural addresses. Better to fail → use the literal address.
+  const _GEO_BAD_KEY=new Set(['leisure','amenity','tourism','natural','historic','shop','boundary','landuse','waterway','railway','aeroway','man_made','military','office']);
+  const _GEO_BAD_TYPE=new Set(['city','town','village','hamlet','suburb','neighbourhood','locality','district','region','county','state','island','islet','administrative']);
+  const wantHouseNum=(streetNoState.match(/^\s*\d+\b/)||[''])[0].trim();
   function fetchWithTimeout(url,opts,ms){ ms=ms||4000; const ctrl=new AbortController(); const timer=setTimeout(function(){ctrl.abort();},ms); return fetch(url,Object.assign({},opts,{signal:ctrl.signal})).finally(function(){clearTimeout(timer);}); }
-  async function tryPhoton(q){ const r=await fetchWithTimeout('https://photon.komoot.io/api/?q='+encodeURIComponent(q)+'&limit=1&countrycode=us',{},4000); const d=await r.json(); const f=d&&d.features&&d.features[0]; if(f) return { lat:f.geometry.coordinates[1], lon:f.geometry.coordinates[0] }; return null; }
-  async function tryNominatim(q){ const r=await fetchWithTimeout('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q='+encodeURIComponent(q),{headers:{'Accept-Language':'en'}},4000); const d=await r.json(); if(d&&d[0]) return { lat:parseFloat(d[0].lat), lon:parseFloat(d[0].lon) }; return null; }
+  async function tryPhoton(q){
+    const r=await fetchWithTimeout('https://photon.komoot.io/api/?q='+encodeURIComponent(q)+'&limit=5&lang=en&countrycode=us',{},4000);
+    const d=await r.json(); const feats=(d&&d.features)||[];
+    for(const f of feats){ const p=f.properties||{}; const k=String(p.osm_key||'').toLowerCase(); const t=String(p.type||'').toLowerCase();
+      if(_GEO_BAD_KEY.has(k)||_GEO_BAD_TYPE.has(t)) continue;                  // reject parks/communities/areas
+      if(wantHouseNum && !p.street && t!=='house' && t!=='street') continue;  // need a real street, not an area centroid
+      return { lat:f.geometry.coordinates[1], lon:f.geometry.coordinates[0] }; }
+    return null;
+  }
+  async function tryNominatim(q,structured){
+    const url='https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=us&'+(structured?q:'q='+encodeURIComponent(q));
+    const r=await fetchWithTimeout(url,{headers:{'Accept-Language':'en'}},4000);
+    const d=await r.json(); if(!Array.isArray(d)) return null;
+    for(const h of d){ const c=String(h.class||'').toLowerCase(); const t=String(h.type||'').toLowerCase(); const a=h.address||{};
+      if(_GEO_BAD_KEY.has(c)) continue;                       // reject leisure/amenity/tourism POIs
+      if(c==='place' && _GEO_BAD_TYPE.has(t)) continue;       // reject suburb/locality/district centroids
+      const hasRoad=!!(a.road||a.pedestrian||a.residential);
+      if(wantHouseNum && !hasRoad) continue;                  // a house-numbered input must hit a real road
+      return { lat:parseFloat(h.lat), lon:parseFloat(h.lon) }; }
+    return null;
+  }
+  // 0. Structured Nominatim first — most accurate for rural addresses, least POI bleed
+  if(streetNoState){ const _qs='street='+encodeURIComponent(streetNoState)+(city?'&city='+encodeURIComponent(city):'')+'&state=FL&country=US'+(zip?'&postalcode='+encodeURIComponent(zip):''); try{ const r=await tryNominatim(_qs,true); if(r) return r; }catch(e){} }
   try{ const r=await tryPhoton(addr); if(r) return r; }catch(e){}
   try{ const r=await tryNominatim(addr); if(r) return r; }catch(e){}
   if(addrByCity){ try{ const r=await tryPhoton(addrByCity); if(r) return r; }catch(e){} try{ const r=await tryNominatim(addrByCity); if(r) return r; }catch(e){} }

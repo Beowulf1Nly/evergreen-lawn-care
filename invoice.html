@@ -8203,13 +8203,20 @@ function routeAddrInput(el) {
     return;
   }
   if (box) { box.innerHTML = '<div class="addr-suggestion-loading">Searching…</div>'; box.style.display = 'block'; }
-  fetch('https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=us&q=' + encodeURIComponent(q))
+  fetch('https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&countrycodes=us&q=' + encodeURIComponent(q))
     .then(r => r.json()).then(results => {
-      _addrSuggs = results;
+      // Prefer real addresses (house/road); drop parks/communities/POIs. Fall back to all if nothing qualifies.
+      const BAD = new Set(['leisure','amenity','tourism','natural','historic','shop','boundary','landuse','waterway','railway','aeroway']);
+      const addressy = (results || []).filter(r => {
+        const c = String(r.class||'').toLowerCase(); const a = r.address || {};
+        if (BAD.has(c)) return false;
+        return !!(a.house_number || a.road || a.residential);
+      });
+      _addrSuggs = (addressy.length ? addressy : (results || [])).slice(0, 5);
       if (!box) return;
-      if (!results.length) { box.innerHTML = ''; box.style.display = 'none'; return; }
+      if (!_addrSuggs.length) { box.innerHTML = ''; box.style.display = 'none'; return; }
       box.style.display = 'block';
-      box.innerHTML = results.map((r, i) =>
+      box.innerHTML = _addrSuggs.map((r, i) =>
         '<div class="addr-suggestion-item" onmousedown="selectAddrSugg(' + i + ')">' + esc(r.display_name) + '</div>'
       ).join('');
     }).catch(() => { if (box) { box.innerHTML = ''; box.style.display = 'none'; } });
@@ -9229,7 +9236,7 @@ async function buildRoute() {
 
     // Geocode all job addresses — uses persistent localStorage cache so each address
     // is only ever looked up once, even across sessions.
-    const _GEO_CACHE_KEY = 'evg_geocache_v2';
+    const _GEO_CACHE_KEY = 'evg_geocache_v3'; // v3: POI-rejecting geocoder — re-geocode everything
     let geoCache = {};
     try { geoCache = JSON.parse(localStorage.getItem(_GEO_CACHE_KEY) || '{}'); } catch(e) {}
     let _geoCacheDirty = false;
@@ -9624,6 +9631,11 @@ async function geocodeAddr(addr) {
   const addrByCity = city ? streetNoState + ', ' + city + ', FL' : '';
   // Widest net fallback: "123 Oak St, Florida"
   const streetFL   = streetNoState + ', Florida';
+  // Reject POI / area matches (parks, communities, subdivision centroids) that
+  // otherwise hijack rural addresses. Better to fail → use the literal address.
+  const _GEO_BAD_KEY=new Set(['leisure','amenity','tourism','natural','historic','shop','boundary','landuse','waterway','railway','aeroway','man_made','military','office']);
+  const _GEO_BAD_TYPE=new Set(['city','town','village','hamlet','suburb','neighbourhood','locality','district','region','county','state','island','islet','administrative']);
+  const wantHouseNum=(streetNoState.match(/^\s*\d+\b/)||[''])[0].trim();
 
   // fetchWithTimeout: abort after ms milliseconds so a hanging API never stalls the route build
   function fetchWithTimeout(url, opts, ms = 4000) {
@@ -9631,20 +9643,30 @@ async function geocodeAddr(addr) {
     const timer = setTimeout(() => ctrl.abort(), ms);
     return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
   }
-  async function tryPhoton(q) {
-    const r = await fetchWithTimeout('https://photon.komoot.io/api/?q=' + encodeURIComponent(q) + '&limit=1&countrycode=us', {}, 4000);
-    const d = await r.json();
-    const f = d?.features?.[0];
-    if (f) return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] };
+  async function tryPhoton(q){
+    const r=await fetchWithTimeout('https://photon.komoot.io/api/?q='+encodeURIComponent(q)+'&limit=5&lang=en&countrycode=us',{},4000);
+    const d=await r.json(); const feats=(d&&d.features)||[];
+    for(const f of feats){ const p=f.properties||{}; const k=String(p.osm_key||'').toLowerCase(); const t=String(p.type||'').toLowerCase();
+      if(_GEO_BAD_KEY.has(k)||_GEO_BAD_TYPE.has(t)) continue;                  // reject parks/communities/areas
+      if(wantHouseNum && !p.street && t!=='house' && t!=='street') continue;  // need a real street, not an area centroid
+      return { lat:f.geometry.coordinates[1], lon:f.geometry.coordinates[0] }; }
     return null;
   }
-  async function tryNominatim(q) {
-    const r = await fetchWithTimeout('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=' + encodeURIComponent(q), { headers: { 'Accept-Language': 'en' } }, 4000);
-    const d = await r.json();
-    if (d?.[0]) return { lat: parseFloat(d[0].lat), lon: parseFloat(d[0].lon) };
+  async function tryNominatim(q,structured){
+    const url='https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=us&'+(structured?q:'q='+encodeURIComponent(q));
+    const r=await fetchWithTimeout(url,{headers:{'Accept-Language':'en'}},4000);
+    const d=await r.json(); if(!Array.isArray(d)) return null;
+    for(const h of d){ const c=String(h.class||'').toLowerCase(); const t=String(h.type||'').toLowerCase(); const a=h.address||{};
+      if(_GEO_BAD_KEY.has(c)) continue;                       // reject leisure/amenity/tourism POIs
+      if(c==='place' && _GEO_BAD_TYPE.has(t)) continue;       // reject suburb/locality/district centroids
+      const hasRoad=!!(a.road||a.pedestrian||a.residential);
+      if(wantHouseNum && !hasRoad) continue;                  // a house-numbered input must hit a real road
+      return { lat:parseFloat(h.lat), lon:parseFloat(h.lon) }; }
     return null;
   }
 
+  // 0. Structured Nominatim first — most accurate for rural addresses, least POI bleed
+  if(streetNoState){ const _qs='street='+encodeURIComponent(streetNoState)+(city?'&city='+encodeURIComponent(city):'')+'&state=FL&country=US'+(zip?'&postalcode='+encodeURIComponent(zip):''); try{ const r=await tryNominatim(_qs,true); if(r) return r; }catch(e){} }
   // 1. Photon with full address (zip)
   try { const r = await tryPhoton(addr);        if (r) return r; } catch(e) {}
   // 2. Nominatim with full address (zip)
