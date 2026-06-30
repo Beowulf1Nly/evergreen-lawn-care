@@ -12,9 +12,9 @@
 <!-- Auto-updater: pulls the latest version in the background and reloads once when a new
      deploy is live, so phones never get stuck on an old cached build. Loop-guarded. -->
 <script>
-/* APP_VER:2026-06-29.8 */
+/* APP_VER:2026-06-29.9 */
 (function(){
-  var V = '2026-06-29.8';
+  var V = '2026-06-29.9';
   window.__APP_VER = V;
   var reloads = 0, lastCheck = 0;
   function check(){
@@ -11197,8 +11197,9 @@ function enterFieldMode(){
   _fmUpdateSyncBadge();
   _fmFlushQueue();
   _fmRender();
-  // Warm up the route in the background while the crew is on the start screen /
-  // doing PMCS, so tapping "Start My Route" is instant instead of a long load.
+  // Warm up the route AND the PMCS status in the background while the crew is on
+  // the start screen, so tapping "Start My Route" — and the PMCS gate — are instant.
+  try { if (typeof pmcsLoadStatus === 'function') pmcsLoadStatus(true); } catch(e){}
   setTimeout(() => { try { _fmPrebuildRoute(); } catch(e){} }, 400);
 }
 function _fmOnlineHandler(){ _fmUpdateSyncBadge(); _fmFlushQueue(); }
@@ -11938,20 +11939,26 @@ function _pmcsInjectOverlay(){
   document.body.appendChild(o);
 }
 
+let _pmcsStatusPromise = null;
 async function pmcsLoadStatus(force){
   if (_pmcsState.loaded && !force) return _pmcsState.status;
+  if (_pmcsStatusPromise) return _pmcsStatusPromise;   // dedupe: share an in-flight fetch
   // Hard 6s timeout so a slow/weak connection can NEVER hang the gate — if the
   // status can't load we just treat everything as due and let the crew proceed.
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 6000);
-    const r = await fetch(SCRIPT_URL + '?action=get_pmcs_status&adminToken=' + encodeURIComponent(adminToken), { signal: ctrl.signal });
-    clearTimeout(timer);
-    const d = await r.json();
-    if (d && d.success && d.status) _pmcsState.status = d.status;
-  } catch(e){ /* offline / slow / not deployed: keep whatever we have */ }
-  _pmcsState.loaded = true;
-  return _pmcsState.status;
+  _pmcsStatusPromise = (async () => {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 6000);
+      const r = await fetch(SCRIPT_URL + '?action=get_pmcs_status&adminToken=' + encodeURIComponent(adminToken), { signal: ctrl.signal });
+      clearTimeout(timer);
+      const d = await r.json();
+      if (d && d.success && d.status) _pmcsState.status = d.status;
+    } catch(e){ /* offline / slow / not deployed: keep whatever we have */ }
+    _pmcsState.loaded = true;
+    _pmcsStatusPromise = null;
+    return _pmcsState.status;
+  })();
+  return _pmcsStatusPromise;
 }
 
 async function initPmcsTab(){
@@ -12076,7 +12083,7 @@ function pmcsOpenSingle(eqKey){
 function pmcsGateForClockIn(){
   return new Promise(async (resolve) => {
     _pmcsInjectStyle(); _pmcsInjectOverlay();
-    await pmcsLoadStatus(true);
+    await pmcsLoadStatus(false);   // uses the status pre-warmed on Field Mode entry → instant
     // Any machine with an outstanding check (daily, or a weekly/monthly that's due
     // or was missed/skipped) goes in the gate — and keeps coming back each day.
     const dueList = PMCS_EQUIPMENT.filter(e => _pmcsDueCads(e.key).length).map(e => e.key);
