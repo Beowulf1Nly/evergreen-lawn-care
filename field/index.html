@@ -882,6 +882,10 @@ function _fmStops(){
 }
 function _fmIsSkipped(bk){ return !!_fmSkipped[_stopKey(bk)]; }
 function _fmResolved(s){ return isDone(s.bk)||_fmIsSkipped(s.bk); }
+function _fmOpenStops(){ return _fmStops().filter(s=>!_fmResolved(s)); }
+// True only when the stop being completed is the LAST open stop. A "Skip for now"
+// stop is still open, so being on the last stop by position is NOT the finish.
+function _fmIsFinalOpenStop(){ return _fmOpenStops().length<=1; }
 function _fmShow(screen){ document.querySelectorAll('#fieldMode .fm-screen').forEach(s=>s.classList.remove('active')); const el=document.getElementById(screen); if(el) el.classList.add('active'); }
 function fmBackToStart(){ _fmShow('fmScreenStart'); _fmRenderStart(); }
 
@@ -1030,7 +1034,7 @@ function _fmRenderJob(stops,idx){
     '<div class="fm-card-actions"><button class="fm-btn fm-btn-lg fm-btn-nav" onclick="fmNavigate('+idx+')">🧭 Navigate Here</button>'+
     '<div class="fm-secondary-row">'+phoneRow+'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmRemainingMap()">🗺 Remaining</button></div></div></div>'+
     '<div class="fm-jobnav"><button onclick="fmPrevStop()" '+(idx===0?'disabled':'')+'>‹ Prev</button><button onclick="fmNextStop()" '+(idx>=total-1?'disabled':'')+'>Next ›</button></div>';
-  const doneBtn=document.getElementById('fmDoneBtn'); if(doneBtn){ doneBtn.style.display=(done||skipped)?'none':''; doneBtn.textContent=(idx>=total-1)?'✓ Done — Finish Route':'✓ Done — Collect & Next'; }
+  const doneBtn=document.getElementById('fmDoneBtn'); if(doneBtn){ doneBtn.style.display=(done||skipped)?'none':''; doneBtn.textContent=_fmIsFinalOpenStop()?'✓ Done — Finish Route':'✓ Done — Next Stop'; }
   _fmSyncTimerSlots(); _fmHeartbeat();
 }
 function _fmUpdateTotalsChip(){ const el=document.getElementById('fmTotalsChip'); if(!el) return; el.innerHTML='Collected <b>$'+(_fmCashTotal||0).toFixed(0)+'</b> cash'+(_isMoneyRole()?(' · Billed <b>$'+(_fmBilledTotal||0).toFixed(0)+'</b> today'):''); }
@@ -1133,7 +1137,7 @@ function _fmcCanFinish(){ return _fmcPayResolved()&&_fmcEndChkDone(); }
 function _fmcUpdateSubmit(){
   const btn=document.getElementById('fmcSubmitBtn'); if(!btn) return;
   const ok=_fmcCanFinish(); btn.disabled=!ok;
-  const last=_fmViewIdx>=(_fmStops().length-1);
+  const last=_fmIsFinalOpenStop(); // last OPEN stop, not last by position (skipped stops stay open)
   btn.textContent=ok?(last?'✓ Complete & Finish Route':'✓ Complete & Go to Next House'):(!_fmcPayResolved()?'Take payment to finish':'Finish the checklist');
 }
 function fmPhotoSelected(input){ const file=input.files[0]; if(!file) return; const reader=new FileReader(); reader.onload=e=>{ _fmcPhotos.push({ b64:e.target.result.split(',')[1], fileName:file.name, mimeType:file.type, dataUrl:e.target.result }); _fmcRenderPhotos(); }; reader.readAsDataURL(file); input.value=''; }
