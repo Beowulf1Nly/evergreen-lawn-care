@@ -12,9 +12,9 @@
 <!-- Auto-updater: pulls the latest version in the background and reloads once when a new
      deploy is live, so phones never get stuck on an old cached build. Loop-guarded. -->
 <script>
-/* APP_VER:2026-06-29.10 */
+/* APP_VER:2026-06-29.11 */
 (function(){
-  var V = '2026-06-29.10';
+  var V = '2026-06-29.11';
   window.__APP_VER = V;
   var reloads = 0, lastCheck = 0;
   function check(){
@@ -1439,6 +1439,7 @@
       <span class="header-role" id="roleTag"></span>
       <span id="lastRefresh"></span>
       <button class="fm-launch-btn" id="fmLaunchBtn" onclick="enterFieldMode()" title="Open the on-the-job crew view">📲 Field Mode</button>
+      <button class="fm-launch-btn" id="fmTestBtn" onclick="fmStartTest()" title="Practice the whole crew flow with fake customers — nothing is saved" style="background:linear-gradient(135deg,#b45309,#92400e);">🧪 Test Field Mode</button>
       <button class="btn-sm" onclick="loadBookings()">↻ Refresh</button>
       <button class="btn-logout" onclick="logout()">Sign Out</button>
     </div>
@@ -7536,6 +7537,12 @@ function selectFinishJobType(btn, type) {
 }
 
 async function submitClockOut() {
+  if (_fmTestMode){
+    try { closeFinishRouteModal(); } catch(e){}
+    if (typeof showToast === 'function') showToast('🧪 Test complete — nothing was saved');
+    try { exitFieldMode(); } catch(e){}
+    return;
+  }
   const hoursInput = document.getElementById('finishRouteHours');
   const errEl      = document.getElementById('finishRouteError');
   const submitBtn  = document.getElementById('finishRouteSubmitBtn');
@@ -11082,6 +11089,7 @@ let _fmFlushing = false;
 function _fmQueueLoad(){ try { return JSON.parse(localStorage.getItem(FM_QUEUE_KEY) || '[]'); } catch(e){ return []; } }
 function _fmQueueSave(q){ try { localStorage.setItem(FM_QUEUE_KEY, JSON.stringify(q)); } catch(e){} }
 function _fmEnqueue(item){
+  if (_fmTestMode){ try { console.log('[TEST] blocked server action:', (item&&item.params&&item.params.action)||(item&&item.body&&item.body.action)||item); } catch(e){} return; }
   const q = _fmQueueLoad();
   item.tries = 0;
   q.push(item);
@@ -11133,12 +11141,14 @@ function _fmUpdateSyncBadge(){
 function _fmTodayStr(){ return (typeof todayISOStr === 'function') ? todayISOStr() : new Date().toISOString().slice(0,10); }
 
 function _fmTodayRawJobs(){
+  if (_fmTestMode) return _fmTestStops.map(s => s.bk);
   const ds = _fmTodayStr();
   return (allBookings || []).filter(b => !b.rowCancelled && !b.rowCompleted && dateOf(b) === ds);
 }
 
 // Flattened, optimized list of {bk,...} stops for today
 function _fmStops(){
+  if (_fmTestMode) return _fmTestStops;
   const ds = _fmTodayStr();
   const order = _routeCustomOrder[ds];
   if (order){
@@ -11230,7 +11240,61 @@ function _fmPrebuildRoute(){
   return _fmPrebuildPromise;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// TEST FIELD MODE — a safe sandbox with fake customers. Runs the exact same
+// flow (PMCS → load-out → jobs → complete → finish) but EVERY server write is
+// blocked, so nothing touches real customers, the sheet, cards, or invoices.
+// ═══════════════════════════════════════════════════════════════════════════
+let _fmTestMode = false, _fmTestStarted = false, _fmTestStops = [], _fmTestSavedOrder = null;
+
+function _fmBuildTestStops(){
+  const today = _fmTodayStr();
+  const mk = (name, addr, zip, price, opts) => ({ bk: Object.assign({
+    name, address:addr, zip, email:'', phone:'', price:String(price),
+    serviceDate:today, _rowIndex:-1, _test:true
+  }, opts||{}), lat:null, lon:null, geocodeFailed:false });
+  return [
+    mk('TEST · Sandy Greens', '101 Practice Ln', '34442', 45, { frequency:'Bi-Weekly', payMethod:'card', notes:'Gate code 1234 · dog is friendly | Lot: 0.30ac', phone:'3525550101' }),
+    mk('TEST · Dusty Fields', '202 Demo Dr', '34442', 60, { frequency:'Weekly', payMethod:'cash', calendarEvent:'cash', notes:'Cash on porch' }),
+    mk('TEST · Mo Lawnsworth', '303 Sample St', '34442', 50, { frequency:'Bi-Weekly', payMethod:'card', notes:'Lot: 0.5ac' }),
+  ].map((s,i)=>{ s.distFromPrev = i? 3.2 : 0; s.driveMinReal = i? 7 : 0; return s; });
+}
+
+function fmStartTest(){
+  _fmTestSavedOrder = _routeCustomOrder;     // stash the real route so we can restore it
+  _fmTestMode = true;
+  _fmTestStarted = false;
+  _fmTestStops = _fmBuildTestStops();
+  _clockInTime = null;
+  _fmViewIdx = null;
+  _fmSkipped = {};
+  _fmCashTotal = 0; _fmBilledTotal = 0;
+  try { _pmcsState.loaded = false; _pmcsState.status = {}; } catch(e){}   // fresh PMCS for the test
+  enterFieldMode();
+  // persistent TEST badge so it's never mistaken for a real run
+  try {
+    const fm = document.getElementById('fieldMode');
+    let badge = document.getElementById('fmTestBadge');
+    if (!badge){ badge = document.createElement('div'); badge.id = 'fmTestBadge'; fm.appendChild(badge); }
+    badge.textContent = '🧪 TEST MODE · nothing is saved';
+    badge.style.cssText = 'position:absolute;top:max(13px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:6;font-size:11px;font-weight:800;letter-spacing:.04em;color:#fff;background:#b45309;padding:5px 12px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.3);white-space:nowrap;';
+    badge.style.display = '';
+  } catch(e){}
+  _fmRender();
+}
+function _fmExitTest(){
+  const badge = document.getElementById('fmTestBadge'); if (badge) badge.style.display = 'none';
+  _fmTestMode = false; _fmTestStarted = false; _fmTestStops = [];
+  _routeCustomOrder = _fmTestSavedOrder || {};
+  _fmTestSavedOrder = null;
+  _clockInTime = null; _fmViewIdx = null; _fmSkipped = {};
+  _fmCashTotal = 0; _fmBilledTotal = 0;
+  if (_clockInInterval){ clearInterval(_clockInInterval); _clockInInterval = null; }
+  try { _pmcsState.loaded = false; _pmcsState.status = {}; } catch(e){}   // re-evaluate real PMCS next time
+}
+
 function exitFieldMode(){
+  if (_fmTestMode){ try { _fmExitTest(); } catch(e){} }   // restore real route + state
   const fm = document.getElementById('fieldMode');
   if (fm) fm.style.display = 'none';
   document.body.style.overflow = '';
@@ -11260,8 +11324,9 @@ function _fmShow(screen){
 
 function _fmRender(){
   if (!_fmActive()) return;
-  const routeBuilt = !!_routeCustomOrder[_fmTodayStr()];
   const stops = _fmStops();
+  // Test mode: start screen until they tap Start, then the fake-job flow.
+  const routeBuilt = _fmTestMode ? _fmTestStarted : !!_routeCustomOrder[_fmTodayStr()];
   if (!routeBuilt || !stops.length){ _fmRenderStart(stops); return; }
   const total = stops.length;
   const resolved = stops.filter(_fmResolved).length;
@@ -11315,6 +11380,15 @@ async function fmStart(){
   if (!_clockInTime){
     try { if (typeof pmcsGateForClockIn === 'function') await pmcsGateForClockIn(); } catch(e){}
     try { if (typeof loadoutGate === 'function') await loadoutGate(); } catch(e){}
+  }
+  // Test mode: no real route to build — start the clock and show the fake jobs.
+  if (_fmTestMode){
+    _clockInTime = new Date();
+    _fmTestStarted = true;
+    if (btn){ btn.disabled = false; btn.textContent = '🟢 Start My Route'; }
+    _fmViewIdx = null;
+    _fmRender();
+    return;
   }
   if (btn){ btn.disabled = true; btn.textContent = '⏳ Loading route…'; }
   const ds = _fmTodayStr();
@@ -11520,6 +11594,7 @@ function _fmcRenderAmount(){
 
 // Open the full invoice editor (autofilled price + tip selector) layered above Field Mode.
 function fmSendInvoice(){
+  if (_fmTestMode){ showToast('🧪 Test mode — invoice not sent'); return; }
   if (_fmcRowIdx == null || _fmcRowIdx < 0){ showToast('Open a job first.'); return; }
   const modal = document.getElementById('invoiceModal');
   if (modal) modal.style.zIndex = '3300';   // sit above the field-mode complete sheet (3100)
@@ -11624,6 +11699,7 @@ async function fmSubmitComplete(){
     _fmRender();
   };
 
+  if (_fmTestMode){ finish(false); return; }   // test: advance UI, write nothing
   const online = !(typeof navigator !== 'undefined' && navigator.onLine === false);
   if (online){
     try {
@@ -12300,6 +12376,7 @@ function pmcsCloseRunner(){
   try { if (document.getElementById('pmcsMenuOverlay')) pmcsRenderMenu(); } catch(e){}
 }
 function _pmcsSend(params){
+  if (_fmTestMode){ try { console.log('[TEST] blocked PMCS log:', params && params.equipment); } catch(e){} return; }
   try {
     if (typeof _fmEnqueue === 'function'){
       _fmEnqueue({ kind:'pmcs', method:'GET', params });
