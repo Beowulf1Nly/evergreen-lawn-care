@@ -8779,6 +8779,149 @@ function addMin(date, mins) {
   return d.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
 }
 
+/* ╔══════════════════════════════════════════════════════════════════════════╗
+   ║  EVERGREEN SHARED ROUTE CORE — rc1                                          ║
+   ║  KEEP THIS BLOCK BYTE-IDENTICAL IN  field/index.html  AND  invoice.html.    ║
+   ║  A Node test (test/route-core.test.js) asserts the two copies match —       ║
+   ║  never edit one without the other.                                          ║
+   ╟────────────────────────────────────────────────────────────────────────────╢
+   ║  Tight geographic optimizer: nearest-neighbour + 2-opt + Or-opt from a      ║
+   ║  fixed start point, with an OPTIONAL OSRM real-road refinement that only     ║
+   ║  replaces the straight-line order when it is genuinely shorter. There is NO  ║
+   ║  time-window / jobTime "anchor" logic here on purpose — jobTime is a         ║
+   ║  synthetic sequence number, not a real appointment, so honouring it scatters ║
+   ║  the route. Stops flagged {pinned:true} hold their slot; everything else is  ║
+   ║  freely reordered into the shortest loop from the start point.               ║
+   ╚══════════════════════════════════════════════════════════════════════════════╝ */
+var RC_VERSION = 'rc1';
+function rcHaversineMiles(lat1,lon1,lat2,lon2){ var R=3958.8; var dLat=(lat2-lat1)*Math.PI/180; var dLon=(lon2-lon1)*Math.PI/180; var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2); return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); }
+function rcDD(a,b){ return (a&&b&&a.lat!=null&&b.lat!=null)?rcHaversineMiles(a.lat,a.lon,b.lat,b.lon):0; }
+function rcRouteLen(arr,origin){ var total=0; var prev=(origin&&origin.lat!=null)?origin:null; for(var i=0;i<arr.length;i++){ var s=arr[i]; if(s&&s.lat!=null){ if(prev) total+=rcDD(prev,s); prev=s; } } return total; }
+// 2-opt: reverse segments while doing so shortens the open path from `origin`.
+function rcTwoOpt(route,origin){
+  if(!route||route.length<4) return route;
+  var pts=route.slice(); var org=(origin&&origin.lat!=null)?origin:null;
+  var improved=true,guard=0;
+  while(improved&&guard++<40){ improved=false;
+    for(var i=0;i<pts.length-1;i++){ for(var j=i+1;j<pts.length;j++){
+      var A=i===0?org:pts[i-1]; var B=pts[i],C=pts[j],D=j+1<pts.length?pts[j+1]:null;
+      var before=rcDD(A,B)+rcDD(C,D); var after=rcDD(A,C)+rcDD(B,D);
+      if(after+1e-6<before){ for(var lo=i,hi=j;lo<hi;lo++,hi--){ var t=pts[lo]; pts[lo]=pts[hi]; pts[hi]=t; } improved=true; }
+    } } }
+  return pts;
+}
+// Or-opt: relocate runs of 1-3 stops to a cheaper position.
+function rcOrOpt(route,origin){
+  if(!route||route.length<3) return route;
+  var pts=route.slice(); var org=(origin&&origin.lat!=null)?origin:null;
+  var improved=true,guard=0;
+  while(improved&&guard++<60){ improved=false; var baseLen=rcRouteLen(pts,org);
+    outer: for(var segLen=1;segLen<=3&&segLen<pts.length;segLen++){
+      for(var i=0;i+segLen<=pts.length;i++){
+        var seg=pts.slice(i,i+segLen); var rest=pts.slice(0,i).concat(pts.slice(i+segLen));
+        for(var j=0;j<=rest.length;j++){
+          var cand=rest.slice(0,j).concat(seg,rest.slice(j)); var same=true;
+          for(var k=0;k<cand.length;k++){ if(cand[k]!==pts[k]){ same=false; break; } }
+          if(same) continue;
+          if(rcRouteLen(cand,org)+1e-6<baseLen){ pts=cand; improved=true; break outer; }
+        }
+      }
+    }
+  }
+  return pts;
+}
+function rcLocalSearch(route,origin){ var r=route; for(var pass=0;pass<8;pass++){ var before=rcRouteLen(r,origin); r=rcTwoOpt(r,origin); r=rcOrOpt(r,origin); if(rcRouteLen(r,origin)+1e-9>=before) break; } return r; }
+// Nearest-neighbour seed from startCoord, then local search. Returns COPIES with distFromPrev.
+function rcNearestNeighbour(startCoord,stops){
+  var unvisited=stops.slice(); var route=[]; var cur=(startCoord&&startCoord.lat!=null)?startCoord:(stops[0]||{});
+  while(unvisited.length){ var best=-1,bestDist=Infinity;
+    for(var i=0;i<unvisited.length;i++){ var d=rcDD(cur,unvisited[i]); if(d<bestDist){ bestDist=d; best=i; } }
+    var picked={}; for(var kk in unvisited[best]) picked[kk]=unvisited[best][kk]; picked.distFromPrev=bestDist;
+    route.push(picked); cur=unvisited[best]; unvisited.splice(best,1); }
+  return rcLocalSearch(route,startCoord);
+}
+// Recompute distFromPrev along an ordered array from startCoord (in place).
+function rcCalcDist(arr,startCoord){ var prev=(startCoord&&startCoord.lat!=null)?startCoord:null; for(var i=0;i<arr.length;i++){ var s=arr[i]; if(s&&s.lat!=null){ s.distFromPrev=prev?rcDD(prev,s):0; prev=s; } else if(s){ s.distFromPrev=s.distFromPrev||0; } } return arr; }
+// MAIN geographic optimizer. stops:[{bk,lat,lon,(pinned)}] (all geocoded). Pinned
+// stops keep their slot index; unpinned are tightly reordered into the gaps.
+function rcOptimizeGeographic(stops,startCoord){
+  if(!stops||!stops.length) return [];
+  var pinnedIdx=[]; var unpinned=[];
+  for(var i=0;i<stops.length;i++){ if(stops[i]&&stops[i].pinned) pinnedIdx.push(i); else unpinned.push(stops[i]); }
+  if(!pinnedIdx.length){ var ord=rcNearestNeighbour(startCoord,stops); return rcCalcDist(ord,startCoord); }
+  // Optimize the unpinned set, then weave it back around the fixed pinned slots.
+  var optUnpinned=rcNearestNeighbour(startCoord,unpinned); var u=0; var out=[];
+  for(var s=0;s<stops.length;s++){
+    if(stops[s]&&stops[s].pinned){ var p={}; for(var kk in stops[s]) p[kk]=stops[s][kk]; out.push(p); }
+    else { out.push(optUnpinned[u++]); }
+  }
+  return rcCalcDist(out,startCoord);
+}
+/* ── OSRM real-road refinement (free public server, no key) ─────────────────── */
+function rcFetch(){ return (typeof fetch==='function')?fetch:(typeof globalThis!=='undefined'&&globalThis.fetch)?globalThis.fetch:null; }
+async function rcOsrmTableMatrix(points){
+  var f=rcFetch(); if(!f||!Array.isArray(points)||points.length<2) return null;
+  var coords=points.map(function(p){ return p.lon+','+p.lat; }).join(';');
+  var url='https://router.project-osrm.org/table/v1/driving/'+coords+'?annotations=duration,distance';
+  var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  var timer=ctrl?setTimeout(function(){ ctrl.abort(); },9000):null;
+  try{ var r=await f(url,ctrl?{signal:ctrl.signal}:{}); var d=await r.json(); if(!d||d.code!=='Ok'||!d.durations) return null; return { dur:d.durations, dist:d.distances||null }; }
+  catch(e){ return null; } finally{ if(timer) clearTimeout(timer); }
+}
+// 2-opt over a real-road duration matrix for an OPEN path (no forced return).
+function rcTwoOptMatrix(order,dur,stopPts,originPt){
+  var D=function(a,b){ return dur[a][b]; }; var improved=true,guard=0;
+  while(improved&&guard++<60){ improved=false;
+    for(var i=0;i<order.length-1;i++){ for(var j=i+1;j<order.length;j++){
+      var Apt=(i===0)?originPt:stopPts[order[i-1]]; var Bpt=stopPts[order[i]],Cpt=stopPts[order[j]];
+      var Ept=(j+1<order.length)?stopPts[order[j+1]]:null; var before=0,after=0;
+      if(Apt!=null){ before+=D(Apt,Bpt); after+=D(Apt,Cpt); }
+      if(Ept!=null){ before+=D(Cpt,Ept); after+=D(Bpt,Ept); }
+      if(Apt==null&&Ept==null) continue;
+      if(after+1e-6<before){ for(var lo=i,hi=j;lo<hi;lo++,hi--){ var t=order[lo]; order[lo]=order[hi]; order[hi]=t; } improved=true; }
+    } } }
+  return order;
+}
+function rcMatrixOrder(dur,stopPts,originPt){
+  var n=stopPts.length;
+  var nnFrom=function(startK){ var order=[startK]; var unv=stopPts.map(function(_,k){ return k; }).filter(function(k){ return k!==startK; }); var cur=stopPts[startK];
+    while(unv.length){ var best=-1,bestD=Infinity; for(var i=0;i<unv.length;i++){ var d=dur[cur][stopPts[unv[i]]]; if(d<bestD){ bestD=d; best=i; } } order.push(unv[best]); cur=stopPts[unv[best]]; unv.splice(best,1); } return order; };
+  var tourLen=function(order){ var s=0; if(originPt!=null) s+=dur[originPt][stopPts[order[0]]]; for(var i=0;i<order.length-1;i++) s+=dur[stopPts[order[i]]][stopPts[order[i+1]]]; return s; };
+  var starts;
+  if(originPt!=null){ var best=0,bd=Infinity; for(var k=0;k<n;k++){ var d=dur[originPt][stopPts[k]]; if(d<bd){ bd=d; best=k; } } starts=[best]; }
+  else { starts=stopPts.map(function(_,k){ return k; }); }
+  var bestOrder=null,bestLen=Infinity;
+  for(var si=0;si<starts.length;si++){ var o=rcTwoOptMatrix(nnFrom(starts[si]),dur,stopPts,originPt); var L=tourLen(o); if(L<bestLen){ bestLen=L; bestOrder=o; } }
+  return bestOrder||stopPts.map(function(_,k){ return k; });
+}
+// Refine an already geographic-ordered list with real driving times. Returns a NEW
+// ordered array only if OSRM is reachable AND the new order's straight-line length
+// is not worse; otherwise returns the input unchanged. Never reorders if any stop
+// is pinned (manual pins are sacred). Writes driveMinReal/distFromPrev when applied.
+async function rcRefineWithRoads(ordered,startCoord){
+  if(!ordered||ordered.length<3) return ordered;
+  if(ordered.some(function(s){ return s&&s.pinned; })) return ordered;
+  var geo=ordered.filter(function(s){ return s&&s.lat!=null&&s.lon!=null; });
+  if(geo.length<3) return ordered;
+  var hasOrigin=!!(startCoord&&startCoord.lat!=null);
+  var points=[]; if(hasOrigin) points.push({ lat:startCoord.lat, lon:startCoord.lon });
+  var baseIdx=points.length; for(var i=0;i<geo.length;i++) points.push({ lat:geo[i].lat, lon:geo[i].lon });
+  var M=await rcOsrmTableMatrix(points); if(!M) return ordered;        // OSRM down → keep straight-line
+  var stopPts=geo.map(function(_,k){ return baseIdx+k; }); var originPt=hasOrigin?0:null;
+  var idxOrder=rcMatrixOrder(M.dur,stopPts,originPt);
+  var refined=idxOrder.map(function(oi){ return geo[oi]; });
+  // Safety: only accept if it does not make the straight-line loop worse.
+  if(rcRouteLen(refined,startCoord)>rcRouteLen(geo,startCoord)+1e-6) return ordered;
+  var prevPt=hasOrigin?0:null;
+  for(var x=0;x<idxOrder.length;x++){ var pt=baseIdx+idxOrder[x]; var s=refined[x];
+    s.distFromPrev=(prevPt!=null&&M.dist)?(M.dist[prevPt][pt]||0)/1609.344:0; s.driveMinReal=(prevPt!=null)?(M.dur[prevPt][pt]||0)/60:0; prevPt=pt; }
+  // Re-attach any non-geocoded stops (no coords) at the end, preserving them.
+  var tail=ordered.filter(function(s){ return !(s&&s.lat!=null&&s.lon!=null); });
+  return refined.concat(tail);
+}
+if(typeof module!=='undefined'&&module.exports){ module.exports={ RC_VERSION:RC_VERSION, rcHaversineMiles:rcHaversineMiles, rcRouteLen:rcRouteLen, rcNearestNeighbour:rcNearestNeighbour, rcOptimizeGeographic:rcOptimizeGeographic, rcOsrmTableMatrix:rcOsrmTableMatrix, rcMatrixOrder:rcMatrixOrder, rcTwoOptMatrix:rcTwoOptMatrix, rcRefineWithRoads:rcRefineWithRoads }; }
+/* ╔═══════════════════ END EVERGREEN SHARED ROUTE CORE (rc1) ═══════════════════╗ */
+
 // ── Real road distance/time via OSRM (free, no API key) ───────────────────
 // Ordering still uses fast straight-line (haversine) math; AFTER the route is
 // built we replace each leg's distance/time with the REAL driving values from
@@ -8904,12 +9047,12 @@ async function applyRealRoadDistances(){
       if (hasOrigin) points.push({ lat:_routeStartCoord.lat, lon:_routeStartCoord.lon });
       const baseIdx = points.length;
       for (const s of geoStops) points.push({ lat:s.lat, lon:s.lon });
-      const M = await osrmTableMatrix(points);
+      const M = await rcOsrmTableMatrix(points);   // shared rc matrix fetch
       if (!M) continue;                       // OSRM down → keep current order
       const stopPts  = geoStops.map((_,k)=> baseIdx + k);
       const originPt = hasOrigin ? 0 : null;
       const pinned   = geoStops.some(s => s.bk && s.bk._routePinned);
-      const ordered  = pinned ? geoStops.map((_,k)=>k) : _matrixOrder(M.dur, stopPts, originPt);
+      const ordered  = pinned ? geoStops.map((_,k)=>k) : rcMatrixOrder(M.dur, stopPts, originPt);  // shared rc matrix 2-opt
       const newStops = [];
       let prevPt = hasOrigin ? 0 : null;
       for (let idx=0; idx<ordered.length; idx++){
@@ -9207,117 +9350,14 @@ async function buildRoute() {
       }
       // ── End saved-order path ─────────────────────────────────────────────
 
-      const anchored = validStops.filter(s => s.bk.jobTime);
-      const floating = validStops.filter(s => !s.bk.jobTime);
-
-      // No anchors → pure nearest-neighbour
-      if (!anchored.length) {
-        const ordered = floating.length
-          ? nearestNeighbour(startCoord || floating[0] || {}, floating)
-          : [];
-        _calcDist(ordered);
-        for (const fs of failedStops) ordered.push({ bk: fs.bk, lat:null, lon:null, distFromPrev:0, geocodeFailed:true }), allFailedStops.push(fs);
-        return ordered;
-      }
-
-      anchored.sort((a, b) => toMin(a.bk.jobTime) - toMin(b.bk.jobTime));
-
-      // Build time windows: W[0]=start→anchor[0], W[1]=anchor[0]→anchor[1], …, W[n]=anchor[n-1]→∞
-      // Each window knows: startMin, endMin (anchor's fixed time), startCoord, endCoord
-      const [sH, sM] = startTime.split(':').map(Number);
-      const dayStartMin = sH * 60 + sM;
-
-      const windows = anchored.map((anch, i) => ({
-        endMin:    toMin(anch.bk.jobTime),
-        startMin:  i === 0 ? dayStartMin : toMin(anchored[i-1].bk.jobTime) + mowMinutes(anchored[i-1].bk),
-        startCoord: i === 0 ? (startCoord || null) : anchored[i-1],
-        endCoord:  anch,
-        anchor:    anch,
-      }));
-      // Final window after last anchor
-      windows.push({
-        startMin:  toMin(anchored[anchored.length-1].bk.jobTime) + mowMinutes(anchored[anchored.length-1].bk),
-        endMin:    Infinity,
-        startCoord: anchored[anchored.length-1],
-        endCoord:  null,
-        anchor:    null,
-      });
-
-      // Assign each floating stop to the best window.
-      // Score = detour distance: dist(windowStart→stop) + dist(stop→windowEnd)
-      // weighted by whether the stop actually fits time-wise in the window.
-      const windowStops = windows.map(() => []);
-      // Deferral penalty per window level (miles): keeps nearby stops in early windows
-      // while letting far stops slide to later windows where they don't need a return trip
-      const DEFER_COST = 5.0;
-
-      for (const stop of floating) {
-        let bestW = windows.length - 1;
-        let bestScore = Infinity;
-
-        for (let wi = 0; wi < windows.length; wi++) {
-          const w = windows[wi];
-          const isLastWindow = wi === windows.length - 1;
-
-          // Time feasibility: skip if clearly not enough slack (non-last windows)
-          const availMin = w.endMin - w.startMin;
-          if (!isLastWindow && availMin < mowMinutes(stop.bk) + 10) continue;
-
-          const fromCoord = w.startCoord;
-          const toCoord   = w.endCoord;
-
-          // distFromStart: cost to reach this stop from window start
-          const dFS = (fromCoord?.lat != null && stop.lat != null)
-            ? haversineMiles(fromCoord.lat, fromCoord.lon, stop.lat, stop.lon) : 50;
-
-          // distToEnd: cost to continue to the window's anchor after this stop.
-          // Last window has no fixed end → 0 (no forced return trip).
-          // This is the key: a far stop in an early window pays BOTH legs (out + back),
-          // but in the last window only pays the outbound leg.
-          const dTE = (!isLastWindow && toCoord?.lat != null && stop.lat != null)
-            ? haversineMiles(stop.lat, stop.lon, toCoord.lat, toCoord.lon) : 0;
-
-          // Total route cost + deferral penalty (each later window costs DEFER_COST extra)
-          const score = dFS + dTE + wi * DEFER_COST;
-
-          if (score < bestScore) { bestScore = score; bestW = wi; }
-        }
-        windowStops[bestW].push(stop);
-      }
-
-      // Within each window, sort assigned stops by NN from window's start coord
-      const ordered = [];
-      for (let wi = 0; wi < windows.length; wi++) {
-        const w     = windows[wi];
-        const stops = windowStops[wi];
-        if (stops.length) {
-          const origin = w.startCoord || stops[0];
-          const nn     = nearestNeighbour(origin, stops);
-          // Re-check time: if stops don't fit even after assignment, push overflow to next window
-          let curMin = w.startMin;
-          const overflow = [];
-          for (const s of nn) {
-            const dur = mowMinutes(s.bk);
-            if (wi < windows.length - 1 && curMin + dur + 10 > w.endMin) {
-              overflow.push(s); // doesn't fit — defer to next window
-            } else {
-              ordered.push(s);
-              curMin += dur + 20;
-            }
-          }
-          // Prepend overflow to next window's stops
-          if (overflow.length && wi + 1 < windows.length) {
-            windowStops[wi + 1].unshift(...overflow);
-          } else {
-            ordered.push(...overflow); // last window — just append
-          }
-        }
-        // Place anchor after its window's stops
-        if (w.anchor) ordered.push(w.anchor);
-      }
-
+      // ── Tight geographic optimization (shared with /field, NO time-window scatter) ──
+      // jobTime here is only ever a synthetic sequence number — customers never pick a
+      // time — so it is intentionally IGNORED. Only stops the owner explicitly pinned
+      // (_routePinned) hold their slot; everything else is reordered into the shortest
+      // loop from the start point, identical to the /field crew app.
+      validStops.forEach(s => { s.pinned = !!(s.bk && s.bk._routePinned); });
+      const ordered = validStops.length ? rcOptimizeGeographic(validStops, startCoord) : [];
       _calcDist(ordered);
-
       for (const fs of failedStops) {
         ordered.push({ bk: fs.bk, lat:null, lon:null, distFromPrev:0, geocodeFailed:true });
         allFailedStops.push(fs);

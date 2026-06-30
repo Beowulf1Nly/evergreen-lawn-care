@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
 <link rel="icon" href="icon-192.png"/>
 <style>
-  :root{ --green-deep:#0f2417; --green:#15803d; --border:#e2e8f0; --text-muted:#64748b; --red:#dc2626; --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
+  :root{ --green-deep:#0f2417; --green:#15803d; --border:#e2e8f0; --text-muted:#64748b; --red:#dc2626; --text:#14361f; --green-mid:#15803d; --green-pale:#f0fdf4; --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
   *{ box-sizing:border-box; }
   html,body{ margin:0; padding:0; height:100%; }
   body{ font-family:var(--font); background:#0f2417; color:#14361f; -webkit-font-smoothing:antialiased; overscroll-behavior:none; -webkit-tap-highlight-color:transparent; }
@@ -38,6 +38,7 @@
   .fm-top-timer{ font-variant-numeric:tabular-nums; font-size:14px; font-weight:700; color:#86efac; background:rgba(134,239,172,.14); padding:6px 11px; border-radius:999px; display:inline-flex; align-items:center; gap:6px; }
   .fm-dot{ width:8px; height:8px; border-radius:50%; background:#22c55e; animation:fmPulse 1.6s infinite; }
   @keyframes fmPulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+  @keyframes slideInUp{ from{ transform:translateY(100%); } to{ transform:translateY(0); } }
   .fm-body{ flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:0 16px 20px; }
   .fm-progress-wrap{ padding:0 16px 10px; flex-shrink:0; }
   .fm-progress-meta{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; font-size:13px; }
@@ -180,7 +181,8 @@
         <div id="fmStartPtNote" style="font-size:12.5px;color:#9ed8b1;margin-top:9px;line-height:1.4;"></div>
       </div>
       <button class="fm-btn fm-btn-xl fm-btn-start" id="fmStartBtn" onclick="fmStartTapped()" style="min-width:260px;">🟢 Start My Route</button>
-      <button class="fm-skip" onclick="loadData(true)" style="color:#9ed8b1;margin-top:18px;">↻ Refresh jobs</button>
+      <button class="fm-skip" onclick="pmcsOpenMenu()" style="color:#9ed8b1;margin-top:18px;">🔧 PMCS / Maintenance Checks</button>
+      <button class="fm-skip" onclick="loadData(true)" style="color:#9ed8b1;margin-top:10px;">↻ Refresh jobs</button>
     </div>
   </div>
   <!-- START-OF-ROUTE CHECKLIST -->
@@ -201,7 +203,7 @@
   <div class="fm-screen" id="fmScreenJob">
     <div class="fm-top">
       <button class="fm-top-exit" onclick="fmBackToStart()">‹ Route</button>
-      <div style="display:flex;align-items:center;gap:8px;"><button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button><div class="fm-top-timer" id="fmJobTimer" style="display:none;"><span class="fm-dot"></span><span id="fmJobTimerVal">0:00:00</span></div></div>
+      <div style="display:flex;align-items:center;gap:8px;"><button class="fm-top-exit" onclick="pmcsOpenMenu()" title="PMCS / Maintenance">🔧 PMCS</button><button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button><div class="fm-top-timer" id="fmJobTimer" style="display:none;"><span class="fm-dot"></span><span id="fmJobTimerVal">0:00:00</span></div></div>
     </div>
     <div class="fm-progress-wrap">
       <div class="fm-progress-meta"><span>Stop <b id="fmStopPos">1</b> of <span id="fmStopTotal">1</span></span><span id="fmDoneCount">0 done</span></div>
@@ -292,6 +294,20 @@
   </div>
 </div>
 
+<!-- CREW / HELPER PICKER -->
+<div id="fmCrewPicker" style="display:none;position:fixed;inset:0;z-index:3200;background:rgba(0,0,0,.55);align-items:flex-end;justify-content:center;" onclick="if(event.target===this)fmCrewCancel()">
+  <div class="fm-sheet">
+    <div class="fm-sheet-title">🟢 Who's working today?</div>
+    <div class="fm-sheet-sub">You're auto-included. Add any helpers riding along — tap a name to add.</div>
+    <div id="fmCrewChosen" style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px;"></div>
+    <input id="fmCrewSearch" class="login-input" placeholder="Search crew…" style="margin-bottom:10px;" oninput="_fmRenderCrewPicker()">
+    <div id="fmCrewResults" class="fm-checklist" style="max-height:44vh;overflow-y:auto;margin-bottom:10px;"></div>
+    <button class="fm-toggle-btn" onclick="fmCrewAddManual()">✏️ Add by name…</button>
+    <button class="fm-btn fm-btn-xl fm-btn-start" style="margin-top:12px;" onclick="fmCrewConfirm()">Continue →</button>
+    <button class="fm-mini-link" onclick="fmCrewCancel()">Cancel</button>
+  </div>
+</div>
+
 <div id="toast"></div>
 <script>
 /* ════════════════════════════════════════════════════════════════════
@@ -310,6 +326,150 @@ let _clockInTime=null, _clockOutTime=null, _clockedOut=false, _fmTimerInt=null, 
 let _fmStarted=false, _fmViewIdx=null, _fmCashTotal=0, _fmBilledTotal=0, _fmSkipped={}, _startChkState=[], _jobTimers={}, _helpers=[]; let _lastSync={ok:null,ts:0,msg:''};
 // complete-sheet state
 let _fmcStop=null, _fmcRowIdx=-1, _fmcPayType='invoice', _fmcCash=false, _fmcInvoiceSent=false, _fmcBase=0, _fmcAddons=[], _fmcPhotos=[], _fmcEndChk={};
+
+/* ╔══════════════════════════════════════════════════════════════════════════╗
+   ║  EVERGREEN SHARED ROUTE CORE — rc1                                          ║
+   ║  KEEP THIS BLOCK BYTE-IDENTICAL IN  field/index.html  AND  invoice.html.    ║
+   ║  A Node test (test/route-core.test.js) asserts the two copies match —       ║
+   ║  never edit one without the other.                                          ║
+   ╟────────────────────────────────────────────────────────────────────────────╢
+   ║  Tight geographic optimizer: nearest-neighbour + 2-opt + Or-opt from a      ║
+   ║  fixed start point, with an OPTIONAL OSRM real-road refinement that only     ║
+   ║  replaces the straight-line order when it is genuinely shorter. There is NO  ║
+   ║  time-window / jobTime "anchor" logic here on purpose — jobTime is a         ║
+   ║  synthetic sequence number, not a real appointment, so honouring it scatters ║
+   ║  the route. Stops flagged {pinned:true} hold their slot; everything else is  ║
+   ║  freely reordered into the shortest loop from the start point.               ║
+   ╚══════════════════════════════════════════════════════════════════════════════╝ */
+var RC_VERSION = 'rc1';
+function rcHaversineMiles(lat1,lon1,lat2,lon2){ var R=3958.8; var dLat=(lat2-lat1)*Math.PI/180; var dLon=(lon2-lon1)*Math.PI/180; var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2); return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); }
+function rcDD(a,b){ return (a&&b&&a.lat!=null&&b.lat!=null)?rcHaversineMiles(a.lat,a.lon,b.lat,b.lon):0; }
+function rcRouteLen(arr,origin){ var total=0; var prev=(origin&&origin.lat!=null)?origin:null; for(var i=0;i<arr.length;i++){ var s=arr[i]; if(s&&s.lat!=null){ if(prev) total+=rcDD(prev,s); prev=s; } } return total; }
+// 2-opt: reverse segments while doing so shortens the open path from `origin`.
+function rcTwoOpt(route,origin){
+  if(!route||route.length<4) return route;
+  var pts=route.slice(); var org=(origin&&origin.lat!=null)?origin:null;
+  var improved=true,guard=0;
+  while(improved&&guard++<40){ improved=false;
+    for(var i=0;i<pts.length-1;i++){ for(var j=i+1;j<pts.length;j++){
+      var A=i===0?org:pts[i-1]; var B=pts[i],C=pts[j],D=j+1<pts.length?pts[j+1]:null;
+      var before=rcDD(A,B)+rcDD(C,D); var after=rcDD(A,C)+rcDD(B,D);
+      if(after+1e-6<before){ for(var lo=i,hi=j;lo<hi;lo++,hi--){ var t=pts[lo]; pts[lo]=pts[hi]; pts[hi]=t; } improved=true; }
+    } } }
+  return pts;
+}
+// Or-opt: relocate runs of 1-3 stops to a cheaper position.
+function rcOrOpt(route,origin){
+  if(!route||route.length<3) return route;
+  var pts=route.slice(); var org=(origin&&origin.lat!=null)?origin:null;
+  var improved=true,guard=0;
+  while(improved&&guard++<60){ improved=false; var baseLen=rcRouteLen(pts,org);
+    outer: for(var segLen=1;segLen<=3&&segLen<pts.length;segLen++){
+      for(var i=0;i+segLen<=pts.length;i++){
+        var seg=pts.slice(i,i+segLen); var rest=pts.slice(0,i).concat(pts.slice(i+segLen));
+        for(var j=0;j<=rest.length;j++){
+          var cand=rest.slice(0,j).concat(seg,rest.slice(j)); var same=true;
+          for(var k=0;k<cand.length;k++){ if(cand[k]!==pts[k]){ same=false; break; } }
+          if(same) continue;
+          if(rcRouteLen(cand,org)+1e-6<baseLen){ pts=cand; improved=true; break outer; }
+        }
+      }
+    }
+  }
+  return pts;
+}
+function rcLocalSearch(route,origin){ var r=route; for(var pass=0;pass<8;pass++){ var before=rcRouteLen(r,origin); r=rcTwoOpt(r,origin); r=rcOrOpt(r,origin); if(rcRouteLen(r,origin)+1e-9>=before) break; } return r; }
+// Nearest-neighbour seed from startCoord, then local search. Returns COPIES with distFromPrev.
+function rcNearestNeighbour(startCoord,stops){
+  var unvisited=stops.slice(); var route=[]; var cur=(startCoord&&startCoord.lat!=null)?startCoord:(stops[0]||{});
+  while(unvisited.length){ var best=-1,bestDist=Infinity;
+    for(var i=0;i<unvisited.length;i++){ var d=rcDD(cur,unvisited[i]); if(d<bestDist){ bestDist=d; best=i; } }
+    var picked={}; for(var kk in unvisited[best]) picked[kk]=unvisited[best][kk]; picked.distFromPrev=bestDist;
+    route.push(picked); cur=unvisited[best]; unvisited.splice(best,1); }
+  return rcLocalSearch(route,startCoord);
+}
+// Recompute distFromPrev along an ordered array from startCoord (in place).
+function rcCalcDist(arr,startCoord){ var prev=(startCoord&&startCoord.lat!=null)?startCoord:null; for(var i=0;i<arr.length;i++){ var s=arr[i]; if(s&&s.lat!=null){ s.distFromPrev=prev?rcDD(prev,s):0; prev=s; } else if(s){ s.distFromPrev=s.distFromPrev||0; } } return arr; }
+// MAIN geographic optimizer. stops:[{bk,lat,lon,(pinned)}] (all geocoded). Pinned
+// stops keep their slot index; unpinned are tightly reordered into the gaps.
+function rcOptimizeGeographic(stops,startCoord){
+  if(!stops||!stops.length) return [];
+  var pinnedIdx=[]; var unpinned=[];
+  for(var i=0;i<stops.length;i++){ if(stops[i]&&stops[i].pinned) pinnedIdx.push(i); else unpinned.push(stops[i]); }
+  if(!pinnedIdx.length){ var ord=rcNearestNeighbour(startCoord,stops); return rcCalcDist(ord,startCoord); }
+  // Optimize the unpinned set, then weave it back around the fixed pinned slots.
+  var optUnpinned=rcNearestNeighbour(startCoord,unpinned); var u=0; var out=[];
+  for(var s=0;s<stops.length;s++){
+    if(stops[s]&&stops[s].pinned){ var p={}; for(var kk in stops[s]) p[kk]=stops[s][kk]; out.push(p); }
+    else { out.push(optUnpinned[u++]); }
+  }
+  return rcCalcDist(out,startCoord);
+}
+/* ── OSRM real-road refinement (free public server, no key) ─────────────────── */
+function rcFetch(){ return (typeof fetch==='function')?fetch:(typeof globalThis!=='undefined'&&globalThis.fetch)?globalThis.fetch:null; }
+async function rcOsrmTableMatrix(points){
+  var f=rcFetch(); if(!f||!Array.isArray(points)||points.length<2) return null;
+  var coords=points.map(function(p){ return p.lon+','+p.lat; }).join(';');
+  var url='https://router.project-osrm.org/table/v1/driving/'+coords+'?annotations=duration,distance';
+  var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  var timer=ctrl?setTimeout(function(){ ctrl.abort(); },9000):null;
+  try{ var r=await f(url,ctrl?{signal:ctrl.signal}:{}); var d=await r.json(); if(!d||d.code!=='Ok'||!d.durations) return null; return { dur:d.durations, dist:d.distances||null }; }
+  catch(e){ return null; } finally{ if(timer) clearTimeout(timer); }
+}
+// 2-opt over a real-road duration matrix for an OPEN path (no forced return).
+function rcTwoOptMatrix(order,dur,stopPts,originPt){
+  var D=function(a,b){ return dur[a][b]; }; var improved=true,guard=0;
+  while(improved&&guard++<60){ improved=false;
+    for(var i=0;i<order.length-1;i++){ for(var j=i+1;j<order.length;j++){
+      var Apt=(i===0)?originPt:stopPts[order[i-1]]; var Bpt=stopPts[order[i]],Cpt=stopPts[order[j]];
+      var Ept=(j+1<order.length)?stopPts[order[j+1]]:null; var before=0,after=0;
+      if(Apt!=null){ before+=D(Apt,Bpt); after+=D(Apt,Cpt); }
+      if(Ept!=null){ before+=D(Cpt,Ept); after+=D(Bpt,Ept); }
+      if(Apt==null&&Ept==null) continue;
+      if(after+1e-6<before){ for(var lo=i,hi=j;lo<hi;lo++,hi--){ var t=order[lo]; order[lo]=order[hi]; order[hi]=t; } improved=true; }
+    } } }
+  return order;
+}
+function rcMatrixOrder(dur,stopPts,originPt){
+  var n=stopPts.length;
+  var nnFrom=function(startK){ var order=[startK]; var unv=stopPts.map(function(_,k){ return k; }).filter(function(k){ return k!==startK; }); var cur=stopPts[startK];
+    while(unv.length){ var best=-1,bestD=Infinity; for(var i=0;i<unv.length;i++){ var d=dur[cur][stopPts[unv[i]]]; if(d<bestD){ bestD=d; best=i; } } order.push(unv[best]); cur=stopPts[unv[best]]; unv.splice(best,1); } return order; };
+  var tourLen=function(order){ var s=0; if(originPt!=null) s+=dur[originPt][stopPts[order[0]]]; for(var i=0;i<order.length-1;i++) s+=dur[stopPts[order[i]]][stopPts[order[i+1]]]; return s; };
+  var starts;
+  if(originPt!=null){ var best=0,bd=Infinity; for(var k=0;k<n;k++){ var d=dur[originPt][stopPts[k]]; if(d<bd){ bd=d; best=k; } } starts=[best]; }
+  else { starts=stopPts.map(function(_,k){ return k; }); }
+  var bestOrder=null,bestLen=Infinity;
+  for(var si=0;si<starts.length;si++){ var o=rcTwoOptMatrix(nnFrom(starts[si]),dur,stopPts,originPt); var L=tourLen(o); if(L<bestLen){ bestLen=L; bestOrder=o; } }
+  return bestOrder||stopPts.map(function(_,k){ return k; });
+}
+// Refine an already geographic-ordered list with real driving times. Returns a NEW
+// ordered array only if OSRM is reachable AND the new order's straight-line length
+// is not worse; otherwise returns the input unchanged. Never reorders if any stop
+// is pinned (manual pins are sacred). Writes driveMinReal/distFromPrev when applied.
+async function rcRefineWithRoads(ordered,startCoord){
+  if(!ordered||ordered.length<3) return ordered;
+  if(ordered.some(function(s){ return s&&s.pinned; })) return ordered;
+  var geo=ordered.filter(function(s){ return s&&s.lat!=null&&s.lon!=null; });
+  if(geo.length<3) return ordered;
+  var hasOrigin=!!(startCoord&&startCoord.lat!=null);
+  var points=[]; if(hasOrigin) points.push({ lat:startCoord.lat, lon:startCoord.lon });
+  var baseIdx=points.length; for(var i=0;i<geo.length;i++) points.push({ lat:geo[i].lat, lon:geo[i].lon });
+  var M=await rcOsrmTableMatrix(points); if(!M) return ordered;        // OSRM down → keep straight-line
+  var stopPts=geo.map(function(_,k){ return baseIdx+k; }); var originPt=hasOrigin?0:null;
+  var idxOrder=rcMatrixOrder(M.dur,stopPts,originPt);
+  var refined=idxOrder.map(function(oi){ return geo[oi]; });
+  // Safety: only accept if it does not make the straight-line loop worse.
+  if(rcRouteLen(refined,startCoord)>rcRouteLen(geo,startCoord)+1e-6) return ordered;
+  var prevPt=hasOrigin?0:null;
+  for(var x=0;x<idxOrder.length;x++){ var pt=baseIdx+idxOrder[x]; var s=refined[x];
+    s.distFromPrev=(prevPt!=null&&M.dist)?(M.dist[prevPt][pt]||0)/1609.344:0; s.driveMinReal=(prevPt!=null)?(M.dur[prevPt][pt]||0)/60:0; prevPt=pt; }
+  // Re-attach any non-geocoded stops (no coords) at the end, preserving them.
+  var tail=ordered.filter(function(s){ return !(s&&s.lat!=null&&s.lon!=null); });
+  return refined.concat(tail);
+}
+if(typeof module!=='undefined'&&module.exports){ module.exports={ RC_VERSION:RC_VERSION, rcHaversineMiles:rcHaversineMiles, rcRouteLen:rcRouteLen, rcNearestNeighbour:rcNearestNeighbour, rcOptimizeGeographic:rcOptimizeGeographic, rcOsrmTableMatrix:rcOsrmTableMatrix, rcMatrixOrder:rcMatrixOrder, rcTwoOptMatrix:rcTwoOptMatrix, rcRefineWithRoads:rcRefineWithRoads }; }
+/* ╔═══════════════════ END EVERGREEN SHARED ROUTE CORE (rc1) ═══════════════════╗ */
+
 
 /* ───────── Helpers ───────── */
 function esc(s){ return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
@@ -487,7 +647,8 @@ async function _fmComputeOptimizedOrder(){
     const valid=geo.filter(s=>!s.failed&&s.lat!=null); const failed=geo.filter(s=>s.failed||s.lat==null);
     if(valid.length<2) return false;                       // not enough geocoded → keep job-time fallback
     const origin=(_startPoint&&_startPoint.lat!=null&&_startPoint.lon!=null)?_startPoint:valid[0]; // employee's chosen start point is the route depot
-    const ordered=_nearestNeighbour(origin, valid);
+    let ordered=rcOptimizeGeographic(valid, origin);       // tight geographic loop from the start point (shared with /invoice)
+    try{ ordered=await rcRefineWithRoads(ordered, origin); }catch(e){}  // OSRM real-road refine — only ever improves, falls back to straight-line
     const all=ordered.concat(failed);                      // geocode-failed stops trail at the end
     const keys=all.filter(s=>s&&s.bk&&s.bk.email).map(s=>_stopKey(s.bk));
     if(!keys.length) return false;
@@ -515,7 +676,6 @@ function _availableCrews(){
 
 // Re-run optimization right away when the start point or crew changes.
 async function _reoptimizeNow(){
-  if(_savedOrderKeys&&_savedOrderKeys.length){ _fmRender(); showToast("Owner's saved route is in use"); return; }
   showToast('🧭 Optimizing route…');
   const ok=await _fmComputeOptimizedOrder();
   _fmRender();
@@ -695,7 +855,7 @@ function _autoClockOut(){
   _clockOutTime=new Date(); _clockedOut=true;
   const hours=Math.max(0,(_clockOutTime.getTime()-_clockInTime.getTime())/3600000);
   const _coKey='clockout:'+(_clockInTime?_clockInTime.toISOString():todayISOStr());
-  _fmEnqueue({ kind:'clockout', idemKey:_coKey, method:'GET', params:{ action:'employee_clock_out', hours:hours.toFixed(2), date:todayISOStr(), markedBy:adminName||'Crew', helpers:JSON.stringify((_helpers||[]).map(function(n){return {name:n};})), adminToken } });
+  _fmEnqueue({ kind:'clockout', idemKey:_coKey, method:'GET', params:{ action:'employee_clock_out', hours:hours.toFixed(2), date:todayISOStr(), markedBy:adminName||'Crew', helpers:JSON.stringify((_helpers||[]).map(function(h){return (typeof h==='string')?{name:h}:{name:h&&h.name,hourlyRate:(h&&h.hourlyRate)||0};})), adminToken } });
   _fmSendClockedOut(); _fmFlushQueue(); _persist(); _stopGeo(); _releaseWake();
 }
 
@@ -705,7 +865,8 @@ function _crewMatch(bk){ if(_crewSel){ if(_crewSel==='ALL') return true; const c
 function _fmTodayRawJobs(){ const ds=todayISOStr(); return (allBookings||[]).filter(b=>!b.rowCancelled&&dateOf(b)===ds&&_crewMatch(b)); } // completed jobs stay so progress counts them as done
 function _fmStops(){
   const jobs=_fmTodayRawJobs().map(bk=>({bk}));
-  const order=(_savedOrderKeys&&_savedOrderKeys.length)?_savedOrderKeys
+  const order=(_startPoint&&_optOrderKeys&&_optOrderKeys.length)?_optOrderKeys   // crew set a start point → their tight route wins
+             :(_savedOrderKeys&&_savedOrderKeys.length)?_savedOrderKeys
              :(_optOrderKeys&&_optOrderKeys.length)?_optOrderKeys:null;
   if(order){
     const pos=k=>{ const i=order.indexOf(k); return i<0?9999:i; };   // (a) saved canonical route, else (b) self-optimized order
@@ -747,11 +908,20 @@ function _fmRenderStart(){
 }
 
 /* ───────── Start-of-route checklist ───────── */
-function fmStartTapped(){
-  // already clocked in & gear confirmed earlier today → jump straight back into the route
-  if(_clockInTime&&!_clockedOut&&_startChkState.length===START_CHECKLIST.length&&_startChkState.every(Boolean)){ _fmStarted=true; _persist(); _fmRender(); return; }
-  if(_startChkState.length!==START_CHECKLIST.length) _startChkState=START_CHECKLIST.map(()=>false);
-  _renderStartChecklist(); _renderHelpers(); _fmShow('fmScreenChecklist'); _fmSyncTimerSlots();
+async function fmStartTapped(){
+  // Resume: already clocked in & rolling today → jump straight back into the route.
+  if(_clockInTime&&!_clockedOut&&_fmStarted){ _fmRender(); return; }
+  // 1) Who's working today (prefilled roster picker; cancel aborts the start).
+  const who = await fmOpenCrewPicker();
+  if(who===false) return;
+  // 2) PMCS gate — daily/weekly/monthly checks that are due (identical to /invoice).
+  let pmcsOK=true;
+  try{ if(typeof pmcsGateForClockIn==='function') pmcsOK=await pmcsGateForClockIn(); }catch(e){}
+  if(pmcsOK===false) return;
+  // 3) 'Got everything?' load-out checklist (replaces the old gear list).
+  try{ if(typeof loadoutGate==='function') await loadoutGate(); }catch(e){}
+  // 4) Clock in + roll.
+  fmBeginRoute();
 }
 function _renderStartChecklist(){
   const wrap=document.getElementById('fmStartChecklist');
@@ -760,10 +930,53 @@ function _renderStartChecklist(){
   const btn=document.getElementById('fmStartGoBtn'); btn.disabled=!all; btn.textContent=all?'Start Working →':'Confirm all gear to start →';
 }
 function _toggleStartChk(i){ _startChkState[i]=!_startChkState[i]; _persist(); _renderStartChecklist(); }
-function _renderHelpers(){ const w=document.getElementById('fmHelperList'); if(!w) return; w.innerHTML=_helpers.map((h,i)=>'<button class="fm-check on" onclick="fmRemoveHelper('+i+')"><span class="box">✓</span><span>'+esc(h)+'  ✕</span></button>').join(''); }
-function fmAddHelper(){ const n=prompt('Helper name (someone riding along today):'); if(n&&n.trim()){ _helpers.push(n.trim()); _persist(); _renderHelpers(); } }
-function fmRemoveHelper(i){ _helpers.splice(i,1); _persist(); _renderHelpers(); }
+function _hName(h){ return (typeof h==='string')?h:((h&&h.name)||''); }
+function _renderHelpers(){ const w=document.getElementById('fmHelperList'); if(!w) return; w.innerHTML=_helpers.map((h,i)=>'<button class="fm-check on" onclick="fmRemoveHelper('+i+')"><span class="box">✓</span><span>'+esc(_hName(h))+'  ✕</span></button>').join(''); }
+function fmAddHelper(){ const n=prompt('Helper name (someone riding along today):'); if(n&&n.trim()&&!_fmHelperHas(n.trim())){ _helpers.push({name:n.trim(),hourlyRate:0}); _persist(); _renderHelpers(); if(typeof _fmRenderCrewPicker==='function') _fmRenderCrewPicker(); } }
+function fmRemoveHelper(i){ _helpers.splice(i,1); _persist(); _renderHelpers(); if(typeof _fmRenderCrewPicker==='function') _fmRenderCrewPicker(); }
 function _anySheetOpen(){ const c=document.getElementById('fmCompleteSheet'), k=document.getElementById('fmSkipSheet'); return (c&&c.style.display==='flex')||(k&&k.style.display==='flex'); }
+/* ───────── Crew / helper picker (prefilled from the staff roster) ───────── */
+let _crewListAll=[], _crewPickerResolve=null, _crewPickerView=[];
+const _CREW_CACHE_KEY='evg_field_crewlist_v1';
+function _fmHelperHas(name){ return (_helpers||[]).some(h=>_hName(h)===name); }
+async function _fmLoadCrewList(){
+  // cache-first (instant + offline), then refresh from the server roster when online.
+  try{ const c=JSON.parse(localStorage.getItem(_CREW_CACHE_KEY)||'null'); if(Array.isArray(c)) _crewListAll=c; }catch(e){}
+  if(navigator.onLine!==false && adminToken){
+    try{
+      const r=await fetch(SCRIPT_URL+'?action=get_crew_list&adminToken='+encodeURIComponent(adminToken));
+      const d=await r.json();
+      if(d&&Array.isArray(d.crew)){
+        _crewListAll=d.crew.filter(c=>String(c.email||'').toLowerCase()!==String(adminEmail||'').toLowerCase());
+        try{ localStorage.setItem(_CREW_CACHE_KEY, JSON.stringify(_crewListAll)); }catch(e){}
+      }
+    }catch(e){}
+  }
+}
+function fmOpenCrewPicker(){
+  return new Promise(async (resolve)=>{
+    _crewPickerResolve=resolve;
+    const ov=document.getElementById('fmCrewPicker'); if(ov) ov.style.display='flex';
+    const sb=document.getElementById('fmCrewSearch'); if(sb) sb.value='';
+    _fmRenderCrewPicker();        // show cached roster + current helpers immediately
+    await _fmLoadCrewList();
+    _fmRenderCrewPicker();        // refresh with the latest roster
+  });
+}
+function _fmRenderCrewPicker(){
+  const chips=document.getElementById('fmCrewChosen');
+  if(chips) chips.innerHTML=(_helpers||[]).map((h,i)=>'<button class="fm-pill" style="background:#dcfce7;color:#15803d;border-color:#16a34a;cursor:pointer;" onclick="fmRemoveHelper('+i+')">'+esc(_hName(h))+' ✕</button>').join('')||'<span style="color:#9ed8b1;font-size:13px;">Just you so far.</span>';
+  const list=document.getElementById('fmCrewResults'); if(!list) return;
+  const q=((document.getElementById('fmCrewSearch')||{}).value||'').toLowerCase();
+  _crewPickerView=_crewListAll.filter(c=>!_fmHelperHas(c.name) && (!q||String(c.name||'').toLowerCase().includes(q)));
+  if(!_crewListAll.length){ list.innerHTML='<div style="padding:12px;color:#9ed8b1;font-size:13px;">No saved crew list'+(navigator.onLine===false?' (offline)':'')+'. Tap "Add by name" below.</div>'; return; }
+  if(!_crewPickerView.length){ list.innerHTML='<div style="padding:12px;color:#9ed8b1;font-size:13px;">Everyone added — or no match.</div>'; return; }
+  list.innerHTML=_crewPickerView.map((c,idx)=>{ const role=({helper:'Helper',crew_leader:'Crew Leader',manager:'Manager'})[c.role]||c.role||''; const rate=c.hourlyRate?(' · $'+c.hourlyRate+'/hr'):''; return '<button class="fm-check" onclick="fmCrewPick('+idx+')"><span class="box" style="color:#15803d;">＋</span><span>'+esc(c.name)+' <span style="color:#94a3b8;font-size:12px;font-weight:600;">'+esc(role)+esc(rate)+'</span></span></button>'; }).join('');
+}
+function fmCrewPick(idx){ const c=_crewPickerView[idx]; if(!c) return; if(!_fmHelperHas(c.name)){ _helpers.push({name:c.name,hourlyRate:c.hourlyRate||0}); _persist(); } _fmRenderCrewPicker(); _renderHelpers(); }
+function fmCrewAddManual(){ const n=prompt('Helper name:'); if(n&&n.trim()&&!_fmHelperHas(n.trim())){ _helpers.push({name:n.trim(),hourlyRate:0}); _persist(); _fmRenderCrewPicker(); _renderHelpers(); } }
+function fmCrewConfirm(){ const ov=document.getElementById('fmCrewPicker'); if(ov) ov.style.display='none'; const r=_crewPickerResolve; _crewPickerResolve=null; if(r) r(true); }
+function fmCrewCancel(){ const ov=document.getElementById('fmCrewPicker'); if(ov) ov.style.display='none'; const r=_crewPickerResolve; _crewPickerResolve=null; if(r) r(false); }
 function fmEmergencyEnd(){
   if(!confirm('End your route now? You\'ll be clocked out and your hours logged. Any stops left stay open for follow-up.')) return;
   _autoClockOut();
@@ -772,10 +985,8 @@ function fmEmergencyEnd(){
   _fmRenderDone(_fmStops());
 }
 function fmBeginRoute(){
-  if(!(_startChkState.length===START_CHECKLIST.length&&_startChkState.every(Boolean))) return;
+  // PMCS + load-out already ran and logged their own checklists; just clock in and roll.
   if(!_clockInTime || _clockedOut){ _clockInTime=new Date(); _clockedOut=false; _clockOutTime=null; }
-  _fmEnqueue({ kind:'startchk', idemKey:'startchk:'+todayISOStr(), method:'GET', params:{ action:'log_checklist', type:'start_route', date:todayISOStr(), crew:adminCrews||'', by:adminName||'Crew', items:JSON.stringify(START_CHECKLIST), adminToken } });
-  _fmFlushQueue();
   _fmStarted=true; _fmViewIdx=null; _persist(); _fmRender();
 }
 
@@ -819,11 +1030,18 @@ function _fmRenderJob(stops,idx){
   _fmSyncTimerSlots(); _fmHeartbeat();
 }
 function _fmUpdateTotalsChip(){ const el=document.getElementById('fmTotalsChip'); if(!el) return; el.innerHTML='Collected <b>$'+(_fmCashTotal||0).toFixed(0)+'</b> cash'+(_isMoneyRole()?(' · Billed <b>$'+(_fmBilledTotal||0).toFixed(0)+'</b> today'):''); }
-function fmNavigate(idx){ const s=_fmStops(), bk=s[idx]&&s[idx].bk; if(!bk) return; window.open(_fmMapsUrl(bk),'_blank'); }
-function fmRemainingMap(){ const left=_fmStops().filter(s=>!_fmResolved(s)).map(s=>s.bk); if(!left.length){ showToast('No stops left.'); return; } const addrs=left.map(bk=>encodeURIComponent((bk.address||'')+(bk.zip?', '+bk.zip:'')+', FL')); let url='https://www.google.com/maps/dir/?api=1&travelmode=driving&destination='+addrs[addrs.length-1]; const mids=addrs.slice(0,-1).slice(0,9); if(mids.length) url+='&waypoints='+mids.join('|'); window.open(url,'_blank'); }
+// Reliable external-link open for installed PWAs — window.open can be blocked or open a
+// dead blank tab in standalone mode; a transient anchor click hands off to the Maps app.
+function _fmOpenUrl(url){ try{ const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; document.body.appendChild(a); a.click(); a.remove(); }catch(e){ try{ window.open(url,'_blank'); }catch(_e){ location.href=url; } } }
+function fmNavigate(idx){ const s=_fmStops(), bk=s[idx]&&s[idx].bk; if(!bk) return; _fmOpenUrl(_fmMapsUrl(bk)); }
+function fmRemainingMap(){ const left=_fmStops().filter(s=>!_fmResolved(s)).map(s=>s.bk); if(!left.length){ showToast('No stops left.'); return; } const addrs=left.map(bk=>encodeURIComponent((bk.address||'')+(bk.zip?', '+bk.zip:'')+', FL')); let url='https://www.google.com/maps/dir/?api=1&travelmode=driving&destination='+addrs[addrs.length-1]; const mids=addrs.slice(0,-1).slice(0,9); if(mids.length) url+='&waypoints='+mids.join('|'); _fmOpenUrl(url); }
 function fmPrevStop(){ const s=_fmStops(); if(_fmViewIdx>0){ _fmViewIdx--; _persist(); _fmRenderJob(s,_fmViewIdx); } }
 function fmNextStop(){ const s=_fmStops(); if(_fmViewIdx<s.length-1){ _fmViewIdx++; _persist(); _fmRenderJob(s,_fmViewIdx); } }
-function fmSkip(){ fmNextStop(); }
+function fmSkip(){
+  const s=_fmStops(); if(!s.length) return;
+  for(let k=1;k<=s.length;k++){ const j=(_fmViewIdx+k)%s.length; if(!_fmResolved(s[j])){ _fmViewIdx=j; _persist(); _fmRenderJob(s,j); return; } }
+  showToast('No other open stops — this is the last one.');
+}
 
 /* ───────── Skip ───────── */
 function fmOpenSkip(){ const stop=_fmStops()[_fmViewIdx]; if(!stop) return; document.getElementById('fmSkipErr').style.display='none'; document.getElementById('fmSkipTitle').textContent="Couldn't service "+(stop.bk.name||'this stop'); document.getElementById('fmSkipSheet').style.display='flex'; }
@@ -1012,6 +1230,910 @@ window.addEventListener('DOMContentLoaded', ()=>{
   else { document.getElementById('loginScreen').style.display='flex'; }
   _fmUpdateSyncBadge();
 });
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PMCS + load-out — ported VERBATIM from invoice.html so the crew app shows the
+   exact same Preventive-Maintenance flow (daily/weekly/monthly, owner-editable).
+   Only two field-specific adaptations: _pmcsCrewLabel reads _helpers, and the
+   test-mode guard is typeof-safe. Keep in sync with invoice.html.
+   ═══════════════════════════════════════════════════════════════════════════ */
+let PMCS_EQUIPMENT = [
+  { key:'truck', name:'Work Truck', icon:'🛻', items:[
+    { id:'t_tires',   label:'Tires & pressure (incl. spare) — no damage', cad:'daily', crit:true },
+    { id:'t_lights',  label:'Lights: head / tail / brake / turn / hazard', cad:'daily', crit:true },
+    { id:'t_brakes',  label:'Brakes feel firm, no pulling', cad:'daily', crit:true },
+    { id:'t_oil',     label:'Engine oil level', cad:'daily', crit:false },
+    { id:'t_cool',    label:'Coolant level', cad:'daily', crit:false },
+    { id:'t_wash',    label:'Windshield, wipers & washer fluid', cad:'daily', crit:false },
+    { id:'t_horn',    label:'Horn & mirrors', cad:'daily', crit:false },
+    { id:'t_belt',    label:'Seatbelts latch & retract', cad:'daily', crit:true },
+    { id:'t_fuel',    label:'Fuel level ≥ ½ tank', cad:'daily', crit:false },
+    { id:'t_leak',    label:'No leaks under truck (oil / coolant / fuel)', cad:'daily', crit:true },
+    { id:'t_docs',    label:'Registration & insurance in glovebox', cad:'daily', crit:false },
+    { id:'t_tread',   label:'Tire tread depth & even wear', cad:'weekly', crit:false },
+    { id:'t_batt',    label:'Battery terminals clean & tight', cad:'weekly', crit:false },
+    { id:'t_pwrfl',   label:'Power-steering & brake fluid', cad:'weekly', crit:false },
+    { id:'t_belts',   label:'Belts & hoses — no cracks/glaze', cad:'weekly', crit:false },
+    { id:'t_tiedwn',  label:'Bed/cargo tie-downs secure', cad:'weekly', crit:false },
+    { id:'t_air',     label:'Engine air filter', cad:'monthly', crit:false },
+    { id:'t_cabin',   label:'Cabin air filter', cad:'monthly', crit:false },
+    { id:'t_spare',   label:'Spare tire pressure, jack & tools present', cad:'monthly', crit:false },
+    { id:'t_lug',     label:'Wheel lug-nut torque', cad:'monthly', crit:false },
+    { id:'t_oilint',  label:'Oil-change interval check (mileage)', cad:'monthly', crit:false },
+  ]},
+  { key:'trailer', name:'Trailer', icon:'🚚', items:[
+    { id:'r_tires',   label:'Tires & pressure (incl. spare)', cad:'daily', crit:true },
+    { id:'r_lights',  label:'Trailer lights plugged & working (brake/turn/marker)', cad:'daily', crit:true },
+    { id:'r_coupler', label:'Coupler latched & locked to hitch ball', cad:'daily', crit:true },
+    { id:'r_chains',  label:'Safety chains crossed & attached', cad:'daily', crit:true },
+    { id:'r_ramp',    label:'Ramp / gate operates & latches', cad:'daily', crit:false },
+    { id:'r_cargo',   label:'Equipment strapped & secured', cad:'daily', crit:true },
+    { id:'r_break',   label:'Breakaway cable connected (if equipped)', cad:'daily', crit:false },
+    { id:'r_tread',   label:'Tire tread & sidewall condition', cad:'weekly', crit:false },
+    { id:'r_bear',    label:'Wheel bearings/hubs — no play, not hot', cad:'weekly', crit:false },
+    { id:'r_floor',   label:'Floor & ramp boards solid', cad:'weekly', crit:false },
+    { id:'r_frame',   label:'Fenders & frame — no cracks/rust', cad:'weekly', crit:false },
+    { id:'r_grease',  label:'Grease wheel bearings', cad:'monthly', crit:false },
+    { id:'r_brakes',  label:'Trailer brakes adjust/test (if equipped)', cad:'monthly', crit:false },
+    { id:'r_sparet',  label:'Spare tire condition & mount', cad:'monthly', crit:false },
+    { id:'r_lug',     label:'Lug-nut torque', cad:'monthly', crit:false },
+    { id:'r_jack',    label:'Coupler & jack lubricated', cad:'monthly', crit:false },
+  ]},
+  { key:'mower', name:'Mower', icon:'🚜', items:[
+    { id:'m_oil',     label:'Engine oil level', cad:'daily', crit:true },
+    { id:'m_fuel',    label:'Fuel level & no leaks', cad:'daily', crit:true },
+    { id:'m_blades',  label:'Blades secure, sharp, no cracks', cad:'daily', crit:true },
+    { id:'m_tires',   label:'Tire pressure (all)', cad:'daily', crit:false },
+    { id:'m_air',     label:'Air filter clean', cad:'daily', crit:false },
+    { id:'m_deck',    label:'Deck clear of debris/build-up', cad:'daily', crit:false },
+    { id:'m_safety',  label:'Safety / operator-presence switches work', cad:'daily', crit:true },
+    { id:'m_belts',   label:'Belts in place & intact', cad:'daily', crit:false },
+    { id:'m_grease',  label:'Daily grease points hit', cad:'daily', crit:false },
+    { id:'m_ctrl',    label:'Controls / steering smooth', cad:'daily', crit:false },
+    { id:'m_sharp',   label:'Sharpen / rotate blades', cad:'weekly', crit:false },
+    { id:'m_spindle', label:'Spindle play check', cad:'weekly', crit:false },
+    { id:'m_batt',    label:'Battery charge & terminals', cad:'weekly', crit:false },
+    { id:'m_fins',    label:'Cooling fins / screen clean', cad:'weekly', crit:false },
+    { id:'m_hydro',   label:'Hydro fluid level (if hydro)', cad:'weekly', crit:false },
+    { id:'m_airm',    label:'Replace / deep-clean air filter', cad:'monthly', crit:false },
+    { id:'m_plug',    label:'Spark plug condition', cad:'monthly', crit:false },
+    { id:'m_oilch',   label:'Change engine oil (per hours)', cad:'monthly', crit:false },
+    { id:'m_hydf',    label:'Hydro / gearbox fluid', cad:'monthly', crit:false },
+    { id:'m_level',   label:'Deck level & pitch', cad:'monthly', crit:false },
+  ]},
+  { key:'edger', name:'Edger', icon:'🔪', items:[
+    { id:'e_mix',     label:'Fuel/oil mix correct & topped off', cad:'daily', crit:true },
+    { id:'e_blade',   label:'Blade secure, sharp, not worn past line', cad:'daily', crit:true },
+    { id:'e_guard',   label:'Blade guard in place', cad:'daily', crit:true },
+    { id:'e_thr',     label:'Throttle returns to idle', cad:'daily', crit:true },
+    { id:'e_air',     label:'Air filter clean', cad:'daily', crit:false },
+    { id:'e_shaft',   label:'Handle / shaft tight', cad:'daily', crit:false },
+    { id:'e_leak',    label:'No fuel leaks', cad:'daily', crit:true },
+    { id:'e_rot',     label:'Rotate / replace blade', cad:'weekly', crit:false },
+    { id:'e_gear',    label:'Grease gearhead', cad:'weekly', crit:false },
+    { id:'e_spark',   label:'Spark-arrestor screen', cad:'weekly', crit:false },
+    { id:'e_fast',    label:'Fasteners tight', cad:'weekly', crit:false },
+    { id:'e_plug',    label:'Spark plug', cad:'monthly', crit:false },
+    { id:'e_lines',   label:'Fuel lines & filter', cad:'monthly', crit:false },
+    { id:'e_gbx',     label:'Gearbox grease', cad:'monthly', crit:false },
+    { id:'e_carb',    label:'Carb / idle adjust', cad:'monthly', crit:false },
+  ]},
+  { key:'whacker', name:'Weed Whacker', icon:'🌿', items:[
+    { id:'w_mix',     label:'Fuel/oil mix correct & topped off', cad:'daily', crit:true },
+    { id:'w_line',    label:'Trimmer line/head loaded & feeds', cad:'daily', crit:false },
+    { id:'w_guard',   label:'Guard / deflector in place', cad:'daily', crit:true },
+    { id:'w_thr',     label:'Throttle returns to idle', cad:'daily', crit:true },
+    { id:'w_harn',    label:'Harness / strap good', cad:'daily', crit:false },
+    { id:'w_air',     label:'Air filter clean', cad:'daily', crit:false },
+    { id:'w_leak',    label:'No fuel leaks', cad:'daily', crit:true },
+    { id:'w_head',    label:'Cutting head secure', cad:'daily', crit:false },
+    { id:'w_spool',   label:'Replace line spool / check head', cad:'weekly', crit:false },
+    { id:'w_airw',    label:'Clean air filter', cad:'weekly', crit:false },
+    { id:'w_spark',   label:'Spark-arrestor screen', cad:'weekly', crit:false },
+    { id:'w_coup',    label:'Fasteners & shaft coupler', cad:'weekly', crit:false },
+    { id:'w_plug',    label:'Spark plug', cad:'monthly', crit:false },
+    { id:'w_lines',   label:'Fuel lines & filter', cad:'monthly', crit:false },
+    { id:'w_gear',    label:'Gearhead grease (if equipped)', cad:'monthly', crit:false },
+    { id:'w_drive',   label:'Drive shaft inspect / grease', cad:'monthly', crit:false },
+  ]},
+];
+
+// ── Editable checklists (shared across all crews via the sheet) ─────────────
+// The list above is the built-in default. An owner can edit it on the PMCS tab;
+// edits are saved to the sheet (pmcs_config) so every crew's phone gets the same
+// checklists, with a localStorage fallback for instant local use.
+const PMCS_DEFAULT_EQUIPMENT = JSON.parse(JSON.stringify(PMCS_EQUIPMENT));
+const _PMCS_CFG_KEY = 'evg_pmcs_config_v1';
+let _pmcsConfigLoaded = false;
+
+function _pmcsApplyConfig(list){
+  if (!Array.isArray(list) || !list.length) return false;
+  // sanity: each machine needs key/name/items[]
+  const ok = list.every(e => e && e.key && e.name && Array.isArray(e.items));
+  if (!ok) return false;
+  PMCS_EQUIPMENT = list;
+  return true;
+}
+async function pmcsLoadConfig(force){
+  if (_pmcsConfigLoaded && !force) return;
+  // try the server (shared, authoritative)
+  try {
+    const ctrl = new AbortController(); const t = setTimeout(()=>ctrl.abort(), 6000);
+    const r = await fetch(SCRIPT_URL + '?action=get_pmcs_config&adminToken=' + encodeURIComponent(adminToken), { signal: ctrl.signal });
+    clearTimeout(t);
+    const d = await r.json();
+    if (d && d.success && d.config){
+      const parsed = (typeof d.config === 'string') ? JSON.parse(d.config) : d.config;
+      if (_pmcsApplyConfig(parsed)){
+        try { localStorage.setItem(_PMCS_CFG_KEY, JSON.stringify(parsed)); } catch(e){}
+        _pmcsConfigLoaded = true; return;
+      }
+    }
+  } catch(e){ /* offline / not deployed → fall back to local */ }
+  // fallback: last-known local copy
+  try {
+    const local = JSON.parse(localStorage.getItem(_PMCS_CFG_KEY) || 'null');
+    if (local) _pmcsApplyConfig(local);
+  } catch(e){}
+  _pmcsConfigLoaded = true;
+}
+function pmcsSaveConfig(){
+  const json = JSON.stringify(PMCS_EQUIPMENT);
+  try { localStorage.setItem(_PMCS_CFG_KEY, json); } catch(e){}
+  // POST the whole checklist to the sheet so all crews get it (too big for a GET URL).
+  const body = { action:'set_pmcs_config', config: json, by: adminName || adminEmail || '', adminToken };
+  try {
+    if (typeof _fmEnqueue === 'function'){ _fmEnqueue({ kind:'pmcs_config', method:'POST', body }); if (typeof _fmFlushQueue==='function') _fmFlushQueue(); }
+    else fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(body), headers:{ 'Content-Type':'application/json' } }).catch(()=>{});
+  } catch(e){ try { fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(body), headers:{ 'Content-Type':'application/json' } }).catch(()=>{}); } catch(_e){} }
+}
+
+// Weekly PMCS lands every Monday; monthly PMCS every 4 weeks (28 days) on a Monday,
+// counted from this anchor Monday. A check stays "due" every day until it's actually
+// completed — skipping or missing it does NOT clear it (skips aren't counted as done).
+const PMCS_MONTHLY_ANCHOR = '2026-06-29';   // a Monday — start of the 4-week monthly cycle
+const _pmcsState = { status:{}, loaded:false };
+let _pmcsMode = 'single';     // 'single' | 'gate'
+let _pmcsQueue = [];          // equipment keys to run
+let _pmcsIdx = 0;
+let _pmcsCads = [];           // cadences being checked for current equipment
+let _pmcsItemState = {};      // id -> 'pass' | 'fault'
+let _pmcsNotes = {};          // id -> note text
+let _pmcsResolveGate = null;
+
+function _pmcsUuid(){
+  return 'pmcs-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,9);
+}
+function _pmcsEq(key){ return PMCS_EQUIPMENT.find(e => e.key === key); }
+function _pmcsToday(){ return (typeof todayISOStr === 'function') ? todayISOStr() : new Date().toISOString().slice(0,10); }
+function _pmcsIso(d){
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+// Monday (inclusive) of the week containing `iso`.
+function _pmcsWeeklyWindowStart(iso){
+  const d = new Date(iso + 'T00:00:00');
+  const back = (d.getDay() + 6) % 7;        // 0=Sun..6=Sat → days since Monday
+  d.setDate(d.getDate() - back);
+  return _pmcsIso(d);
+}
+// Start of the current 4-week monthly window (a Monday), or null before the anchor.
+function _pmcsMonthlyWindowStart(iso){
+  const today  = new Date(iso + 'T00:00:00');
+  const anchor = new Date(PMCS_MONTHLY_ANCHOR + 'T00:00:00');
+  const diff = Math.floor((today - anchor) / 86400000);
+  if (diff < 0) return null;
+  const k = Math.floor(diff / 28);
+  return _pmcsIso(new Date(anchor.getTime() + k * 28 * 86400000));
+}
+// Which cadences are currently OUTSTANDING for a machine. A cadence is "done" only
+// if it was completed on/after the start of its current window; otherwise it's due
+// and re-appears every day until completed (skips never count as done).
+function _pmcsDue(eqKey){
+  const st = _pmcsState.status[eqKey] || {};
+  const today = _pmcsToday();
+  const due = {};
+  due.daily  = !(st.daily  && st.daily  >= today);
+  const wk = _pmcsWeeklyWindowStart(today);
+  due.weekly = !(st.weekly && st.weekly >= wk);
+  const mo = _pmcsMonthlyWindowStart(today);
+  due.monthly = mo ? !(st.monthly && st.monthly >= mo) : false;
+  return due;
+}
+function _pmcsDueCads(eqKey){
+  const d = _pmcsDue(eqKey);
+  return ['daily','weekly','monthly'].filter(c => d[c]);
+}
+function _pmcsCrewLabel(){
+  try {
+    if (Array.isArray(_helpers) && _helpers.length){
+      return [adminName].concat(_helpers.map(c=>(typeof c==='string'?c:(c&&c.name)))).filter(Boolean).join(', ');
+    }
+  } catch(e){}
+  return adminName || adminEmail || '';
+}
+
+function _pmcsInjectStyle(){
+  if (document.getElementById('pmcsStyle')) return;
+  const s = document.createElement('style');
+  s.id = 'pmcsStyle';
+  s.textContent = `
+  .pmcs-card { background:#fff; border:1.5px solid var(--border); border-radius:14px; padding:16px 18px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  .pmcs-card-top { display:flex; align-items:center; gap:12px; }
+  .pmcs-card-icon { font-size:30px; line-height:1; }
+  .pmcs-card-name { font-size:17px; font-weight:800; color:var(--green-deep); }
+  .pmcs-card-sub { font-size:12px; color:var(--text-muted); margin-top:2px; }
+  .pmcs-badges { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0 4px; }
+  .pmcs-badge { font-size:11px; font-weight:700; padding:3px 9px; border-radius:20px; }
+  .pmcs-badge.due  { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+  .pmcs-badge.ok   { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+  .pmcs-start-btn { margin-top:12px; width:100%; padding:12px; border:none; border-radius:10px; font-family:inherit; font-size:14px; font-weight:700; color:#fff; cursor:pointer; background:linear-gradient(135deg,#15803d,#166534); transition:opacity .15s,transform .15s; }
+  .pmcs-start-btn:hover { opacity:.9; transform:translateY(-1px); }
+  .pmcs-start-btn.allok { background:#fff; color:#15803d; border:1.5px solid #bbf7d0; }
+  .pmcs-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:3300; align-items:flex-end; justify-content:center; }
+  .pmcs-overlay.open { display:flex; }
+  .pmcs-panel { background:#fff; border-radius:20px 20px 0 0; width:100%; max-width:640px; max-height:92vh; display:flex; flex-direction:column; box-shadow:0 -8px 40px rgba(0,0,0,.22); animation:slideInUp .22s ease; }
+  .pmcs-head { padding:16px 18px 12px; border-bottom:1.5px solid var(--border); position:sticky; top:0; background:#fff; border-radius:20px 20px 0 0; }
+  .pmcs-head-row { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .pmcs-head-title { font-size:18px; font-weight:800; color:var(--green-deep); display:flex; align-items:center; gap:9px; }
+  .pmcs-head-close { background:none; border:none; font-size:24px; color:var(--text-muted); cursor:pointer; line-height:1; padding:0 4px; }
+  .pmcs-progress { font-size:12px; font-weight:700; color:#92400e; background:#fef3c7; border:1px solid #fde68a; padding:3px 10px; border-radius:20px; }
+  .pmcs-head-sub { font-size:12px; color:var(--text-muted); margin-top:6px; }
+  .pmcs-body { overflow-y:auto; padding:8px 14px 12px; flex:1; }
+  .pmcs-section-title { font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:#64748b; margin:14px 4px 6px; }
+  .pmcs-item { display:flex; align-items:center; gap:10px; padding:11px 6px; border-bottom:1px solid #f1f5f9; }
+  .pmcs-item.unset { background:#fffdf3; }
+  .pmcs-item-toggle { flex:0 0 auto; width:30px; height:30px; border-radius:8px; border:1.5px solid #cbd5e1; background:#fff; font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .12s; margin-top:1px; }
+  .pmcs-item.pass  .pmcs-item-toggle { background:#16a34a; border-color:#16a34a; color:#fff; }
+  .pmcs-item.fault .pmcs-item-toggle { background:#dc2626; border-color:#dc2626; color:#fff; }
+  .pmcs-item-main { flex:1; min-width:0; }
+  .pmcs-item-label { font-size:14px; color:var(--text); line-height:1.4; font-weight:600; }
+  .pmcs-item-label .crit { color:#dc2626; font-weight:700; font-size:10px; margin-left:5px; vertical-align:middle; }
+  .pmcs-item-note { display:none; width:100%; margin-top:8px; padding:9px 10px; border:1.5px solid #fca5a5; border-radius:9px; font-family:inherit; font-size:13.5px; outline:none; box-sizing:border-box; }
+  .pmcs-item-note.need { border-color:#dc2626; background:#fff5f5; }
+  .pmcs-item.fault .pmcs-item-note { display:block; }
+  /* check / X buttons — nothing is pre-selected; crew must choose for every item */
+  .pmcs-item-btns { display:flex; gap:7px; flex-shrink:0; }
+  .pmcs-pf { width:42px; height:42px; border-radius:11px; border:1.5px solid #d8e0db; background:#fff; font-size:19px; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#b6c0b9; transition:all .12s; -webkit-tap-highlight-color:transparent; }
+  .pmcs-pf:active { transform:scale(.92); }
+  .pmcs-pf.pass.on  { background:#16a34a; border-color:#16a34a; color:#fff; }
+  .pmcs-pf.fault.on { background:#dc2626; border-color:#dc2626; color:#fff; }
+  .pmcs-foot { border-top:1.5px solid var(--border); padding:12px 16px calc(12px + env(safe-area-inset-bottom)); background:#fff; }
+  .pmcs-status-banner { font-size:13px; font-weight:700; text-align:center; padding:8px; border-radius:9px; margin-bottom:10px; }
+  .pmcs-status-banner.go    { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+  .pmcs-status-banner.nogo  { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+  .pmcs-status-banner.pending { background:#fffbeb; color:#92400e; border:1px solid #fde68a; }
+  .pmcs-btn:disabled { opacity:.5; cursor:not-allowed; }
+  .pmcs-foot-btns { display:flex; gap:10px; }
+  .pmcs-btn { flex:1; padding:13px; border-radius:11px; font-family:inherit; font-size:15px; font-weight:700; cursor:pointer; border:none; }
+  .pmcs-btn-submit { background:linear-gradient(135deg,#15803d,#166534); color:#fff; }
+  .pmcs-btn-submit:hover { opacity:.92; }
+  .pmcs-btn-skip { background:#fff; color:#b45309; border:1.5px solid #fcd34d; flex:0 0 auto; padding:13px 16px; }
+  .pmcs-btn-skip:hover { background:#fffbeb; }
+  .pmcs-quick { display:flex; gap:8px; margin:6px 4px 2px; }
+  .pmcs-quick button { flex:1; font-size:12px; font-weight:600; padding:7px; border-radius:8px; border:1.5px solid var(--border); background:#fff; color:var(--text-muted); cursor:pointer; }
+  .pmcs-quick button:hover { border-color:var(--green-mid); color:var(--green-mid); }
+  `;
+  document.head.appendChild(s);
+}
+function _pmcsInjectOverlay(){
+  if (document.getElementById('pmcsOverlay')) return;
+  const o = document.createElement('div');
+  o.className = 'pmcs-overlay'; o.id = 'pmcsOverlay';
+  o.innerHTML = `
+    <div class="pmcs-panel">
+      <div class="pmcs-head">
+        <div class="pmcs-head-row">
+          <div class="pmcs-head-title" id="pmcsRunTitle">🔧 PMCS</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="pmcs-progress" id="pmcsRunProgress" style="display:none;"></span>
+            <button class="pmcs-head-close" id="pmcsRunClose" onclick="pmcsCloseRunner()">×</button>
+          </div>
+        </div>
+        <div class="pmcs-head-sub" id="pmcsRunSub"></div>
+      </div>
+      <div class="pmcs-body" id="pmcsRunBody"></div>
+      <div class="pmcs-foot">
+        <div class="pmcs-status-banner go" id="pmcsRunBanner"></div>
+        <div class="pmcs-foot-btns">
+          <button class="pmcs-btn pmcs-btn-skip" id="pmcsRunSkip" onclick="pmcsSkipCurrent()">Skip</button>
+          <button class="pmcs-btn pmcs-btn-submit" id="pmcsRunSubmit" onclick="pmcsSubmitCurrent()">Submit ✓</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(o);
+}
+
+let _pmcsStatusPromise = null;
+async function pmcsLoadStatus(force){
+  if (_pmcsState.loaded && !force) return _pmcsState.status;
+  if (_pmcsStatusPromise) return _pmcsStatusPromise;   // dedupe: share an in-flight fetch
+  // Hard 6s timeout so a slow/weak connection can NEVER hang the gate — if the
+  // status can't load we just treat everything as due and let the crew proceed.
+  _pmcsStatusPromise = (async () => {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 6000);
+      const r = await fetch(SCRIPT_URL + '?action=get_pmcs_status&adminToken=' + encodeURIComponent(adminToken), { signal: ctrl.signal });
+      clearTimeout(timer);
+      const d = await r.json();
+      if (d && d.success && d.status) _pmcsState.status = d.status;
+    } catch(e){ /* offline / slow / not deployed: keep whatever we have */ }
+    _pmcsState.loaded = true;
+    _pmcsStatusPromise = null;
+    return _pmcsState.status;
+  })();
+  return _pmcsStatusPromise;
+}
+
+async function initPmcsTab(){
+  _pmcsInjectStyle(); _pmcsInjectOverlay();
+  const body = document.getElementById('pmcsTabBody');
+  if (!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Loading PMCS…</div>';
+  await pmcsLoadConfig(true);
+  await pmcsLoadStatus(true);
+  pmcsRenderTab();
+}
+function pmcsRenderTab(){
+  const body = document.getElementById('pmcsTabBody');
+  if (!body) return;
+  const dueCount = PMCS_EQUIPMENT.reduce((n,e)=> n + (_pmcsDueCads(e.key).length ? 1 : 0), 0);
+  let html = `
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px;">
+      <div style="font-size:22px;font-weight:800;color:var(--green-deep);">🔧 PMCS</div>
+      <div style="font-size:12px;color:var(--text-muted);">${_pmcsToday()}</div>
+    </div>
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">
+      Preventive Maintenance Checks & Services. ${dueCount ? `<strong style="color:#b91c1c;">${dueCount} machine${dueCount!==1?'s':''} need${dueCount===1?'s':''} a check.</strong>` : '<strong style="color:#15803d;">All checks up to date. 👍</strong>'}
+    </div>
+    ${(window._isAtLeast && window._isAtLeast('owner')) ? `
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button onclick="pmcsOpenEditor()" style="flex:1;padding:11px;border:1.5px solid var(--border);border-radius:11px;background:#fff;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;color:var(--green-deep);">✏️ Edit checklists</button>
+      <button onclick="pmcsOpenFaults()" style="flex:1;padding:11px;border:1.5px solid #fecaca;border-radius:11px;background:#fff5f5;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;color:#b91c1c;">⚠️ Faults log</button>
+    </div>` : ''}`;
+  for (const eq of PMCS_EQUIPMENT){
+    const due = _pmcsDue(eq.key);
+    const st  = _pmcsState.status[eq.key] || {};
+    const badge = (cad,lbl) => due[cad]
+      ? `<span class="pmcs-badge due">${lbl} due</span>`
+      : `<span class="pmcs-badge ok">${lbl} ✓</span>`;
+    const lastTxt = st.daily ? `Last daily: ${st.daily}` : 'No daily logged yet';
+    const anyDue = due.daily || due.weekly || due.monthly;
+    html += `
+      <div class="pmcs-card">
+        <div class="pmcs-card-top">
+          <div class="pmcs-card-icon">${eq.icon}</div>
+          <div style="flex:1;">
+            <div class="pmcs-card-name">${esc(eq.name)}</div>
+            <div class="pmcs-card-sub">${esc(lastTxt)}</div>
+          </div>
+        </div>
+        <div class="pmcs-badges">
+          ${badge('daily','Daily')}${badge('weekly','Weekly')}${badge('monthly','Monthly')}
+        </div>
+        <button class="pmcs-start-btn ${anyDue?'':'allok'}" onclick="pmcsOpenSingle('${eq.key}')">
+          ${anyDue ? '▶ Start '+esc(eq.name)+' PMCS' : '↻ Re-run '+esc(eq.name)+' PMCS'}
+        </button>
+      </div>`;
+  }
+  body.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PMCS CHECKLIST EDITOR (owner) — edits the shared checklist for ALL crews
+// ═══════════════════════════════════════════════════════════════════════════
+let _pmcsEdit = null, _pmcsEditKey = null;
+function _pmcsInjectEditorOverlay(){
+  if (document.getElementById('pmcsEditOverlay')) return;
+  _pmcsInjectStyle();
+  const o = document.createElement('div');
+  o.className='pmcs-overlay'; o.id='pmcsEditOverlay';
+  o.innerHTML = `
+    <div class="pmcs-panel">
+      <div class="pmcs-head">
+        <div class="pmcs-head-row">
+          <div class="pmcs-head-title">✏️ Edit checklists</div>
+          <button class="pmcs-head-close" onclick="pmcsCloseEditor()">×</button>
+        </div>
+        <div class="pmcs-head-sub">Changes apply to <b>every crew</b> · saved to your sheet</div>
+        <div id="pmcsEditMachines" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:11px;"></div>
+      </div>
+      <div class="pmcs-body" id="pmcsEditBody"></div>
+      <div class="pmcs-foot">
+        <div class="pmcs-foot-btns">
+          <button class="pmcs-btn pmcs-btn-skip" onclick="pmcsEditReset()">↺ Reset</button>
+          <button class="pmcs-btn pmcs-btn-submit" onclick="pmcsEditSave()">Save for all crews ✓</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(o);
+}
+function pmcsOpenEditor(){
+  _pmcsInjectEditorOverlay();
+  _pmcsEdit = JSON.parse(JSON.stringify(PMCS_EQUIPMENT));
+  _pmcsEditKey = _pmcsEdit[0] && _pmcsEdit[0].key;
+  pmcsRenderEditor();
+  document.getElementById('pmcsEditOverlay').classList.add('open');
+}
+function pmcsCloseEditor(){ const o=document.getElementById('pmcsEditOverlay'); if(o)o.classList.remove('open'); }
+function _pmcsEditEq(){ return _pmcsEdit.find(e=>e.key===_pmcsEditKey); }
+function pmcsEditSelect(key){ _pmcsEditKey=key; pmcsRenderEditor(); }
+function pmcsRenderEditor(){
+  const chips = document.getElementById('pmcsEditMachines');
+  chips.innerHTML = _pmcsEdit.map(e=>`<button onclick="pmcsEditSelect('${e.key}')" style="padding:6px 11px;border-radius:20px;border:1.5px solid ${e.key===_pmcsEditKey?'var(--green-mid)':'var(--border)'};background:${e.key===_pmcsEditKey?'var(--green-pale)':'#fff'};font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;color:${e.key===_pmcsEditKey?'var(--green-deep)':'var(--text-muted)'};white-space:nowrap;">${e.icon} ${esc(e.name)}</button>`).join('');
+  const eq=_pmcsEditEq(); const body=document.getElementById('pmcsEditBody'); if(!eq){ body.innerHTML=''; return; }
+  let html = `<div style="margin:8px 2px 16px;"><label style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;">Machine name</label><input value="${esc(eq.name)}" oninput="pmcsEditName(this.value)" style="width:100%;margin-top:5px;padding:10px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;font-size:15px;font-weight:700;box-sizing:border-box;"></div>`;
+  for (const cad of ['daily','weekly','monthly']){
+    const items = eq.items.filter(it=>it.cad===cad);
+    html += `<div class="pmcs-section-title">${cad} — ${items.length} item${items.length!==1?'s':''}</div>`;
+    for (const it of items){
+      html += `
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 2px;border-bottom:1px solid #f1f5f9;">
+          <input value="${esc(it.label)}" oninput="pmcsEditItemText('${it.id}',this.value)" placeholder="Check item…" style="flex:1;min-width:0;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px;box-sizing:border-box;">
+          <label title="Failing this is a NO-GO (don't operate)" style="display:flex;align-items:center;gap:4px;font-size:10.5px;font-weight:800;color:${it.crit?'#dc2626':'#b6c0b9'};white-space:nowrap;cursor:pointer;"><input type="checkbox" ${it.crit?'checked':''} onchange="pmcsEditItemCrit('${it.id}',this.checked)" style="accent-color:#dc2626;">NO-GO</label>
+          <button onclick="pmcsEditDelItem('${it.id}')" title="Remove" style="flex-shrink:0;width:32px;height:32px;border:1.5px solid #fecaca;border-radius:8px;background:#fff5f5;color:#dc2626;font-size:16px;cursor:pointer;line-height:1;">×</button>
+        </div>`;
+    }
+    html += `<button onclick="pmcsEditAdd('${cad}')" style="margin:9px 2px 6px;padding:10px;width:100%;border:1.5px dashed var(--border);border-radius:9px;background:#fff;color:var(--green-deep);font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;">+ Add ${cad} item</button>`;
+  }
+  body.innerHTML = html;
+}
+function pmcsEditName(v){ const eq=_pmcsEditEq(); if(eq) eq.name=v; }
+function pmcsEditItemText(id,v){ const eq=_pmcsEditEq(); const it=eq&&eq.items.find(x=>x.id===id); if(it) it.label=v; }
+function pmcsEditItemCrit(id,c){ const eq=_pmcsEditEq(); const it=eq&&eq.items.find(x=>x.id===id); if(it){ it.crit=!!c; pmcsRenderEditor(); } }
+function pmcsEditDelItem(id){ const eq=_pmcsEditEq(); if(eq){ eq.items=eq.items.filter(x=>x.id!==id); pmcsRenderEditor(); } }
+function pmcsEditAdd(cad){ const eq=_pmcsEditEq(); if(eq){ eq.items.push({ id:(eq.key[0]||'x')+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), label:'', cad, crit:false }); pmcsRenderEditor(); } }
+function pmcsEditReset(){ if(!confirm('Reset ALL checklists back to the built-in defaults? This replaces your edits for everyone.')) return; _pmcsEdit=JSON.parse(JSON.stringify(PMCS_DEFAULT_EQUIPMENT)); _pmcsEditKey=_pmcsEdit[0].key; pmcsRenderEditor(); }
+function pmcsEditSave(){
+  for (const e of _pmcsEdit){ e.items = e.items.filter(it=>(it.label||'').trim()); }
+  if (!_pmcsApplyConfig(_pmcsEdit)){ alert('Each machine needs a name and at least one item.'); return; }
+  pmcsSaveConfig();
+  pmcsCloseEditor();
+  try { pmcsRenderTab(); } catch(e){}
+  if (typeof showToast==='function') showToast('✏️ Checklists saved — syncing to all crews');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PMCS FAULTS LOG (owner) — every fault / NO-GO the crews have flagged
+// ═══════════════════════════════════════════════════════════════════════════
+function _pmcsInjectFaultsOverlay(){
+  if (document.getElementById('pmcsFaultsOverlay')) return; _pmcsInjectStyle();
+  const o=document.createElement('div'); o.className='pmcs-overlay'; o.id='pmcsFaultsOverlay';
+  o.innerHTML=`<div class="pmcs-panel"><div class="pmcs-head"><div class="pmcs-head-row"><div class="pmcs-head-title">⚠️ Faults log</div><button class="pmcs-head-close" onclick="pmcsCloseFaults()">×</button></div><div class="pmcs-head-sub">Every fault & NO-GO the crews have flagged</div></div><div class="pmcs-body" id="pmcsFaultsBody"></div></div>`;
+  document.body.appendChild(o);
+}
+function pmcsCloseFaults(){ const o=document.getElementById('pmcsFaultsOverlay'); if(o)o.classList.remove('open'); }
+async function pmcsOpenFaults(){
+  _pmcsInjectFaultsOverlay();
+  const body=document.getElementById('pmcsFaultsBody');
+  body.innerHTML='<div style="text-align:center;padding:34px;color:#64748b;">Loading faults…</div>';
+  document.getElementById('pmcsFaultsOverlay').classList.add('open');
+  let faults=[];
+  try {
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),7000);
+    const r=await fetch(SCRIPT_URL+'?action=get_pmcs_faults&adminToken='+encodeURIComponent(adminToken),{signal:ctrl.signal});
+    clearTimeout(t); const d=await r.json();
+    if (d && d.success && Array.isArray(d.faults)) faults=d.faults;
+  } catch(e){}
+  pmcsRenderFaults(faults);
+}
+function pmcsRenderFaults(faults){
+  const body=document.getElementById('pmcsFaultsBody'); if(!body)return;
+  if (!faults.length){ body.innerHTML='<div style="text-align:center;padding:40px 24px;color:#64748b;line-height:1.6;">✅ No open faults logged.<br><span style="font-size:12px;color:#94a3b8;">Faults crews flag during PMCS show up here once the PMCS backend is deployed.</span></div>'; return; }
+  const byEq={};
+  for (const f of faults){ const k=f.equipment||f.equipKey||'Equipment'; (byEq[k]=byEq[k]||[]).push(f); }
+  let html='';
+  for (const k of Object.keys(byEq)){
+    html += `<div class="pmcs-section-title">${esc(k)} — ${byEq[k].length} fault${byEq[k].length!==1?'s':''}</div>`;
+    for (const f of byEq[k]){
+      const crit = f.critical || /NO-GO/i.test(String(f.result||''));
+      html += `<div style="padding:11px 8px;border-bottom:1px solid #f1f5f9;">
+        <div style="font-size:14px;font-weight:700;color:${crit?'#b91c1c':'#92400e'};">${crit?'⛔':'⚠️'} ${esc(f.label||f.result||'Fault')}</div>
+        ${f.note?`<div style="font-size:13px;color:#475569;margin-top:3px;">"${esc(f.note)}"</div>`:''}
+        <div style="font-size:11px;color:#94a3b8;margin-top:4px;">${esc(f.date||'')}${f.by?(' · '+esc(f.by)):''}${f.crew?(' · '+esc(f.crew)):''}</div>
+      </div>`;
+    }
+  }
+  body.innerHTML=html;
+}
+
+// ── On-demand PMCS menu (used inside Field Mode, where there's no tab) ───────
+// Lets a crew pull up the machine list and run any check anytime, not just at
+// route start. Reuses the same per-machine runner as the tab/gate.
+function _pmcsInjectMenuOverlay(){
+  if (document.getElementById('pmcsMenuOverlay')) return;
+  _pmcsInjectStyle();
+  const o = document.createElement('div');
+  o.className = 'pmcs-overlay'; o.id = 'pmcsMenuOverlay';
+  o.innerHTML = `
+    <div class="pmcs-panel">
+      <div class="pmcs-head">
+        <div class="pmcs-head-row">
+          <div class="pmcs-head-title">🔧 PMCS</div>
+          <button class="pmcs-head-close" onclick="pmcsCloseMenu()">×</button>
+        </div>
+        <div class="pmcs-head-sub">Run a maintenance check on any machine.</div>
+      </div>
+      <div class="pmcs-body" id="pmcsMenuBody"></div>
+    </div>`;
+  document.body.appendChild(o);
+}
+async function pmcsOpenMenu(){
+  _pmcsInjectStyle(); _pmcsInjectOverlay(); _pmcsInjectMenuOverlay();
+  const body = document.getElementById('pmcsMenuBody');
+  if (body) body.innerHTML = '<div style="text-align:center;padding:34px;color:#64748b;">Loading PMCS status…</div>';
+  const ov = document.getElementById('pmcsMenuOverlay');
+  if (ov) ov.classList.add('open');
+  await pmcsLoadStatus(true);
+  pmcsRenderMenu();
+}
+function pmcsCloseMenu(){
+  const ov = document.getElementById('pmcsMenuOverlay');
+  if (ov) ov.classList.remove('open');
+}
+function pmcsRenderMenu(){
+  const body = document.getElementById('pmcsMenuBody');
+  if (!body) return;
+  let html = '';
+  for (const eq of PMCS_EQUIPMENT){
+    const due = _pmcsDue(eq.key);
+    const st  = _pmcsState.status[eq.key] || {};
+    const badge = (cad,lbl) => due[cad]
+      ? `<span class="pmcs-badge due">${lbl} due</span>`
+      : `<span class="pmcs-badge ok">${lbl} ✓</span>`;
+    const anyDue = due.daily || due.weekly || due.monthly;
+    const lastTxt = st.daily ? `Last daily: ${st.daily}` : 'No daily logged yet';
+    html += `
+      <div class="pmcs-card">
+        <div class="pmcs-card-top">
+          <div class="pmcs-card-icon">${eq.icon}</div>
+          <div style="flex:1;">
+            <div class="pmcs-card-name">${esc(eq.name)}</div>
+            <div class="pmcs-card-sub">${esc(lastTxt)}</div>
+          </div>
+        </div>
+        <div class="pmcs-badges">${badge('daily','Daily')}${badge('weekly','Weekly')}${badge('monthly','Monthly')}</div>
+        <button class="pmcs-start-btn ${anyDue?'':'allok'}" onclick="pmcsOpenSingle('${eq.key}')">
+          ${anyDue ? '▶ Start '+esc(eq.name)+' PMCS' : '↻ Re-run '+esc(eq.name)+' PMCS'}
+        </button>
+      </div>`;
+  }
+  body.innerHTML = html;
+}
+
+function pmcsOpenSingle(eqKey){
+  _pmcsInjectStyle(); _pmcsInjectOverlay();
+  _pmcsMode = 'single';
+  _pmcsQueue = [eqKey];
+  _pmcsIdx = 0;
+  _pmcsStartCurrent();
+}
+function pmcsGateForClockIn(){
+  return new Promise(async (resolve) => {
+    _pmcsInjectStyle(); _pmcsInjectOverlay();
+    try { await pmcsLoadConfig(false); } catch(e){}   // latest edited checklists
+    await pmcsLoadStatus(false);   // uses the status pre-warmed on Field Mode entry → instant
+    // Any machine with an outstanding check (daily, or a weekly/monthly that's due
+    // or was missed/skipped) goes in the gate — and keeps coming back each day.
+    const dueList = PMCS_EQUIPMENT.filter(e => _pmcsDueCads(e.key).length).map(e => e.key);
+    if (!dueList.length){ resolve(true); return; }   // nothing due — straight to route
+    _pmcsMode = 'gate';
+    _pmcsQueue = dueList;
+    _pmcsIdx = 0;
+    _pmcsResolveGate = resolve;
+    _pmcsStartCurrent();
+  });
+}
+function _pmcsStartCurrent(){
+  const eqKey = _pmcsQueue[_pmcsIdx];
+  const eq = _pmcsEq(eqKey);
+  if (!eq){ pmcsFinishRunner(); return; }
+  // Both gate and tab run every cadence that's currently outstanding for this
+  // machine (daily + weekly on Mondays + monthly every 4th Monday, plus anything
+  // missed). Re-running from the tab when nothing's due falls back to daily.
+  _pmcsCads = _pmcsDueCads(eqKey);
+  if (!_pmcsCads.length) _pmcsCads = ['daily'];
+  // Nothing is pre-checked — the crew must actively pass or X every item.
+  _pmcsItemState = {}; _pmcsNotes = {};
+  pmcsRenderRunner();
+  const ov = document.getElementById('pmcsOverlay');
+  if (ov) ov.classList.add('open');
+}
+function pmcsRenderRunner(){
+  const eq = _pmcsEq(_pmcsQueue[_pmcsIdx]);
+  if (!eq) return;
+  document.getElementById('pmcsRunTitle').innerHTML = eq.icon + ' ' + esc(eq.name) + ' PMCS';
+  const cadTxt = _pmcsCads.map(c => c.charAt(0).toUpperCase()+c.slice(1)).join(' + ');
+  document.getElementById('pmcsRunSub').textContent =
+    cadTxt + ' checks · Check ✓ or X every item' + (_pmcsMode === 'gate' ? ' · or skip with a reason' : '');
+  const prog = document.getElementById('pmcsRunProgress');
+  if (_pmcsMode === 'gate'){ prog.style.display = ''; prog.textContent = (_pmcsIdx+1) + ' of ' + _pmcsQueue.length; }
+  else { prog.style.display = 'none'; }
+  document.getElementById('pmcsRunClose').style.display = '';   // closable in every mode
+  let html = '';
+  for (const cad of _pmcsCads){
+    const items = eq.items.filter(it => it.cad === cad);
+    if (!items.length) continue;
+    html += `<div class="pmcs-section-title">${cad} — ${items.length} item${items.length!==1?'s':''}</div>`;
+    for (const it of items){
+      const stt = _pmcsItemState[it.id] || 'unset';
+      html += `
+        <div class="pmcs-item ${stt}" id="pmcsItem_${it.id}">
+          <div class="pmcs-item-main">
+            <div class="pmcs-item-label">${esc(it.label)}${it.crit?'<span class="crit">● NO-GO IF FAIL</span>':''}</div>
+            <input class="pmcs-item-note" id="pmcsNote_${it.id}" placeholder="Required: what's wrong?"
+              value="${esc(_pmcsNotes[it.id]||'')}" oninput="_pmcsNotes['${it.id}']=this.value;pmcsUpdateBanner();">
+          </div>
+          <div class="pmcs-item-btns">
+            <button class="pmcs-pf pass ${stt==='pass'?'on':''}"  onclick="pmcsSetItem('${it.id}','pass')">✓</button>
+            <button class="pmcs-pf fault ${stt==='fault'?'on':''}" onclick="pmcsSetItem('${it.id}','fault')">✕</button>
+          </div>
+        </div>`;
+    }
+  }
+  document.getElementById('pmcsRunBody').innerHTML = html;
+  pmcsUpdateBanner();
+}
+// Count items still needing a decision, and faults still needing a written reason.
+function _pmcsUnset(){
+  const eq = _pmcsEq(_pmcsQueue[_pmcsIdx]); if (!eq) return { left:0, needNote:0 };
+  let left=0, needNote=0;
+  for (const it of eq.items){
+    if (!_pmcsCads.includes(it.cad)) continue;
+    const s = _pmcsItemState[it.id];
+    if (s !== 'pass' && s !== 'fault') left++;
+    else if (s === 'fault' && !(_pmcsNotes[it.id]||'').trim()) needNote++;
+  }
+  return { left, needNote };
+}
+function pmcsSetItem(id, val){
+  _pmcsItemState[id] = val;
+  const row = document.getElementById('pmcsItem_' + id);
+  if (row){
+    row.classList.remove('unset','pass','fault'); row.classList.add(val);
+    row.querySelectorAll('.pmcs-pf').forEach(b => b.classList.remove('on'));
+    const b = row.querySelector('.pmcs-pf.' + val); if (b) b.classList.add('on');
+    if (val === 'fault'){ const n = document.getElementById('pmcsNote_'+id); if (n) setTimeout(()=>n.focus(),60); }
+  }
+  pmcsUpdateBanner();
+}
+function pmcsSetAll(cad, val){
+  const eq = _pmcsEq(_pmcsQueue[_pmcsIdx]);
+  for (const it of eq.items){ if (it.cad === cad){ _pmcsItemState[it.id] = val; } }
+  pmcsRenderRunner();
+}
+function _pmcsFaults(){
+  const eq = _pmcsEq(_pmcsQueue[_pmcsIdx]);
+  const out = [];
+  for (const it of eq.items){
+    if (!_pmcsCads.includes(it.cad)) continue;
+    if (_pmcsItemState[it.id] === 'fault'){
+      out.push({ id:it.id, label:it.label, critical:!!it.crit, note:(_pmcsNotes[it.id]||'').trim() });
+    }
+  }
+  return out;
+}
+function _pmcsResult(){
+  const faults = _pmcsFaults();
+  if (faults.some(f => f.critical)) return 'NO-GO';
+  return 'GO';
+}
+function pmcsUpdateBanner(){
+  const banner = document.getElementById('pmcsRunBanner');
+  if (!banner) return;
+  const submit = document.getElementById('pmcsRunSubmit');
+  const { left, needNote } = _pmcsUnset();
+  // mark note fields that still need a reason
+  document.querySelectorAll('.pmcs-item.fault').forEach(row => {
+    const n = row.querySelector('.pmcs-item-note');
+    if (n) n.classList.toggle('need', !(n.value||'').trim());
+  });
+  if (left > 0){
+    banner.className = 'pmcs-status-banner pending';
+    banner.textContent = '☐ ' + left + ' item' + (left!==1?'s':'') + ' still need a ✓ or ✕';
+    if (submit){ submit.disabled = true; submit.textContent = 'Check every item'; }
+    return;
+  }
+  if (needNote > 0){
+    banner.className = 'pmcs-status-banner nogo';
+    banner.textContent = '✏️ Write a reason for ' + needNote + ' X\'d item' + (needNote!==1?'s':'');
+    if (submit){ submit.disabled = true; submit.textContent = 'Add reason for each X'; }
+    return;
+  }
+  const faults = _pmcsFaults();
+  const res = _pmcsResult();
+  if (submit){ submit.disabled = false; submit.textContent = 'Submit ✓'; }
+  if (res === 'NO-GO'){
+    banner.className = 'pmcs-status-banner nogo';
+    banner.textContent = '⛔ NO-GO — ' + faults.filter(f=>f.critical).length + ' safety fault(s). Do not operate until fixed.';
+  } else if (faults.length){
+    banner.className = 'pmcs-status-banner go';
+    banner.textContent = '✅ GO — with ' + faults.length + ' fault(s) logged.';
+  } else {
+    banner.className = 'pmcs-status-banner go';
+    banner.textContent = '✅ GO — all checks pass.';
+  }
+}
+
+function pmcsSubmitCurrent(){
+  const eq = _pmcsEq(_pmcsQueue[_pmcsIdx]);
+  // Must check ✓ or X every item, and every X needs a written reason.
+  const { left, needNote } = _pmcsUnset();
+  if (left > 0){ alert('Check ✓ or ✕ every item first — ' + left + ' still unmarked.'); pmcsUpdateBanner(); return; }
+  if (needNote > 0){ alert('Write a reason for every X\'d item (' + needNote + ' missing).'); pmcsUpdateBanner(); return; }
+  const faults = _pmcsFaults();
+  const result = _pmcsResult();
+  if (result === 'NO-GO'){
+    const ok = confirm(eq.name + ' is NO-GO (a safety-critical item failed).\n\nLog it as NO-GO and continue? The equipment should be repaired or swapped before use.');
+    if (!ok) return;
+  }
+  const itemsCompact = {};
+  for (const it of eq.items){ if (_pmcsCads.includes(it.cad)) itemsCompact[it.id] = (_pmcsItemState[it.id]==='fault'?'F':'P'); }
+  const params = {
+    action:'pmcs_log', idemKey:_pmcsUuid(),
+    equipment:eq.name, equipKey:eq.key,
+    cadences:_pmcsCads.join(','),
+    result, by:adminName || adminEmail || '', crew:_pmcsCrewLabel(),
+    date:_pmcsToday(),
+    faults:JSON.stringify(faults), items:JSON.stringify(itemsCompact),
+    skipped:'false', skipReason:'',
+    adminToken
+  };
+  _pmcsSend(params);
+  _pmcsState.status[eq.key] = _pmcsState.status[eq.key] || {};
+  for (const c of _pmcsCads) _pmcsState.status[eq.key][c] = _pmcsToday();
+  // In the clock-in gate we run several machines back-to-back — don't spam a toast
+  // for each (they pile up over the next screen). The progress counter is enough.
+  if (_pmcsMode !== 'gate' && typeof showToast === 'function') showToast(eq.icon + ' ' + eq.name + ' PMCS logged — ' + result);
+  pmcsAdvance();
+}
+function pmcsSkipCurrent(){
+  const eq = _pmcsEq(_pmcsQueue[_pmcsIdx]);
+  const reason = prompt('Skip ' + eq.name + ' PMCS for today?\n\nEnter a reason (required — this is logged):', '');
+  if (reason === null) return;          // cancelled
+  const r = (reason || '').trim();
+  if (!r){ alert('A reason is required to skip a PMCS.'); return; }
+  const params = {
+    action:'pmcs_log', idemKey:_pmcsUuid(),
+    equipment:eq.name, equipKey:eq.key,
+    cadences:_pmcsCads.join(','),
+    result:'SKIPPED', by:adminName || adminEmail || '', crew:_pmcsCrewLabel(),
+    date:_pmcsToday(),
+    faults:'[]', items:'{}',
+    skipped:'true', skipReason:r,
+    adminToken
+  };
+  _pmcsSend(params);
+  if (_pmcsMode !== 'gate' && typeof showToast === 'function') showToast('⤼ ' + eq.name + ' PMCS skipped — reason logged');
+  pmcsAdvance();
+}
+function pmcsAdvance(){
+  _pmcsIdx++;
+  if (_pmcsIdx < _pmcsQueue.length){ _pmcsStartCurrent(); }
+  else { pmcsFinishRunner(); }
+}
+function pmcsFinishRunner(){
+  const ov = document.getElementById('pmcsOverlay');
+  if (ov) ov.classList.remove('open');
+  try { pmcsRenderTab(); } catch(e){}
+  try { if (document.getElementById('pmcsMenuOverlay')) pmcsRenderMenu(); } catch(e){}
+  if (_pmcsMode === 'gate' && typeof _pmcsResolveGate === 'function'){
+    const r = _pmcsResolveGate; _pmcsResolveGate = null; r(true);   // completed → start the route
+  }
+}
+function pmcsCloseRunner(){
+  const ov = document.getElementById('pmcsOverlay');
+  if (ov) ov.classList.remove('open');
+  try { pmcsRenderTab(); } catch(e){}
+  try { if (document.getElementById('pmcsMenuOverlay')) pmcsRenderMenu(); } catch(e){}
+  // Closing the clock-in gate cancels starting the route (it can't be used to skip
+  // PMCS and still get the route). They can tap Start again to re-open it.
+  if (_pmcsMode === 'gate' && typeof _pmcsResolveGate === 'function'){
+    const r = _pmcsResolveGate; _pmcsResolveGate = null; r(false);
+  }
+}
+function _pmcsSend(params){
+  if (typeof _fmTestMode!=='undefined' && _fmTestMode){ try { console.log('[TEST] blocked PMCS log:', params && params.equipment); } catch(e){} return; }
+  try {
+    if (typeof _fmEnqueue === 'function'){
+      _fmEnqueue({ kind:'pmcs', method:'GET', params });
+      if (typeof _fmFlushQueue === 'function') _fmFlushQueue();
+      return;
+    }
+  } catch(e){}
+  try { fetch(SCRIPT_URL + '?' + new URLSearchParams(params).toString()).catch(()=>{}); } catch(e){}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// "Got everything?" load-out checklist — runs after the PMCS gate, before the
+// route builds. Fast memory aid so nothing's left at the shop. Logged to the
+// FieldLog sheet (type=loadout) via the same offline-safe queue.
+// ═══════════════════════════════════════════════════════════════════════════
+const LOADOUT_ITEMS = [
+  { id:'lo_mower',   label:'Mower(s) loaded & strapped down' },
+  { id:'lo_trimmer', label:'Weed whacker / string trimmer' },
+  { id:'lo_edger',   label:'Edger' },
+  { id:'lo_blower',  label:'Blower' },
+  { id:'lo_gas',     label:'Gas cans filled (mix + regular)' },
+  { id:'lo_line',    label:'Spare trimmer line / blades' },
+  { id:'lo_hand',    label:'Hand tools (rake, broom, shears)' },
+  { id:'lo_bags',    label:'Trash bags / tarp' },
+  { id:'lo_ppe',     label:'Eye + ear protection' },
+  { id:'lo_water',   label:'Water / cooler' },
+  { id:'lo_ramp',    label:'Trailer ramp up & latched' },
+  { id:'lo_phone',   label:'Phone + charger / job list' },
+];
+let _loadoutState = {};
+let _loadoutResolve = null;
+
+function _loadoutInjectOverlay(){
+  if (document.getElementById('loadoutOverlay')) return;
+  _pmcsInjectStyle();
+  const o = document.createElement('div');
+  o.className = 'pmcs-overlay'; o.id = 'loadoutOverlay';
+  o.innerHTML = `
+    <div class="pmcs-panel">
+      <div class="pmcs-head">
+        <div class="pmcs-head-row"><div class="pmcs-head-title">🧰 Got everything?</div></div>
+        <div class="pmcs-head-sub">Quick load-out check before you roll. Tap each thing that's loaded.</div>
+      </div>
+      <div class="pmcs-body" id="loadoutBody"></div>
+      <div class="pmcs-foot">
+        <div class="pmcs-quick"><button onclick="loadoutSetAll(true)">✓ Loaded it all</button><button onclick="loadoutSetAll(false)">Clear</button></div>
+        <div class="pmcs-foot-btns">
+          <button class="pmcs-btn pmcs-btn-submit" onclick="loadoutConfirm()">Start Route →</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(o);
+}
+function loadoutGate(){
+  return new Promise((resolve) => {
+    _loadoutInjectOverlay();
+    _loadoutState = {};
+    for (const it of LOADOUT_ITEMS) _loadoutState[it.id] = false;
+    _loadoutResolve = resolve;
+    loadoutRender();
+    const ov = document.getElementById('loadoutOverlay');
+    if (ov) ov.classList.add('open');
+  });
+}
+function loadoutRender(){
+  const body = document.getElementById('loadoutBody');
+  if (!body) return;
+  const n = LOADOUT_ITEMS.filter(it => _loadoutState[it.id]).length;
+  let html = `<div class="pmcs-section-title">Load-out — ${n}/${LOADOUT_ITEMS.length} loaded</div>`;
+  for (const it of LOADOUT_ITEMS){
+    const on = !!_loadoutState[it.id];
+    html += `
+      <div class="pmcs-item ${on?'pass':''}" onclick="loadoutToggle('${it.id}')" style="cursor:pointer;">
+        <button class="pmcs-item-toggle" onclick="event.stopPropagation();loadoutToggle('${it.id}')">${on?'✓':''}</button>
+        <div class="pmcs-item-main"><div class="pmcs-item-label">${esc(it.label)}</div></div>
+      </div>`;
+  }
+  body.innerHTML = html;
+}
+function loadoutToggle(id){ _loadoutState[id] = !_loadoutState[id]; loadoutRender(); }
+function loadoutSetAll(val){ for (const it of LOADOUT_ITEMS) _loadoutState[it.id] = !!val; loadoutRender(); }
+function loadoutConfirm(){
+  const checked  = LOADOUT_ITEMS.filter(it => _loadoutState[it.id]).map(it => it.id);
+  const missing  = LOADOUT_ITEMS.filter(it => !_loadoutState[it.id]).map(it => it.label);
+  if (missing.length){
+    const ok = confirm('Not loaded yet:\n\n• ' + missing.join('\n• ') + '\n\nStart the route anyway?');
+    if (!ok) return;
+  }
+  _pmcsSend({
+    action:'log_checklist', idemKey:_pmcsUuid(),
+    type:'loadout', date:_pmcsToday(), crew:_pmcsCrewLabel(), by:adminName || adminEmail || '',
+    items: JSON.stringify({ checked: checked, missingCount: missing.length }),
+    adminToken
+  });
+  const ov = document.getElementById('loadoutOverlay');
+  if (ov) ov.classList.remove('open');
+  if (typeof showToast === 'function') showToast('🧰 Load-out logged — rolling out');
+  if (typeof _loadoutResolve === 'function'){ const r = _loadoutResolve; _loadoutResolve = null; r(); }
+}
+
 </script>
 </body>
 </html>
