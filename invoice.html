@@ -12,9 +12,9 @@
 <!-- Auto-updater: pulls the latest version in the background and reloads once when a new
      deploy is live, so phones never get stuck on an old cached build. Loop-guarded. -->
 <script>
-/* APP_VER:2026-06-29.11 */
+/* APP_VER:2026-06-29.12 */
 (function(){
-  var V = '2026-06-29.11';
+  var V = '2026-06-29.12';
   window.__APP_VER = V;
   var reloads = 0, lastCheck = 0;
   function check(){
@@ -7284,7 +7284,9 @@ async function confirmCrewAndStartRoute() {
   //   1) PMCS gate — every outstanding daily/weekly/monthly check (missed ones
   //      re-appear here each day until completed).
   //   2) "Got everything?" load-out checklist.
-  try { if (typeof pmcsGateForClockIn === 'function') await pmcsGateForClockIn(); } catch(e) {}
+  let _pmcsProceed = true;
+  try { if (typeof pmcsGateForClockIn === 'function') _pmcsProceed = await pmcsGateForClockIn(); } catch(e) {}
+  if (_pmcsProceed === false) return;   // closed the gate — don't clock in / build the route
   try { if (typeof loadoutGate === 'function') await loadoutGate(); } catch(e) {}
   const btn = document.getElementById('routeClockInBtn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Building route…'; }
@@ -11378,7 +11380,12 @@ async function fmStart(){
   // day (not yet clocked in), also run the "Got everything?" load-out check.
   // This is the path Field Mode uses, so without it employees never see PMCS.
   if (!_clockInTime){
-    try { if (typeof pmcsGateForClockIn === 'function') await pmcsGateForClockIn(); } catch(e){}
+    let proceed = true;
+    try { if (typeof pmcsGateForClockIn === 'function') proceed = await pmcsGateForClockIn(); } catch(e){}
+    if (proceed === false){   // they closed the gate — don't start the route
+      if (btn){ btn.disabled = false; btn.textContent = '🟢 Start My Route'; }
+      return;
+    }
     try { if (typeof loadoutGate === 'function') await loadoutGate(); } catch(e){}
   }
   // Test mode: no real route to build — start the clock and show the fake jobs.
@@ -12163,7 +12170,7 @@ function pmcsGateForClockIn(){
     // Any machine with an outstanding check (daily, or a weekly/monthly that's due
     // or was missed/skipped) goes in the gate — and keeps coming back each day.
     const dueList = PMCS_EQUIPMENT.filter(e => _pmcsDueCads(e.key).length).map(e => e.key);
-    if (!dueList.length){ resolve(); return; }   // nothing due — straight to route
+    if (!dueList.length){ resolve(true); return; }   // nothing due — straight to route
     _pmcsMode = 'gate';
     _pmcsQueue = dueList;
     _pmcsIdx = 0;
@@ -12196,7 +12203,7 @@ function pmcsRenderRunner(){
   const prog = document.getElementById('pmcsRunProgress');
   if (_pmcsMode === 'gate'){ prog.style.display = ''; prog.textContent = (_pmcsIdx+1) + ' of ' + _pmcsQueue.length; }
   else { prog.style.display = 'none'; }
-  document.getElementById('pmcsRunClose').style.display = (_pmcsMode === 'gate') ? 'none' : '';
+  document.getElementById('pmcsRunClose').style.display = '';   // closable in every mode
   let html = '';
   for (const cad of _pmcsCads){
     const items = eq.items.filter(it => it.cad === cad);
@@ -12365,15 +12372,19 @@ function pmcsFinishRunner(){
   try { pmcsRenderTab(); } catch(e){}
   try { if (document.getElementById('pmcsMenuOverlay')) pmcsRenderMenu(); } catch(e){}
   if (_pmcsMode === 'gate' && typeof _pmcsResolveGate === 'function'){
-    const r = _pmcsResolveGate; _pmcsResolveGate = null; r();
+    const r = _pmcsResolveGate; _pmcsResolveGate = null; r(true);   // completed → start the route
   }
 }
 function pmcsCloseRunner(){
-  if (_pmcsMode === 'gate') return;     // can't dismiss the gate — submit or skip
   const ov = document.getElementById('pmcsOverlay');
   if (ov) ov.classList.remove('open');
   try { pmcsRenderTab(); } catch(e){}
   try { if (document.getElementById('pmcsMenuOverlay')) pmcsRenderMenu(); } catch(e){}
+  // Closing the clock-in gate cancels starting the route (it can't be used to skip
+  // PMCS and still get the route). They can tap Start again to re-open it.
+  if (_pmcsMode === 'gate' && typeof _pmcsResolveGate === 'function'){
+    const r = _pmcsResolveGate; _pmcsResolveGate = null; r(false);
+  }
 }
 function _pmcsSend(params){
   if (_fmTestMode){ try { console.log('[TEST] blocked PMCS log:', params && params.equipment); } catch(e){} return; }
