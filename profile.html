@@ -1019,6 +1019,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 const SCRIPT_URL      = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
 const SESSION_KEY     = 'eg_portal_session';
+let pendingAddCard = false; // set from ?addcard=1 — auto-opens the Add Card modal after auto-login
 // ↓ Get this from Stripe Dashboard → Developers → API Keys → Publishable key
 const STRIPE_PUB_KEY  = 'pk_live_51TLrat4J18msjfgfYqm9zvDa2pkr5ZPv6s10bl5UwMIYnAqpJbXEU14YXFlS6sEA3H0VgsLPTxHuPWD6YutUy1J000mzhTGL1N';
 
@@ -1029,6 +1030,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   const params         = new URLSearchParams(window.location.search);
   const token          = params.get('token');
   const emailChangeToken = params.get('emailchange');
+  pendingAddCard = params.get('addcard') === '1';
 
   if (token) {
     // Magic link clicked — verify the token
@@ -1117,11 +1119,17 @@ async function verifyToken(token) {
       // Load the profile directly — script is still warm, saves a full cold-start
       await loadProfile(data.sessionToken);
     } else {
+      // Token dead (expired/used) — fall back to an existing saved session if present
+      const s = getStoredSession();
+      if (s && s.token) { history.replaceState(null, '', window.location.pathname); await loadProfile(s.token); return; }
       hideLoading();
       showLogin();
       showLoginError('That link has expired or already been used. Enter your email to get a new one.');
     }
   } catch(err) {
+    // Network/parse error — fall back to saved session before giving up
+    const s = getStoredSession();
+    if (s && s.token) { try { await loadProfile(s.token); return; } catch(e) {} }
     hideLoading();
     showLogin();
     showLoginError('Could not verify link. Please try again.');
@@ -1173,12 +1181,21 @@ function hideSkeleton() {
   if (s) s.classList.remove('visible');
 }
 
+// Auto-open the Add Card modal when the customer arrived via an "Add card now" email link
+function maybeOpenAddCard() {
+  if (!pendingAddCard) return;
+  pendingAddCard = false;
+  // small delay so the profile screen + pre-mounted Stripe element are ready
+  setTimeout(() => { try { openCardModal(); } catch(e) {} }, 400);
+}
+
 async function loadProfile(sessionToken) {
   // Show cached data instantly so the page feels immediate
   const cached = getCachedProfile();
   if (cached) {
     renderProfile(cached);
     showProfile();
+    maybeOpenAddCard();
     // Refresh silently in the background — user sees content immediately
     refreshProfileInBackground(sessionToken);
     return;
@@ -1199,6 +1216,7 @@ async function loadProfile(sessionToken) {
     setCachedProfile(data);
     renderProfile(data);
     showProfile();
+    maybeOpenAddCard();
   } catch(err) {
     hideSkeleton();
     hideLoading();
