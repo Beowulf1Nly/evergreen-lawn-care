@@ -357,13 +357,14 @@
   .modal-overlay.open { display:flex; }
   .modal-box {
     background:#fff; border-radius:20px; padding:32px 28px;
-    max-width:400px; width:100%; box-shadow:0 24px 60px rgba(0,0,0,.25);
+    max-width:460px; width:100%; box-shadow:0 24px 60px rgba(0,0,0,.25);
   }
   .modal-title { font-family:'Playfair Display',serif; font-size:20px; color:var(--green-deep); margin-bottom:6px; }
   .modal-sub { font-size:14px; color:var(--text-muted); margin-bottom:24px; line-height:1.5; }
   #card-element {
-    padding:14px 16px; border:2px solid var(--border); border-radius:12px;
+    padding:14px 12px; border:2px solid var(--border); border-radius:12px;
     background:#fff; margin-bottom:8px; transition:border .2s;
+    overflow:visible;
   }
   #card-errors { color:var(--red); font-size:13px; min-height:20px; margin-bottom:16px; }
   .modal-btns { display:flex; gap:10px; margin-top:4px; }
@@ -2271,9 +2272,21 @@ function clearSession() {
 async function apiGet(params) {
   const qs  = Object.entries(params).map(([k,v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v)).join('&');
   const url = SCRIPT_URL + '?' + qs;
-  const res = await fetch(url, { redirect: 'follow' });
-  const text = await res.text();
-  return JSON.parse(text);
+  // Hard timeout: without this, a backend that accepts the request but never
+  // returns leaves the "Saving…" spinner stuck forever. Abort after 20s and
+  // surface a recoverable error instead.
+  const ctrl  = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), 20000) : null;
+  try {
+    const res  = await fetch(url, { redirect: 'follow', signal: ctrl ? ctrl.signal : undefined });
+    const text = await res.text();
+    return JSON.parse(text);
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw new Error('The payment server took too long to respond. Please try again.');
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════

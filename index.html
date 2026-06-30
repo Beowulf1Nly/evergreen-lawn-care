@@ -4166,8 +4166,16 @@ async function quotePaySubmit() {
     });
     let clientSecret='', customerId='';
     try {
-      const res  = await fetch(SHEETS_SCRIPT_URL+'?'+intentParams.toString());
-      const data = await res.json();
+      // Hard timeout so a backend that never returns can't hang the card step.
+      const _ctrl  = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      const _timer = _ctrl ? setTimeout(() => _ctrl.abort(), 20000) : null;
+      let res, data;
+      try {
+        res  = await fetch(SHEETS_SCRIPT_URL+'?'+intentParams.toString(), _ctrl ? { signal: _ctrl.signal } : {});
+        data = await res.json();
+      } finally {
+        if (_timer) clearTimeout(_timer);
+      }
       if (!data.success) throw new Error(data.error || 'Could not set up card');
       clientSecret = data.clientSecret;
       customerId   = data.customerId;
