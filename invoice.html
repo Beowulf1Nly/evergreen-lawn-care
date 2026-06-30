@@ -12,9 +12,9 @@
 <!-- Auto-updater: pulls the latest version in the background and reloads once when a new
      deploy is live, so phones never get stuck on an old cached build. Loop-guarded. -->
 <script>
-/* APP_VER:2026-06-29.12 */
+/* APP_VER:2026-06-29.13 */
 (function(){
-  var V = '2026-06-29.12';
+  var V = '2026-06-29.13';
   window.__APP_VER = V;
   var reloads = 0, lastCheck = 0;
   function check(){
@@ -1440,6 +1440,7 @@
       <span id="lastRefresh"></span>
       <button class="fm-launch-btn" id="fmLaunchBtn" onclick="enterFieldMode()" title="Open the on-the-job crew view">📲 Field Mode</button>
       <button class="fm-launch-btn" id="fmTestBtn" onclick="fmStartTest()" title="Practice the whole crew flow with fake customers — nothing is saved" style="background:linear-gradient(135deg,#b45309,#92400e);">🧪 Test Field Mode</button>
+      <button class="fm-launch-btn" id="liveOpsBtn" data-min-role="owner" onclick="window.open('/live/','_blank')" title="Open the live operations / HQ dashboard" style="background:linear-gradient(135deg,#1d4ed8,#1e3a8a);">📡 Live Ops</button>
       <button class="btn-sm" onclick="loadBookings()">↻ Refresh</button>
       <button class="btn-logout" onclick="logout()">Sign Out</button>
     </div>
@@ -11212,6 +11213,7 @@ function enterFieldMode(){
   // Warm up the route AND the PMCS status in the background while the crew is on
   // the start screen, so tapping "Start My Route" — and the PMCS gate — are instant.
   try { if (typeof pmcsLoadStatus === 'function') pmcsLoadStatus(true); } catch(e){}
+  try { if (typeof pmcsLoadConfig === 'function') pmcsLoadConfig(true); } catch(e){}   // pull the latest edited checklists
   setTimeout(() => { try { _fmPrebuildRoute(); } catch(e){} }, 400);
 }
 function _fmOnlineHandler(){ _fmUpdateSyncBadge(); _fmFlushQueue(); }
@@ -11766,7 +11768,7 @@ function fmFinishRoute(){
 // offline-safe queue, exactly like job completions.
 // ═══════════════════════════════════════════════════════════════════════════
 
-const PMCS_EQUIPMENT = [
+let PMCS_EQUIPMENT = [
   { key:'truck', name:'Work Truck', icon:'🛻', items:[
     { id:'t_tires',   label:'Tires & pressure (incl. spare) — no damage', cad:'daily', crit:true },
     { id:'t_lights',  label:'Lights: head / tail / brake / turn / hazard', cad:'daily', crit:true },
@@ -11866,6 +11868,56 @@ const PMCS_EQUIPMENT = [
     { id:'w_drive',   label:'Drive shaft inspect / grease', cad:'monthly', crit:false },
   ]},
 ];
+
+// ── Editable checklists (shared across all crews via the sheet) ─────────────
+// The list above is the built-in default. An owner can edit it on the PMCS tab;
+// edits are saved to the sheet (pmcs_config) so every crew's phone gets the same
+// checklists, with a localStorage fallback for instant local use.
+const PMCS_DEFAULT_EQUIPMENT = JSON.parse(JSON.stringify(PMCS_EQUIPMENT));
+const _PMCS_CFG_KEY = 'evg_pmcs_config_v1';
+let _pmcsConfigLoaded = false;
+
+function _pmcsApplyConfig(list){
+  if (!Array.isArray(list) || !list.length) return false;
+  // sanity: each machine needs key/name/items[]
+  const ok = list.every(e => e && e.key && e.name && Array.isArray(e.items));
+  if (!ok) return false;
+  PMCS_EQUIPMENT = list;
+  return true;
+}
+async function pmcsLoadConfig(force){
+  if (_pmcsConfigLoaded && !force) return;
+  // try the server (shared, authoritative)
+  try {
+    const ctrl = new AbortController(); const t = setTimeout(()=>ctrl.abort(), 6000);
+    const r = await fetch(SCRIPT_URL + '?action=get_pmcs_config&adminToken=' + encodeURIComponent(adminToken), { signal: ctrl.signal });
+    clearTimeout(t);
+    const d = await r.json();
+    if (d && d.success && d.config){
+      const parsed = (typeof d.config === 'string') ? JSON.parse(d.config) : d.config;
+      if (_pmcsApplyConfig(parsed)){
+        try { localStorage.setItem(_PMCS_CFG_KEY, JSON.stringify(parsed)); } catch(e){}
+        _pmcsConfigLoaded = true; return;
+      }
+    }
+  } catch(e){ /* offline / not deployed → fall back to local */ }
+  // fallback: last-known local copy
+  try {
+    const local = JSON.parse(localStorage.getItem(_PMCS_CFG_KEY) || 'null');
+    if (local) _pmcsApplyConfig(local);
+  } catch(e){}
+  _pmcsConfigLoaded = true;
+}
+function pmcsSaveConfig(){
+  const json = JSON.stringify(PMCS_EQUIPMENT);
+  try { localStorage.setItem(_PMCS_CFG_KEY, json); } catch(e){}
+  // POST the whole checklist to the sheet so all crews get it (too big for a GET URL).
+  const body = { action:'set_pmcs_config', config: json, by: adminName || adminEmail || '', adminToken };
+  try {
+    if (typeof _fmEnqueue === 'function'){ _fmEnqueue({ kind:'pmcs_config', method:'POST', body }); if (typeof _fmFlushQueue==='function') _fmFlushQueue(); }
+    else fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(body), headers:{ 'Content-Type':'application/json' } }).catch(()=>{});
+  } catch(e){ try { fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(body), headers:{ 'Content-Type':'application/json' } }).catch(()=>{}); } catch(_e){} }
+}
 
 // Weekly PMCS lands every Monday; monthly PMCS every 4 weeks (28 days) on a Monday,
 // counted from this anchor Monday. A check stays "due" every day until it's actually
@@ -12048,7 +12100,8 @@ async function initPmcsTab(){
   _pmcsInjectStyle(); _pmcsInjectOverlay();
   const body = document.getElementById('pmcsTabBody');
   if (!body) return;
-  body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Loading PMCS status…</div>';
+  body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Loading PMCS…</div>';
+  await pmcsLoadConfig(true);
   await pmcsLoadStatus(true);
   pmcsRenderTab();
 }
@@ -12061,9 +12114,14 @@ function pmcsRenderTab(){
       <div style="font-size:22px;font-weight:800;color:var(--green-deep);">🔧 PMCS</div>
       <div style="font-size:12px;color:var(--text-muted);">${_pmcsToday()}</div>
     </div>
-    <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">
       Preventive Maintenance Checks & Services. ${dueCount ? `<strong style="color:#b91c1c;">${dueCount} machine${dueCount!==1?'s':''} need${dueCount===1?'s':''} a check.</strong>` : '<strong style="color:#15803d;">All checks up to date. 👍</strong>'}
-    </div>`;
+    </div>
+    ${(window._isAtLeast && window._isAtLeast('owner')) ? `
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button onclick="pmcsOpenEditor()" style="flex:1;padding:11px;border:1.5px solid var(--border);border-radius:11px;background:#fff;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;color:var(--green-deep);">✏️ Edit checklists</button>
+      <button onclick="pmcsOpenFaults()" style="flex:1;padding:11px;border:1.5px solid #fecaca;border-radius:11px;background:#fff5f5;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;color:#b91c1c;">⚠️ Faults log</button>
+    </div>` : ''}`;
   for (const eq of PMCS_EQUIPMENT){
     const due = _pmcsDue(eq.key);
     const st  = _pmcsState.status[eq.key] || {};
@@ -12090,6 +12148,124 @@ function pmcsRenderTab(){
       </div>`;
   }
   body.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PMCS CHECKLIST EDITOR (owner) — edits the shared checklist for ALL crews
+// ═══════════════════════════════════════════════════════════════════════════
+let _pmcsEdit = null, _pmcsEditKey = null;
+function _pmcsInjectEditorOverlay(){
+  if (document.getElementById('pmcsEditOverlay')) return;
+  _pmcsInjectStyle();
+  const o = document.createElement('div');
+  o.className='pmcs-overlay'; o.id='pmcsEditOverlay';
+  o.innerHTML = `
+    <div class="pmcs-panel">
+      <div class="pmcs-head">
+        <div class="pmcs-head-row">
+          <div class="pmcs-head-title">✏️ Edit checklists</div>
+          <button class="pmcs-head-close" onclick="pmcsCloseEditor()">×</button>
+        </div>
+        <div class="pmcs-head-sub">Changes apply to <b>every crew</b> · saved to your sheet</div>
+        <div id="pmcsEditMachines" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:11px;"></div>
+      </div>
+      <div class="pmcs-body" id="pmcsEditBody"></div>
+      <div class="pmcs-foot">
+        <div class="pmcs-foot-btns">
+          <button class="pmcs-btn pmcs-btn-skip" onclick="pmcsEditReset()">↺ Reset</button>
+          <button class="pmcs-btn pmcs-btn-submit" onclick="pmcsEditSave()">Save for all crews ✓</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(o);
+}
+function pmcsOpenEditor(){
+  _pmcsInjectEditorOverlay();
+  _pmcsEdit = JSON.parse(JSON.stringify(PMCS_EQUIPMENT));
+  _pmcsEditKey = _pmcsEdit[0] && _pmcsEdit[0].key;
+  pmcsRenderEditor();
+  document.getElementById('pmcsEditOverlay').classList.add('open');
+}
+function pmcsCloseEditor(){ const o=document.getElementById('pmcsEditOverlay'); if(o)o.classList.remove('open'); }
+function _pmcsEditEq(){ return _pmcsEdit.find(e=>e.key===_pmcsEditKey); }
+function pmcsEditSelect(key){ _pmcsEditKey=key; pmcsRenderEditor(); }
+function pmcsRenderEditor(){
+  const chips = document.getElementById('pmcsEditMachines');
+  chips.innerHTML = _pmcsEdit.map(e=>`<button onclick="pmcsEditSelect('${e.key}')" style="padding:6px 11px;border-radius:20px;border:1.5px solid ${e.key===_pmcsEditKey?'var(--green-mid)':'var(--border)'};background:${e.key===_pmcsEditKey?'var(--green-pale)':'#fff'};font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;color:${e.key===_pmcsEditKey?'var(--green-deep)':'var(--text-muted)'};white-space:nowrap;">${e.icon} ${esc(e.name)}</button>`).join('');
+  const eq=_pmcsEditEq(); const body=document.getElementById('pmcsEditBody'); if(!eq){ body.innerHTML=''; return; }
+  let html = `<div style="margin:8px 2px 16px;"><label style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;">Machine name</label><input value="${esc(eq.name)}" oninput="pmcsEditName(this.value)" style="width:100%;margin-top:5px;padding:10px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;font-size:15px;font-weight:700;box-sizing:border-box;"></div>`;
+  for (const cad of ['daily','weekly','monthly']){
+    const items = eq.items.filter(it=>it.cad===cad);
+    html += `<div class="pmcs-section-title">${cad} — ${items.length} item${items.length!==1?'s':''}</div>`;
+    for (const it of items){
+      html += `
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 2px;border-bottom:1px solid #f1f5f9;">
+          <input value="${esc(it.label)}" oninput="pmcsEditItemText('${it.id}',this.value)" placeholder="Check item…" style="flex:1;min-width:0;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px;box-sizing:border-box;">
+          <label title="Failing this is a NO-GO (don't operate)" style="display:flex;align-items:center;gap:4px;font-size:10.5px;font-weight:800;color:${it.crit?'#dc2626':'#b6c0b9'};white-space:nowrap;cursor:pointer;"><input type="checkbox" ${it.crit?'checked':''} onchange="pmcsEditItemCrit('${it.id}',this.checked)" style="accent-color:#dc2626;">NO-GO</label>
+          <button onclick="pmcsEditDelItem('${it.id}')" title="Remove" style="flex-shrink:0;width:32px;height:32px;border:1.5px solid #fecaca;border-radius:8px;background:#fff5f5;color:#dc2626;font-size:16px;cursor:pointer;line-height:1;">×</button>
+        </div>`;
+    }
+    html += `<button onclick="pmcsEditAdd('${cad}')" style="margin:9px 2px 6px;padding:10px;width:100%;border:1.5px dashed var(--border);border-radius:9px;background:#fff;color:var(--green-deep);font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;">+ Add ${cad} item</button>`;
+  }
+  body.innerHTML = html;
+}
+function pmcsEditName(v){ const eq=_pmcsEditEq(); if(eq) eq.name=v; }
+function pmcsEditItemText(id,v){ const eq=_pmcsEditEq(); const it=eq&&eq.items.find(x=>x.id===id); if(it) it.label=v; }
+function pmcsEditItemCrit(id,c){ const eq=_pmcsEditEq(); const it=eq&&eq.items.find(x=>x.id===id); if(it){ it.crit=!!c; pmcsRenderEditor(); } }
+function pmcsEditDelItem(id){ const eq=_pmcsEditEq(); if(eq){ eq.items=eq.items.filter(x=>x.id!==id); pmcsRenderEditor(); } }
+function pmcsEditAdd(cad){ const eq=_pmcsEditEq(); if(eq){ eq.items.push({ id:(eq.key[0]||'x')+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), label:'', cad, crit:false }); pmcsRenderEditor(); } }
+function pmcsEditReset(){ if(!confirm('Reset ALL checklists back to the built-in defaults? This replaces your edits for everyone.')) return; _pmcsEdit=JSON.parse(JSON.stringify(PMCS_DEFAULT_EQUIPMENT)); _pmcsEditKey=_pmcsEdit[0].key; pmcsRenderEditor(); }
+function pmcsEditSave(){
+  for (const e of _pmcsEdit){ e.items = e.items.filter(it=>(it.label||'').trim()); }
+  if (!_pmcsApplyConfig(_pmcsEdit)){ alert('Each machine needs a name and at least one item.'); return; }
+  pmcsSaveConfig();
+  pmcsCloseEditor();
+  try { pmcsRenderTab(); } catch(e){}
+  if (typeof showToast==='function') showToast('✏️ Checklists saved — syncing to all crews');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PMCS FAULTS LOG (owner) — every fault / NO-GO the crews have flagged
+// ═══════════════════════════════════════════════════════════════════════════
+function _pmcsInjectFaultsOverlay(){
+  if (document.getElementById('pmcsFaultsOverlay')) return; _pmcsInjectStyle();
+  const o=document.createElement('div'); o.className='pmcs-overlay'; o.id='pmcsFaultsOverlay';
+  o.innerHTML=`<div class="pmcs-panel"><div class="pmcs-head"><div class="pmcs-head-row"><div class="pmcs-head-title">⚠️ Faults log</div><button class="pmcs-head-close" onclick="pmcsCloseFaults()">×</button></div><div class="pmcs-head-sub">Every fault & NO-GO the crews have flagged</div></div><div class="pmcs-body" id="pmcsFaultsBody"></div></div>`;
+  document.body.appendChild(o);
+}
+function pmcsCloseFaults(){ const o=document.getElementById('pmcsFaultsOverlay'); if(o)o.classList.remove('open'); }
+async function pmcsOpenFaults(){
+  _pmcsInjectFaultsOverlay();
+  const body=document.getElementById('pmcsFaultsBody');
+  body.innerHTML='<div style="text-align:center;padding:34px;color:#64748b;">Loading faults…</div>';
+  document.getElementById('pmcsFaultsOverlay').classList.add('open');
+  let faults=[];
+  try {
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),7000);
+    const r=await fetch(SCRIPT_URL+'?action=get_pmcs_faults&adminToken='+encodeURIComponent(adminToken),{signal:ctrl.signal});
+    clearTimeout(t); const d=await r.json();
+    if (d && d.success && Array.isArray(d.faults)) faults=d.faults;
+  } catch(e){}
+  pmcsRenderFaults(faults);
+}
+function pmcsRenderFaults(faults){
+  const body=document.getElementById('pmcsFaultsBody'); if(!body)return;
+  if (!faults.length){ body.innerHTML='<div style="text-align:center;padding:40px 24px;color:#64748b;line-height:1.6;">✅ No open faults logged.<br><span style="font-size:12px;color:#94a3b8;">Faults crews flag during PMCS show up here once the PMCS backend is deployed.</span></div>'; return; }
+  const byEq={};
+  for (const f of faults){ const k=f.equipment||f.equipKey||'Equipment'; (byEq[k]=byEq[k]||[]).push(f); }
+  let html='';
+  for (const k of Object.keys(byEq)){
+    html += `<div class="pmcs-section-title">${esc(k)} — ${byEq[k].length} fault${byEq[k].length!==1?'s':''}</div>`;
+    for (const f of byEq[k]){
+      const crit = f.critical || /NO-GO/i.test(String(f.result||''));
+      html += `<div style="padding:11px 8px;border-bottom:1px solid #f1f5f9;">
+        <div style="font-size:14px;font-weight:700;color:${crit?'#b91c1c':'#92400e'};">${crit?'⛔':'⚠️'} ${esc(f.label||f.result||'Fault')}</div>
+        ${f.note?`<div style="font-size:13px;color:#475569;margin-top:3px;">"${esc(f.note)}"</div>`:''}
+        <div style="font-size:11px;color:#94a3b8;margin-top:4px;">${esc(f.date||'')}${f.by?(' · '+esc(f.by)):''}${f.crew?(' · '+esc(f.crew)):''}</div>
+      </div>`;
+    }
+  }
+  body.innerHTML=html;
 }
 
 // ── On-demand PMCS menu (used inside Field Mode, where there's no tab) ───────
@@ -12166,6 +12342,7 @@ function pmcsOpenSingle(eqKey){
 function pmcsGateForClockIn(){
   return new Promise(async (resolve) => {
     _pmcsInjectStyle(); _pmcsInjectOverlay();
+    try { await pmcsLoadConfig(false); } catch(e){}   // latest edited checklists
     await pmcsLoadStatus(false);   // uses the status pre-warmed on Field Mode entry → instant
     // Any machine with an outstanding check (daily, or a weekly/monthly that's due
     // or was missed/skipped) goes in the gate — and keeps coming back each day.
