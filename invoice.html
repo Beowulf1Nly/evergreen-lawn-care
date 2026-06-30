@@ -12,9 +12,9 @@
 <!-- Auto-updater: pulls the latest version in the background and reloads once when a new
      deploy is live, so phones never get stuck on an old cached build. Loop-guarded. -->
 <script>
-/* APP_VER:2026-06-29.9 */
+/* APP_VER:2026-06-29.10 */
 (function(){
-  var V = '2026-06-29.9';
+  var V = '2026-06-29.10';
   window.__APP_VER = V;
   var reloads = 0, lastCheck = 0;
   function check(){
@@ -1145,8 +1145,8 @@
     color:#bbf7d0; background:rgba(34,197,94,.16); padding:7px 12px; border-radius:999px;
     display:inline-flex; align-items:center; gap:7px; border:1px solid rgba(134,239,172,.2);
   }
-  .fm-top-timer .fm-dot { width:8px; height:8px; border-radius:50%; background:#34d399; box-shadow:0 0 0 0 rgba(52,211,153,.6); animation:fmPulse 1.8s infinite; }
-  @keyframes fmPulse { 0%{box-shadow:0 0 0 0 rgba(52,211,153,.5);} 70%{box-shadow:0 0 0 7px rgba(52,211,153,0);} 100%{box-shadow:0 0 0 0 rgba(52,211,153,0);} }
+  .fm-top-timer .fm-dot { width:8px; height:8px; border-radius:50%; background:#34d399; animation:fmPulse 1.8s infinite; }
+  @keyframes fmPulse { 0%,100%{opacity:1;} 50%{opacity:.3;} }
   /* Body scroll area — vertically centers the card when there's room, scrolls when not */
   .fm-body { flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:6px 16px 18px;
              display:flex; flex-direction:column; justify-content:center; }
@@ -1161,7 +1161,7 @@
   .fm-start-center { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:24px; gap:0; }
   .fm-start-greet { font-family:'Playfair Display',serif; font-size:33px; font-weight:700; margin-bottom:6px; letter-spacing:-.01em; }
   .fm-start-date { color:#9ed8b1; font-size:15px; font-weight:600; margin-bottom:34px; }
-  .fm-start-stat { background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.13); border-radius:22px; padding:30px 38px; margin-bottom:14px; min-width:230px; backdrop-filter:blur(6px); box-shadow:0 14px 40px rgba(0,0,0,.22); }
+  .fm-start-stat { background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.13); border-radius:22px; padding:30px 38px; margin-bottom:14px; min-width:230px; box-shadow:0 14px 40px rgba(0,0,0,.22); }
   .fm-start-stat-num { font-size:62px; font-weight:800; line-height:1; letter-spacing:-.02em; }
   .fm-start-stat-lbl { font-size:13px; color:#9ed8b1; margin-top:8px; text-transform:uppercase; letter-spacing:.12em; font-weight:700; }
   .fm-start-sub { color:#bbf7d0; font-size:15px; font-weight:600; margin-bottom:30px; }
@@ -12253,7 +12253,9 @@ function pmcsSubmitCurrent(){
   _pmcsSend(params);
   _pmcsState.status[eq.key] = _pmcsState.status[eq.key] || {};
   for (const c of _pmcsCads) _pmcsState.status[eq.key][c] = _pmcsToday();
-  if (typeof showToast === 'function') showToast(eq.icon + ' ' + eq.name + ' PMCS logged — ' + result);
+  // In the clock-in gate we run several machines back-to-back — don't spam a toast
+  // for each (they pile up over the next screen). The progress counter is enough.
+  if (_pmcsMode !== 'gate' && typeof showToast === 'function') showToast(eq.icon + ' ' + eq.name + ' PMCS logged — ' + result);
   pmcsAdvance();
 }
 function pmcsSkipCurrent(){
@@ -12273,7 +12275,7 @@ function pmcsSkipCurrent(){
     adminToken
   };
   _pmcsSend(params);
-  if (typeof showToast === 'function') showToast('⤼ ' + eq.name + ' PMCS skipped — reason logged');
+  if (_pmcsMode !== 'gate' && typeof showToast === 'function') showToast('⤼ ' + eq.name + ' PMCS skipped — reason logged');
   pmcsAdvance();
 }
 function pmcsAdvance(){
