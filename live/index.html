@@ -12,8 +12,8 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <!-- Auto-updater: reload once when a newer build is live (loop-proof, per-version guard). -->
 <script>
-/* APP_VER:2026-07-01.1 */
-(function(){ var V='2026-07-01.1'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-01.2 */
+(function(){ var V='2026-07-01.2'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -82,6 +82,8 @@
   .leaflet-tooltip.rt-num{ background:transparent; border:none; box-shadow:none; color:#fff; font-weight:800; font-size:11px; padding:0; }
   .empty{ text-align:center; color:#9ed8b1; padding:30px 16px; font-size:14px; }
   .grow{ flex:1; }
+  .cocrew{ width:100%; margin-top:10px; background:rgba(239,68,68,.14); color:#fca5a5; border:1px solid rgba(239,68,68,.35); border-radius:10px; padding:9px; font-family:inherit; font-size:13px; font-weight:800; cursor:pointer; }
+  .cocrew:active{ opacity:.8; }
   /* ── bottom sheets / modals ── */
   .sheet-wrap{ display:none; position:fixed; inset:0; z-index:4000; background:rgba(0,0,0,.55); align-items:flex-end; justify-content:center; }
   .sheet-wrap.show{ display:flex; }
@@ -348,6 +350,7 @@ function crewCard(c, isWorking){
     +'<div class="crewhead" onclick="toggle(\''+esc(c.email)+'\')"><span class="dot '+freshClass+'"></span><span class="crewname">'+esc(c.name||'Crew')+'</span>'+(crewBadge?'<span class="badge">Crew '+esc(crewBadge)+'</span>':'')+'<span class="grow"></span><span class="clk" data-clk="'+esc(c.clockIn||'')+'" style="font-weight:800;">'+durStr(c.clockIn)+'</span></div>'
     +'<div class="crewmeta">'+where+(+c.helpers>0?(' · 🧍 +'+c.helpers):'')+(isWorking&&c.staleMin>3?(' · <span style="color:#fbbf24;">⚠ '+c.staleMin+'m ago</span>'):'')+'</div>'
     +'<div class="bar"><div class="fill" style="width:'+pct+'%"></div></div>'
+    +(isWorking?('<button class="cocrew" onclick="event.stopPropagation();clockOutCrew(\''+esc(c.email)+'\')">🔴 Clock out this crew</button>'):'')
     +(open?('<div class="routelist open"><button class="mapbtn" onclick="showRouteOnMap(\''+esc(c.email)+'\')">🗺 Show route lines on map</button>'+detail+'</div>'):'')
     +'</div>';
 }
@@ -540,6 +543,18 @@ async function showRouteOnMap(email){
   rb.textContent='route mapped';
 }
 
+async function clockOutCrew(email){
+  const c=_crews.find(function(x){return x.email===email;}); if(!c) return;
+  const hrs=c.clockIn?Math.max(0,(Date.now()-new Date(c.clockIn).getTime())/3600000):0;
+  if(!confirm('Clock out '+(c.name||'this crew')+'?\n\nHours today: '+hrs.toFixed(2)+'. This ends their shift and logs their time.')) return;
+  toast('Clocking out '+(c.name||'crew')+'…');
+  try{
+    const p=new URLSearchParams({ action:'owner_clock_out_crew', targetEmail:email, targetName:c.name||'', crew:c.crew||'', hours:hrs.toFixed(2), date:todayISO(), adminToken:token });
+    const d=await(await fetch(SCRIPT_URL+'?'+p)).json();
+    if(d&&d.success){ c.active='0'; toast('🔴 '+(c.name||'Crew')+' clocked out'); render(); refreshStatus(); }
+    else toast('Error: '+((d&&d.error)||'backend needs the owner_clock_out_crew action'));
+  }catch(e){ toast('Network error'); }
+}
 function updateClocks(){ document.querySelectorAll('.clk').forEach(el=>{ el.textContent=durStr(el.getAttribute('data-clk')); }); }
 
 window.addEventListener('DOMContentLoaded', ()=>{
