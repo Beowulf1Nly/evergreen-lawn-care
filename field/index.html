@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-06-30.6 */
+/* APP_VER:2026-06-30.7 */
 (function(){
-  var V='2026-06-30.6'; window.__APP_VER=V;
+  var V='2026-06-30.7'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -782,7 +782,8 @@ async function _reoptimizeNow(){
 function fmUseMyLocation(){
   if(!navigator.geolocation){ showToast('Location not supported on this device'); return; }
   showToast('📍 Getting your location…');
-  const apply=function(lat,lon){ _startPoint={ lat:lat, lon:lon, label:'My current location', src:'gps' }; _saveStartPoint(_startPoint); const i=document.getElementById('fmStartAddr'); if(i) i.value=''; _fmRenderRouteSetup(); _reoptimizeNow(); };
+  try{ _startGeo(); }catch(e){}   // warm the live-GPS watch so the fallbacks below actually have a fix to use
+  const apply=function(lat,lon){ _startPoint={ lat:lat, lon:lon, label:'My current location', src:'gps' }; _saveStartPoint(_startPoint); const i=document.getElementById('fmStartAddr'); if(i) i.value=''; showToast('📍 Start point set'); _fmRenderRouteSetup(); _reoptimizeNow(); };
   const tryGeo=function(hi, ms, onFail){ navigator.geolocation.getCurrentPosition(
     function(pos){ apply(pos.coords.latitude, pos.coords.longitude); },
     function(err){ onFail(err); },
@@ -797,7 +798,13 @@ function fmUseMyLocation(){
     showToast('📍 Still locating…');
     tryGeo(false, 25000, function(err2){
       if(_lastPos && _lastPos.lat!=null){ apply(_lastPos.lat, _lastPos.lon); return; }
-      showToast(err2&&err2.code===1?'Location blocked — allow it in settings, or type a start address':'Couldn\'t get GPS — type a start address instead');
+      // last chance: the warm watch may have landed a fix in the meantime
+      setTimeout(function(){
+        if(_lastPos && _lastPos.lat!=null){ apply(_lastPos.lat, _lastPos.lon); return; }
+        showToast(err2&&err2.code===1
+          ? '📍 Location is blocked for this app. Turn it on in Settings ▸ Privacy ▸ Location, or just type your start address in the box.'
+          : '📍 Couldn\'t get a GPS fix (common indoors / on home-screen apps). Type your start address in the box instead — it works the same.');
+      }, 2500);
     });
   });
 }
