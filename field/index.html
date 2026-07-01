@@ -717,11 +717,24 @@ async function _reoptimizeNow(){
 function fmUseMyLocation(){
   if(!navigator.geolocation){ showToast('Location not supported on this device'); return; }
   showToast('📍 Getting your location…');
-  navigator.geolocation.getCurrentPosition(
-    function(pos){ _startPoint={ lat:pos.coords.latitude, lon:pos.coords.longitude, label:'My current location', src:'gps' }; _saveStartPoint(_startPoint); const i=document.getElementById('fmStartAddr'); if(i) i.value=''; _fmRenderRouteSetup(); _reoptimizeNow(); },
-    function(err){ showToast(err&&err.code===1?'Location permission denied — type a start address instead':'Could not get location — type a start address'); },
-    { enableHighAccuracy:true, maximumAge:60000, timeout:15000 }
-  );
+  const apply=function(lat,lon){ _startPoint={ lat:lat, lon:lon, label:'My current location', src:'gps' }; _saveStartPoint(_startPoint); const i=document.getElementById('fmStartAddr'); if(i) i.value=''; _fmRenderRouteSetup(); _reoptimizeNow(); };
+  const tryGeo=function(hi, ms, onFail){ navigator.geolocation.getCurrentPosition(
+    function(pos){ apply(pos.coords.latitude, pos.coords.longitude); },
+    function(err){ onFail(err); },
+    { enableHighAccuracy:hi, maximumAge:60000, timeout:ms }
+  ); };
+  // 1) quick high-accuracy try
+  tryGeo(true, 10000, function(err){
+    if(err && err.code===1){ showToast('Location blocked — allow location for this site in your browser settings, then tap 📍 again'); return; }
+    // 2) fall back to the live GPS the app already tracks while driving
+    if(_lastPos && _lastPos.lat!=null){ apply(_lastPos.lat, _lastPos.lon); return; }
+    // 3) slower low-accuracy retry (cell/wifi based) with a longer window
+    showToast('📍 Still locating…');
+    tryGeo(false, 25000, function(err2){
+      if(_lastPos && _lastPos.lat!=null){ apply(_lastPos.lat, _lastPos.lon); return; }
+      showToast(err2&&err2.code===1?'Location blocked — allow it in settings, or type a start address':'Couldn\'t get GPS — type a start address instead');
+    });
+  });
 }
 
 // Employee typed a start address — geocode it (same pipeline as /invoice) and use as origin.
@@ -1177,9 +1190,9 @@ async function fmSubmitComplete(){
   const grand=_fmcGrand(), ownerNote=String(document.getElementById('fmcOwnerNote').value||'').trim();
   // Done action: autopay uses field_complete (marks done + charges + emails owner on fail); others mark_done.
   const doneAction=_fmcPayType==='autopay'?'field_complete':'mark_done';
-  const doneItem={ kind:'done', idemKey:'done:'+base, method:'GET', params:{ action:doneAction, rowIndex, email, serviceDate:svcDate, amount:grand.toFixed(2), markedBy:adminName||adminEmail||'Staff', adminToken } };
+  const doneItem={ kind:'done', idemKey:'done:'+base, method:'GET', params:{ action:doneAction, rowIndex, email, serviceDate:svcDate, amount:grand.toFixed(2), addons:(selAddons.length?JSON.stringify(selAddons):''), markedBy:adminName||adminEmail||'Staff', adminToken } };
   const extra=[];
-  if(selAddons.length){ const tag=selAddons.map(a=>a.name+'='+a.price).join(','); extra.push({ kind:'addons', idemKey:'addons:'+base+':'+tag, method:'GET', params:{ action:'apply_job_addons', rowIndex, email, serviceDate:svcDate, addons:JSON.stringify(selAddons), adminToken } }); }
+  if(selAddons.length && _fmcPayType!=='autopay'){ const tag=selAddons.map(a=>a.name+'='+a.price).join(','); extra.push({ kind:'addons', idemKey:'addons:'+base+':'+tag, method:'GET', params:{ action:'apply_job_addons', rowIndex, email, serviceDate:svcDate, addons:JSON.stringify(selAddons), adminToken } }); } // autopay applies extras inside field_complete so the charge includes them
   if(_fmcPayType==='cash') extra.push({ kind:'cash', idemKey:'cash:'+base, method:'GET', params:{ action:'mark_cash_paid', rowIndex, email, serviceDate:svcDate, adminToken, markedBy:adminName||'Crew' } });
   if(_fmcPayType==='invoice' && _fmcInvoiceSent) extra.push({ kind:'invoice', idemKey:'invoice:'+base, method:'GET', params:{ action:'send_invoice', rowIndex, email, serviceDate:svcDate, amount:grand.toFixed(2), adminToken } });
   if(ownerNote){ const noteLine='📝 '+ownerNote+' — '+(adminName||'crew'); extra.push({ kind:'note', idemKey:'note:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex, note:(String(bk.employeeNotes||'').trim()?bk.employeeNotes+' | ':'')+noteLine, adminToken } }); }
