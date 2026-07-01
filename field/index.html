@@ -181,6 +181,7 @@
         <div id="fmStartPtNote" style="font-size:12.5px;color:#9ed8b1;margin-top:9px;line-height:1.4;"></div>
       </div>
       <button class="fm-btn fm-btn-xl fm-btn-start" id="fmStartBtn" onclick="fmStartTapped()" style="min-width:260px;">🟢 Start My Route</button>
+      <button class="fm-skip" id="fmStartEndBtn" style="color:#fca5a5;display:none;margin-top:12px;" onclick="fmEmergencyEnd()">🏁 End route &amp; clock out</button>
       <button class="fm-skip" onclick="pmcsOpenMenu()" style="color:#9ed8b1;margin-top:18px;">🔧 PMCS / Maintenance Checks</button>
       <button class="fm-skip" onclick="loadData(true)" style="color:#9ed8b1;margin-top:10px;">↻ Refresh jobs</button>
     </div>
@@ -324,6 +325,7 @@ let allBookings=[], allCustomers=[], _savedOrderKeys=null, _optOrderKeys=null;
 let _startPoint=null, _crewSel=null;   // employee-chosen route origin + crew override
 let _clockInTime=null, _clockOutTime=null, _clockedOut=false, _fmTimerInt=null, _fmSyncInt=null, _fmPollInt=null, _geoWatch=null, _lastPos=null, _wakeLock=null;
 let _fmStarted=false, _fmViewIdx=null, _fmCashTotal=0, _fmBilledTotal=0, _fmSkipped={}, _startChkState=[], _jobTimers={}, _helpers=[]; let _lastSync={ok:null,ts:0,msg:''};
+let _fmBooted=false;   // false until the crew taps Start/Continue → land on the Start screen on every fresh app open (never auto-drop into a job)
 // complete-sheet state
 let _fmcStop=null, _fmcRowIdx=-1, _fmcPayType='invoice', _fmcCash=false, _fmcInvoiceSent=false, _fmcChargeChosen=false, _fmcBase=0, _fmcAddons=[], _fmcPhotos=[], _fmcEndChk={};
 
@@ -941,7 +943,7 @@ function fmBackToStart(){ _fmShow('fmScreenStart'); _fmRenderStart(); }
 function _fmRender(){
   if(!document.getElementById('fieldMode').classList.contains('show')) return;
   const stops=_fmStops();
-  if(!_fmStarted||!stops.length){ _fmRenderStart(stops); return; }
+  if(!_fmBooted||!_fmStarted||!stops.length){ _fmRenderStart(stops); return; }
   const total=stops.length, resolved=stops.filter(_fmResolved).length;
   if(resolved>=total){ _autoClockOut(); _fmRenderDone(stops); return; }
   let idx=_fmViewIdx;
@@ -959,6 +961,7 @@ function _fmRenderStart(){
   const moneyPart=_isMoneyRole()?('~$'+total.toFixed(0)+' on the books'):(n+' stop'+(n!==1?'s':''));
   document.getElementById('fmStartSub').textContent=n?(moneyPart+(cashN?' · '+cashN+' cash stop'+(cashN!==1?'s':''):'')):'No jobs scheduled'+(adminCrews?(' for crew '+adminCrews):'')+' today.';
   const btn=document.getElementById('fmStartBtn'); if(btn){ btn.style.display=n?'':'none'; btn.textContent=_clockInTime&&!_clockedOut?'▶ Continue Route':'🟢 Start My Route'; }
+  const _eb=document.getElementById('fmStartEndBtn'); if(_eb) _eb.style.display=(_clockInTime&&!_clockedOut)?'':'none';
   _fmRenderRouteSetup();
   _fmSyncTimerSlots();
 }
@@ -966,7 +969,7 @@ function _fmRenderStart(){
 /* ───────── Start-of-route checklist ───────── */
 async function fmStartTapped(){
   // Resume: already clocked in & rolling today → jump straight back into the route.
-  if(_clockInTime&&!_clockedOut&&_fmStarted){ _fmRender(); return; }
+  if(_clockInTime&&!_clockedOut&&_fmStarted){ _fmBooted=true; _fmRender(); return; }
   // 1) Who's working today (prefilled roster picker; cancel aborts the start).
   const who = await fmOpenCrewPicker();
   if(who===false) return;
@@ -1043,7 +1046,7 @@ function fmEmergencyEnd(){
 function fmBeginRoute(){
   // PMCS + load-out already ran and logged their own checklists; just clock in and roll.
   if(!_clockInTime || _clockedOut){ _clockInTime=new Date(); _clockedOut=false; _clockOutTime=null; }
-  _fmStarted=true; _fmViewIdx=null; _persist(); _fmRender();
+  _fmStarted=true; _fmViewIdx=null; _fmBooted=true; _persist(); _fmRender();
 }
 
 /* ───────── Job card ───────── */
@@ -1246,7 +1249,7 @@ function _fmRenderDone(stops){
   document.getElementById('fmClockSummary').textContent=(_clockInTime?('🕒 On the clock '+_fmTimerStr()+(_clockedOut?' — clocked out':'')):'');
   _fmUpdateSyncBadge(); _fmSyncTimerSlots();
 }
-function fmReviewStops(){ const s=_fmStops(); _fmStarted=true; _fmViewIdx=0; _persist(); _fmRenderJob(s,0); }
+function fmReviewStops(){ const s=_fmStops(); _fmStarted=true; _fmBooted=true; _fmViewIdx=0; _persist(); _fmRenderJob(s,0); }
 function fmFinishRoute(){
   _autoClockOut(); _fmFlushQueue();
   showToast('🏁 Logged out — great work!');
