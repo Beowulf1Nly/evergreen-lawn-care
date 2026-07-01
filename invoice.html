@@ -9604,20 +9604,32 @@ async function buildRoute() {
 
 // ── Sync optimized route times to Google Calendar ───────────────────────
 async function syncRouteToCalendar(silent) {
-  if (!_lastCalendarUpdates.length) {
-    showToast('No route to sync — optimize first');
-    return;
-  }
   const calBtn = document.getElementById('routeCalSyncBtn');
   if (calBtn) { calBtn.disabled = true; calBtn.textContent = '📅 Syncing…'; }
+
+  // The calendar ALWAYS covers every crew, even if you're viewing just one.
+  // If a single crew is selected, rebuild the route for all crews to collect
+  // their calendar times, then rebuild again to restore your filtered view.
+  let updates = _lastCalendarUpdates;
+  const _prevCrewFilter = routeCrewFilter;
+  if (_prevCrewFilter !== 'all') {
+    try { routeCrewFilter = 'all'; await buildRoute(); updates = (_lastCalendarUpdates || []).slice(); } catch(e) {}
+    try { routeCrewFilter = _prevCrewFilter; await buildRoute(); } catch(e) {}
+  }
+  if (!updates || !updates.length) {
+    showToast('No route to sync — optimize first');
+    if (calBtn) { calBtn.disabled = false; calBtn.textContent = '📅 Sync to Google Calendar'; }
+    return;
+  }
+
   try {
     // Batch the updates: one giant GET URL overflows length limits (dropping
     // later yards) and can trip calendar rate limits. Send small chunks and
     // aggregate the counts so every yard gets written.
     const BATCH = 8;
     let updated = 0, created = 0, failed = 0;
-    for (let i = 0; i < _lastCalendarUpdates.length; i += BATCH) {
-      const chunk = _lastCalendarUpdates.slice(i, i + BATCH);
+    for (let i = 0; i < updates.length; i += BATCH) {
+      const chunk = updates.slice(i, i + BATCH);
       const syncParams = new URLSearchParams({
         action:  'sync_route_to_calendar',
         updates: JSON.stringify(chunk),
@@ -9628,7 +9640,7 @@ async function syncRouteToCalendar(silent) {
         if (data && data.success) { updated += data.updated || 0; created += data.created || 0; failed += data.failed || 0; }
         else { failed += chunk.length; }   // batch errored — count it but keep going so later crews/yards still sync
       } catch(e) { failed += chunk.length; }
-      if (calBtn) calBtn.textContent = '📅 Syncing… ' + Math.min(i + BATCH, _lastCalendarUpdates.length) + '/' + _lastCalendarUpdates.length;
+      if (calBtn) calBtn.textContent = '📅 Syncing… ' + Math.min(i + BATCH, updates.length) + '/' + updates.length;
     }
     {
       const parts = [];
