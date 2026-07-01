@@ -8267,25 +8267,29 @@ function closeContactPopup() {
 }
 
 // ── Waypoint for Google Maps links ───────────────────────────────────────
-// Exact lat,lon beats address text: Maps can't mis-match a coordinate, so
-// routes no longer need addresses manually "fixed" in Google Maps.
-// Priority: stop's geocoded coords → persistent geocode cache → address text.
+// Prefer the REAL address string. Google Maps geocodes rural FL addresses far
+// better than Photon/Nominatim, and passing a coordinate makes Maps label/route
+// the pin by the nearest named place — which is how a stop ends up shown as
+// "Central Ridge Community Park" instead of the customer's house. Coordinates
+// are only a last resort when there is no usable address text.
 function routeWaypoint(s) {
-  if (s && s.lat != null && s.lon != null) {
-    return (+s.lat).toFixed(6) + ',' + (+s.lon).toFixed(6);
-  }
   const bk = s?.bk || s || {};
   const city = ZIP_CITY[bk.zip] || '';
+  const base = (bk.address || '').trim();
+  if (base) {
+    if (city)    return base + ', ' + city + ', FL' + (bk.zip ? ' ' + bk.zip : '');
+    if (bk.zip)  return base + ', ' + bk.zip + ', FL';
+    return base + ', FL';
+  }
+  // No street address on file — fall back to a coordinate if we have one.
+  if (s && s.lat != null && s.lon != null) return (+s.lat).toFixed(6) + ',' + (+s.lon).toFixed(6);
   try {
-    const cache = JSON.parse(localStorage.getItem('evg_geocache_v2') || '{}');
+    const cache = JSON.parse(localStorage.getItem('evg_geocache_v3') || '{}');
     const key   = (bk.address || '') + (bk.zip ? ', ' + bk.zip : '') + (city ? ', ' + city : '') + ', FL';
     const c     = cache[key];
     if (c && c.lat != null) return (+c.lat).toFixed(6) + ',' + (+c.lon).toFixed(6);
   } catch(e) {}
-  const base = (bk.address || '').trim();
-  if (city) return base + ', ' + city + ', FL';
-  if (bk.zip) return base + ', ' + bk.zip + ', FL';
-  return base + ', FL';
+  return (bk.zip ? bk.zip + ', ' : '') + 'FL';
 }
 
 // ── Route All Stops across every day in the current route ────────────────
