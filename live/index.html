@@ -63,7 +63,8 @@
   .rs-addr{ font-size:12px; color:#9ed8b1; margin:3px 0 0 26px; }
   .rs-note{ font-size:13px; color:#cdebd9; margin:4px 0 0 26px; background:rgba(255,255,255,.05); border-radius:8px; padding:6px 9px; line-height:1.5; }
   .rs-note.crew{ color:#fde68a; }
-  .rs-photos{ margin:5px 0 0 26px; display:flex; gap:8px; } .rs-photos a{ text-decoration:none; font-size:20px; }
+  .rs-photos{ margin:6px 0 0 26px; display:flex; gap:8px; flex-wrap:wrap; } .rs-photos a{ text-decoration:none; display:inline-block; }
+  .rs-thumb{ width:66px; height:66px; object-fit:cover; border-radius:8px; border:1px solid rgba(255,255,255,.18); display:block; background:#10261a; }
   .leaflet-tooltip.rt-num{ background:transparent; border:none; box-shadow:none; color:#fff; font-weight:800; font-size:11px; padding:0; }
   .rstop{ display:flex; gap:8px; align-items:baseline; font-size:13px; padding:4px 0; border-top:1px dashed rgba(255,255,255,.08); }
   .rstop .i{ color:#9ed8b1; width:18px; } .rstop.done{ color:#86efac; } .rstop.done .nm{ text-decoration:line-through; opacity:.7; }
@@ -109,6 +110,8 @@ let map=null, markers={}, _crews=[], _bookings=[], _expanded={}, _tick=null, _st
 const CREW_COLORS={ A:'#22c55e', B:'#3b82f6', C:'#f59e0b', D:'#a855f7' };
 
 function esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Google Drive file URL → embeddable thumbnail URL
+function _driveThumb(url){ var m=String(url||'').match(/[-\w]{25,}/); return m?('https://drive.google.com/thumbnail?id='+m[0]+'&sz=w240'):url; }
 function showErr(m){ const e=document.getElementById('err'); e.textContent=m||''; e.style.display=m?'block':'none'; }
 function todayISO(){ const t=new Date(); return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); }
 function dateOf(b){ const raw=b.serviceDate||b.serviceDateRaw||''; if(!raw) return ''; const s=String(raw).trim(); if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; const d=new Date(s); if(isNaN(d)) return s; return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -229,7 +232,7 @@ function stopDetail(b,i){
     +'<div class="rs-addr">📍 '+esc(b.address||'')+(b.zip?', '+esc(b.zip):'')+(b.jobTime?(' · '+esc(b.jobTime)):'')+'</div>'
     +(cNotes?'<div class="rs-note">📝 '+esc(cNotes)+'</div>':'')
     +(eNotes?'<div class="rs-note crew">👷 '+esc(eNotes)+'</div>':'')
-    +(photos.length?'<div class="rs-photos">'+photos.map(function(u){return '<a href="'+esc(u)+'" target="_blank" title="photo">📷</a>';}).join('')+'</div>':'')
+    +(photos.length?'<div class="rs-photos">'+photos.map(function(u){return '<a href="'+esc(u)+'" target="_blank" title="Open photo"><img class="rs-thumb" loading="lazy" src="'+esc(_driveThumb(u))+'" alt="job photo" onerror="this.replaceWith(document.createTextNode(String.fromCodePoint(0x1F4F7)))"></a>';}).join('')+'</div>':'')
     +'</div>';
 }
 function crewCard(c, isWorking){
