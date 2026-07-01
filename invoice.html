@@ -11073,11 +11073,17 @@ function renderHistoryList() {
     var pill  = b.rowCompleted ? '<span style="font-size:11px;font-weight:700;background:#dcfce7;color:#166534;border-radius:6px;padding:2px 8px;">✓ Archived</span>'
               : paid ? '<span style="font-size:11px;font-weight:700;background:#dbeafe;color:#1e40af;border-radius:6px;padding:2px 8px;">Paid</span>'
               : '<span style="font-size:11px;font-weight:700;background:#fef9c3;color:#854d0e;border-radius:6px;padding:2px 8px;">Done</span>';
+    var nPhotos = String(b.photos || '').split(',').map(function(x){return x.trim();}).filter(Boolean).length;
+    var hasNote = !!(String(b.employeeNotes || '').trim());
+    var badges  = (nPhotos || hasNote) ? ('<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">'
+      + (nPhotos ? '<span style="font-size:11px;font-weight:700;background:#ede9fe;color:#6d28d9;border-radius:6px;padding:2px 8px;">📷 ' + nPhotos + ' photo' + (nPhotos !== 1 ? 's' : '') + '</span>' : '')
+      + (hasNote ? '<span style="font-size:11px;font-weight:700;background:#fef3c7;color:#92400e;border-radius:6px;padding:2px 8px;">📝 Note</span>' : '')
+      + '</div>') : '';
     return '<div class="hist-card" style="cursor:pointer;margin-bottom:10px;" onclick="openHistoryDetail(' + ri + ')">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">' +
       '<div><div style="font-size:16px;font-weight:700;color:var(--green-deep);">' + esc(b.name || '—') + '</div>' +
       (addr ? '<div style="font-size:13px;color:var(--text-muted);margin-top:2px;">📍 ' + esc(addr) + '</div>' : '') +
-      '<div style="font-size:13px;color:var(--text-muted);margin-top:2px;">📅 ' + esc(displayDate(b.serviceDate || b.serviceDateRaw) || '—') + (b.crew ? ' · 👷 Crew ' + esc(b.crew) : '') + '</div></div>' +
+      '<div style="font-size:13px;color:var(--text-muted);margin-top:2px;">📅 ' + esc(displayDate(b.serviceDate || b.serviceDateRaw) || '—') + (b.crew ? ' · 👷 Crew ' + esc(b.crew) : '') + '</div>' + badges + '</div>' +
       '<div style="text-align:right;">' + pill + (price ? '<div style="font-size:15px;font-weight:800;color:var(--text);margin-top:6px;">$' + price.toFixed(0) + '</div>' : '') + '</div>' +
       '</div></div>';
   }).join('');
