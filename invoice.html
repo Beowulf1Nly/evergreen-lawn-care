@@ -9288,15 +9288,14 @@ async function buildRoute() {
 
     // Geocode all job addresses — uses persistent localStorage cache so each address
     // is only ever looked up once, even across sessions.
-    const _GEO_CACHE_KEY = 'evg_geocache_v3'; // v3: POI-rejecting geocoder — re-geocode everything
+    const _GEO_CACHE_KEY = 'evg_geocache_v4'; // v3: POI-rejecting geocoder — re-geocode everything
     let geoCache = {};
     try { geoCache = JSON.parse(localStorage.getItem(_GEO_CACHE_KEY) || '{}'); } catch(e) {}
     let _geoCacheDirty = false;
     async function geocodeCached(addr) {
       if (geoCache[addr] !== undefined) return geoCache[addr];
       const r = await geocodeAddr(addr);
-      geoCache[addr] = r;
-      _geoCacheDirty = true;
+      if (r) { geoCache[addr] = r; _geoCacheDirty = true; }
       return r;
     }
     for (const bk of allUpcoming) {
@@ -9691,7 +9690,7 @@ async function geocodeAddr(addr) {
   // Expand abbreviated US addresses ("123 W Oak Ct" -> "123 West Oak Court"); geocoders
   // miss the abbreviated form. Keep the raw form as a fallback variant below.
   const _GEO_EXP={ N:'North',S:'South',E:'East',W:'West',NE:'Northeast',NW:'Northwest',SE:'Southeast',SW:'Southwest',St:'Street',Ave:'Avenue',Av:'Avenue',Blvd:'Boulevard',Dr:'Drive',Ct:'Court',Ln:'Lane',Rd:'Road',Ter:'Terrace',Terr:'Terrace',Pl:'Place',Cir:'Circle',Hwy:'Highway',Pkwy:'Parkway',Trl:'Trail',Pt:'Point',Sq:'Square',Xing:'Crossing',Cv:'Cove',Trce:'Trace' };
-  function _expandAbbr(s){ let x=' '+String(s||'')+' '; for(const k in _GEO_EXP){ x=x.replace(new RegExp('\\b'+k+'\\b','g'), _GEO_EXP[k]); } return x.replace(/\s+/g,' ').trim(); }
+  function _expandAbbr(s){ let x=' '+String(s||'')+' '; for(const k in _GEO_EXP){ x=x.replace(new RegExp('(^|[\\s,])'+k+'\\.?(?=[\\s,])','gi'), '$1'+_GEO_EXP[k]); } return x.replace(/\s+/g,' ').trim(); }
   const _rawAddr = addr; addr = _expandAbbr(addr);
   const _geoInFL=function(c){ return c&&c.lat>=28.3&&c.lat<=29.75&&c.lon>=-83.05&&c.lon<=-81.7; };
   const zipMatch   = addr.match(/,\s*(\d{5})/);

@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-06-30.1 */
+/* APP_VER:2026-06-30.2 */
 (function(){
-  var V='2026-06-30.1'; window.__APP_VER=V;
+  var V='2026-06-30.2'; window.__APP_VER=V;
   var reloads=0, lastCheck=0;
   function check(){
     if(document.hidden) return;
@@ -641,7 +641,7 @@ function _extractRouteKeys(rRes){
    job time. Preference: (a) saved canonical route > (b) self-optimized > (c) job time.
    Geocoding needs a signal; with none we fall back gracefully to the cached
    optimized order, then to job time — never breaking the route view. */
-const _GEO_CACHE_KEY='evg_geocache_v3';      // v3: POI-rejecting geocoder — shared with /invoice (free cache hits)
+const _GEO_CACHE_KEY='evg_geocache_v4';      // v3: POI-rejecting geocoder — shared with /invoice (free cache hits)
 const _OPT_ORDER_KEY='evg_field_optorder_v1';
 const ZIP_CITY={ '34428':'Crystal River','34429':'Crystal River','34450':'Inverness','34451':'Inverness','34452':'Inverness','34453':'Inverness','34460':'Lecanto','34461':'Lecanto','34431':'Dunnellon','34432':'Dunnellon','34433':'Dunnellon','34434':'Citrus Springs','34436':'Floral City','34442':'Hernando','34423':'Crystal River','34464':'Beverly Hills','34465':'Beverly Hills','34449':'Inglis','34498':'Yankeetown','34480':'Ocala','34481':'Ocala','34482':'Ocala','34476':'Ocala','34474':'Ocala','34472':'Ocala','34470':'Ocala','34471':'Ocala','34479':'Ocala','34475':'Ocala','34478':'Ocala','34491':'Summerfield','34488':'Silver Springs','32626':'Chiefland','32668':'Morriston','34601':'Brooksville','34602':'Brooksville','34604':'Brooksville' };
 function _geoCacheLoad(){ try{ return JSON.parse(localStorage.getItem(_GEO_CACHE_KEY)||'{}'); }catch(e){ return {}; } }
@@ -669,7 +669,7 @@ async function _geocodeAddr(addr){
   // suffixes and query the expanded form first. (US Census would be ideal but it is
   // CORS-blocked from browsers, so it can't be used client-side.)
   const _GEO_EXP={ N:'North',S:'South',E:'East',W:'West',NE:'Northeast',NW:'Northwest',SE:'Southeast',SW:'Southwest',St:'Street',Ave:'Avenue',Av:'Avenue',Blvd:'Boulevard',Dr:'Drive',Ct:'Court',Ln:'Lane',Rd:'Road',Ter:'Terrace',Terr:'Terrace',Pl:'Place',Cir:'Circle',Hwy:'Highway',Pkwy:'Parkway',Trl:'Trail',Pt:'Point',Sq:'Square',Xing:'Crossing',Cv:'Cove',Trce:'Trace' };
-  function _expandAbbr(s){ let x=' '+String(s||'')+' '; for(const k in _GEO_EXP){ x=x.replace(new RegExp('\\b'+k+'\\b','g'), _GEO_EXP[k]); } return x.replace(/\s+/g,' ').trim(); }
+  function _expandAbbr(s){ let x=' '+String(s||'')+' '; for(const k in _GEO_EXP){ x=x.replace(new RegExp('(^|[\\s,])'+k+'\\.?(?=[\\s,])','gi'), '$1'+_GEO_EXP[k]); } return x.replace(/\s+/g,' ').trim(); }
   // Service-area bounds (Citrus + neighbouring counties). Rejects a same-named street
   // elsewhere in Florida that would otherwise fling the route 100+ miles off.
   const inFL=function(c){ return c&&c.lat>=28.3&&c.lat<=29.75&&c.lon>=-83.05&&c.lon<=-81.7; };
@@ -722,7 +722,7 @@ async function _fmComputeOptimizedOrder(){
       const city=ZIP_CITY[bk.zip]||'';
       const fullAddr=(bk.address||'')+(bk.zip?', '+bk.zip:'')+(city?', '+city:'')+', FL';
       let coord=cache[fullAddr];
-      if(coord===undefined){ coord=await _geocodeAddr(fullAddr); cache[fullAddr]=coord; dirty=true; }
+      if(coord===undefined){ coord=await _geocodeAddr(fullAddr); if(coord){ cache[fullAddr]=coord; dirty=true; } }
       geo.push({ bk:bk, lat:coord?coord.lat:undefined, lon:coord?coord.lon:undefined, failed:!coord });
     }
     if(dirty) _geoCacheSave(cache);
