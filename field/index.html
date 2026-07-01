@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-06-30.2 */
+/* APP_VER:2026-06-30.3 */
 (function(){
-  var V='2026-06-30.2'; window.__APP_VER=V;
+  var V='2026-06-30.3'; window.__APP_VER=V;
   var reloads=0, lastCheck=0;
   function check(){
     if(document.hidden) return;
@@ -1306,6 +1306,11 @@ window.addEventListener('offline', _fmUpdateSyncBadge);
 // When the app is reopened/foregrounded, force a fresh update right away.
 // iOS fires this through several events depending on cold/warm resume, so cover them all.
 function _fmResume(){
+  // Always pull the freshest jobs when the app is brought forward — even on the Start
+  // screen — so a reschedule / added / removed job shows without a manual refresh. This
+  // was the "showing jobs that aren't there / missing jobs" bug: a warm foreground on the
+  // start screen never re-fetched, so the app sat on stale cached bookings.
+  if(navigator.onLine!==false && !_anySheetOpen()) loadData();
   if(!_fmStarted) return;
   _startTimers();                       // re-arm the ~20s heartbeat loop in case iOS suspended it
   _requestWake(); _startGeo();
@@ -1316,7 +1321,6 @@ function _fmResume(){
       function(){}, { enableHighAccuracy:true, timeout:8000, maximumAge:0 });
   }
   _fmFlushQueue();
-  if(navigator.onLine!==false) loadData();
 }
 document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible') _fmResume(); });
 window.addEventListener('pageshow', function(){ _fmResume(); });

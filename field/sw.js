@@ -6,7 +6,7 @@
    - The Apps Script API (script.google.com) is NEVER cached or intercepted — the
      app's own offline queue owns write reliability, and reads must stay fresh.
    Bump CACHE_VERSION on every deploy so old shells are replaced. */
-const CACHE_VERSION = 'evg-field-v9';
+const CACHE_VERSION = 'evg-field-v10';
 const SHELL = [
   './',
   './index.html',
