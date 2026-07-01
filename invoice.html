@@ -2673,6 +2673,21 @@ function cap(str) {
   const s = String(str ?? '');
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
+// Global: is a done job fully paid/free? Used by History/Stats (renderBookings has
+// its own local copy). Kept top-level so renderHistoryList can call it.
+function isPaidDone(b) {
+  const cal  = String(b.calendarEvent || '').toLowerCase();
+  const pm   = String(b.payMethod || '').toLowerCase();
+  const inv  = String(b.invoiced || '').toLowerCase();
+  const free  = String(b.frequency||'').toLowerCase().includes('free');
+  const quote = String(b.frequency||'').toLowerCase().includes('quote visit');
+  const paidPattern = s => {
+    if (s.includes('not paid') || s.includes('pending')) return false;
+    return s.includes('✅') || s.includes('autopay') || s.includes('auto-pay') || s === 'paid' || s.startsWith('paid');
+  };
+  return free || quote || paidPattern(cal) || paidPattern(pm) || paidPattern(inv);
+}
+
 function isDone(b) {
   // rowCompleted = job was archived to the "Completed Jobs" sheet (done + paid)
   if (b.rowCompleted) return true;
