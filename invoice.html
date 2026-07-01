@@ -12,9 +12,9 @@
 <!-- Auto-updater: pulls the latest version in the background and reloads once when a new
      deploy is live, so phones never get stuck on an old cached build. Loop-guarded. -->
 <script>
-/* APP_VER:2026-06-29.13 */
+/* APP_VER:2026-07-01.1 */
 (function(){
-  var V = '2026-06-29.13';
+  var V = '2026-07-01.1';
   window.__APP_VER = V;
   var reloads = 0, lastCheck = 0;
   function check(){
@@ -7178,6 +7178,7 @@ function loadRouteFromStorage() {
 }
 
 function clearSavedRoute() {
+  try { clearPushedRoutes(Object.keys(_routeCustomOrder || {})); } catch(e){}   // crews fall back to self-optimize
   localStorage.removeItem('eg_savedRoute');
   _savedRoute = null;
   _routeViewDates  = [];
@@ -7829,7 +7830,10 @@ function moveRouteStop(dateStr, crew, fromIdx, dir) {
   // Sync times to dispatch board then update bookings
   _syncRouteOrderToDispatch(dateStr);
 
-  showToast('↕ Stop moved · Times recalculated · ⚡ Re-optimize for exact times');
+  // Push the new order to the backend so /field & /live follow it
+  schedulePushRoute(dateStr);
+
+  showToast('↕ Stop moved · 📲 Sending new order to crews…');
 }
 
 function _syncRouteOrderToDispatch(dateStr) {
@@ -7866,6 +7870,96 @@ function _syncRouteOrderToDispatch(dateStr) {
     const el = document.getElementById('dispatchDate');
     if (el && el.value === dateStr) renderDispatchBoard();
   }
+}
+
+// ── PUSH ROUTE ORDER TO CREWS (backend Routes sheet → /field & /live) ──────
+// Field Mode polls get_route every 20s while a crew is on the clock and treats
+// the saved route as canonical ("Following the route your owner set"). These
+// helpers write the on-screen order into that record via put_route, so a
+// reorder here shows up on employees' phones within seconds.
+const _routePushTimers = {};
+let   _routePushSeq    = 0;
+
+function _routePushStatus(msg, ok) {
+  let el = document.getElementById('routePushStatus');
+  if (!el) {
+    const nav = document.getElementById('routeStatsBar') || document.getElementById('routeTimeline');
+    if (!nav || !nav.parentNode) return;
+    el = document.createElement('div');
+    el.id = 'routePushStatus';
+    el.style.cssText = 'font-size:12.5px;font-weight:700;margin:8px 0 2px;padding:8px 12px;border-radius:9px;display:inline-flex;align-items:center;gap:7px;';
+    nav.parentNode.insertBefore(el, nav.nextSibling);
+  }
+  el.style.background = ok ? 'rgba(34,197,94,.1)'  : 'rgba(251,191,36,.12)';
+  el.style.color      = ok ? '#15803d'             : '#92400e';
+  el.style.border     = ok ? '1px solid rgba(34,197,94,.35)' : '1px solid rgba(251,191,36,.4)';
+  el.textContent = msg;
+}
+
+function pushRouteToCrews(dateStr) {
+  if (adminRole !== 'owner' && adminRole !== 'manager') return;   // crews can't overwrite the canonical route
+  const dayOrder = _routeCustomOrder[dateStr];
+  if (!dayOrder) return;
+  const crews = Array.isArray(dayOrder) ? { '': dayOrder } : dayOrder;
+  const seq = ++_routePushSeq;
+  const reqs = [];
+  for (const [crewKey, order] of Object.entries(crews)) {
+    if (!Array.isArray(order)) continue;
+    const crew = (crewKey === '_legacy') ? '' : crewKey;
+    const stops = order.map((s, i) => {
+      const b = (s && s.bk) || {};
+      return {
+        order: i + 1,
+        email: String(b.email || '').toLowerCase().trim(),
+        serviceDate: dateStr,
+        name: b.name || '', address: b.address || '', zip: b.zip || '',
+        crew: crew || String(b.crew || ''), jobTime: b.jobTime || ''
+      };
+    }).filter(st => st.email);
+    const p = new URLSearchParams({
+      action: 'put_route', date: dateStr, crew: crew,
+      stops: JSON.stringify(stops),
+      updatedBy: adminName || 'Owner',
+      idemKey: 'route:' + dateStr + ':' + crew + ':' + Date.now() + ':' + seq,
+      adminToken
+    });
+    reqs.push(fetch(SCRIPT_URL + '?' + p).then(r => r.json()).catch(() => null));
+  }
+  if (!reqs.length) return;
+  _routePushStatus('📲 Sending route order to crews…', true);
+  Promise.all(reqs).then(results => {
+    if (seq !== _routePushSeq) return;   // a newer push superseded this one
+    const allOk = results.every(d => d && d.success);
+    const t = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    if (allOk) _routePushStatus('📲 Crews see this order · synced ' + t, true);
+    else {
+      _routePushStatus('⚠ Route didn\'t reach the crews — retrying…', false);
+      setTimeout(() => { if (seq === _routePushSeq) pushRouteToCrews(dateStr); }, 8000);
+    }
+  });
+}
+
+function schedulePushRoute(dateStr) {
+  clearTimeout(_routePushTimers[dateStr]);
+  _routePushTimers[dateStr] = setTimeout(() => pushRouteToCrews(dateStr), 1200);
+}
+
+// Clear the canonical route on the backend (crews fall back to self-optimize).
+function clearPushedRoutes(dates) {
+  if (adminRole !== 'owner' && adminRole !== 'manager') return;
+  (dates || []).forEach(dateStr => {
+    const dayOrder = _routeCustomOrder[dateStr] || {};
+    const crewKeys = Array.isArray(dayOrder) ? [''] : Object.keys(dayOrder).map(k => k === '_legacy' ? '' : k);
+    (crewKeys.length ? crewKeys : ['']).forEach(crew => {
+      const p = new URLSearchParams({
+        action: 'put_route', date: dateStr, crew: crew, stops: '[]',
+        updatedBy: adminName || 'Owner',
+        idemKey: 'routeclear:' + dateStr + ':' + crew + ':' + Date.now(),
+        adminToken
+      });
+      fetch(SCRIPT_URL + '?' + p).catch(() => {});
+    });
+  });
 }
 
 // Build a single crew's stop list HTML
@@ -8180,8 +8274,12 @@ function routeDrop(ev, dateStr, crew, idx) {
   if (!order) return;
   const [moved] = order.splice(_dragSrc.idx, 1);
   order.splice(idx, 0, moved);
+  if (moved && moved.bk) moved.bk._routePinned = true;
   _dragSrc = null;
   renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
+  _syncRouteOrderToDispatch(dateStr);
+  schedulePushRoute(dateStr);   // crews' phones pick up the new order
+  showToast('↕ Stop moved · 📲 Sending new order to crews…');
 }
 function routeDragEnd(ev) {
   ev.currentTarget.classList.remove('dragging');
@@ -9552,11 +9650,14 @@ async function buildRoute() {
     _routeViewDayIdx = 0;
     _updateRouteAllBtn();
 
+    // Push the optimized order to the backend so /field & /live follow it
+    try { sortedDates.forEach(ds => pushRouteToCrews(ds)); } catch(e) { console.warn('route push failed:', e); }
+
     // Show saved banner
     const banner = document.getElementById('routeSavedBanner');
     if (banner) {
       banner.style.display = '';
-      banner.innerHTML = `✅ Route optimized &amp; saved · ${sortedDates.length} day${sortedDates.length!==1?'s':''} · Re-opens automatically on the Route tab`;
+      banner.innerHTML = `✅ Route optimized &amp; saved · ${sortedDates.length} day${sortedDates.length!==1?'s':''} · 📲 Sent to crews' Field Mode`;
     }
 
     // Show calendar sync button (hidden until a route exists)
