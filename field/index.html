@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-06-30.8 */
+/* APP_VER:2026-06-30.9 */
 (function(){
-  var V='2026-06-30.8'; window.__APP_VER=V;
+  var V='2026-06-30.9'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -630,7 +630,7 @@ async function loadData(refreshToast){
     if(!allBookings.length) _hydrateFromCache();
     if(_savedOrderKeys&&_savedOrderKeys.length){ _optOrderKeys=null; }   // (a) canonical route from backend wins; drop any stale self-optimized order
     else { _optOrderKeys=_loadOptOrderCache();                           // (b) no canonical route → self-optimize (show cached order instantly, refine in background)
-      if(navigator.onLine!==false){ _fmComputeOptimizedOrder().then(function(changed){ if(changed&&!_fmStarted) _fmRender(); }).catch(function(){}); } }
+      if(navigator.onLine!==false){ _fmComputeOptimizedOrder().then(function(res){ if(res&&res.changed&&!_fmStarted) _fmRender(); }).catch(function(){}); } }
     if(refreshToast) showToast('↻ Jobs updated');
   }catch(e){ _hydrateFromCache(); }
   _fmRender();
@@ -764,7 +764,9 @@ async function _fmComputeOptimizedOrder(){
     if(!keys.length) return false;
     const changed=!_optOrderKeys||_optOrderKeys.join('~')!==keys.join('~');
     _optOrderKeys=keys; _saveOptOrderCache(keys);
-    return changed;
+    return { ok:true, changed:changed };   // SUCCESS. (Previously returned only "changed",
+                                           // so an already-optimal route reported a false
+                                           // "Could not optimize" every time after the first.)
   }catch(e){ return false; }
 }
 
@@ -787,7 +789,8 @@ function _availableCrews(){
 // Re-run optimization right away when the start point or crew changes.
 async function _reoptimizeNow(){
   showToast('🧭 Optimizing route…');
-  const ok=await _fmComputeOptimizedOrder();
+  const res=await _fmComputeOptimizedOrder();
+  const ok=!!(res && res.ok);
   _fmRender();
   if(!ok){ if(navigator.onLine===false) showToast('📴 Offline — using last saved order'); else showToast('Could not optimize — check addresses/signal'); }
   else showToast('✅ Route optimized from your start point');
