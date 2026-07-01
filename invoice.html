@@ -9492,6 +9492,7 @@ async function buildRoute() {
             address:   (stop.bk.address || '') + (stop.bk.zip ? ', ' + stop.bk.zip : '') + ', FL',
             service:   stop.bk.service   || stop.bk.frequency || 'Lawn Service',
             frequency: stop.bk.frequency || '',
+            crew:      (crew === 'unassigned' ? '' : crew),
             startIso:  cursor.toISOString(),
             endIso:    doneAt.toISOString(),
           });
@@ -9621,10 +9622,12 @@ async function syncRouteToCalendar(silent) {
         action:  'sync_route_to_calendar',
         updates: JSON.stringify(chunk),
       });
-      const res  = await fetch(SCRIPT_URL + '?' + syncParams + '&' + authParam());
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'sync failed');
-      updated += data.updated || 0; created += data.created || 0; failed += data.failed || 0;
+      try {
+        const res  = await fetch(SCRIPT_URL + '?' + syncParams + '&' + authParam());
+        const data = await res.json();
+        if (data && data.success) { updated += data.updated || 0; created += data.created || 0; failed += data.failed || 0; }
+        else { failed += chunk.length; }   // batch errored — count it but keep going so later crews/yards still sync
+      } catch(e) { failed += chunk.length; }
       if (calBtn) calBtn.textContent = '📅 Syncing… ' + Math.min(i + BATCH, _lastCalendarUpdates.length) + '/' + _lastCalendarUpdates.length;
     }
     {
