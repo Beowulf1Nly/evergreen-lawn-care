@@ -5,41 +5,55 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <title>Evergreen — Live Ops</title>
 <meta name="robots" content="noindex,nofollow"/>
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate"/>
 <meta name="theme-color" content="#0f2417"/>
 <link rel="apple-touch-icon" href="/field/apple-touch-icon.png"/>
 <link rel="icon" href="/field/icon-192.png"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<!-- Auto-updater: reload once when a newer build is live (loop-proof, per-version guard). -->
+<script>
+/* APP_VER:2026-07-01.1 */
+(function(){ var V='2026-07-01.1'; window.__LIVE_VER=V;
+  function check(){ if(document.hidden) return;
+    fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
+      if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
+      var done=''; try{ done=localStorage.getItem('evg_live_updated_to')||''; }catch(e){}
+      if(done===m[1]) return; try{ localStorage.setItem('evg_live_updated_to', m[1]); }catch(e){}
+      location.replace('index.html?_='+Date.now());
+    }).catch(function(){}); }
+  setTimeout(check,8000); document.addEventListener('visibilitychange',function(){ if(!document.hidden) setTimeout(check,3000); });
+})();
+</script>
 <style>
   :root{ --green-deep:#0f2417; --green:#15803d; --border:#e2e8f0; --muted:#64748b; --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
   *{ box-sizing:border-box; }
   html,body{ margin:0; height:100%; }
-  body{ font-family:var(--font); background:#0b1f13; color:#e8f3ec; -webkit-font-smoothing:antialiased; }
-  /* login */
+  body{ font-family:var(--font); background:#0b1f13; color:#e8f3ec; -webkit-font-smoothing:antialiased; -webkit-tap-highlight-color:transparent; }
   #login{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:linear-gradient(170deg,#0f2417,#14361f 55%,#0c2a18); padding:24px; }
   .card{ background:#fff; color:#14361f; border-radius:20px; padding:28px 24px; width:100%; max-width:380px; box-shadow:0 20px 60px rgba(0,0,0,.4); }
   .card h1{ font-size:24px; margin:0 0 6px; } .card p{ font-size:14px; color:var(--muted); margin:0 0 14px; }
-  .inp{ width:100%; padding:13px; border:2px solid var(--border); border-radius:11px; font-size:16px; font-family:inherit; margin-bottom:10px; outline:none; }
+  .inp{ width:100%; padding:13px; border:2px solid var(--border); border-radius:11px; font-size:16px; font-family:inherit; margin-bottom:10px; outline:none; color:#14361f; background:#fff; }
   .btn{ width:100%; padding:14px; border:none; border-radius:11px; background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; font-size:16px; font-weight:800; font-family:inherit; cursor:pointer; }
   .btn:disabled{ opacity:.6; }
   #err{ color:#dc2626; font-size:13px; margin-top:8px; display:none; }
-  /* app */
   #app{ display:none; flex-direction:column; height:100%; }
-  header{ display:flex; align-items:center; justify-content:space-between; padding:max(12px,env(safe-area-inset-top)) 16px 12px; background:#0f2417; border-bottom:1px solid rgba(255,255,255,.08); flex-shrink:0; }
+  header{ display:flex; align-items:center; justify-content:space-between; padding:max(12px,env(safe-area-inset-top)) 16px 12px; background:#0f2417; border-bottom:1px solid rgba(255,255,255,.08); flex-shrink:0; gap:8px; }
   header .brand{ font-size:17px; font-weight:800; } header .brand small{ display:block; font-size:11px; color:#9ed8b1; font-weight:600; }
   header .acts{ display:flex; gap:8px; align-items:center; }
-  .hbtn{ background:rgba(255,255,255,.12); color:#dcfce7; border:none; border-radius:9px; padding:8px 12px; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+  .hbtn{ background:rgba(255,255,255,.12); color:#dcfce7; border:none; border-radius:9px; padding:8px 12px; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; }
+  .hbtn.add{ background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; }
   .stats{ display:flex; gap:10px; padding:12px 16px; flex-wrap:wrap; flex-shrink:0; }
   .stat{ background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); border-radius:14px; padding:12px 16px; flex:1; min-width:120px; }
   .stat .n{ font-size:24px; font-weight:800; } .stat .l{ font-size:11px; color:#9ed8b1; text-transform:uppercase; letter-spacing:.06em; margin-top:2px; }
-  #map{ height:42vh; min-height:280px; margin:0 16px; border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,.1); flex-shrink:0; background:#10261a; }
+  #map{ height:38vh; min-height:240px; margin:0 16px; border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,.1); flex-shrink:0; background:#10261a; }
   .leaflet-popup-content{ font-family:var(--font); font-size:13px; }
-  .roster{ flex:1; overflow-y:auto; padding:14px 16px 28px; }
+  .roster{ flex:1; overflow-y:auto; padding:14px 16px 40px; }
   .roster h2{ font-size:13px; text-transform:uppercase; letter-spacing:.07em; color:#9ed8b1; margin:0 0 10px; }
-  .crewcard{ background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); border-radius:16px; padding:14px 16px; margin-bottom:12px; cursor:pointer; }
-  .crewcard.stale{ opacity:.5; }
-  .crewhead{ display:flex; align-items:center; gap:10px; }
+  .crewcard{ background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); border-radius:16px; padding:14px 16px; margin-bottom:12px; }
+  .crewhead{ display:flex; align-items:center; gap:10px; cursor:pointer; }
   .dot{ width:10px; height:10px; border-radius:50%; flex-shrink:0; }
   .fresh{ background:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.25); } .old{ background:#f59e0b; } .dead{ background:#ef4444; }
+  .dot.done{ background:#64748b; box-shadow:none; }
   .crewname{ font-size:17px; font-weight:800; }
   .badge{ font-size:11px; font-weight:800; padding:3px 9px; border-radius:999px; background:rgba(134,239,172,.18); color:#86efac; }
   .crewmeta{ font-size:13px; color:#cdebd9; margin-top:8px; line-height:1.6; }
@@ -50,11 +64,10 @@
   .routelist.open{ display:block; }
   .sec{ font-size:12px; text-transform:uppercase; letter-spacing:.07em; color:#9ed8b1; margin:16px 0 8px; font-weight:800; }
   .crewcard.exp{ background:rgba(255,255,255,.09); }
-  .crewhead{ cursor:pointer; }
-  .dot.done{ background:#64748b; box-shadow:none; }
   .mapbtn{ width:100%; background:#1565c0; color:#fff; border:none; border-radius:10px; padding:9px; font-family:inherit; font-weight:700; font-size:13px; cursor:pointer; margin-bottom:10px; }
-  .rstop2{ border-top:1px dashed rgba(255,255,255,.1); padding:8px 0; }
-  .rstop2.done{ opacity:.65; }
+  .rstop2{ border-top:1px dashed rgba(255,255,255,.1); padding:9px 0; cursor:pointer; border-radius:8px; transition:background .12s; }
+  .rstop2:hover{ background:rgba(255,255,255,.05); }
+  .rstop2.done{ opacity:.7; }
   .rs-top{ display:flex; align-items:center; gap:8px; font-size:14px; }
   .rs-top .i{ color:#9ed8b1; width:18px; } .rs-top .nm{ font-weight:700; }
   .chip{ font-size:11px; font-weight:800; padding:2px 8px; border-radius:999px; white-space:nowrap; }
@@ -65,11 +78,36 @@
   .rs-note.crew{ color:#fde68a; }
   .rs-photos{ margin:6px 0 0 26px; display:flex; gap:8px; flex-wrap:wrap; } .rs-photos a{ text-decoration:none; display:inline-block; }
   .rs-thumb{ width:66px; height:66px; object-fit:cover; border-radius:8px; border:1px solid rgba(255,255,255,.18); display:block; background:#10261a; }
+  .rs-tap{ font-size:11px; color:#7fb79a; margin:4px 0 0 26px; }
   .leaflet-tooltip.rt-num{ background:transparent; border:none; box-shadow:none; color:#fff; font-weight:800; font-size:11px; padding:0; }
-  .rstop{ display:flex; gap:8px; align-items:baseline; font-size:13px; padding:4px 0; border-top:1px dashed rgba(255,255,255,.08); }
-  .rstop .i{ color:#9ed8b1; width:18px; } .rstop.done{ color:#86efac; } .rstop.done .nm{ text-decoration:line-through; opacity:.7; }
   .empty{ text-align:center; color:#9ed8b1; padding:30px 16px; font-size:14px; }
   .grow{ flex:1; }
+  /* ── bottom sheets / modals ── */
+  .sheet-wrap{ display:none; position:fixed; inset:0; z-index:4000; background:rgba(0,0,0,.55); align-items:flex-end; justify-content:center; }
+  .sheet-wrap.show{ display:flex; }
+  .sheet{ background:#fff; color:#14361f; border-radius:22px 22px 0 0; width:100%; max-width:520px; padding:22px 20px max(26px,env(safe-area-inset-bottom)); box-shadow:0 -10px 50px rgba(0,0,0,.4); max-height:92vh; overflow-y:auto; animation:up .22s ease; }
+  @keyframes up{ from{ transform:translateY(100%);} to{ transform:translateY(0);} }
+  .sheet h3{ font-size:20px; margin:0 0 2px; }
+  .sheet .sub{ font-size:13px; color:var(--muted); margin:0 0 16px; }
+  .act{ display:flex; align-items:center; gap:12px; width:100%; padding:15px; border:1.5px solid var(--border); border-radius:13px; background:#fff; font-family:inherit; font-size:15px; font-weight:700; color:#14361f; cursor:pointer; margin-bottom:10px; text-align:left; }
+  .act:active{ transform:scale(.99); }
+  .act.danger{ border-color:#fecaca; background:#fff5f5; color:#b91c1c; }
+  .act .em{ font-size:20px; }
+  .lbl{ font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#94a3b8; margin:12px 0 6px; }
+  .crewpick{ display:flex; gap:8px; flex-wrap:wrap; }
+  .crewpick button{ flex:1; min-width:64px; padding:12px; border:2px solid var(--border); border-radius:11px; background:#fff; font-family:inherit; font-weight:800; font-size:15px; cursor:pointer; color:#14361f; }
+  .crewpick button.on{ border-color:#15803d; background:#f0fdf4; color:#15803d; }
+  .primary{ width:100%; padding:15px; border:none; border-radius:13px; background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; font-size:16px; font-weight:800; font-family:inherit; cursor:pointer; margin-top:6px; }
+  .primary.red{ background:linear-gradient(135deg,#dc2626,#991b1b); }
+  .primary:disabled{ opacity:.6; }
+  .ghost{ width:100%; padding:12px; border:none; background:none; color:var(--muted); font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; margin-top:6px; }
+  .field{ width:100%; padding:12px; border:1.5px solid var(--border); border-radius:11px; font-size:16px; font-family:inherit; margin-bottom:10px; outline:none; color:#14361f; box-sizing:border-box; }
+  .toggle-row{ display:flex; align-items:center; gap:10px; margin:6px 0 12px; font-size:14px; }
+  #toast{ position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom)); transform:translateX(-50%); background:#14361f; color:#fff; padding:13px 20px; border-radius:12px; font-size:14px; font-weight:600; z-index:6000; opacity:0; transition:opacity .25s; pointer-events:none; max-width:90vw; text-align:center; box-shadow:0 8px 30px rgba(0,0,0,.5); }
+  #toast.show{ opacity:1; }
+  .srch-item{ padding:11px 12px; border-bottom:1px solid #eef2f0; cursor:pointer; font-size:14px; color:#14361f; }
+  .srch-item:hover{ background:#f0fdf4; }
+  .srch-item small{ color:var(--muted); display:block; font-size:12px; }
 </style>
 </head>
 <body>
@@ -88,8 +126,12 @@
 
 <div id="app">
   <header>
-    <div class="brand">🌿 Live Operations<small id="today"></small></div>
-    <div class="acts"><span class="hbtn" id="refreshState">live</span><button class="hbtn" onclick="logout()">Sign out</button></div>
+    <div class="brand">🌿 Live Ops<small id="today"></small></div>
+    <div class="acts">
+      <button class="hbtn add" onclick="openAddJob()">＋ Job</button>
+      <span class="hbtn" id="refreshState" onclick="refresh(true)">live</span>
+      <button class="hbtn" onclick="logout()">Sign out</button>
+    </div>
   </header>
   <div class="stats">
     <div class="stat"><div class="n" id="sCrews">—</div><div class="l">crews working</div></div>
@@ -98,27 +140,80 @@
     <div class="stat"><div class="n" id="sHours">—</div><div class="l">hours on clock now</div></div>
   </div>
   <div id="map"></div>
-  <div class="roster"><h2 id="rosterTitle">Crews</h2><div id="rosterList"></div></div>
+  <div class="roster"><h2 id="rosterTitle">Crews &amp; Route</h2><div id="rosterList"></div></div>
 </div>
+
+<div class="sheet-wrap" id="jobSheet" onclick="if(event.target===this)closeSheet('jobSheet')">
+  <div class="sheet" id="jobSheetBody"></div>
+</div>
+<div class="sheet-wrap" id="reschedSheet" onclick="if(event.target===this)closeSheet('reschedSheet')">
+  <div class="sheet">
+    <h3>📅 Reschedule</h3>
+    <div class="sub" id="reschedSub"></div>
+    <div class="lbl">New date</div>
+    <input type="date" id="reschedDate" class="field">
+    <div class="toggle-row"><input type="checkbox" id="reschedSeries"><label for="reschedSeries">Move this &amp; all future visits (whole series)</label></div>
+    <div class="toggle-row"><input type="checkbox" id="reschedNotify" checked><label for="reschedNotify">Email the customer about the change</label></div>
+    <button class="primary" id="reschedGo" onclick="doReschedule()">Move job</button>
+    <button class="ghost" onclick="closeSheet('reschedSheet')">Cancel</button>
+  </div>
+</div>
+<div class="sheet-wrap" id="cancelSheet" onclick="if(event.target===this)closeSheet('cancelSheet')">
+  <div class="sheet">
+    <h3>🗑 Cancel job</h3>
+    <div class="sub" id="cancelSub"></div>
+    <div class="lbl">Reason (optional)</div>
+    <input type="text" id="cancelReason" class="field" placeholder="e.g. customer requested">
+    <div class="toggle-row"><input type="checkbox" id="cancelNotify" checked><label for="cancelNotify">Email the customer</label></div>
+    <button class="primary red" id="cancelGo" onclick="doCancel()">Cancel this job</button>
+    <button class="ghost" onclick="closeSheet('cancelSheet')">Keep it</button>
+  </div>
+</div>
+<div class="sheet-wrap" id="addSheet" onclick="if(event.target===this)closeSheet('addSheet')">
+  <div class="sheet">
+    <h3>＋ Add a job</h3>
+    <div class="sub">Search an existing customer or type a new one.</div>
+    <input type="text" id="addSearch" class="field" placeholder="Search name / address…" oninput="renderAddSearch(this.value)">
+    <div id="addResults" style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:11px;margin-bottom:12px;display:none;"></div>
+    <div class="lbl">Customer</div>
+    <input type="text" id="addName" class="field" placeholder="Name">
+    <input type="text" id="addAddr" class="field" placeholder="Street address">
+    <div style="display:flex;gap:10px;"><input type="text" id="addZip" class="field" placeholder="ZIP" style="flex:0 0 110px;"><input type="text" id="addPhone" class="field" placeholder="Phone" style="flex:1;"></div>
+    <input type="email" id="addEmail" class="field" placeholder="Email">
+    <div class="lbl">Job</div>
+    <div style="display:flex;gap:10px;"><input type="date" id="addDate" class="field" style="flex:1;"><input type="text" id="addPrice" class="field" placeholder="$ price" style="flex:0 0 120px;"></div>
+    <div class="lbl">Crew</div>
+    <div class="crewpick" id="addCrewPick"></div>
+    <input type="text" id="addNotes" class="field" placeholder="Notes (optional)" style="margin-top:10px;">
+    <button class="primary" id="addGo" onclick="doAddJob()" style="margin-top:12px;">Schedule job</button>
+    <button class="ghost" onclick="closeSheet('addSheet')">Cancel</button>
+  </div>
+</div>
+
+<div id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 const SCRIPT_URL='https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
 const SESSION_KEY='eg_staff_session';
+const GEO_CACHE_KEY='evg_geocache_v5';
 let token='', myEmail='', myName='', myRole='', myCrews='';
 let map=null, markers={}, _crews=[], _bookings=[], _expanded={}, _tick=null, _statusBad=false, _routeLayers=[];
+let _statusInt=null, _bookInt=null, _addCrew='', _jobBi=-1;
 const CREW_COLORS={ A:'#22c55e', B:'#3b82f6', C:'#f59e0b', D:'#a855f7' };
 
-function esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-// Google Drive file URL → embeddable thumbnail URL
+function esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function _driveThumb(url){ var m=String(url||'').match(/[-\w]{25,}/); return m?('https://drive.google.com/thumbnail?id='+m[0]+'&sz=w240'):url; }
 function showErr(m){ const e=document.getElementById('err'); e.textContent=m||''; e.style.display=m?'block':'none'; }
 function todayISO(){ const t=new Date(); return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); }
 function dateOf(b){ const raw=b.serviceDate||b.serviceDateRaw||''; if(!raw) return ''; const s=String(raw).trim(); if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; const d=new Date(s); if(isNaN(d)) return s; return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function isDone(b){ if(b.rowCompleted) return true; const d=String(b.done||''); return d.includes('Done')||d.startsWith('✓'); }
 function durStr(fromIso){ if(!fromIso) return '—'; const ms=Date.now()-new Date(fromIso).getTime(); if(isNaN(ms)||ms<0) return '—'; const m=Math.floor(ms/60000); return Math.floor(m/60)+'h '+(m%60)+'m'; }
+function _ri(b){ const r=parseInt(b&&b._rowIndex,10); if(r&&r>=2) return r; const i=_bookings.indexOf(b); return i>=0?i+2:0; }
+let _tt=null; function toast(m){ const t=document.getElementById('toast'); if(!t) return; t.textContent=m; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(function(){t.classList.remove('show');},3200); }
+function closeSheet(id){ const e=document.getElementById(id); if(e) e.classList.remove('show'); }
+function openSheet(id){ const e=document.getElementById(id); if(e) e.classList.add('show'); }
 
-/* auth */
 function loadSession(){ try{ const r=localStorage.getItem(SESSION_KEY); if(!r) return null; const s=JSON.parse(r); const e=s.expiry||s.exp; if(!s.token||!e||new Date()>new Date(e)) return null; return s; }catch(e){ return null; } }
 async function reqCode(){ const em=document.getElementById('email').value.trim().toLowerCase(); if(!em) return; const b=document.getElementById('b1'); b.disabled=true; b.textContent='Sending…'; showErr('');
   try{ const d=await(await fetch(SCRIPT_URL+'?action=admin_request_code&email='+encodeURIComponent(em))).json();
@@ -140,36 +235,39 @@ function enterApp(){
     map=L.map('map',{ zoomControl:true, attributionControl:false }).setView([28.9,-82.4],10);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ maxZoom:19 }).addTo(map);
   }
-  refresh();
-  setInterval(refresh, 15000);
-  if(_tick) clearInterval(_tick);
-  _tick=setInterval(updateClocks, 1000);
+  refresh(true);
+  if(_statusInt) clearInterval(_statusInt); _statusInt=setInterval(refreshStatus,15000);
+  if(_bookInt) clearInterval(_bookInt);   _bookInt=setInterval(refreshBookings,60000);
+  if(_tick) clearInterval(_tick); _tick=setInterval(updateClocks,1000);
 }
 
-async function refresh(){
+async function refreshStatus(){
   const rb=document.getElementById('refreshState'); rb.textContent='updating…';
   try{
-    const [st,bk]=await Promise.all([
-      fetch(SCRIPT_URL+'?action=get_field_status&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null),
-      fetch(SCRIPT_URL+'?action=bookings&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null)
-    ]);
-    _statusBad = !(st&&st.success);
-    if(st&&st.success) _crews=(st.crews||[]).filter(c=>c.staleMin<=720); // today's crews incl. clocked-out
-    if(bk&&bk.success&&Array.isArray(bk.bookings)) _bookings=bk.bookings;
+    const st=await fetch(SCRIPT_URL+'?action=get_field_status&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null);
+    _statusBad=!(st&&st.success);
+    if(st&&st.success) _crews=(st.crews||[]).filter(c=>c.staleMin<=720);
     render();
     rb.textContent='live · '+new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
   }catch(e){ rb.textContent='offline'; }
 }
+async function refreshBookings(){
+  try{
+    const bk=await fetch(SCRIPT_URL+'?action=bookings&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null);
+    if(bk&&bk.success&&Array.isArray(bk.bookings)){ _bookings=bk.bookings; render(); }
+  }catch(e){}
+}
+async function refresh(force){ await Promise.all([refreshStatus(), (force||!_bookings.length)?refreshBookings():Promise.resolve()]); }
 
 function routeFor(crewStr){
   const set=new Set(String(crewStr||'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean));
   const t=todayISO();
   return (_bookings||[]).filter(function(b){
-    if(b.rowCancelled) return false;   // keep completed jobs so they count as done
+    if(b.rowCancelled) return false;
     if(dateOf(b)!==t) return false;
     const bc=String(b.crew||'').toUpperCase().trim();
-    if(set.size===0) return true;   // employee with no crew assignment sees all
-    if(!bc) return true;            // unassigned job is visible to every crew
+    if(set.size===0) return true;
+    if(!bc) return true;
     return set.has(bc);
   }).sort(function(a,b){ const x=a.jobTime||'99:99', y=b.jobTime||'99:99'; return x<y?-1:x>y?1:0; });
 }
@@ -179,7 +277,6 @@ function render(){
   const todays=(_bookings||[]).filter(function(b){return !b.rowCancelled&&dateOf(b)===t;});
   document.getElementById('sDone').textContent=todays.filter(isDone).length;
   document.getElementById('sLeft').textContent=todays.filter(function(b){return !isDone(b);}).length;
-
   const working=_crews.filter(function(c){return String(c.active)!=='0';});
   const doneCrews=_crews.filter(function(c){return String(c.active)==='0';});
   document.getElementById('sCrews').textContent=working.length;
@@ -199,14 +296,14 @@ function render(){
   working.forEach(function(c){ if(c.clockIn){ const ms=Date.now()-new Date(c.clockIn).getTime(); if(!isNaN(ms)&&ms>0) totalMs+=ms; } });
   document.getElementById('sHours').textContent=(totalMs/3600000).toFixed(1);
 
+  const unassigned=todays.filter(function(b){ return !String(b.crew||'').trim(); });
+
   const listEl=document.getElementById('rosterList');
-  if(!working.length && !doneCrews.length){
-    listEl.innerHTML=_statusBad?'<div class="empty">Live status couldn\'t load — make sure the backend is deployed.</div>':'<div class="empty">No crews clocked in yet today.</div>';
-    return;
-  }
   let html='';
   if(working.length){ html+='<div class="sec">On the clock ('+working.length+')</div>'+working.map(function(c){return crewCard(c,true);}).join(''); }
   if(doneCrews.length){ html+='<div class="sec">Clocked out today ('+doneCrews.length+')</div>'+doneCrews.map(function(c){return crewCard(c,false);}).join(''); }
+  if(unassigned.length){ html+='<div class="sec">⚠ Unassigned today ('+unassigned.length+')</div><div class="crewcard"><div class="routelist open">'+unassigned.map(function(b){return stopDetail(b, _bookings.indexOf(b));}).join('')+'</div></div>'; }
+  if(!html){ html=_statusBad?'<div class="empty">Live status couldn\'t load — make sure the backend is deployed.</div>':'<div class="empty">No crews clocked in and no jobs scheduled today.</div>'; }
   listEl.innerHTML=html;
 }
 
@@ -219,20 +316,21 @@ function payBadge(b){
   if(pm.indexOf('autopay')>=0||pm.indexOf('stripe')>=0) return {t:'Autopay',c:'#3b82f6'};
   return {t:'Unpaid',c:'#ef4444'};
 }
-function stopDetail(b,i){
+function stopDetail(b,bi){
   const done=isDone(b); const pb=payBadge(b);
   const photos=String(b.photos||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
   const eNotes=String(b.employeeNotes||'').trim();
   const cNotes=String(b.notes||'').replace(/\blot:\s*[\d.]+ac\b/gi,'').replace(/\s*\|\s*$/,'').trim();
-  return '<div class="rstop2'+(done?' done':'')+'">'
-    +'<div class="rs-top"><span class="i">'+(i+1)+'</span><span class="nm">'+esc(b.name||'Customer')+'</span><span class="grow"></span>'
+  return '<div class="rstop2'+(done?' done':'')+'" onclick="openJobSheet('+bi+')">'
+    +'<div class="rs-top"><span class="i">•</span><span class="nm">'+esc(b.name||'Customer')+'</span><span class="grow"></span>'
     +(done?'<span class="chip ok">✓ done</span>':'')
     +'<span class="chip" style="background:'+pb.c+'33;color:'+pb.c+'">'+pb.t+'</span>'
     +(b.price?'<span class="amt">'+esc(b.price)+'</span>':'')+'</div>'
-    +'<div class="rs-addr">📍 '+esc(b.address||'')+(b.zip?', '+esc(b.zip):'')+(b.jobTime?(' · '+esc(b.jobTime)):'')+'</div>'
+    +'<div class="rs-addr">📍 '+esc(b.address||'')+(b.zip?', '+esc(b.zip):'')+(b.jobTime?(' · '+esc(b.jobTime)):'')+(b.crew?(' · Crew '+esc(b.crew)):'')+'</div>'
     +(cNotes?'<div class="rs-note">📝 '+esc(cNotes)+'</div>':'')
     +(eNotes?'<div class="rs-note crew">👷 '+esc(eNotes)+'</div>':'')
-    +(photos.length?'<div class="rs-photos">'+photos.map(function(u){return '<a href="'+esc(u)+'" target="_blank" title="Open photo"><img class="rs-thumb" loading="lazy" src="'+esc(_driveThumb(u))+'" alt="job photo" onerror="this.replaceWith(document.createTextNode(String.fromCodePoint(0x1F4F7)))"></a>';}).join('')+'</div>':'')
+    +(photos.length?'<div class="rs-photos">'+photos.map(function(u){return '<a href="'+esc(u)+'" target="_blank" onclick="event.stopPropagation()"><img class="rs-thumb" loading="lazy" src="'+esc(_driveThumb(u))+'" onerror="this.replaceWith(document.createTextNode(String.fromCodePoint(0x1F4F7)))"></a>';}).join('')+'</div>':'')
+    +'<div class="rs-tap">tap to move · reassign · cancel</div>'
     +'</div>';
 }
 function crewCard(c, isWorking){
@@ -245,7 +343,7 @@ function crewCard(c, isWorking){
   const open=_expanded[c.email];
   const where=!isWorking?('🏁 Finished · '+done+' of '+total+' done')
     :(total?(done>=total?'✅ Route complete':('📍 At '+esc(current?current.name:'next stop')+' · '+done+' of '+total+' done')):'📍 No stops today');
-  const detail=route.length?route.map(function(b,i){return stopDetail(b,i);}).join(''):'<div class="rstop2">No stops for this crew today.</div>';
+  const detail=route.length?route.map(function(b){return stopDetail(b, _bookings.indexOf(b));}).join(''):'<div class="rstop2" style="cursor:default;">No stops for this crew today.</div>';
   return '<div class="crewcard'+(open?' exp':'')+'">'
     +'<div class="crewhead" onclick="toggle(\''+esc(c.email)+'\')"><span class="dot '+freshClass+'"></span><span class="crewname">'+esc(c.name||'Crew')+'</span>'+(crewBadge?'<span class="badge">Crew '+esc(crewBadge)+'</span>':'')+'<span class="grow"></span><span class="clk" data-clk="'+esc(c.clockIn||'')+'" style="font-weight:800;">'+durStr(c.clockIn)+'</span></div>'
     +'<div class="crewmeta">'+where+(+c.helpers>0?(' · 🧍 +'+c.helpers):'')+(isWorking&&c.staleMin>3?(' · <span style="color:#fbbf24;">⚠ '+c.staleMin+'m ago</span>'):'')+'</div>'
@@ -253,21 +351,174 @@ function crewCard(c, isWorking){
     +(open?('<div class="routelist open"><button class="mapbtn" onclick="showRouteOnMap(\''+esc(c.email)+'\')">🗺 Show route lines on map</button>'+detail+'</div>'):'')
     +'</div>';
 }
-
 function toggle(email){ _expanded[email]=!_expanded[email]; render(); }
 
-// ── Route lines on the map (geocode via OpenStreetMap, cached) ──
-function clearRouteLayers(){ _routeLayers.forEach(function(l){ try{map.removeLayer(l);}catch(e){} }); _routeLayers=[]; }
-function geoGet(){ try{return JSON.parse(localStorage.getItem('evg_live_geocache')||'{}');}catch(e){return {};} }
-function geoSet(c){ try{localStorage.setItem('evg_live_geocache',JSON.stringify(c));}catch(e){} }
-async function geocode(addr){
-  const cache=geoGet(); if(cache[addr]) return cache[addr];
+/* ═════════ JOB ACTIONS ═════════ */
+function openJobSheet(bi){
+  const b=_bookings[bi]; if(!b) return; _jobBi=bi;
+  const done=isDone(b);
+  const body=document.getElementById('jobSheetBody');
+  body.innerHTML='<h3>'+esc(b.name||'Customer')+'</h3>'
+    +'<div class="sub">📍 '+esc(b.address||'')+(b.zip?', '+esc(b.zip):'')+' · '+esc(dateOf(b)||'no date')+(b.crew?(' · Crew '+esc(b.crew)):' · unassigned')+'</div>'
+    +'<div class="lbl">Assign crew</div><div class="crewpick" id="jobCrewPick"></div>'
+    +'<div class="lbl">Actions</div>'
+    +'<button class="act" onclick="openResched()"><span class="em">📅</span> Reschedule to another day</button>'
+    +(done?'':'<button class="act" onclick="doMarkDone()"><span class="em">✓</span> Mark as done</button>')
+    +'<a class="act" href="https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent((b.address||'')+(b.zip?', '+b.zip:'')+', FL')+'" target="_blank"><span class="em">🧭</span> Navigate here</a>'
+    +(b.phone?('<a class="act" href="tel:'+esc(String(b.phone).replace(/[^0-9+]/g,''))+'"><span class="em">📞</span> Call '+esc((b.name||'').split(" ")[0])+'</a>'):'')
+    +'<button class="act danger" onclick="openCancel()"><span class="em">🗑</span> Cancel this job</button>'
+    +'<button class="ghost" onclick="closeSheet(\'jobSheet\')">Close</button>';
+  const cur=String(b.crew||'').toUpperCase().trim();
+  document.getElementById('jobCrewPick').innerHTML=['A','B','C','—'].map(function(cw){ const val=cw==='—'?'':cw; const on=(val===cur); return '<button class="'+(on?'on':'')+'" onclick="doAssign(\''+val+'\')">'+(cw==='—'?'Unassign':('Crew '+cw))+'</button>'; }).join('');
+  openSheet('jobSheet');
+}
+async function doAssign(crew){
+  const b=_bookings[_jobBi]; if(!b) return;
+  const prev=b.crew||''; b.crew=crew;
+  toast(crew?('Assigning to Crew '+crew+'…'):'Clearing crew…');
   try{
-    const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(addr));
-    const d=await r.json();
-    if(d&&d[0]){ const p={lat:+d[0].lat,lon:+d[0].lon}; cache[addr]=p; geoSet(cache); return p; }
-  }catch(e){}
-  return null;
+    const p=new URLSearchParams({action:'set_crew', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), crew:crew, adminToken:token});
+    const d=await(await fetch(SCRIPT_URL+'?'+p)).json();
+    if(d.success){ toast(crew?('👷 Assigned to Crew '+crew):'Crew cleared'); render(); refreshBookings(); closeSheet('jobSheet'); }
+    else { b.crew=prev; toast('Error: '+(d.error||'could not assign')); }
+  }catch(e){ b.crew=prev; toast('Network error'); }
+}
+async function doMarkDone(){
+  const b=_bookings[_jobBi]; if(!b) return;
+  toast('Marking done…');
+  try{
+    const amt=parseFloat(String(b.price||'0').replace(/[^0-9.]/g,''))||0;
+    const p=new URLSearchParams({action:'mark_done', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), amount:amt.toFixed(2), markedBy:myName||'Owner', adminToken:token});
+    const d=await(await fetch(SCRIPT_URL+'?'+p)).json();
+    if(d.success){ b.done='✓ Done'; toast('✅ Marked done'); render(); refreshBookings(); closeSheet('jobSheet'); }
+    else toast('Error: '+(d.error||'could not mark done'));
+  }catch(e){ toast('Network error'); }
+}
+function openResched(){
+  const b=_bookings[_jobBi]; if(!b) return;
+  document.getElementById('reschedSub').textContent=(b.name||'Customer')+' · currently '+(dateOf(b)||'no date');
+  document.getElementById('reschedDate').value=dateOf(b)||todayISO();
+  document.getElementById('reschedSeries').checked=false;
+  document.getElementById('reschedNotify').checked=true;
+  closeSheet('jobSheet'); openSheet('reschedSheet');
+}
+async function doReschedule(){
+  const b=_bookings[_jobBi]; if(!b) return;
+  const nd=document.getElementById('reschedDate').value; if(!nd){ toast('Pick a date'); return; }
+  const btn=document.getElementById('reschedGo'); btn.disabled=true; btn.textContent='Moving…';
+  try{
+    const p=new URLSearchParams({ action:'owner_reschedule', rowIndex:_ri(b), newDate:nd,
+      scope:(document.getElementById('reschedSeries').checked?'all':'single'),
+      reason:'', expectedEmail:b.email||'',
+      skipEmail:(document.getElementById('reschedNotify').checked?'false':'true'), adminToken:token });
+    const d=await(await fetch(SCRIPT_URL+'?'+p)).json();
+    if(d.success){ b.serviceDate=nd; b.serviceDateRaw=nd; toast('📅 Rescheduled to '+nd); closeSheet('reschedSheet'); render(); refreshBookings(); }
+    else toast('Error: '+(d.error||'could not reschedule'));
+  }catch(e){ toast('Network error'); }
+  btn.disabled=false; btn.textContent='Move job';
+}
+function openCancel(){
+  const b=_bookings[_jobBi]; if(!b) return;
+  document.getElementById('cancelSub').textContent=(b.name||'Customer')+' · '+(dateOf(b)||'no date');
+  document.getElementById('cancelReason').value='';
+  document.getElementById('cancelNotify').checked=true;
+  closeSheet('jobSheet'); openSheet('cancelSheet');
+}
+async function doCancel(){
+  const b=_bookings[_jobBi]; if(!b) return;
+  const btn=document.getElementById('cancelGo'); btn.disabled=true; btn.textContent='Cancelling…';
+  try{
+    const p=new URLSearchParams({ action:'cancel_job', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b),
+      reason:document.getElementById('cancelReason').value.trim(),
+      skipEmail:(document.getElementById('cancelNotify').checked?'false':'true'), adminToken:token });
+    const d=await(await fetch(SCRIPT_URL+'?'+p)).json();
+    if(d.success){ b.rowCancelled=true; toast('🗑 Job cancelled'); closeSheet('cancelSheet'); render(); refreshBookings(); }
+    else toast('Error: '+(d.error||'could not cancel'));
+  }catch(e){ toast('Network error'); }
+  btn.disabled=false; btn.textContent='Cancel this job';
+}
+
+/* ═════════ ADD JOB ═════════ */
+function _uniqueCustomers(){
+  const seen={}, out=[];
+  (_bookings||[]).forEach(function(b){ const k=(String(b.email||'').toLowerCase())||(String(b.name||'')+String(b.address||'')); if(!k||seen[k]) return; seen[k]=1; out.push(b); });
+  return out;
+}
+function openAddJob(){
+  document.getElementById('addSearch').value='';
+  ['addName','addAddr','addZip','addPhone','addEmail','addPrice','addNotes'].forEach(function(id){ document.getElementById(id).value=''; });
+  document.getElementById('addDate').value=todayISO();
+  document.getElementById('addResults').style.display='none';
+  _addCrew='';
+  document.getElementById('addCrewPick').innerHTML=['A','B','C','—'].map(function(cw){ const val=cw==='—'?'':cw; return '<button onclick="pickAddCrew(this,\''+val+'\')">'+(cw==='—'?'Unassigned':('Crew '+cw))+'</button>'; }).join('');
+  openSheet('addSheet');
+}
+function pickAddCrew(el,val){ _addCrew=val; document.querySelectorAll('#addCrewPick button').forEach(function(b){b.classList.remove('on');}); el.classList.add('on'); }
+function renderAddSearch(q){
+  const box=document.getElementById('addResults'); q=String(q||'').toLowerCase().trim();
+  if(!q){ box.style.display='none'; return; }
+  const hits=_uniqueCustomers().filter(function(b){ return (String(b.name||'')+' '+String(b.address||'')+' '+String(b.email||'')+' '+String(b.phone||'')).toLowerCase().indexOf(q)>=0; }).slice(0,8);
+  if(!hits.length){ box.style.display='none'; return; }
+  box.style.display='block';
+  box.innerHTML=hits.map(function(b){ return '<div class="srch-item" onclick="fillCustomer('+_bookings.indexOf(b)+')"><b>'+esc(b.name||'Customer')+'</b><small>'+esc(b.address||'')+(b.zip?', '+esc(b.zip):'')+'</small></div>'; }).join('');
+}
+function fillCustomer(bi){
+  const b=_bookings[bi]; if(!b) return;
+  document.getElementById('addName').value=b.name||'';
+  document.getElementById('addAddr').value=b.address||'';
+  document.getElementById('addZip').value=b.zip||'';
+  document.getElementById('addPhone').value=b.phone||'';
+  document.getElementById('addEmail').value=b.email||'';
+  if(b.price) document.getElementById('addPrice').value=String(b.price).replace(/[^0-9.]/g,'');
+  document.getElementById('addResults').style.display='none';
+  document.getElementById('addSearch').value=b.name||'';
+}
+async function doAddJob(){
+  const name=document.getElementById('addName').value.trim();
+  const addr=document.getElementById('addAddr').value.trim();
+  const date=document.getElementById('addDate').value;
+  if(!name||!addr){ toast('Name and address required'); return; }
+  if(!date){ toast('Pick a date'); return; }
+  const btn=document.getElementById('addGo'); btn.disabled=true; btn.textContent='Scheduling…';
+  try{
+    const price=(document.getElementById('addPrice').value||'').replace(/[^0-9.]/g,'');
+    const p=new URLSearchParams({ action:'manual_schedule', name:name, email:document.getElementById('addEmail').value.trim(),
+      phone:document.getElementById('addPhone').value.trim(), address:addr, zip:document.getElementById('addZip').value.trim(),
+      frequency:'One-time', price:price, serviceDate:date, notes:document.getElementById('addNotes').value.trim(),
+      payMethod:'card', crew:_addCrew, adminToken:token });
+    const d=await(await fetch(SCRIPT_URL+'?'+p)).json();
+    if(d.success){ toast('✅ Job scheduled for '+date); closeSheet('addSheet'); await refreshBookings();
+      if(_addCrew){ const nb=(_bookings||[]).find(function(b){ return dateOf(b)===date && String(b.address||'').toLowerCase()===addr.toLowerCase() && !String(b.crew||'').trim(); }); if(nb){ try{ await fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'set_crew',rowIndex:_ri(nb),email:nb.email||'',serviceDate:date,crew:_addCrew,adminToken:token})); nb.crew=_addCrew; render(); }catch(e){} } }
+    }
+    else toast('Error: '+(d.error||'could not schedule'));
+  }catch(e){ toast('Network error'); }
+  btn.disabled=false; btn.textContent='Schedule job';
+}
+
+/* ── Route lines — Census geocoder (fast + accurate, no rate-limit delay) ── */
+function clearRouteLayers(){ _routeLayers.forEach(function(l){ try{map.removeLayer(l);}catch(e){} }); _routeLayers=[]; }
+function geoGet(){ try{return JSON.parse(localStorage.getItem(GEO_CACHE_KEY)||'{}');}catch(e){return {};} }
+function geoSet(c){ try{localStorage.setItem(GEO_CACHE_KEY,JSON.stringify(c));}catch(e){} }
+function _censusGeocode(addr){
+  return new Promise(function(resolve){
+    if(typeof document==='undefined'){ resolve(null); return; }
+    var cb='__evgCensus_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+    var s=document.createElement('script'); var done=false;
+    function cleanup(){ try{ delete window[cb]; }catch(e){} try{ if(s&&s.parentNode) s.parentNode.removeChild(s); }catch(e){} }
+    window[cb]=function(data){ done=true; cleanup(); try{ var m=data&&data.result&&data.result.addressMatches&&data.result.addressMatches[0]; if(m&&m.coordinates){ resolve({ lat:+m.coordinates.y, lon:+m.coordinates.x }); return; } }catch(e){} resolve(null); };
+    s.onerror=function(){ if(!done){ cleanup(); resolve(null); } };
+    s.src='https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?benchmark=Public_AR_Current&format=jsonp&callback='+cb+'&address='+encodeURIComponent(addr);
+    (document.head||document.documentElement).appendChild(s);
+    setTimeout(function(){ if(!done){ cleanup(); resolve(null); } }, 6000);
+  });
+}
+async function geocode(addr){
+  const cache=geoGet(); if(cache[addr]&&cache[addr].lat!=null) return cache[addr];
+  let c=null;
+  try{ c=await _censusGeocode(addr); }catch(e){}
+  if(!c){ try{ const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q='+encodeURIComponent(addr)); const d=await r.json(); if(d&&d[0]) c={lat:+d[0].lat,lon:+d[0].lon}; }catch(e){} }
+  if(c){ cache[addr]=c; geoSet(cache); }
+  return c;
 }
 async function showRouteOnMap(email){
   clearRouteLayers();
@@ -275,18 +526,14 @@ async function showRouteOnMap(email){
   const route=routeFor(c.crew);
   const col=CREW_COLORS[String(c.crew||'').toUpperCase().split(/[^A-Z0-9]+/)[0]]||'#22c55e';
   const rb=document.getElementById('refreshState'); rb.textContent='mapping route…';
+  const coords=await Promise.all(route.map(function(b){ return geocode((b.address||'')+(b.zip?', '+b.zip:'')+', FL').catch(function(){return null;}); }));
   const pts=[];
-  for(let i=0;i<route.length;i++){
-    const b=route[i];
-    const g=await geocode((b.address||'')+(b.zip?', '+b.zip:'')+', FL');
-    if(g){
-      pts.push([g.lat,g.lon]);
-      const mk=L.circleMarker([g.lat,g.lon],{radius:10,color:'#fff',weight:2,fillColor:(isDone(b)?'#22c55e':col),fillOpacity:.95}).addTo(map)
-        .bindTooltip(String(pts.length),{permanent:true,direction:'center',className:'rt-num'})
-        .bindPopup((pts.length)+'. '+esc(b.name||'')+(isDone(b)?' ✓':''));
-      _routeLayers.push(mk);
-    }
-    if(i<route.length-1) await new Promise(function(r){setTimeout(r,1100);}); // be polite to OSM
+  for(let i=0;i<route.length;i++){ const g=coords[i]; const b=route[i]; if(!g) continue;
+    pts.push([g.lat,g.lon]);
+    const mk=L.circleMarker([g.lat,g.lon],{radius:10,color:'#fff',weight:2,fillColor:(isDone(b)?'#22c55e':col),fillOpacity:.95}).addTo(map)
+      .bindTooltip(String(pts.length),{permanent:true,direction:'center',className:'rt-num'})
+      .bindPopup((pts.length)+'. '+esc(b.name||'')+(isDone(b)?' ✓':''));
+    _routeLayers.push(mk);
   }
   if(pts.length>1){ const pl=L.polyline(pts,{color:col,weight:4,opacity:.8,dashArray:'6,6'}).addTo(map); _routeLayers.push(pl); try{map.fitBounds(pts,{padding:[50,50]});}catch(e){} }
   else if(pts.length===1){ map.setView(pts[0],14); }
