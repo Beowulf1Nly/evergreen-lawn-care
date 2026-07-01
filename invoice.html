@@ -10997,11 +10997,24 @@ function _dispMonthDayClick(ds) {
 // HISTORY TAB  (restored)
 // Shows done / completed jobs from the loaded bookings, filterable.
 // ═══════════════════════════════════════════════════════
+// Completed/archived jobs are loaded on demand via a dedicated, bounded endpoint,
+// so History never depends on the heavy bookings call succeeding.
+let _completedJobs = [], _histJobs = [];
+function _driveThumb(url){ var m=String(url||'').match(/[-\w]{25,}/); return m?('https://drive.google.com/thumbnail?id='+m[0]+'&sz=w400'):url; }
+async function loadCompletedJobs() {
+  try {
+    const res  = await fetch(SCRIPT_URL + '?action=completed_jobs&limit=800&' + authParam());
+    const data = await res.json();
+    if (data && data.success && Array.isArray(data.jobs)) _completedJobs = data.jobs;
+  } catch(e) { /* keep whatever we have */ }
+}
+
 function initHistoryTab() {
   if (!allBookings || !allBookings.length) {
     try { loadBookings(); } catch(e) {}
   }
-  renderHistoryList();
+  renderHistoryList();                          // instant with whatever we have
+  loadCompletedJobs().then(renderHistoryList);  // then fill in the archive
 }
 
 function renderHistoryList() {
@@ -11010,10 +11023,11 @@ function renderHistoryList() {
   var crewFilt = (document.getElementById('histCrewFilter') || {}).value || 'all';
   var q = ((document.getElementById('histSearch') || {}).value || '').toLowerCase().trim();
 
-  var jobs = (allBookings || []).filter(function(b) {
-    if (b.rowCancelled) return false;
-    return isDone(b) || b.rowCompleted || isPaidDone(b);
+  var fromBookings = (allBookings || []).filter(function(b) {
+    if (b.rowCancelled || b.rowCompleted) return false;   // archived come from the dedicated endpoint
+    return isDone(b) || isPaidDone(b);
   });
+  var jobs = fromBookings.concat(_completedJobs || []);
   if (crewFilt !== 'all') jobs = jobs.filter(function(b) { return (b.crew || '').trim() === crewFilt; });
   if (q) {
     jobs = jobs.filter(function(b) {
@@ -11021,6 +11035,7 @@ function renderHistoryList() {
     });
   }
   jobs.sort(function(a, b) { return String(b.serviceDate || b.serviceDateRaw || '').localeCompare(String(a.serviceDate || a.serviceDateRaw || '')); });
+  _histJobs = jobs;
 
   var countEl = document.getElementById('histCount');
   if (countEl) countEl.textContent = jobs.length + ' job' + (jobs.length !== 1 ? 's' : '');
@@ -11030,8 +11045,8 @@ function renderHistoryList() {
     return;
   }
 
-  listEl.innerHTML = jobs.map(function(b) {
-    var ri    = allBookings.indexOf(b);
+  listEl.innerHTML = jobs.map(function(b, i) {
+    var ri    = i;
     var price = parseFloat(String(b.price || '').replace(/[^0-9.]/g, '')) || 0;
     var addr  = [b.address, b.zip].filter(Boolean).join(', ');
     var paid  = isPaidDone(b);
@@ -11049,7 +11064,7 @@ function renderHistoryList() {
 }
 
 function openHistoryDetail(rowIdx) {
-  var b = allBookings[rowIdx];
+  var b = _histJobs[rowIdx];
   if (!b) return;
   var titleEl  = document.getElementById('histDetailTitle');
   var statusEl = document.getElementById('histDetailStatus');
@@ -11087,7 +11102,7 @@ function openHistoryDetail(rowIdx) {
     var ph = String(b.photos || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
     if (ph.length) {
       body += '<div class="hist-card"><div class="hist-card-title">Photos</div><div class="hist-photo-grid">';
-      ph.forEach(function(u) { body += '<a class="hist-photo-thumb" href="' + esc(u) + '" target="_blank"><img src="' + esc(u) + '"></a>'; });
+      ph.forEach(function(u) { body += '<a class="hist-photo-thumb" href="' + esc(u) + '" target="_blank"><img loading="lazy" src="' + esc(_driveThumb(u)) + '" onerror="this.style.display=\'none\'"></a>'; });
       body += '</div></div>';
     }
     bodyEl.innerHTML = body;
