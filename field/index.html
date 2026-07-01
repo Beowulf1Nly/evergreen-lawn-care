@@ -11,37 +11,32 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-06-30.3 */
+/* APP_VER:2026-06-30.4 */
 (function(){
-  var V='2026-06-30.3'; window.__APP_VER=V;
-  var reloads=0, lastCheck=0;
+  var V='2026-06-30.4'; window.__APP_VER=V;
+  // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
+  // the service worker can't answer with the old shell). If a newer APP_VER is live AND
+  // we have not already reloaded for that exact version, reload ONCE. The localStorage
+  // guard means that even if the SW keeps serving a stale shell, we reload at most once
+  // per version and then sit still — never a flicker loop. No controllerchange reload.
   function check(){
     if(document.hidden) return;
-    if(reloads>=2) return;                       // hard cap per page session
-    var now=Date.now();
-    if(now-lastCheck<60000) return;              // at most one check per minute
-    lastCheck=now;
-    fetch('index.html?_='+now,{cache:'no-store'})
-      .then(function(r){ return r.ok?r.text():null; })
+    fetch('index.html?_='+Date.now(),{cache:'no-store'})
+      .then(function(r){ return r.ok ? r.text() : null; })
       .then(function(html){
         if(!html) return;
         var m=html.match(/APP_VER:([0-9.\-]+)/);
-        var last=+(sessionStorage.getItem('evg_field_ver_reload')||0);
-        if(m&&m[1]&&m[1]!==V&&(now-last)>60000){
-          reloads++;
-          try{ sessionStorage.setItem('evg_field_ver_reload',String(now)); }catch(e){}
-          location.replace('index.html?_='+now);  // fresh, cache-busted load
-        }
+        if(!m||!m[1]) return;
+        var tgt=m[1];
+        if(tgt===V) return;                                   // already current
+        var done=''; try{ done=localStorage.getItem('evg_field_updated_to')||''; }catch(e){}
+        if(done===tgt) return;                                // already reloaded once for this version — stop
+        try{ localStorage.setItem('evg_field_updated_to', tgt); }catch(e){}
+        location.replace('index.html?_='+Date.now());         // one clean reload to the new build
       }).catch(function(){});
   }
-  setTimeout(check,4000);
-  document.addEventListener('visibilitychange',function(){ if(!document.hidden) check(); });
-  if('serviceWorker' in navigator){
-    var refreshed=false;
-    navigator.serviceWorker.addEventListener('controllerchange',function(){
-      if(refreshed) return; refreshed=true; location.reload();
-    });
-  }
+  setTimeout(check, 8000);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) setTimeout(check, 3000); });
 })();
 </script>
 <title>Evergreen Field Mode</title>
@@ -1326,7 +1321,7 @@ document.addEventListener('visibilitychange', function(){ if(document.visibility
 window.addEventListener('pageshow', function(){ _fmResume(); });
 window.addEventListener('focus', function(){ _fmResume(); });
 window.addEventListener('DOMContentLoaded', ()=>{
-  if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').then(function(reg){ try{ reg.update(); }catch(e){} document.addEventListener('visibilitychange',function(){ if(!document.hidden){ try{ reg.update(); }catch(e){} } }); }).catch(()=>{}); }
+  if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').then(function(reg){ try{ reg.update(); }catch(e){} }).catch(()=>{}); }
   const saved=loadSavedSession();
   if(saved){ adminToken=saved.token; adminName=saved.name; adminEmail=saved.email; adminRole=saved.role||'employee'; adminCrews=saved.crews||''; _hydrateFromCache(); _restoreState(); showApp(); loadData(); }
   else { document.getElementById('loginScreen').style.display='flex'; }
