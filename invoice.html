@@ -12111,6 +12111,23 @@ function pmcsSaveConfig(){
 // completed — skipping or missing it does NOT clear it (skips aren't counted as done).
 const PMCS_MONTHLY_ANCHOR = '2026-06-29';   // a Monday — start of the 4-week monthly cycle
 const _pmcsState = { status:{}, loaded:false };
+// Device-local PMCS completion memory (per crew). The backend status is global and may
+// not be deployed, so we ALSO remember completions on THIS device and merge them in —
+// this is what stops the gate re-asking for a daily/weekly/monthly you already did.
+const _PMCS_STATUS_KEY = 'evg_pmcs_status_v1';
+function _pmcsStatusStoreKey(){ return _PMCS_STATUS_KEY + ':' + (String(typeof adminCrews!=='undefined'?adminCrews:'').toUpperCase().replace(/[^A-Z0-9]+/g,'') || 'ALL'); }
+function _pmcsLoadLocalStatus(){ try{ return JSON.parse(localStorage.getItem(_pmcsStatusStoreKey())||'{}') || {}; }catch(e){ return {}; } }
+function _pmcsSaveLocalStatus(){ try{ localStorage.setItem(_pmcsStatusStoreKey(), JSON.stringify(_pmcsState.status||{})); }catch(e){} }
+function _pmcsMergeLocalStatus(){
+  var local=_pmcsLoadLocalStatus();
+  for(var eq in local){
+    _pmcsState.status[eq]=_pmcsState.status[eq]||{};
+    ['daily','weekly','monthly'].forEach(function(cad){
+      var l=local[eq][cad], s=_pmcsState.status[eq][cad];
+      if(l && (!s || l>s)) _pmcsState.status[eq][cad]=l;   // keep the most recent completion date
+    });
+  }
+}
 let _pmcsMode = 'single';     // 'single' | 'gate'
 let _pmcsQueue = [];          // equipment keys to run
 let _pmcsIdx = 0;
@@ -12276,6 +12293,7 @@ async function pmcsLoadStatus(force){
       const d = await r.json();
       if (d && d.success && d.status) _pmcsState.status = d.status;
     } catch(e){ /* offline / slow / not deployed: keep whatever we have */ }
+    _pmcsMergeLocalStatus();   // device-local completions persist even when the backend doesn't return them
     _pmcsState.loaded = true;
     _pmcsStatusPromise = null;
     return _pmcsState.status;
@@ -12700,6 +12718,7 @@ function pmcsSubmitCurrent(){
   _pmcsSend(params);
   _pmcsState.status[eq.key] = _pmcsState.status[eq.key] || {};
   for (const c of _pmcsCads) _pmcsState.status[eq.key][c] = _pmcsToday();
+  _pmcsSaveLocalStatus();   // remember on-device so this period isn't re-asked at next login
   // In the clock-in gate we run several machines back-to-back — don't spam a toast
   // for each (they pile up over the next screen). The progress counter is enough.
   if (_pmcsMode !== 'gate' && typeof showToast === 'function') showToast(eq.icon + ' ' + eq.name + ' PMCS logged — ' + result);
