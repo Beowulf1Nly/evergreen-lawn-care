@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-01.1 */
+/* APP_VER:2026-07-01.2 */
 (function(){
-  var V='2026-07-01.1'; window.__APP_VER=V;
+  var V='2026-07-01.2'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -272,7 +272,7 @@
       </div>
       <div id="fmDoneSkipped" style="color:#fca5a5;font-size:14px;margin-bottom:14px;font-weight:600;min-height:18px;"></div>
       <div id="fmClockSummary" style="color:#9ed8b1;font-size:14px;margin-bottom:20px;font-weight:600;"></div>
-      <button class="fm-btn fm-btn-xl fm-btn-start" onclick="fmFinishRoute()" style="min-width:260px;">🏁 Done for the day</button>
+      <button class="fm-btn fm-btn-xl fm-btn-start" onclick="fmEndOfDay()" style="min-width:260px;">🔧 Drop-off PMCS &amp; Clock Out →</button>
       <button class="fm-skip" onclick="fmReviewStops()" style="margin-top:18px;">← Review stops</button>
     </div>
   </div>
@@ -1045,7 +1045,7 @@ function _fmRender(){
   const stops=_fmStops();
   if(!_fmBooted||!_fmStarted||!stops.length){ _fmRenderStart(stops); return; }
   const total=stops.length, resolved=stops.filter(_fmResolved).length;
-  if(resolved>=total){ _autoClockOut(); _fmRenderDone(stops); return; }
+  if(resolved>=total){ _fmRenderDone(stops); return; }   // stay clocked in until the end-of-day drop-off PMCS
   let idx=_fmViewIdx;
   if(idx==null||idx<0||idx>=total||_fmResolved(stops[idx])) idx=stops.findIndex(s=>!_fmResolved(s));
   _fmViewIdx=idx; _persist(); _fmRenderJob(stops,idx);
@@ -1345,11 +1345,17 @@ function _fmRenderDone(stops){
   document.getElementById('fmDoneBilled').textContent='$'+(_fmBilledTotal||0).toFixed(0);
   const _bb=document.getElementById('fmDoneBilledBox'); if(_bb) _bb.style.display=_isMoneyRole()?'':'none';
   document.getElementById('fmDoneSkipped').textContent=skipN?('⤼ '+skipN+' stop'+(skipN!==1?'s':'')+' skipped — flagged for follow-up'):'';
-  document.getElementById('fmDoneSub').textContent=doneN+' of '+total+' stop'+(total!==1?'s':'')+' done. Nice work, '+((adminName||'').split(' ')[0]||'crew')+'!';
+  document.getElementById('fmDoneSub').textContent=doneN+' of '+total+' stop'+(total!==1?'s':'')+' done. Head back to the shop for drop-off, '+((adminName||'').split(' ')[0]||'crew')+'.';
   document.getElementById('fmClockSummary').textContent=(_clockInTime?('🕒 On the clock '+_fmTimerStr()+(_clockedOut?' — clocked out':'')):'');
   _fmUpdateSyncBadge(); _fmSyncTimerSlots();
 }
 function fmReviewStops(){ const s=_fmStops(); _fmStarted=true; _fmBooted=true; _fmViewIdx=0; _persist(); _fmRenderJob(s,0); }
+async function fmEndOfDay(){
+  let ok=true;
+  try{ if(typeof endOfDayGate==='function') ok=await endOfDayGate(); }catch(e){}
+  if(ok===false) return;                 // crew backed out — stay clocked in
+  fmFinishRoute();                        // logs clock-out + resets the day
+}
 function fmFinishRoute(){
   _autoClockOut(); _fmFlushQueue();
   showToast('🏁 Logged out — great work!');
@@ -2312,6 +2318,78 @@ function loadoutConfirm(){
   if (ov) ov.classList.remove('open');
   if (typeof showToast === 'function') showToast('🧰 Load-out logged — rolling out');
   if (typeof _loadoutResolve === 'function'){ const r = _loadoutResolve; _loadoutResolve = null; r(); }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   END-OF-DAY DROP-OFF PMCS — runs at the shop after the route, BEFORE clock-out.
+   Clean-up checklist + truck mileage. Logged via the same offline-safe queue
+   (log_checklist type=end_of_day) so the office sees daily mileage + shutdown.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const ENDOFDAY_ITEMS = [
+  { id:'ed_blowmower', label:'Leaf-blowed / cleaned the mower deck' },
+  { id:'ed_blowequip', label:'Blew off edger, trimmer & blower' },
+  { id:'ed_fuel',      label:'Fueled up mowers & gas cans for tomorrow' },
+  { id:'ed_blades',    label:'Blades & trimmer line good for tomorrow' },
+  { id:'ed_unload',    label:'Equipment unloaded / secured in shop' },
+  { id:'ed_fluids',    label:'Checked mower oil / no leaks on the trailer' },
+  { id:'ed_trash',     label:'Trash & clippings emptied' },
+  { id:'ed_lock',      label:'Trailer, truck & shop locked up' },
+];
+let _eodState={}, _eodResolve=null, _eodOdo='', _eodTrip='';
+function _eodInject(){
+  if (document.getElementById('eodOverlay')) return;
+  _pmcsInjectStyle();
+  const o=document.createElement('div'); o.className='pmcs-overlay'; o.id='eodOverlay';
+  o.innerHTML = `
+    <div class="pmcs-panel">
+      <div class="pmcs-head">
+        <div class="pmcs-head-row"><div class="pmcs-head-title">🔧 End-of-Day PMCS</div></div>
+        <div class="pmcs-head-sub">Back at the shop — clean up, log the truck mileage, then clock out.</div>
+      </div>
+      <div class="pmcs-body" id="eodBody"></div>
+      <div class="pmcs-foot">
+        <div class="pmcs-foot-btns"><button class="pmcs-btn pmcs-btn-submit" onclick="eodConfirm()">Log &amp; Clock Out →</button></div>
+      </div>
+    </div>`;
+  document.body.appendChild(o);
+}
+function endOfDayGate(){
+  return new Promise((resolve)=>{
+    _eodInject(); _eodState={}; ENDOFDAY_ITEMS.forEach(it=>_eodState[it.id]=false);
+    _eodResolve=resolve; eodRender();
+    const ov=document.getElementById('eodOverlay'); if(ov) ov.classList.add('open');
+  });
+}
+function eodRender(){
+  const body=document.getElementById('eodBody'); if(!body) return;
+  const n=ENDOFDAY_ITEMS.filter(it=>_eodState[it.id]).length;
+  let html='<div class="pmcs-section-title">Truck mileage</div>'
+    +'<div style="padding:4px 2px 10px;">'
+    +'<input id="eodOdo" type="number" inputmode="decimal" placeholder="Ending odometer (miles) — required" value="'+esc(_eodOdo||'')+'" oninput="_eodOdo=this.value" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:16px;box-sizing:border-box;color:#14361f;">'
+    +'<input id="eodTrip" type="number" inputmode="decimal" placeholder="Miles driven today (trip) — optional" value="'+esc(_eodTrip||'')+'" oninput="_eodTrip=this.value" style="width:100%;margin-top:8px;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:16px;box-sizing:border-box;color:#14361f;">'
+    +'</div>'
+    +'<div class="pmcs-section-title">Shutdown &amp; clean-up — '+n+'/'+ENDOFDAY_ITEMS.length+'</div>';
+  ENDOFDAY_ITEMS.forEach(it=>{ const on=!!_eodState[it.id];
+    html+='<div class="pmcs-item '+(on?'pass':'')+'" onclick="eodToggle(\''+it.id+'\')" style="cursor:pointer;"><button class="pmcs-item-toggle" onclick="event.stopPropagation();eodToggle(\''+it.id+'\')">'+(on?'✓':'')+'</button><div class="pmcs-item-main"><div class="pmcs-item-label">'+esc(it.label)+'</div></div></div>';
+  });
+  body.innerHTML=html;
+}
+function eodToggle(id){ _eodState[id]=!_eodState[id]; eodRender(); }
+function eodConfirm(){
+  const odoEl=document.getElementById('eodOdo'); const odo=String((odoEl&&odoEl.value)||_eodOdo||'').trim();
+  if(!odo){ alert('Enter the truck odometer (ending mileage) before clocking out.'); return; }
+  const tripEl=document.getElementById('eodTrip'); const trip=String((tripEl&&tripEl.value)||_eodTrip||'').trim();
+  const checked=ENDOFDAY_ITEMS.filter(it=>_eodState[it.id]).map(it=>it.id);
+  const missing=ENDOFDAY_ITEMS.filter(it=>!_eodState[it.id]).map(it=>it.label);
+  if(missing.length){ if(!confirm('Not done yet:\n\n• '+missing.join('\n• ')+'\n\nClock out anyway?')) return; }
+  _pmcsSend({ action:'log_checklist', idemKey:_pmcsUuid(), type:'end_of_day', date:_pmcsToday(),
+    crew:_pmcsCrewLabel(), by:adminName||adminEmail||'', mileage:odo, tripMiles:trip,
+    items:JSON.stringify({ checked:checked, missingCount:missing.length, odometer:odo, tripMiles:trip }), adminToken });
+  const ov=document.getElementById('eodOverlay'); if(ov) ov.classList.remove('open');
+  _eodOdo=''; _eodTrip='';
+  if(typeof showToast==='function') showToast('🔧 Drop-off logged — clocking out');
+  if(typeof _eodResolve==='function'){ const r=_eodResolve; _eodResolve=null; r(true); }
 }
 
 </script>
