@@ -6,7 +6,7 @@
    - The Apps Script API (script.google.com) is NEVER cached or intercepted — the
      app's own offline queue owns write reliability, and reads must stay fresh.
    Bump CACHE_VERSION on every deploy so old shells are replaced. */
-const CACHE_VERSION = 'evg-field-v7';
+const CACHE_VERSION = 'evg-field-v8';
 const SHELL = [
   './',
   './index.html',
@@ -35,6 +35,10 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;                         // never touch POSTs (photo uploads etc.)
   const url = new URL(req.url);
+
+  // Version checks / cache-busted loads (?_= or ?v=) must ALWAYS hit the network so
+  // the app can detect a new deploy — never serve these from the cached shell.
+  if (url.searchParams.has('_') || url.searchParams.has('v')) return;
 
   // Bypass the backend API entirely — let the page + offline queue handle it.
   if (url.hostname.includes('script.google.com') ||
