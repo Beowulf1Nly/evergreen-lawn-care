@@ -13,8 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-02.2 */
-(function(){ var V='2026-07-02.2'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-02.3 */
+(function(){ var V='2026-07-02.3'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -433,8 +433,11 @@
   <div class="hqtabs">
     <button class="hqtab on" data-t="live" onclick="setTab('live')">🛰 Live <span class="k">1</span></button>
     <button class="hqtab" data-t="dispatch" onclick="setTab('dispatch')">📅 Dispatch <span class="k">2</span></button>
-    <button class="hqtab" data-t="sites" onclick="setTab('sites')">🌐 Sites <span class="k">3</span></button>
-    <button class="hqtab" data-t="dev" onclick="setTab('dev')">🛠 Dev <span class="k">4</span></button>
+    <button class="hqtab" data-t="ops" onclick="setTab('ops')">🔧 Ops <span class="k">3</span></button>
+    <button class="hqtab" data-t="stats" onclick="setTab('stats')">📊 Stats <span class="k">4</span></button>
+    <button class="hqtab" data-t="outreach" onclick="setTab('outreach')">📨 Outreach <span class="k">5</span></button>
+    <button class="hqtab" data-t="sites" onclick="setTab('sites')">🌐 Sites <span class="k">6</span></button>
+    <button class="hqtab" data-t="dev" onclick="setTab('dev')">🛠 Dev <span class="k">7</span></button>
   </div>
 
   <div id="pane-live" class="hq-pane on">
@@ -516,6 +519,34 @@
     </div>
   </div>
 
+  <!-- ═══ OPS — PMCS & checklists ═══ -->
+  <div id="pane-ops" class="hq-pane">
+    <div class="dev-wrap">
+      <div class="dev-row" style="margin-bottom:10px;"><div class="disp-chips" id="opsBiz"></div><span class="grow"></span><button class="dev-btn" onclick="renderOps(true)">↻ Refresh</button></div>
+      <div class="dev-grid" id="opsGrid"><div class="empty">Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- ═══ STATS — the whole empire ═══ -->
+  <div id="pane-stats" class="hq-pane">
+    <div class="dev-wrap">
+      <div class="dev-row" style="margin-bottom:10px;"><span style="font-weight:800;font-size:15px;">📊 Empire numbers</span><span class="grow"></span><button class="dev-btn" onclick="renderStats(true)">↻ Refresh</button></div>
+      <div class="dev-grid" id="statsGrid"><div class="empty">Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- ═══ OUTREACH — estimates & mass email ═══ -->
+  <div id="pane-outreach" class="hq-pane">
+    <div class="dev-wrap">
+      <div class="dev-row" style="margin-bottom:10px;">
+        <div class="seg"><button id="ovEst" class="on" onclick="setOutView('est')">📨 Estimates</button><button id="ovMail" onclick="setOutView('mail')">📬 Mass Email</button></div>
+        <div class="disp-chips" id="outBiz"></div><span class="grow"></span><button class="dev-btn" onclick="renderOutreach(true)">↻ Refresh</button>
+      </div>
+      <div id="outEst"></div>
+      <div id="outMail" style="display:none;"></div>
+    </div>
+  </div>
+
   <!-- ═══ SITES — the empire board ═══ -->
   <div id="pane-sites" class="hq-pane">
     <div class="sites-wrap"><div class="sites-grid" id="sitesGrid"></div></div>
@@ -581,7 +612,8 @@
 </div>
 <div class="sheet-wrap" id="addSheet" onclick="if(event.target===this)closeSheet('addSheet')">
   <div class="sheet">
-    <h3>＋ Add a job</h3><div class="sub">Search an existing customer or type a new one.</div>
+    <h3>＋ Add a job</h3><div class="sub">Books straight onto that business's website &amp; Google Sheet.</div>
+    <div class="lbl">Business</div><div class="crewpick" id="addBizPick"></div>
     <input type="text" id="addSearch" class="field" placeholder="Search name / address…" oninput="renderAddSearch(this.value)">
     <div id="addResults" style="max-height:180px;overflow-y:auto;border:1px solid var(--line2);border-radius:11px;margin-bottom:12px;display:none;"></div>
     <div class="lbl">Customer</div>
@@ -676,7 +708,7 @@ function enterApp(){
   if(_routeInt) clearInterval(_routeInt); _routeInt=setInterval(refreshRouteOrder,30000);
   if(_tick) clearInterval(_tick); _tick=setInterval(updateClocks,1000);
   let t0tab='live'; try{ t0tab=(location.hash||'').replace('#','')||localStorage.getItem('hq_tab')||'live'; }catch(e){}
-  setTab(['live','dispatch','sites','dev'].indexOf(t0tab)>=0?t0tab:'live');
+  setTab(['live','dispatch','ops','stats','outreach','sites','dev'].indexOf(t0tab)>=0?t0tab:'live');
 }
 
 /* ── Canonical route order (Routes sheet — the same record /field follows) ── */
@@ -1035,7 +1067,14 @@ async function doCancel(){
 
 /* ═════════ ADD JOB ═════════ */
 function _uniqueCustomers(){ const seen={}, out=[]; (_bookings||[]).forEach(function(b){ const k=(String(b.email||'').toLowerCase())||(String(b.name||'')+String(b.address||'')); if(!k||seen[k]) return; seen[k]=1; out.push(b); }); return out; }
+let _addBiz=0;
+function pickAddBiz(el,i){ _addBiz=i; document.querySelectorAll('#addBizPick button').forEach(function(b){b.classList.remove('on');}); el.classList.add('on'); }
 function openAddJob(){
+  _addBiz=0;
+  document.getElementById('addBizPick').innerHTML=_bizLoad().map(function(z,i){
+    const ok=_bizConnected(z);
+    return '<button class="'+(i===0?'on':'')+'" '+(ok?('onclick="pickAddBiz(this,'+i+')"'):'disabled style="opacity:.4;" title="Connect in 🏢 Businesses first"')+'>'+esc(z.e)+' '+esc(z.n)+(ok?'':' 🔒')+'</button>';
+  }).join('');
   document.getElementById('addSearch').value='';
   ['addName','addAddr','addZip','addPhone','addEmail','addPrice','addNotes'].forEach(function(id){ document.getElementById(id).value=''; });
   document.getElementById('addDate').value=todayISO(); document.getElementById('addResults').style.display='none'; _addCrew='';
@@ -1057,10 +1096,15 @@ async function doAddJob(){
   if(!name||!addr){ toast('Name and address required'); return; } if(!date){ toast('Pick a date'); return; }
   const btn=document.getElementById('addGo'); btn.disabled=true; btn.textContent='Scheduling…';
   try{ const price=(document.getElementById('addPrice').value||'').replace(/[^0-9.]/g,'');
-    const p=new URLSearchParams({ action:'manual_schedule', name:name, email:document.getElementById('addEmail').value.trim(), phone:document.getElementById('addPhone').value.trim(), address:addr, zip:document.getElementById('addZip').value.trim(), frequency:'One-time', price:price, serviceDate:date, notes:document.getElementById('addNotes').value.trim(), payMethod:'card', crew:_addCrew, adminToken:token });
-    const d=await(await fetch(SCRIPT_URL+'?'+p)).json();
-    if(d.success){ toast('✅ Job scheduled for '+date); closeSheet('addSheet'); await refreshBookings();
-      if(_addCrew){ const nb=(_bookings||[]).find(function(b){ return dateOf(b)===date && String(b.address||'').toLowerCase()===addr.toLowerCase() && !String(b.crew||'').trim(); }); if(nb){ try{ await fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'set_crew',rowIndex:_ri(nb),email:nb.email||'',serviceDate:date,crew:_addCrew,adminToken:token})); nb.crew=_addCrew; render(); }catch(e){} } }
+    const _z=_bizLoad()[_addBiz]||_bizLoad()[0];
+    const p=new URLSearchParams({ action:'manual_schedule', name:name, email:document.getElementById('addEmail').value.trim(), phone:document.getElementById('addPhone').value.trim(), address:addr, zip:document.getElementById('addZip').value.trim(), frequency:'One-time', price:price, serviceDate:date, notes:document.getElementById('addNotes').value.trim(), payMethod:'card', crew:_addCrew, adminToken:_bizTok(_z) });
+    const d=await(await fetch(_bizUrl(_z)+'?'+p)).json();
+    if(d.success){
+      const _zn=_bizLoad()[_addBiz]||_bizLoad()[0];
+      toast('✅ Job booked on '+_zn.e+' '+_zn.n+' for '+date); closeSheet('addSheet');
+      if(_bizUrl(_zn)===SCRIPT_URL){ await refreshBookings();
+        if(_addCrew){ const nb=(_bookings||[]).find(function(b){ return dateOf(b)===date && String(b.address||'').toLowerCase()===addr.toLowerCase() && !String(b.crew||'').trim(); }); if(nb){ try{ await fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'set_crew',rowIndex:_ri(nb),email:nb.email||'',serviceDate:date,crew:_addCrew,adminToken:token})); nb.crew=_addCrew; render(); }catch(e){} } }
+      } else if(_addCrew){ try{ const bl=await bizGet(_zn,{action:'bookings'}); const nb=(bl&&bl.bookings||[]).find(function(b){ return dateOf(b)===date && String(b.address||'').toLowerCase()===addr.toLowerCase(); }); if(nb) await bizGet(_zn,{action:'set_crew',rowIndex:(nb._rowIndex||0),email:nb.email||'',serviceDate:date,crew:_addCrew}); }catch(e){} }
     } else toast('Error: '+(d.error||'could not schedule'));
   }catch(e){ toast('Network error'); }
   btn.disabled=false; btn.textContent='Schedule job';
@@ -1140,12 +1184,15 @@ function setTab(t){
   try{ history.replaceState(null,'','#'+t); }catch(e){}
   if(t==='live'&&map){ setTimeout(function(){ try{ map.invalidateSize(); }catch(e){} },120); }
   if(t==='dispatch'){ initDispatch(); }
+  if(t==='ops'){ renderOps(); }
+  if(t==='stats'){ renderStats(); }
+  if(t==='outreach'){ renderOutreach(); }
   if(t==='sites'){ renderSites(); }
   if(t==='dev'){ renderDev(); }
 }
 document.addEventListener('keydown',function(e){
   if(e.target&&/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
-  if(e.key==='1') setTab('live'); if(e.key==='2') setTab('dispatch'); if(e.key==='3') setTab('sites'); if(e.key==='4') setTab('dev');
+  if(e.key==='1') setTab('live'); if(e.key==='2') setTab('dispatch'); if(e.key==='3') setTab('ops'); if(e.key==='4') setTab('stats'); if(e.key==='5') setTab('outreach'); if(e.key==='6') setTab('sites'); if(e.key==='7') setTab('dev');
 });
 
 /* ═══════════════════════ DISPATCH — every business, one board ═══════════════════════
@@ -1157,7 +1204,10 @@ let _dispView='week', _dispAnchor=new Date(), _dispCrew='all', _completed=[], _c
 
 /* ── Businesses config ── */
 const BIZ_KEY='hq_biz_v1';
-const BIZ_DEFAULT=[ {e:'🌿',n:'Lawn Care',c:'#22c55e',kw:''} ];   // no keywords = catch-all
+const BIZ_DEFAULT=[
+  {e:'🌿',n:'Lawn Care',c:'#22c55e',kw:'',su:''},                          // '' = this (main) backend; no keywords = catch-all
+  {e:'🧹',n:'Cleaning',c:'#38bdf8',kw:'clean, pressure wash, pool',su:'https://script.google.com/macros/s/AKfycbxkrw4S5fjdvID0RRownPZqh-kQdUQzaNY7Z4CVbGefkyT2ai0IdmQBYR45ooL5fCMl/exec'}
+];
 function _bizLoad(){ try{ const b=JSON.parse(localStorage.getItem(BIZ_KEY)||'null'); if(Array.isArray(b)&&b.length) return b; }catch(e){} return BIZ_DEFAULT.slice(); }
 function _bizSave(l){ try{ localStorage.setItem(BIZ_KEY,JSON.stringify(l)); }catch(e){} }
 function _bizOf(b,biz){
@@ -1177,18 +1227,21 @@ function openBizEditor(){
   openSheet('bizSheet');
 }
 function _bizRowHtml(z){
-  z=z||{e:'🏢',n:'',c:'#38bdf8',kw:''};
-  return '<div class="biz-row">'
+  z=z||{e:'🏢',n:'',c:'#38bdf8',kw:'',su:'',tk:''};
+  return '<div class="biz-row" data-tk="'+esc(z.tk||'')+'" style="flex-wrap:wrap;">'
     +'<input type="text" class="bz-e" value="'+esc(z.e||'🏢')+'" style="width:44px;text-align:center;" title="Emoji">'
     +'<input type="text" class="bz-n" value="'+esc(z.n||'')+'" placeholder="Business name" style="flex:1;min-width:90px;">'
     +'<input type="text" class="bz-k" value="'+esc(z.kw||'')+'" placeholder="keywords, comma,separated" style="flex:1.2;min-width:110px;">'
     +'<input type="color" class="bz-c" value="'+esc(z.c||'#38bdf8')+'" title="Color">'
-    +'<button class="bdel" onclick="this.parentNode.remove()">🗑</button></div>';
+    +'<button class="bdel" onclick="this.parentNode.remove()">🗑</button>'
+    +'<input type="text" class="bz-u" value="'+esc(z.su||'')+'" placeholder="Backend URL (Apps Script /exec) — empty = main backend" style="flex:1 1 100%;font-family:var(--mono);font-size:11px;">'
+    +'<button class="dev-btn" style="flex:0 0 auto;" onclick="bizConnectRow(this)" title="Sign in to that backend">'+((z.su&&z.tk)||!z.su?'✅':'🔗')+' connect</button>'
+    +'</div>';
 }
 function bizAdd(){ document.getElementById('bizList').insertAdjacentHTML('beforeend',_bizRowHtml(null)); }
 function bizSaveFromUI(){
   const rows=[].slice.call(document.querySelectorAll('#bizList .biz-row'));
-  const list=rows.map(function(r){ return { e:r.querySelector('.bz-e').value.trim()||'🏢', n:r.querySelector('.bz-n').value.trim(), c:r.querySelector('.bz-c').value||'#38bdf8', kw:r.querySelector('.bz-k').value.trim() }; }).filter(function(z){return z.n;});
+  const list=rows.map(function(r){ return { e:r.querySelector('.bz-e').value.trim()||'🏢', n:r.querySelector('.bz-n').value.trim(), c:r.querySelector('.bz-c').value||'#38bdf8', kw:r.querySelector('.bz-k').value.trim(), su:(r.querySelector('.bz-u')?r.querySelector('.bz-u').value.trim():''), tk:(r.dataset.tk||'') }; }).filter(function(z){return z.n;});
   if(!list.length){ toast('Keep at least one business'); return; }
   _bizSave(list); closeSheet('bizSheet'); renderDispatch(); toast('🏢 Businesses saved');
 }
@@ -1422,7 +1475,10 @@ const SITES_DEFAULT=[
   { e:'🧾', n:'Staff Portal', u:'/invoice.html', d:'Jobs, invoicing, routes, dispatch, customers, stats.', tag:'internal', lock:1 },
   { e:'📱', n:'Field Mode', u:'/field/', d:'What the crews run on their phones all day.', tag:'internal', lock:1 },
   { e:'📊', n:'Owner Stats', u:'/stats.html', d:'Revenue, growth and analytics dashboards.', tag:'internal', lock:1 },
-  { e:'🐙', n:'GitHub Repo', u:'https://github.com/Beowulf1Nly/evergreen-lawn-care', d:'Source of truth. Push = deploy.', tag:'dev', lock:1 }
+  { e:'🧹', n:'Evergreen Cleaning', u:'https://evergreencleaningservicesflorida.com', d:'Cleaning, pressure washing & pools — public site.', tag:'business', lock:1 },
+  { e:'🧾', n:'Cleaning Staff Portal', u:'https://evergreencleaningservicesflorida.com/invoice.html', d:'Jobs, invoicing & dispatch for the cleaning biz.', tag:'internal', lock:1 },
+  { e:'🐙', n:'GitHub — Lawn', u:'https://github.com/Beowulf1Nly/evergreen-lawn-care', d:'Source of truth. Push = deploy.', tag:'dev', lock:1 },
+  { e:'🐙', n:'GitHub — Cleaning', u:'https://github.com/Beowulf1Nly/evergreen-cleaning-services', d:'Cleaning site source.', tag:'dev', lock:1 }
 ];
 function _sitesLoad(){ let cust=[]; try{ cust=JSON.parse(localStorage.getItem(SITES_KEY)||'[]'); }catch(e){} return SITES_DEFAULT.concat(Array.isArray(cust)?cust:[]); }
 function _sitesSaveCustom(list){ try{ localStorage.setItem(SITES_KEY,JSON.stringify(list)); }catch(e){} }
@@ -1571,6 +1627,328 @@ function _devConRender(){
     return '<div class="dev-row" style="color:'+(c.k==='error'?'#fca5a5':'#fde68a')+';font-family:var(--mono);font-size:11px;">['+c.t+'] '+esc(c.m).slice(0,220)+'</div>';
   }).join('')+'</div><div class="dev-row"><button class="dev-btn" onclick="_conLog.length=0;_devConRender();">Clear</button></div>')
   :'<div class="dev-row" style="color:var(--dim);">No errors or warnings captured. Clean. 😎</div>';
+}
+
+
+/* ═══════════════════ MULTI-BUSINESS BACKENDS ═══════════════════
+   Every business = its own website + Apps Script backend + Google Sheet.
+   HQ talks to all of them. The main (Lawn) backend uses your HQ login;
+   other backends get connected once via ⚙ Businesses → 🔗. */
+const BIZ_URL_CLEAN='https://script.google.com/macros/s/AKfycbxkrw4S5fjdvID0RRownPZqh-kQdUQzaNY7Z4CVbGefkyT2ai0IdmQBYR45ooL5fCMl/exec';
+function _bizUrl(z){ return (z&&z.su)||SCRIPT_URL; }
+function _bizTok(z){ const u=_bizUrl(z); return u===SCRIPT_URL?token:((z&&z.tk)||''); }
+function _bizConnected(z){ return !!_bizTok(z); }
+async function bizGet(z,params){
+  try{
+    const p=new URLSearchParams(params||{}); p.set('adminToken',_bizTok(z));
+    return await fetch(_bizUrl(z)+'?'+p).then(r=>r.json());
+  }catch(e){ return null; }
+}
+function _bizChips(elId,cur,onclickName,connectedOnly){
+  const el=document.getElementById(elId); if(!el) return;
+  const biz=_bizLoad();
+  el.innerHTML=biz.map(function(z,i){
+    const on=_bizConnected(z);
+    if(connectedOnly&&!on) return '<button data-c="x'+i+'" disabled style="opacity:.4;" title="Connect in 🏢 Businesses">'+esc(z.e)+' '+esc(z.n)+' 🔒</button>';
+    return '<button data-c="'+i+'" class="'+(i===cur?'on':'')+'" onclick="'+onclickName+'('+i+')">'+esc(z.e)+' '+esc(z.n)+'</button>';
+  }).join('');
+}
+async function bizConnectRow(btn){
+  const row=btn.closest('.biz-row');
+  const url=(row.querySelector('.bz-u').value||'').trim();
+  if(!url||url===SCRIPT_URL){ toast('Main backend — you\'re already signed in'); return; }
+  const em=prompt('Owner email for that business\'s backend:', myEmail||''); if(!em) return;
+  btn.textContent='…';
+  const d=await fetch(url+'?action=admin_request_code&email='+encodeURIComponent(em)).then(r=>r.json()).catch(()=>null);
+  if(!(d&&d.success)){ toast('⚠ '+((d&&d.error)||'Could not reach that backend')); btn.textContent='🔗'; return; }
+  const code=prompt('Enter the 6-digit code just emailed to '+em+':'); if(!code){ btn.textContent='🔗'; return; }
+  const v=await fetch(url+'?action=admin_verify_code&email='+encodeURIComponent(em)+'&code='+encodeURIComponent(code.trim())).then(r=>r.json()).catch(()=>null);
+  if(v&&v.success&&v.token){ row.dataset.tk=v.token; btn.textContent='✅'; toast('🔗 Connected! Hit “Save businesses” to keep it.'); }
+  else { toast('⚠ '+((v&&v.error)||'Bad code')); btn.textContent='🔗'; }
+}
+
+/* ═══════════════════ OPS — PMCS & checklists, all businesses ═══════════════════ */
+let _opsBiz=0;
+function setOpsBiz(i){ _opsBiz=i; renderOps(true); }
+function _ago(dstr){ if(!dstr) return null; const d=new Date(String(dstr).slice(0,10)+'T12:00:00'); if(isNaN(d)) return null; return Math.floor((Date.now()-d.getTime())/864e5); }
+function _pmcsChip(label,last,period){
+  const days=_ago(last);
+  let cls='r', txt='never';
+  if(days!=null){
+    if(days<=period-1||(period===1&&days<=0)){ cls='g'; txt=days<=0?'today':days+'d ago'; }
+    else if(days<=period*2){ cls='y'; txt=days+'d ago'; }
+    else { cls='r'; txt=days+'d ago'; }
+  }
+  return '<span class="dev-pill '+cls+'" title="'+label+' — last: '+(last||'never')+'">'+label+' · '+txt+'</span>';
+}
+async function renderOps(force){
+  _bizChips('opsBiz',_opsBiz,'setOpsBiz',true);
+  const grid=document.getElementById('opsGrid'); if(!grid) return;
+  const z=_bizLoad()[_opsBiz]||_bizLoad()[0];
+  grid.innerHTML='<div class="empty">⏳ Pulling PMCS + checklists for '+esc(z.n)+'…</div>';
+  const [cfgR,stR,flR,logR]=await Promise.all([
+    bizGet(z,{action:'get_pmcs_config'}), bizGet(z,{action:'get_pmcs_status'}),
+    bizGet(z,{action:'get_pmcs_faults'}), bizGet(z,{action:'get_field_log',limit:200})
+  ]);
+  let equip=[];
+  try{ const c=cfgR&&cfgR.config?JSON.parse(cfgR.config):[]; if(Array.isArray(c)) equip=c; }catch(e){}
+  const status=(stR&&stR.status)||{};
+  const faults=(flR&&Array.isArray(flR.faults))?flR.faults:[];
+  const log=(logR&&logR.success&&Array.isArray(logR.log))?logR.log:null;
+  let h='';
+  // ── PMCS equipment board ──
+  h+='<div class="dev-card" style="grid-column:1/-1;"><div class="dev-h">🔧 PMCS — equipment readiness<span class="grow"></span><span class="ph-c">'+equip.length+' equipment</span></div><div class="dev-b">';
+  if(!equip.length){ h+='<div class="dev-row" style="color:var(--dim);">No PMCS config set for this business yet — crews set it up in Field Mode, or copy one over via the API console (get_pmcs_config → set_pmcs_config).</div>'; }
+  else{
+    h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;">';
+    equip.forEach(function(eq){
+      const key=eq.key||eq.equipKey||eq.name||'?';
+      const st=status[key]||{};
+      const openFaults=faults.filter(function(f){ return (f.equipKey||f.equipment||'')===key||f.equipment===eq.name; });
+      const crit=openFaults.some(function(f){ return f.critical; });
+      h+='<div style="background:rgba(255,255,255,.04);border:1px solid '+(crit?'rgba(248,113,113,.5)':'var(--line)')+';border-radius:12px;padding:11px 12px;">'
+        +'<div style="font-weight:800;font-size:13px;margin-bottom:7px;">'+(crit?'⛔ ':'')+esc(eq.name||key)+'</div>'
+        +'<div style="display:flex;gap:5px;flex-wrap:wrap;">'
+        +_pmcsChip('Daily', st.daily||st.d, 1)+_pmcsChip('Weekly', st.weekly||st.w, 7)+_pmcsChip('Monthly', st.monthly||st.m, 30)
+        +'</div>'
+        +(openFaults.length?('<div style="margin-top:8px;font-size:11px;color:#fca5a5;">'+openFaults.slice(0,3).map(function(f){ return (f.critical?'⛔ ':'⚠ ')+esc(f.label||f.fault||'fault')+(f.note?' — '+esc(f.note):''); }).join('<br>')+'</div>'):'')
+        +'</div>';
+    });
+    h+='</div>';
+  }
+  h+='</div></div>';
+  // ── open faults table ──
+  h+='<div class="dev-card"><div class="dev-h">⚠️ Open faults<span class="grow"></span><span class="ph-c">'+faults.length+'</span></div><div class="dev-b" style="max-height:280px;overflow:auto;">';
+  h+=faults.length?('<table class="dev-tbl"><tr><th>equipment</th><th>fault</th><th>by</th><th>date</th></tr>'
+    +faults.map(function(f){ return '<tr><td>'+esc(f.equipment||f.equipKey||'')+'</td><td class="'+(f.critical?'bad':'')+'">'+(f.critical?'⛔ ':'')+esc(f.label||f.fault||'')+(f.note?' — '+esc(f.note):'')+'</td><td>'+esc(f.by||'')+'</td><td>'+esc(String(f.date||f.ts||'').slice(0,10))+'</td></tr>'; }).join('')+'</table>')
+    :'<div class="dev-row" style="color:var(--dim);">No open faults. Fleet is GO. 🟢</div>';
+  h+='</div></div>';
+  // ── checklist history ──
+  h+='<div class="dev-card"><div class="dev-h">📝 Checklist log<span class="grow"></span><span class="ph-c">'+(log?log.length:'—')+'</span></div><div class="dev-b" style="max-height:280px;overflow:auto;">';
+  if(log===null){
+    h+='<div class="dev-row" style="color:#fde68a;">This backend doesn\'t have the <b style="margin:0 4px;">get_field_log</b> handler yet. It\'s already written into your apps-script.txt — paste &amp; redeploy that backend and this fills in.</div>';
+  } else if(!log.length){ h+='<div class="dev-row" style="color:var(--dim);">No checklists logged yet.</div>'; }
+  else{
+    h+='<table class="dev-tbl"><tr><th>when</th><th>type</th><th>crew</th><th>by</th><th>items</th></tr>'
+      +log.slice(0,60).map(function(l){
+        let n=0,t=0; try{ const it=JSON.parse(l.items||'{}'); const vals=Array.isArray(it)?it:Object.values(it); t=vals.length; vals.forEach(function(v){ if(v===true||v==='true'||v===1||(v&&v.checked)) n++; }); }catch(e){}
+        const full=t>0&&n>=t;
+        return '<tr><td>'+esc(l.ts||'')+'</td><td>'+esc(l.type||'')+'</td><td>'+esc(l.crew||'')+'</td><td>'+esc(l.by||'')+'</td><td class="'+(t? (full?'ok':'bad'):'')+'">'+(t?(n+'/'+t+(full?' ✓':' ⚠ incomplete')):'—')+'</td></tr>';
+      }).join('')+'</table>';
+  }
+  h+='</div></div>';
+  grid.innerHTML=h;
+}
+
+/* ═══════════════════ STATS — the whole empire ═══════════════════ */
+let _statsCache={};
+function _fmtMoney(n){ return '$'+(+n||0).toLocaleString('en-US',{maximumFractionDigits:0}); }
+async function renderStats(force){
+  const grid=document.getElementById('statsGrid'); if(!grid) return;
+  const biz=_bizLoad();
+  if(!Object.keys(_statsCache).length||force) grid.innerHTML='<div class="empty">⏳ Pulling numbers from every business…</div>';
+  const results=await Promise.all(biz.map(async function(z,i){
+    if(!_bizConnected(z)) return {z:z,locked:true};
+    if(_statsCache[i]&&!force) return _statsCache[i];
+    const [st,cj]=await Promise.all([ bizGet(z,{action:'get_stats'}), bizGet(z,{action:'completed_jobs',limit:2000}) ]);
+    const r={z:z, st:(st&&st.success)?st:null, jobs:(cj&&cj.success&&Array.isArray(cj.jobs))?cj.jobs:[]};
+    _statsCache[i]=r; return r;
+  }));
+  // monthly revenue per biz (last 6 months, from archived completed jobs)
+  const months=[]; const now=new Date();
+  for(let k=5;k>=0;k--){ const d=new Date(now.getFullYear(),now.getMonth()-k,1); months.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); }
+  let h='';
+  // empire totals
+  let totRev=0,totDone=0,totCust=0,twr=0,lwr=0;
+  results.forEach(function(r){ if(r.locked||!r.st) return; const b=r.st.bookings||{};
+    totRev+=r.jobs.reduce(function(s,j){return s+amtOf(j);},0); totDone+=(+b.done||0); totCust+=(+b.customers||0);
+    const w=(b.weekOverWeek||{}); twr+=(+w.thisWeekRev||0); lwr+=(+w.lastWeekRev||0); });
+  const wowPct=lwr>0?Math.round((twr-lwr)/lwr*100):null;
+  h+='<div class="dev-card" style="grid-column:1/-1;"><div class="dev-h">👑 Empire totals — all businesses</div><div class="dev-b"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">'
+    +'<div><div class="kn" style="font-size:26px;font-family:var(--mono);font-weight:800;background:linear-gradient(180deg,#fff,#4ade80);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">'+_fmtMoney(totRev)+'</div><div class="kl" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-top:4px;">Collected (archived jobs)</div></div>'
+    +'<div><div style="font-size:26px;font-family:var(--mono);font-weight:800;">'+_fmtMoney(twr)+'</div><div class="kl" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-top:4px;">Rev this week '+(wowPct==null?'':(wowPct>=0?'<span style="color:#4ade80">▲'+wowPct+'%</span>':'<span style="color:#f87171">▼'+Math.abs(wowPct)+'%</span>'))+'</div></div>'
+    +'<div><div style="font-size:26px;font-family:var(--mono);font-weight:800;">'+totDone+'</div><div class="kl" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-top:4px;">Jobs completed</div></div>'
+    +'<div><div style="font-size:26px;font-family:var(--mono);font-weight:800;">'+totCust+'</div><div class="kl" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-top:4px;">Customers</div></div>'
+    +'</div></div></div>';
+  results.forEach(function(r){
+    const z=r.z;
+    if(r.locked){ h+='<div class="dev-card"><div class="dev-h" style="--bc:'+esc(z.c)+'">'+esc(z.e)+' '+esc(z.n)+'</div><div class="dev-b"><div class="dev-row" style="color:var(--dim);">🔒 Not connected — link it in ⚙ 🏢 Businesses to pull its numbers.</div></div></div>'; return; }
+    const b=(r.st&&r.st.bookings)||{}; const w=b.weekOverWeek||{};
+    const byMonth={}; months.forEach(function(m){ byMonth[m]=0; });
+    r.jobs.forEach(function(j){ const m=String(dateOf(j)||'').slice(0,7); if(m in byMonth) byMonth[m]+=amtOf(j); });
+    const max=Math.max.apply(null,months.map(function(m){return byMonth[m];}).concat([1]));
+    const pct=(+w.lastWeekRev>0)?Math.round(((+w.thisWeekRev)-(+w.lastWeekRev))/(+w.lastWeekRev)*100):null;
+    h+='<div class="dev-card"><div class="dev-h"><span style="width:4px;height:16px;border-radius:3px;background:'+esc(z.c)+';box-shadow:0 0 10px '+esc(z.c)+';"></span>'+esc(z.e)+' '+esc(z.n)+'<span class="grow"></span><span class="ph-c">'+(r.st?'live':'error')+'</span></div><div class="dev-b">'
+      +'<div class="dev-row">This week <b>'+_fmtMoney(w.thisWeekRev||0)+'</b>'+(pct==null?'':(pct>=0?' <span class="dev-pill g">▲ '+pct+'%</span>':' <span class="dev-pill r">▼ '+Math.abs(pct)+'%</span>'))+' <span style="color:var(--dim)">vs '+_fmtMoney(w.lastWeekRev||0)+' last week</span></div>'
+      +'<div class="dev-row">Done <b>'+(b.done||0)+'</b> of <b>'+(b.total||0)+'</b> bookings · customers <b>'+(b.customers||0)+'</b> · pipeline <b>'+_fmtMoney(b.estimatedRev||0)+'</b></div>'
+      +'<div style="display:flex;align-items:flex-end;gap:7px;height:90px;margin-top:12px;">'
+      +months.map(function(m){ const v=byMonth[m]; const hh=Math.max(3,Math.round(v/max*76));
+        return '<div style="flex:1;text-align:center;"><div title="'+m+' — '+_fmtMoney(v)+'" style="height:'+hh+'px;border-radius:6px 6px 3px 3px;background:linear-gradient(180deg,'+esc(z.c)+','+esc(z.c)+'44);margin-bottom:4px;"></div><div style="font-size:8.5px;font-family:var(--mono);color:var(--dim);">'+m.slice(5)+'</div><div style="font-size:8.5px;font-family:var(--mono);color:var(--muted);">'+(v?('$'+Math.round(v/100)/10+'k').replace('$0.','$.'):'—')+'</div></div>'; }).join('')
+      +'</div></div></div>';
+  });
+  grid.innerHTML=h;
+}
+
+/* ═══════════════════ OUTREACH — estimates + mass email ═══════════════════ */
+let _outView='est', _estBiz=0, _mailBiz=0, _estList=null, _mailCust=null, _mailSel={}, _esItems=[{desc:'',price:''}], _mailSending=false;
+function setOutView(v){ _outView=v;
+  document.getElementById('ovEst').classList.toggle('on',v==='est');
+  document.getElementById('ovMail').classList.toggle('on',v==='mail');
+  document.getElementById('outEst').style.display=v==='est'?'block':'none';
+  document.getElementById('outMail').style.display=v==='mail'?'block':'none';
+  renderOutreach();
+}
+function setEstBiz(i){ _estBiz=i; _estList=null; renderOutreach(true); }
+function setMailBiz(i){ _mailBiz=i; _mailCust=null; _mailSel={}; renderOutreach(true); }
+async function renderOutreach(force){
+  _bizChips('outBiz', _outView==='est'?_estBiz:_mailBiz, _outView==='est'?'setEstBiz':'setMailBiz', true);
+  if(_outView==='est') renderEstimates(force); else renderMassMail(force);
+}
+/* ── estimates ── */
+async function renderEstimates(force){
+  const el=document.getElementById('outEst'); if(!el) return;
+  const z=_bizLoad()[_estBiz]||_bizLoad()[0];
+  if(_estList===null||force){
+    el.innerHTML='<div class="empty">⏳ Loading estimates…</div>';
+    const d=await bizGet(z,{action:'get_pending_estimates'});
+    _estList=(d&&d.success&&Array.isArray(d.estimates))?d.estimates:[];
+  }
+  let h='<div class="dev-grid">';
+  // pending list
+  h+='<div class="dev-card"><div class="dev-h">⏳ Pending estimates<span class="grow"></span><span class="ph-c">'+_estList.length+'</span></div><div class="dev-b" style="max-height:420px;overflow:auto;">';
+  h+=_estList.length?_estList.map(function(e){
+    const total=e.total||e.Total||(function(){ try{ return JSON.parse(e.items||e.Items||'[]').reduce(function(s,i){return s+(+i.price||0);},0);}catch(x){return '';} })();
+    return '<div style="background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:9px;">'
+      +'<div style="display:flex;gap:8px;align-items:baseline;"><b>'+esc(e.name||'Customer')+'</b><span style="font-family:var(--mono);font-size:11px;color:var(--dim);">'+esc(e.estimateNum||'')+'</span><span class="grow" style="flex:1;"></span><b style="font-family:var(--mono);">'+(total!==''?_fmtMoney(total):'')+'</b></div>'
+      +'<div style="font-size:12px;color:var(--muted);margin:3px 0 8px;">'+esc(e.email||'')+(e.submittedBy||e['Submitted By']?' · by '+esc(e.submittedBy||e['Submitted By']):'')+'</div>'
+      +'<div style="display:flex;gap:7px;">'
+      +(myRole==='owner'?'<button class="dev-btn go" onclick="estApprove('+e.rowNum+',\''+esc(e.name||'')+'\')">✅ Approve &amp; send</button>':'')
+      +'<button class="dev-btn danger" onclick="estCancel('+e.rowNum+',\''+esc(e.name||'')+'\')">✗ Remove</button></div></div>';
+  }).join(''):'<div class="dev-row" style="color:var(--dim);">Nothing pending for '+esc(z.n)+'.</div>';
+  h+='</div></div>';
+  // composer
+  h+='<div class="dev-card"><div class="dev-h">📨 New estimate — '+esc(z.e)+' '+esc(z.n)+'</div><div class="dev-b">'
+    +'<div class="dev-row"><input class="dev-inp" id="esName" placeholder="Customer name" style="flex:1;"><input class="dev-inp" id="esEmail" placeholder="Email" style="flex:1;"></div>'
+    +'<div class="dev-row"><input class="dev-inp" id="esPhone" placeholder="Phone (optional)" style="flex:1;"><input class="dev-inp" id="esAddr" placeholder="Address (optional)" style="flex:1;"></div>'
+    +'<div class="dev-row" style="font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);">Services</div>'
+    +'<div id="esItems">'+_esItems.map(function(it,i){ return _esItemRow(it,i); }).join('')+'</div>'
+    +'<div class="dev-row"><button class="dev-btn" onclick="_esItems.push({desc:\'\',price:\'\'});_esReRender();">＋ line</button></div>'
+    +'<div class="dev-row"><input class="dev-inp" id="esSummary" placeholder="Summary shown at top of the estimate (optional)" style="flex:1;"></div>'
+    +'<div class="dev-row"><input class="dev-inp" id="esMsg" placeholder="Personal message in the email (optional)" style="flex:1;"></div>'
+    +'<div class="dev-row"><input class="dev-inp" id="esValid" type="date" title="Valid through" style="flex:1;"><button class="dev-btn go" style="flex:1;" onclick="estSend()">'+(myRole==='owner'?'📧 Send estimate':'📤 Submit for approval')+'</button></div>'
+    +'<div class="dev-row" id="esStatus" style="color:var(--dim);"></div>'
+    +'</div></div>';
+  h+='</div>';
+  el.innerHTML=h;
+}
+function _esItemRow(it,i){
+  return '<div class="dev-row"><input class="dev-inp es-desc" data-i="'+i+'" value="'+esc(it.desc)+'" placeholder="Service description" style="flex:2.2;" oninput="_esItems['+i+'].desc=this.value">'
+    +'<input class="dev-inp es-price" data-i="'+i+'" value="'+esc(it.price)+'" placeholder="$" style="flex:.6;" oninput="_esItems['+i+'].price=this.value">'
+    +(i>0?'<button class="dev-btn danger" onclick="_esItems.splice('+i+',1);_esReRender();">✕</button>':'')+'</div>';
+}
+function _esReRender(){ const el=document.getElementById('esItems'); if(el) el.innerHTML=_esItems.map(function(it,i){ return _esItemRow(it,i); }).join(''); }
+async function estApprove(rowNum,name){
+  if(!confirm('Approve and EMAIL this estimate to '+name+'?')) return;
+  const z=_bizLoad()[_estBiz];
+  const d=await bizGet(z,{action:'approve_estimate',rowNum:rowNum});
+  toast(d&&d.success?'✅ Estimate sent to '+name:'⚠ '+((d&&d.error)||'failed'));
+  _estList=null; renderEstimates(true);
+}
+async function estCancel(rowNum,name){
+  if(!confirm('Remove the pending estimate for '+name+'?')) return;
+  const z=_bizLoad()[_estBiz];
+  const d=await bizGet(z,{action:'cancel_estimate',rowNum:rowNum});
+  toast(d&&d.success?'🗑 Removed':'⚠ '+((d&&d.error)||'failed'));
+  _estList=null; renderEstimates(true);
+}
+async function estSend(){
+  const z=_bizLoad()[_estBiz];
+  const name=(document.getElementById('esName').value||'').trim();
+  const email=(document.getElementById('esEmail').value||'').trim();
+  const items=_esItems.filter(function(it){return it.desc.trim();}).map(function(it){ return {desc:it.desc.trim(), price:parseFloat(it.price)||0, included:'true'}; });
+  if(!name||!email){ toast('Name + email required'); return; }
+  if(!items.length){ toast('Add at least one service line'); return; }
+  const st=document.getElementById('esStatus'); st.textContent='⏳ Sending…';
+  const action=(myRole==='owner')?'send_quote_email':'submit_estimate_for_approval';
+  const d=await bizGet(z,{ action:action, submittedBy:myName||'Owner', name:name, email:email,
+    phone:(document.getElementById('esPhone').value||'').trim(), address:(document.getElementById('esAddr').value||'').trim(),
+    summary:(document.getElementById('esSummary').value||'').trim(), personalMessage:(document.getElementById('esMsg').value||'').trim(),
+    estimateDate:todayISO(), validThru:(document.getElementById('esValid').value||''),
+    items:JSON.stringify(items), notes:'[]' });
+  if(d&&d.success){ st.textContent='✅ Sent to '+email; toast('📧 Estimate sent'); _esItems=[{desc:'',price:''}]; _estList=null; renderEstimates(true); }
+  else st.textContent='⚠ '+((d&&d.error)||'Failed — is that backend connected?');
+}
+/* ── mass email ── */
+const _mailFilters={q:'',freq:'',zip:'',status:''};
+async function renderMassMail(force){
+  const el=document.getElementById('outMail'); if(!el) return;
+  const z=_bizLoad()[_mailBiz]||_bizLoad()[0];
+  if(_mailCust===null||force){
+    el.innerHTML='<div class="empty">⏳ Loading '+esc(z.n)+' customers…</div>';
+    const d=await bizGet(z,{action:'customers_list'});
+    _mailCust=(d&&d.success&&Array.isArray(d.customers))?d.customers.filter(function(c){return String(c.email||'').includes('@');}):[];
+  }
+  const freqs={}, statuses={};
+  _mailCust.forEach(function(c){ if(c.frequency) freqs[c.frequency]=1; if(c.status) statuses[c.status]=1; });
+  const list=_mailCust.filter(function(c){
+    if(_mailFilters.q){ const t=(String(c.name||'')+' '+String(c.email||'')+' '+String(c.address||'')).toLowerCase(); if(t.indexOf(_mailFilters.q.toLowerCase())<0) return false; }
+    if(_mailFilters.freq&&String(c.frequency||'')!==_mailFilters.freq) return false;
+    if(_mailFilters.status&&String(c.status||'')!==_mailFilters.status) return false;
+    if(_mailFilters.zip&&String(c.zip||'').indexOf(_mailFilters.zip)!==0) return false;
+    return true;
+  });
+  const selN=Object.keys(_mailSel).filter(function(k){return _mailSel[k];}).length;
+  let h='<div class="dev-grid">';
+  h+='<div class="dev-card"><div class="dev-h">👥 Pick recipients<span class="grow"></span><span class="ph-c">'+selN+' of '+list.length+' selected</span></div><div class="dev-b">'
+    +'<div class="dev-row"><input class="dev-inp" placeholder="🔎 search" value="'+esc(_mailFilters.q)+'" oninput="_mailFilters.q=this.value;renderMassMail()" style="flex:1.4;">'
+    +'<select class="dev-inp" onchange="_mailFilters.freq=this.value;renderMassMail()"><option value="">any frequency</option>'+Object.keys(freqs).map(function(f){return '<option '+(_mailFilters.freq===f?'selected':'')+'>'+esc(f)+'</option>';}).join('')+'</select>'
+    +'<select class="dev-inp" onchange="_mailFilters.status=this.value;renderMassMail()"><option value="">any status</option>'+Object.keys(statuses).map(function(f){return '<option '+(_mailFilters.status===f?'selected':'')+'>'+esc(f)+'</option>';}).join('')+'</select>'
+    +'<input class="dev-inp" placeholder="zip" value="'+esc(_mailFilters.zip)+'" oninput="_mailFilters.zip=this.value;renderMassMail()" style="width:70px;flex:none;"></div>'
+    +'<div class="dev-row"><button class="dev-btn" onclick="list_selAll(true)">Select all shown</button><button class="dev-btn" onclick="list_selAll(false)">Clear selection</button></div>'
+    +'<div style="max-height:320px;overflow:auto;margin-top:6px;">'
+    +list.map(function(c){ const k=String(c.email).toLowerCase(); const on=!!_mailSel[k];
+      return '<label style="display:flex;gap:9px;align-items:center;padding:7px 8px;border-radius:9px;cursor:pointer;'+(on?'background:rgba(34,197,94,.09);':'')+'">'
+        +'<input type="checkbox" '+(on?'checked':'')+' onchange="_mailSel[\''+esc(k)+'\']=this.checked;renderMassMail()" style="accent-color:#22c55e;">'
+        +'<div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(c.name||k)+'</div>'
+        +'<div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(k)+(c.frequency?' · '+esc(c.frequency):'')+(c.zip?' · '+esc(c.zip):'')+'</div></div></label>'; }).join('')
+    +'</div></div></div>';
+  h+='<div class="dev-card"><div class="dev-h">✍️ Compose<span class="grow"></span><span class="dev-pill y">owner only</span></div><div class="dev-b">'
+    +'<div class="dev-row"><input class="dev-inp" id="mmSubject" placeholder="Subject" style="flex:1;"></div>'
+    +'<div class="dev-row"><textarea class="dev-inp" id="mmBody" rows="9" placeholder="Hey {{name}},&#10;&#10;…write your blast. {{name}} becomes each customer\'s first name." style="flex:1;resize:vertical;font-family:inherit;"></textarea></div>'
+    +'<div class="dev-row"><button class="dev-btn go" style="flex:1;" onclick="mmSend()" '+(_mailSending?'disabled':'')+'>📬 Send to '+selN+' customer'+(selN!==1?'s':'')+'</button></div>'
+    +'<div class="dev-row" id="mmProg" style="color:var(--dim);"></div>'
+    +'<div class="dev-row" style="color:var(--dim);font-size:11px;">Sends one-by-one through the '+esc(z.n)+' backend (Gmail). Every send is logged to an “Outreach” sheet. Needs the owner_send_email handler — already in your apps-script.txt, paste &amp; redeploy if sends fail.</div>'
+    +'</div></div>';
+  h+='</div>';
+  el.innerHTML=h;
+  window.__mmList=list;
+}
+function list_selAll(on){ (window.__mmList||[]).forEach(function(c){ _mailSel[String(c.email).toLowerCase()]=on; }); renderMassMail(); }
+async function mmSend(){
+  if(myRole!=='owner'){ toast('Owner only'); return; }
+  if(_mailSending) return;
+  const subj=(document.getElementById('mmSubject').value||'').trim();
+  const body=(document.getElementById('mmBody').value||'').trim();
+  const targets=(_mailCust||[]).filter(function(c){ return _mailSel[String(c.email).toLowerCase()]; });
+  if(!subj||!body){ toast('Subject + body required'); return; }
+  if(!targets.length){ toast('Pick at least one recipient'); return; }
+  if(!confirm('Send this email to '+targets.length+' customer'+(targets.length!==1?'s':'')+'?\n\nSubject: '+subj)) return;
+  _mailSending=true;
+  const z=_bizLoad()[_mailBiz]; const camp='hq-'+Date.now();
+  const prog=document.getElementById('mmProg');
+  let ok=0,fail=0;
+  for(let i=0;i<targets.length;i++){
+    const c=targets[i];
+    const first=String(c.name||'').split(' ')[0]||'there';
+    prog.textContent='📤 '+(i+1)+'/'+targets.length+' — '+(c.email);
+    const d=await bizGet(z,{ action:'owner_send_email', to:c.email, subject:subj.replace(/{{\s*name\s*}}/gi,first),
+      body:body.replace(/{{\s*name\s*}}/gi,first), campaign:camp, idemKey:camp+':'+String(c.email).toLowerCase() });
+    if(d&&d.success) ok++; else { fail++; if(fail===1&&d&&/unknown|unauthorized|not.*function/i.test(String(d.error||''))){ prog.textContent='⛔ Backend rejected: '+(d.error||'?')+' — redeploy apps-script.txt'; _mailSending=false; return; } }
+    await new Promise(function(r){ setTimeout(r,650); });
+  }
+  prog.textContent='✅ Sent '+ok+(fail?(' · ⚠ failed '+fail):'')+' — campaign '+camp;
+  toast('📬 Blast done: '+ok+' sent'+(fail?', '+fail+' failed':''));
+  _mailSending=false;
 }
 
 window.addEventListener('DOMContentLoaded', ()=>{
