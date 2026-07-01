@@ -8292,6 +8292,46 @@ function routeWaypoint(s) {
   return (bk.zip ? bk.zip + ', ' : '') + 'FL';
 }
 
+// ── Google Maps allows only ~10 locations per URL. Split big routes into legs,
+// each starting where the previous ended, and let the user open each in order.
+function _openRouteLegs(addrs, startAddr) {
+  addrs = (addrs || []).filter(Boolean);
+  if (!addrs.length) { showToast('No stops to route.'); return; }
+  const CHUNK = 10;               // max locations per Google Maps URL (incl. origin)
+  const legs = [];
+  let i = 0, prev = (startAddr || '').trim();
+  while (i < addrs.length) {
+    const originParts = prev ? [prev] : [];
+    const room = CHUNK - originParts.length;
+    const take = addrs.slice(i, i + room);
+    const parts = originParts.concat(take);
+    legs.push({ url: 'https://www.google.com/maps/dir/' + parts.map(a => encodeURIComponent(a)).join('/'),
+                from: i + 1, to: i + take.length });
+    prev = take[take.length - 1];
+    i += take.length;
+  }
+  if (legs.length === 1) { window.open(legs[0].url, '_blank', 'noopener'); return; }
+  window.open(legs[0].url, '_blank', 'noopener');   // open leg 1 right away
+  _showRouteLegsPanel(legs);                         // tappable buttons for the rest
+}
+function _showRouteLegsPanel(legs) {
+  const old = document.getElementById('routeLegsOverlay'); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.id = 'routeLegsOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:4000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:20px;';
+  const btns = legs.map((l, idx) =>
+    '<button onclick="window.open(\''+l.url+'\',\'_blank\',\'noopener\')" style="display:block;width:100%;margin:6px 0;padding:12px;border:none;border-radius:10px;background:'+(idx===0?'#166534':'#2d6a2d')+';color:#fff;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">'+(idx===0?'✓ ':'')+'Leg '+(idx+1)+' — stops '+l.from+'–'+l.to+(idx===0?' (opened)':'')+' →</button>'
+  ).join('');
+  ov.innerHTML = '<div style="background:#fff;border-radius:16px;padding:22px;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);">'
+    + '<div style="font-size:17px;font-weight:800;color:#14361f;margin-bottom:6px;">🗺 Route split into '+legs.length+' legs</div>'
+    + '<div style="font-size:13px;color:#64748b;margin-bottom:14px;">Google Maps allows 10 stops per link. Tap each leg to open it in order.</div>'
+    + btns
+    + '<button onclick="document.getElementById(\'routeLegsOverlay\').remove()" style="display:block;width:100%;margin-top:10px;padding:10px;border:1.5px solid #e2e8f0;border-radius:10px;background:#fff;color:#64748b;font-weight:600;cursor:pointer;font-family:inherit;">Close</button>'
+    + '</div>';
+  ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
+
 // ── Route All Stops across every day in the current route ────────────────
 function openRouteAllStops() {
   if (!_routeCustomOrder || !Object.keys(_routeCustomOrder).length) {
@@ -8316,16 +8356,7 @@ function openRouteAllStops() {
 
   if (!allAddrs.length) { showToast('All jobs are already done! 🎉'); return; }
 
-  const MAX = 10; // Google Maps URL waypoint limit
-  const trimmed = allAddrs.slice(0, MAX);
-  if (allAddrs.length > MAX) {
-    showToast(`Opening first ${MAX} of ${allAddrs.length} remaining stops`);
-  }
-
-  let url = 'https://www.google.com/maps/dir/';
-  if (startAddr) url += encodeURIComponent(startAddr) + '/';
-  url += trimmed.map(a => encodeURIComponent(a)).join('/');
-  window.open(url, '_blank', 'noopener');
+  _openRouteLegs(allAddrs, startAddr);
 }
 
 function _updateRouteAllBtn() {
@@ -8362,17 +8393,7 @@ function openRouteAllMaps(dateStr) {
 
   const startAddr = (document.getElementById('routeStartAddr')?.value || '').trim();
   const addrs = filtered.map(s => routeWaypoint(s));
-
-  // Google Maps handles up to 10 waypoints in the URL
-  const MAX_STOPS = 10;
-  const trimmed = addrs.slice(0, MAX_STOPS);
-  if (addrs.length > MAX_STOPS) showToast(`Showing first ${MAX_STOPS} of ${addrs.length} stops`);
-
-  let url = 'https://www.google.com/maps/dir/';
-  if (startAddr) url += encodeURIComponent(startAddr) + '/';
-  url += trimmed.map(a => encodeURIComponent(a)).join('/');
-
-  window.open(url, '_blank', 'noopener');
+  _openRouteLegs(addrs, startAddr);
 }
 
 // ── Mark Done from route tab (then re-render stop with billing options) ──
@@ -9562,17 +9583,28 @@ async function syncRouteToCalendar(silent) {
   const calBtn = document.getElementById('routeCalSyncBtn');
   if (calBtn) { calBtn.disabled = true; calBtn.textContent = '📅 Syncing…'; }
   try {
-    const syncParams = new URLSearchParams({
-      action:  'sync_route_to_calendar',
-      updates: JSON.stringify(_lastCalendarUpdates),
-    });
-    const res  = await fetch(SCRIPT_URL + '?' + syncParams + '&' + authParam());
-    const data = await res.json();
-    if (data.success) {
+    // Batch the updates: one giant GET URL overflows length limits (dropping
+    // later yards) and can trip calendar rate limits. Send small chunks and
+    // aggregate the counts so every yard gets written.
+    const BATCH = 8;
+    let updated = 0, created = 0, failed = 0;
+    for (let i = 0; i < _lastCalendarUpdates.length; i += BATCH) {
+      const chunk = _lastCalendarUpdates.slice(i, i + BATCH);
+      const syncParams = new URLSearchParams({
+        action:  'sync_route_to_calendar',
+        updates: JSON.stringify(chunk),
+      });
+      const res  = await fetch(SCRIPT_URL + '?' + syncParams + '&' + authParam());
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'sync failed');
+      updated += data.updated || 0; created += data.created || 0; failed += data.failed || 0;
+      if (calBtn) calBtn.textContent = '📅 Syncing… ' + Math.min(i + BATCH, _lastCalendarUpdates.length) + '/' + _lastCalendarUpdates.length;
+    }
+    {
       const parts = [];
-      if (data.updated) parts.push(data.updated + ' updated');
-      if (data.created) parts.push(data.created + ' created');
-      if (data.failed)  parts.push(data.failed + ' failed');
+      if (updated) parts.push(updated + ' updated');
+      if (created) parts.push(created + ' created');
+      if (failed)  parts.push(failed + ' failed');
       const msg = '📅 Google Calendar synced — ' + (parts.join(' · ') || 'no changes');
       showToast(msg);
       if (!silent) {
@@ -9586,9 +9618,6 @@ async function syncRouteToCalendar(silent) {
         }
       }
       if (calBtn) calBtn.style.display = 'none'; // hide after sync
-    } else {
-      showToast('❌ Calendar sync failed: ' + (data.error || 'unknown error'));
-      if (calBtn) { calBtn.disabled = false; calBtn.textContent = '📅 Sync to Google Calendar'; }
     }
   } catch(err) {
     showToast('❌ Calendar sync error: ' + err.message);
