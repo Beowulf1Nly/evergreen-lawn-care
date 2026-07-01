@@ -9688,6 +9688,12 @@ const ZIP_CITY = {
 // ── Geocode a US address → { lat, lon }
 // Tries multiple sources + fallback strategies for rural FL addresses
 async function geocodeAddr(addr) {
+  // Expand abbreviated US addresses ("123 W Oak Ct" -> "123 West Oak Court"); geocoders
+  // miss the abbreviated form. Keep the raw form as a fallback variant below.
+  const _GEO_EXP={ N:'North',S:'South',E:'East',W:'West',NE:'Northeast',NW:'Northwest',SE:'Southeast',SW:'Southwest',St:'Street',Ave:'Avenue',Av:'Avenue',Blvd:'Boulevard',Dr:'Drive',Ct:'Court',Ln:'Lane',Rd:'Road',Ter:'Terrace',Terr:'Terrace',Pl:'Place',Cir:'Circle',Hwy:'Highway',Pkwy:'Parkway',Trl:'Trail',Pt:'Point',Sq:'Square',Xing:'Crossing',Cv:'Cove',Trce:'Trace' };
+  function _expandAbbr(s){ let x=' '+String(s||'')+' '; for(const k in _GEO_EXP){ x=x.replace(new RegExp('\\b'+k+'\\b','g'), _GEO_EXP[k]); } return x.replace(/\s+/g,' ').trim(); }
+  const _rawAddr = addr; addr = _expandAbbr(addr);
+  const _geoInFL=function(c){ return c&&c.lat>=28.3&&c.lat<=29.75&&c.lon>=-83.05&&c.lon<=-81.7; };
   const zipMatch   = addr.match(/,\s*(\d{5})/);
   const zip        = zipMatch ? zipMatch[1] : '';
   const city       = ZIP_CITY[zip] || '';
@@ -9724,7 +9730,7 @@ async function geocodeAddr(addr) {
     for(const f of feats){ const p=f.properties||{}; const k=String(p.osm_key||'').toLowerCase(); const t=String(p.type||'').toLowerCase();
       if(_GEO_BAD_KEY.has(k)||_GEO_BAD_TYPE.has(t)) continue;                  // reject parks/communities/areas
       if(wantHouseNum && !p.street && t!=='house' && t!=='street') continue;  // need a real street, not an area centroid
-      return { lat:f.geometry.coordinates[1], lon:f.geometry.coordinates[0] }; }
+      const _c={ lat:f.geometry.coordinates[1], lon:f.geometry.coordinates[0] }; if(_geoInFL(_c)) return _c; continue; }
     return null;
   }
   async function tryNominatim(q,structured){
@@ -9736,14 +9742,15 @@ async function geocodeAddr(addr) {
       if(c==='place' && _GEO_BAD_TYPE.has(t)) continue;       // reject suburb/locality/district centroids
       const hasRoad=!!(a.road||a.pedestrian||a.residential);
       if(wantHouseNum && !hasRoad) continue;                  // a house-numbered input must hit a real road
-      return { lat:parseFloat(h.lat), lon:parseFloat(h.lon) }; }
+      const _co={ lat:parseFloat(h.lat), lon:parseFloat(h.lon) }; if(_geoInFL(_co)) return _co; continue; }
     return null;
   }
 
   // 0. Structured Nominatim first — most accurate for rural addresses, least POI bleed
   if(streetNoState){ const _qs='street='+encodeURIComponent(streetNoState)+(city?'&city='+encodeURIComponent(city):'')+'&state=FL&country=US'+(zip?'&postalcode='+encodeURIComponent(zip):''); try{ const r=await tryNominatim(_qs,true); if(r) return r; }catch(e){} }
-  // 1. Photon with full address (zip)
+  // 1. Photon with full address (expanded, then raw)
   try { const r = await tryPhoton(addr);        if (r) return r; } catch(e) {}
+  try { const r = await tryPhoton(_rawAddr);    if (r) return r; } catch(e) {}
   // 2. Nominatim with full address (zip)
   try { const r = await tryNominatim(addr);     if (r) return r; } catch(e) {}
   // 3. Photon with city name (no zip) — best for rural FL roads
