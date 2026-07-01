@@ -8903,13 +8903,31 @@ function rcNearestNeighbour(startCoord,stops){
 function rcCalcDist(arr,startCoord){ var prev=(startCoord&&startCoord.lat!=null)?startCoord:null; for(var i=0;i<arr.length;i++){ var s=arr[i]; if(s&&s.lat!=null){ s.distFromPrev=prev?rcDD(prev,s):0; prev=s; } else if(s){ s.distFromPrev=s.distFromPrev||0; } } return arr; }
 // MAIN geographic optimizer. stops:[{bk,lat,lon,(pinned)}] (all geocoded). Pinned
 // stops keep their slot index; unpinned are tightly reordered into the gaps.
+// Shortest open route through `stops`. With a depot: nearest-neighbour from the depot
+// + local search. WITHOUT a depot: try every stop as the start (capped for cost) and
+// keep the shortest — a fixed arbitrary start (stops[0]) otherwise yields a looser loop.
+function rcBestOpenRoute(stops,startCoord){
+  if(!stops||stops.length<=1) return stops?stops.slice():[];
+  if(startCoord&&startCoord.lat!=null) return rcNearestNeighbour(startCoord,stops);
+  var starts = (stops.length<=24) ? stops : [stops[0]];
+  var best=null, bestLen=Infinity;
+  for(var i=0;i<starts.length;i++){
+    var un=stops.filter(function(s){ return s!==starts[i]; });
+    var route=[starts[i]]; var cur=starts[i];
+    while(un.length){ var bi=0,bd=Infinity; for(var k=0;k<un.length;k++){ var d=rcDD(cur,un[k]); if(d<bd){bd=d;bi=k;} } route.push(un[bi]); cur=un[bi]; un.splice(bi,1); }
+    route=rcLocalSearch(route,null);
+    var L=rcRouteLen(route,null);
+    if(L<bestLen){ bestLen=L; best=route; }
+  }
+  return best.map(function(s){ var c={}; for(var kk in s) c[kk]=s[kk]; return c; });
+}
 function rcOptimizeGeographic(stops,startCoord){
   if(!stops||!stops.length) return [];
   var pinnedIdx=[]; var unpinned=[];
   for(var i=0;i<stops.length;i++){ if(stops[i]&&stops[i].pinned) pinnedIdx.push(i); else unpinned.push(stops[i]); }
-  if(!pinnedIdx.length){ var ord=rcNearestNeighbour(startCoord,stops); return rcCalcDist(ord,startCoord); }
+  if(!pinnedIdx.length){ return rcCalcDist(rcBestOpenRoute(stops,startCoord),startCoord); }
   // Optimize the unpinned set, then weave it back around the fixed pinned slots.
-  var optUnpinned=rcNearestNeighbour(startCoord,unpinned); var u=0; var out=[];
+  var optUnpinned=rcBestOpenRoute(unpinned,startCoord); var u=0; var out=[];
   for(var s=0;s<stops.length;s++){
     if(stops[s]&&stops[s].pinned){ var p={}; for(var kk in stops[s]) p[kk]=stops[s][kk]; out.push(p); }
     else { out.push(optUnpinned[u++]); }
