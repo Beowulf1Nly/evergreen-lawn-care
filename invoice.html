@@ -11039,10 +11039,15 @@ function renderHistoryList() {
   var q = ((document.getElementById('histSearch') || {}).value || '').toLowerCase().trim();
 
   var fromBookings = (allBookings || []).filter(function(b) {
-    if (b.rowCancelled || b.rowCompleted) return false;   // archived come from the dedicated endpoint
+    if (b.rowCancelled || b.rowCompleted) return false;   // active done-but-unpaid jobs
     return isDone(b) || isPaidDone(b);
   });
-  var jobs = fromBookings.concat(_completedJobs || []);
+  // Archived (done+paid) jobs: prefer the dedicated endpoint (up to 800); if it
+  // isn't deployed yet, fall back to the rowCompleted rows the bookings feed appends.
+  var archived = (_completedJobs && _completedJobs.length)
+    ? _completedJobs
+    : (allBookings || []).filter(function(b){ return b.rowCompleted && !b.rowCancelled; });
+  var jobs = fromBookings.concat(archived);
   if (crewFilt !== 'all') jobs = jobs.filter(function(b) { return (b.crew || '').trim() === crewFilt; });
   if (q) {
     jobs = jobs.filter(function(b) {
