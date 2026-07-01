@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-06-30.7 */
+/* APP_VER:2026-06-30.8 */
 (function(){
-  var V='2026-06-30.7'; window.__APP_VER=V;
+  var V='2026-06-30.8'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -656,6 +656,20 @@ function _extractRouteKeys(rRes){
    optimized order, then to job time — never breaking the route view. */
 const _GEO_CACHE_KEY='evg_geocache_v4';      // v3: POI-rejecting geocoder — shared with /invoice (free cache hits)
 const _OPT_ORDER_KEY='evg_field_optorder_v1';
+// Approximate town centroids for the service area — a graceful fallback when a street
+// address will not geocode (provider down / rate-limited), so a route still clusters and
+// optimizes by town instead of failing with "Could not optimize". Precise geocodes are
+// always preferred; these are only a safety net.
+const CITY_LATLON = {
+  'Crystal River':{lat:28.902,lon:-82.592}, 'Inverness':{lat:28.836,lon:-82.330},
+  'Lecanto':{lat:28.855,lon:-82.487}, 'Dunnellon':{lat:29.049,lon:-82.459},
+  'Citrus Springs':{lat:28.997,lon:-82.459}, 'Floral City':{lat:28.750,lon:-82.298},
+  'Hernando':{lat:28.899,lon:-82.375}, 'Beverly Hills':{lat:28.917,lon:-82.457},
+  'Inglis':{lat:29.028,lon:-82.662}, 'Yankeetown':{lat:29.030,lon:-82.712},
+  'Ocala':{lat:29.187,lon:-82.140}, 'Summerfield':{lat:28.998,lon:-81.985},
+  'Silver Springs':{lat:29.192,lon:-82.052}, 'Chiefland':{lat:29.475,lon:-82.860},
+  'Morriston':{lat:29.290,lon:-82.451}, 'Brooksville':{lat:28.555,lon:-82.388}
+};
 const ZIP_CITY={ '34428':'Crystal River','34429':'Crystal River','34450':'Inverness','34451':'Inverness','34452':'Inverness','34453':'Inverness','34460':'Lecanto','34461':'Lecanto','34431':'Dunnellon','34432':'Dunnellon','34433':'Dunnellon','34434':'Citrus Springs','34436':'Floral City','34442':'Hernando','34423':'Crystal River','34464':'Beverly Hills','34465':'Beverly Hills','34449':'Inglis','34498':'Yankeetown','34480':'Ocala','34481':'Ocala','34482':'Ocala','34476':'Ocala','34474':'Ocala','34472':'Ocala','34470':'Ocala','34471':'Ocala','34479':'Ocala','34475':'Ocala','34478':'Ocala','34491':'Summerfield','34488':'Silver Springs','32626':'Chiefland','32668':'Morriston','34601':'Brooksville','34602':'Brooksville','34604':'Brooksville' };
 function _geoCacheLoad(){ try{ return JSON.parse(localStorage.getItem(_GEO_CACHE_KEY)||'{}'); }catch(e){ return {}; } }
 function _geoCacheSave(c){ try{ localStorage.setItem(_GEO_CACHE_KEY, JSON.stringify(c)); }catch(e){} }
@@ -736,6 +750,7 @@ async function _fmComputeOptimizedOrder(){
       const fullAddr=(bk.address||'')+(bk.zip?', '+bk.zip:'')+(city?', '+city:'')+', FL';
       let coord=cache[fullAddr];
       if(coord===undefined){ coord=await _geocodeAddr(fullAddr); if(coord){ cache[fullAddr]=coord; dirty=true; } }
+      if(!coord){ const _cc=CITY_LATLON[ZIP_CITY[bk.zip]]; if(_cc) coord=_cc; }   // town-centroid fallback so the route still optimizes when a street won't geocode
       geo.push({ bk:bk, lat:coord?coord.lat:undefined, lon:coord?coord.lon:undefined, failed:!coord });
     }
     if(dirty) _geoCacheSave(cache);

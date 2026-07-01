@@ -9393,7 +9393,7 @@ async function buildRoute() {
       const geocoded    = crewJobs.map(bk => {
         const city = ZIP_CITY[bk.zip] || '';
         const fullAddr = (bk.address || '') + (bk.zip ? ', ' + bk.zip : '') + (city ? ', ' + city : '') + ', FL';
-        const coord    = geocodedMap[fullAddr];
+        const coord    = geocodedMap[fullAddr] || CITY_LATLON[ZIP_CITY[bk.zip]] || null;   // town-centroid fallback when a street will not geocode
         return { bk, lat: coord?.lat, lon: coord?.lon, failed: !coord };
       });
       const validStops  = geocoded.filter(s => !s.failed);
@@ -9685,6 +9685,20 @@ async function syncRouteToCalendar(silent) {
 }
 
 // ── Zip → city name for the Citrus County service area ───────────────────
+// Approximate town centroids for the service area — a graceful fallback when a street
+// address will not geocode (provider down / rate-limited), so a route still clusters and
+// optimizes by town instead of failing with "Could not optimize". Precise geocodes are
+// always preferred; these are only a safety net.
+const CITY_LATLON = {
+  'Crystal River':{lat:28.902,lon:-82.592}, 'Inverness':{lat:28.836,lon:-82.330},
+  'Lecanto':{lat:28.855,lon:-82.487}, 'Dunnellon':{lat:29.049,lon:-82.459},
+  'Citrus Springs':{lat:28.997,lon:-82.459}, 'Floral City':{lat:28.750,lon:-82.298},
+  'Hernando':{lat:28.899,lon:-82.375}, 'Beverly Hills':{lat:28.917,lon:-82.457},
+  'Inglis':{lat:29.028,lon:-82.662}, 'Yankeetown':{lat:29.030,lon:-82.712},
+  'Ocala':{lat:29.187,lon:-82.140}, 'Summerfield':{lat:28.998,lon:-81.985},
+  'Silver Springs':{lat:29.192,lon:-82.052}, 'Chiefland':{lat:29.475,lon:-82.860},
+  'Morriston':{lat:29.290,lon:-82.451}, 'Brooksville':{lat:28.555,lon:-82.388}
+};
 const ZIP_CITY = {
   '34428': 'Crystal River', '34429': 'Crystal River',
   '34450': 'Inverness',     '34451': 'Inverness', '34452': 'Inverness', '34453': 'Inverness',
