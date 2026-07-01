@@ -325,7 +325,7 @@ let _startPoint=null, _crewSel=null;   // employee-chosen route origin + crew ov
 let _clockInTime=null, _clockOutTime=null, _clockedOut=false, _fmTimerInt=null, _fmSyncInt=null, _fmPollInt=null, _geoWatch=null, _lastPos=null, _wakeLock=null;
 let _fmStarted=false, _fmViewIdx=null, _fmCashTotal=0, _fmBilledTotal=0, _fmSkipped={}, _startChkState=[], _jobTimers={}, _helpers=[]; let _lastSync={ok:null,ts:0,msg:''};
 // complete-sheet state
-let _fmcStop=null, _fmcRowIdx=-1, _fmcPayType='invoice', _fmcCash=false, _fmcInvoiceSent=false, _fmcBase=0, _fmcAddons=[], _fmcPhotos=[], _fmcEndChk={};
+let _fmcStop=null, _fmcRowIdx=-1, _fmcPayType='invoice', _fmcCash=false, _fmcInvoiceSent=false, _fmcChargeChosen=false, _fmcBase=0, _fmcAddons=[], _fmcPhotos=[], _fmcEndChk={};
 
 /* ╔══════════════════════════════════════════════════════════════════════════╗
    ║  EVERGREEN SHARED ROUTE CORE — rc1                                          ║
@@ -1096,7 +1096,7 @@ function fmOpenComplete(){
   const stop=_fmStops()[_fmViewIdx]; if(!stop) return;
   const bk=stop.bk;
   _fmcStop=stop; _fmcRowIdx=(allBookings||[]).indexOf(bk); _fmcPayType=_payType(bk);
-  _fmcCash=false; _fmcInvoiceSent=false; _fmcBase=_fmAmt(bk); _fmcPhotos=[];
+  _fmcCash=false; _fmcInvoiceSent=false; _fmcChargeChosen=false; _fmcBase=_fmAmt(bk); _fmcPhotos=[];
   _fmcAddons=(customerServicesFor(bk.email)||[]).map(s=>({name:s.name,price:+s.price||0,on:false}));
   _fmcEndChk={}; END_CHECKLIST.forEach(l=>_fmcEndChk[l]=false);
   if(_fmcPayType==='cash') _fmcEndChk['Collected cash']=false;
@@ -1127,29 +1127,26 @@ function _fmcRenderAmount(){
   document.getElementById('fmcMethod').textContent=m+(see&&addTot?' (incl. $'+addTot.toFixed(0)+' add-ons)':'');
 }
 // Whether payment is satisfied for this customer type
-function _fmcPayResolved(){ if(_fmcPayType==='autopay') return true; if(_fmcPayType==='cash') return _fmcCash; return _fmcInvoiceSent; }
+function _fmcPayResolved(){ if(_fmcPayType==='autopay') return _fmcChargeChosen; if(_fmcPayType==='cash') return _fmcCash; return _fmcInvoiceSent; }
 function _fmcRenderPay(){
   const wrap=document.getElementById('fmcPayControls'); const grand=_fmcGrand();
   const state=document.getElementById('fmcPayState');
   const see=_isMoneyRole();
   if(_fmcPayType==='autopay'){
-    wrap.innerHTML='<div style="background:#dcfce7;border:1.5px solid #16a34a;border-radius:12px;padding:12px;font-size:14px;font-weight:700;color:#15803d;">✅ '+(see?('Auto-charges $'+grand.toFixed(0)+' on complete.'):'Completing charges the card on file.')+' Owner is emailed if it fails.</div>';
+    wrap.innerHTML='<button class="fm-toggle-btn'+(_fmcChargeChosen?' cash-on':'')+'" onclick="fmToggleCharge()">'+(_fmcChargeChosen?('✓ Will charge $'+grand.toFixed(0)+' to card on complete — tap to undo'):('💳 Charge $'+grand.toFixed(0)+' to card on file'))+'</button>';
   } else if(_fmcPayType==='cash'){
     wrap.innerHTML='<button class="fm-toggle-btn'+(_fmcCash?' cash-on':'')+'" onclick="fmToggleCash()">'+(_fmcCash?'✓ Collected $'+grand.toFixed(0)+' cash — tap to undo':'💵 Collect $'+grand.toFixed(0)+' cash')+'</button>';
   } else {
-    wrap.innerHTML='<button class="fm-toggle-btn '+(_fmcInvoiceSent?'sent':'invoice')+'" onclick="fmSendInvoice()" '+(_fmcInvoiceSent?'disabled':'')+'>'+(_fmcInvoiceSent?('✓ Invoice sent'+(see?(' for $'+grand.toFixed(0)):'')):('🧾 Send invoice'+(see?(' for $'+grand.toFixed(0)):'')+' →'))+'</button>';
+    wrap.innerHTML='<button class="fm-toggle-btn '+(_fmcInvoiceSent?'sent':'invoice')+'" onclick="fmToggleInvoice()">'+(_fmcInvoiceSent?('✓ Will invoice'+(see?(' $'+grand.toFixed(0)):'')+' on complete — tap to undo'):('🧾 Invoice'+(see?(' $'+grand.toFixed(0)):'')+' on complete →'))+'</button>';
   }
   if(state){ const ok=_fmcPayResolved(); state.textContent=ok?'✓ done':'required'; state.className=ok?'ok':'req'; }
   _fmcUpdateSubmit();
 }
 function fmToggleCash(){ _fmcCash=!_fmcCash; if('Collected cash' in _fmcEndChk) _fmcEndChk['Collected cash']=_fmcCash; _fmcRenderPay(); _fmcRenderEndChk(); }
-function fmSendInvoice(){
-  if(_fmcInvoiceSent) return;
-  const bk=_fmcStop&&_fmcStop.bk; if(!bk) return;
-  const rowIndex=bk._rowIndex||((_fmcRowIdx>=0?_fmcRowIdx:0)+2), svcDate=dateOf(bk);
-  _fmEnqueue({ kind:'invoice', idemKey:'invoice:'+rowIndex+':'+svcDate, method:'GET', params:{ action:'send_invoice', rowIndex, email:bk.email||'', serviceDate:svcDate, amount:_fmcGrand().toFixed(2), adminToken } });
-  _fmFlushQueue(); _fmcInvoiceSent=true; showToast('🧾 Invoice queued for '+(bk.name||'customer')); _fmcRenderPay();
-}
+// Payment is only CHOSEN here — the charge/invoice is executed exactly once on
+// completion submit (fmSubmitComplete), guarded by an idempotency key + backend.
+function fmToggleCharge(){ _fmcChargeChosen=!_fmcChargeChosen; _fmcRenderPay(); }
+function fmToggleInvoice(){ _fmcInvoiceSent=!_fmcInvoiceSent; _fmcRenderPay(); }
 function _fmcRenderEndChk(){
   const wrap=document.getElementById('fmcChecklist'); const items=Object.keys(_fmcEndChk);
   wrap.innerHTML=items.map(l=>'<button class="fm-check'+(_fmcEndChk[l]?' on':'')+'" onclick="fmToggleEndChk(\''+l.replace(/'/g,"\\'")+'\')"><span class="box">✓</span><span>'+esc(l)+'</span></button>').join('');
@@ -1184,6 +1181,7 @@ async function fmSubmitComplete(){
   const extra=[];
   if(selAddons.length){ const tag=selAddons.map(a=>a.name+'='+a.price).join(','); extra.push({ kind:'addons', idemKey:'addons:'+base+':'+tag, method:'GET', params:{ action:'apply_job_addons', rowIndex, email, serviceDate:svcDate, addons:JSON.stringify(selAddons), adminToken } }); }
   if(_fmcPayType==='cash') extra.push({ kind:'cash', idemKey:'cash:'+base, method:'GET', params:{ action:'mark_cash_paid', rowIndex, email, serviceDate:svcDate, adminToken, markedBy:adminName||'Crew' } });
+  if(_fmcPayType==='invoice' && _fmcInvoiceSent) extra.push({ kind:'invoice', idemKey:'invoice:'+base, method:'GET', params:{ action:'send_invoice', rowIndex, email, serviceDate:svcDate, amount:grand.toFixed(2), adminToken } });
   if(ownerNote){ const noteLine='📝 '+ownerNote+' — '+(adminName||'crew'); extra.push({ kind:'note', idemKey:'note:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex, note:(String(bk.employeeNotes||'').trim()?bk.employeeNotes+' | ':'')+noteLine, adminToken } }); }
   const _jk=_stopKey(bk); const _jStart=_jobTimers[_jk]; const _jEnd=new Date().toISOString();
   const _jMin=_jStart?Math.max(0,Math.round((Date.now()-new Date(_jStart).getTime())/60000)):null;
@@ -1203,7 +1201,7 @@ async function fmSubmitComplete(){
   const online=navigator.onLine!==false;
   if(online){
     try{
-      const res=await fetch(SCRIPT_URL+'?'+new URLSearchParams(doneItem.params).toString());
+      const res=await fetch(SCRIPT_URL+'?'+new URLSearchParams(Object.assign({}, doneItem.params, { idemKey: doneItem.idemKey })).toString());
       if(!res.ok) throw new Error('HTTP '+res.status);
       let data=null; try{ data=await res.json(); }catch(_p){}
       if(data&&data.success===false){ errEl.textContent='❌ '+(data.error||'Mark done failed'); errEl.style.display='block'; submitBtn.disabled=false; _fmcUpdateSubmit(); return; }
