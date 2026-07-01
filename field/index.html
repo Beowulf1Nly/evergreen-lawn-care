@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-06-30.9 */
+/* APP_VER:2026-07-01.1 */
 (function(){
-  var V='2026-06-30.9'; window.__APP_VER=V;
+  var V='2026-07-01.1'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -654,7 +654,7 @@ function _extractRouteKeys(rRes){
    job time. Preference: (a) saved canonical route > (b) self-optimized > (c) job time.
    Geocoding needs a signal; with none we fall back gracefully to the cached
    optimized order, then to job time — never breaking the route view. */
-const _GEO_CACHE_KEY='evg_geocache_v4';      // v3: POI-rejecting geocoder — shared with /invoice (free cache hits)
+const _GEO_CACHE_KEY='evg_geocache_v5';   // v5: Census-first accurate geocoder      // v3: POI-rejecting geocoder — shared with /invoice (free cache hits)
 const _OPT_ORDER_KEY='evg_field_optorder_v1';
 // Approximate town centroids for the service area — a graceful fallback when a street
 // address will not geocode (provider down / rate-limited), so a route still clusters and
@@ -690,6 +690,23 @@ function _nearestNeighbour(startCoord,stops){ const unvisited=[...stops]; const 
 //   3) Nominatim — LAST resort only; it 403s / rate-limits from browsers, so it
 //      must never be the sole path (that's what broke the live route).
 // Every hit is bounds-checked to Florida so a bad match can't scatter the route.
+// US Census geocoder via JSONP — the authoritative US street-address database
+// (house-level accuracy), free and keyless. JSONP (a <script> tag) sidesteps the CORS
+// block that stops a normal fetch, and it correctly resolves rural streets that the
+// OpenStreetMap-based providers miss or snap to the wrong road.
+function _censusGeocode(addr){
+  return new Promise(function(resolve){
+    if(typeof document==='undefined'){ resolve(null); return; }
+    var cb='__evgCensus_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+    var s=document.createElement('script'); var done=false;
+    function cleanup(){ try{ delete window[cb]; }catch(e){} try{ if(s&&s.parentNode) s.parentNode.removeChild(s); }catch(e){} }
+    window[cb]=function(data){ done=true; cleanup(); try{ var m=data&&data.result&&data.result.addressMatches&&data.result.addressMatches[0]; if(m&&m.coordinates){ resolve({ lat:+m.coordinates.y, lon:+m.coordinates.x }); return; } }catch(e){} resolve(null); };
+    s.onerror=function(){ if(!done){ cleanup(); resolve(null); } };
+    s.src='https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?benchmark=Public_AR_Current&format=jsonp&callback='+cb+'&address='+encodeURIComponent(addr);
+    (document.head||document.documentElement).appendChild(s);
+    setTimeout(function(){ if(!done){ cleanup(); resolve(null); } }, 7000);
+  });
+}
 async function _geocodeAddr(addr){
   // Geocoders (Photon/Nominatim) miss abbreviated US addresses — "123 W Oak Ct" returns
   // nothing, but "123 West Oak Court" matches. So expand directionals + street-type
@@ -726,6 +743,10 @@ async function _geocodeAddr(addr){
     return null;
   }
   function _geoParts(a){ const zm=a.match(/,\s*(\d{5})/); const zip=zm?zm[1]:''; const city=ZIP_CITY[zip]||''; const streetOnly=a.replace(/,\s*\d{5}/,''); let sn=streetOnly.replace(/,\s*FL\s*$/i,'').replace(/,\s*Florida\s*$/i,'').trim(); if(city&&sn.toLowerCase().endsWith(', '+city.toLowerCase())) sn=sn.slice(0,sn.length-city.length-2).trim(); return {zip,city,streetOnly,streetNoState:sn,addrByCity:city?sn+', '+city+', FL':'',streetFL:sn+', Florida'}; }
+  // 0. US Census first — authoritative, house-level, handles abbreviations/case/punctuation.
+  //    Trusted broadly within Florida (it only returns exact address-string matches).
+  const _inFLwide=function(c){ return c&&c.lat>=24&&c.lat<=31.6&&c.lon>=-88&&c.lon<=-79.4; };
+  try{ const _cc=await _censusGeocode(addr); if(_cc&&_inFLwide(_cc)) return _cc; }catch(e){}
   const P=_geoParts(_expandAbbr(addr));
   // 0. Structured Nominatim on the expanded street — most precise, least POI bleed
   if(P.streetNoState){ const _qs='street='+encodeURIComponent(P.streetNoState)+(P.city?'&city='+encodeURIComponent(P.city):'')+'&state=FL&country=US'+(P.zip?'&postalcode='+encodeURIComponent(P.zip):''); try{ const r=await tryNominatim(_qs,true); if(r) return r; }catch(e){} }

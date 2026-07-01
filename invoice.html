@@ -9306,7 +9306,7 @@ async function buildRoute() {
 
     // Geocode all job addresses — uses persistent localStorage cache so each address
     // is only ever looked up once, even across sessions.
-    const _GEO_CACHE_KEY = 'evg_geocache_v4'; // v3: POI-rejecting geocoder — re-geocode everything
+    const _GEO_CACHE_KEY = 'evg_geocache_v5';   // v5: Census-first accurate geocoder // v3: POI-rejecting geocoder — re-geocode everything
     let geoCache = {};
     try { geoCache = JSON.parse(localStorage.getItem(_GEO_CACHE_KEY) || '{}'); } catch(e) {}
     let _geoCacheDirty = false;
@@ -9718,12 +9718,34 @@ const ZIP_CITY = {
 
 // ── Geocode a US address → { lat, lon }
 // Tries multiple sources + fallback strategies for rural FL addresses
+// US Census geocoder via JSONP — the authoritative US street-address database
+// (house-level accuracy), free and keyless. JSONP (a <script> tag) sidesteps the CORS
+// block that stops a normal fetch, and it correctly resolves rural streets that the
+// OpenStreetMap-based providers miss or snap to the wrong road.
+function _censusGeocode(addr){
+  return new Promise(function(resolve){
+    if(typeof document==='undefined'){ resolve(null); return; }
+    var cb='__evgCensus_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+    var s=document.createElement('script'); var done=false;
+    function cleanup(){ try{ delete window[cb]; }catch(e){} try{ if(s&&s.parentNode) s.parentNode.removeChild(s); }catch(e){} }
+    window[cb]=function(data){ done=true; cleanup(); try{ var m=data&&data.result&&data.result.addressMatches&&data.result.addressMatches[0]; if(m&&m.coordinates){ resolve({ lat:+m.coordinates.y, lon:+m.coordinates.x }); return; } }catch(e){} resolve(null); };
+    s.onerror=function(){ if(!done){ cleanup(); resolve(null); } };
+    s.src='https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?benchmark=Public_AR_Current&format=jsonp&callback='+cb+'&address='+encodeURIComponent(addr);
+    (document.head||document.documentElement).appendChild(s);
+    setTimeout(function(){ if(!done){ cleanup(); resolve(null); } }, 7000);
+  });
+}
 async function geocodeAddr(addr) {
   // Expand abbreviated US addresses ("123 W Oak Ct" -> "123 West Oak Court"); geocoders
   // miss the abbreviated form. Keep the raw form as a fallback variant below.
   const _GEO_EXP={ N:'North',S:'South',E:'East',W:'West',NE:'Northeast',NW:'Northwest',SE:'Southeast',SW:'Southwest',St:'Street',Ave:'Avenue',Av:'Avenue',Blvd:'Boulevard',Dr:'Drive',Ct:'Court',Ln:'Lane',Rd:'Road',Ter:'Terrace',Terr:'Terrace',Pl:'Place',Cir:'Circle',Hwy:'Highway',Pkwy:'Parkway',Trl:'Trail',Pt:'Point',Sq:'Square',Xing:'Crossing',Cv:'Cove',Trce:'Trace' };
   function _expandAbbr(s){ let x=' '+String(s||'')+' '; for(const k in _GEO_EXP){ x=x.replace(new RegExp('(^|[\\s,])'+k+'\\.?(?=[\\s,])','gi'), '$1'+_GEO_EXP[k]); } return x.replace(/\s+/g,' ').trim(); }
   const _rawAddr = addr; addr = _expandAbbr(addr);
+  // 0. US Census first — authoritative, house-level, handles abbreviations/case/punctuation.
+  //    Trusted broadly within Florida (it only returns exact address-string matches).
+  const _inFLwide=function(c){ return c&&c.lat>=24&&c.lat<=31.6&&c.lon>=-88&&c.lon<=-79.4; };
+  try{ const _cc=await _censusGeocode(_rawAddr); if(_cc&&_inFLwide(_cc)) return _cc; }catch(e){}
+
   const _geoInFL=function(c){ return c&&c.lat>=28.3&&c.lat<=29.75&&c.lon>=-83.05&&c.lon<=-81.7; };
   const zipMatch   = addr.match(/,\s*(\d{5})/);
   const zip        = zipMatch ? zipMatch[1] : '';
