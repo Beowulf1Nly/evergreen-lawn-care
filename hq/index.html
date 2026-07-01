@@ -13,8 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-02.1 */
-(function(){ var V='2026-07-02.1'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-02.2 */
+(function(){ var V='2026-07-02.2'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -356,6 +356,45 @@
     .dev-grid{ grid-template-columns:1fr; }
   }
 
+
+  /* ═══ ServiceTitan-style swimlane board (week/day) ═══ */
+  .st-section{ margin-bottom:16px; min-width:900px; }
+  .st-bizhead{ display:flex; align-items:center; gap:9px; padding:7px 8px 9px 4px; font-size:14px; font-weight:800; letter-spacing:.01em; }
+  .st-bizhead .bl{ width:4px; height:18px; border-radius:3px; background:var(--bc,#22c55e); box-shadow:0 0 12px var(--bc,#22c55e); }
+  .st-bizhead .be{ font-size:16px; }
+  .st-bizhead .bt{ font-size:11px; color:var(--dim); font-weight:700; font-family:var(--mono); margin-left:auto; }
+  .st-grid{ display:grid; grid-template-columns:150px repeat(7,minmax(105px,1fr)); gap:5px; margin-bottom:5px; }
+  .st-grid.day{ grid-template-columns:150px 1fr; }
+  .st-rowlab{ display:flex; align-items:center; gap:8px; padding:8px 10px; background:rgba(255,255,255,.045); border:1px solid var(--line); border-radius:11px; font-size:12.5px; font-weight:800; min-height:52px; }
+  .st-rowlab .cdot{ width:10px; height:10px; border-radius:4px; box-shadow:0 0 9px currentColor; flex-shrink:0; }
+  .st-rowlab .cnt{ margin-left:auto; font-family:var(--mono); font-size:10px; color:var(--dim); font-weight:700; }
+  .st-cell{ background:rgba(255,255,255,.025); border:1px solid var(--line); border-radius:10px; padding:4px; min-height:52px; display:flex; flex-direction:column; gap:3px; transition:.12s; }
+  .st-cell.today{ border-color:rgba(34,197,94,.4); background:rgba(34,197,94,.04); }
+  .st-cell.dragover{ border-color:var(--green2); background:rgba(34,197,94,.12); }
+  .st-dowhead{ display:grid; grid-template-columns:150px repeat(7,minmax(105px,1fr)); gap:5px; margin-bottom:7px; min-width:900px; }
+  .st-dowhead div{ font-size:10px; font-weight:800; letter-spacing:.08em; color:var(--dim); text-transform:uppercase; text-align:center; padding:4px 0; }
+  .st-dowhead div.today{ color:#4ade80; }
+  /* day-view timeline */
+  .st-hourshead{ display:grid; grid-template-columns:150px 1fr; gap:5px; min-width:900px; margin-bottom:6px; }
+  .st-hours{ position:relative; height:18px; }
+  .st-hours span{ position:absolute; transform:translateX(-50%); font-size:9.5px; font-family:var(--mono); color:var(--dim); font-weight:700; white-space:nowrap; }
+  .st-tl{ position:relative; height:58px; background:rgba(255,255,255,.025); border:1px solid var(--line); border-radius:11px;
+    background-image:repeating-linear-gradient(90deg, rgba(148,233,184,.07) 0, rgba(148,233,184,.07) 1px, transparent 1px, transparent calc(100%/12)); transition:.12s; }
+  .st-tl.dragover{ border-color:var(--green2); background-color:rgba(34,197,94,.09); }
+  .st-block{ position:absolute; top:6px; height:44px; border-radius:9px; background:rgba(14,34,22,.92); border:1px solid var(--line2); padding:5px 8px; font-size:10.5px; font-weight:700; overflow:hidden; cursor:grab; box-shadow:0 5px 14px rgba(0,0,0,.35); white-space:nowrap; text-overflow:ellipsis; transition:filter .12s; }
+  .st-block::before{ content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--pc,#22c55e); }
+  .st-block:hover{ filter:brightness(1.3); z-index:3; }
+  .st-block .bt2{ font-family:var(--mono); font-size:9px; color:var(--muted); display:block; }
+  .st-block.done{ opacity:.5; } .st-block.arch{ opacity:.45; cursor:default; } .st-block.dragging{ opacity:.3; }
+  .st-nowline{ position:absolute; top:0; bottom:0; width:2px; background:#f87171; box-shadow:0 0 10px #f87171; z-index:2; pointer-events:none; }
+  .st-untimed{ display:flex; gap:4px; flex-wrap:wrap; padding:4px 2px 0; }
+  .st-empty{ color:var(--dim); font-size:11px; padding:16px 8px; text-align:center; }
+  .biz-row{ display:flex; gap:7px; margin-bottom:9px; align-items:center; }
+  .biz-row input[type=text]{ background:rgba(0,0,0,.28); border:1.5px solid var(--line2); border-radius:10px; padding:9px 10px; color:var(--text); font-family:inherit; font-size:13.5px; outline:none; }
+  .biz-row input[type=text]:focus{ border-color:var(--green); }
+  .biz-row input[type=color]{ width:34px; height:36px; border:none; background:none; cursor:pointer; padding:0; }
+  .biz-row .bdel{ background:rgba(248,113,113,.1); color:#fca5a5; border:1px solid rgba(248,113,113,.3); border-radius:9px; width:34px; height:36px; cursor:pointer; font-size:14px; flex-shrink:0; }
+
 </style>
 </head>
 <body>
@@ -449,7 +488,7 @@
   <div id="pane-dispatch" class="hq-pane">
     <div class="disp-wrap">
       <div class="disp-controls">
-        <div class="seg"><button id="dvMonth" class="on" onclick="setDispView('month')">Month</button><button id="dvWeek" onclick="setDispView('week')">Week</button></div>
+        <div class="seg"><button id="dvMonth" onclick="setDispView('month')">Month</button><button id="dvWeek" class="on" onclick="setDispView('week')">Week</button><button id="dvDay" onclick="setDispView('day')">Day</button></div>
         <div class="disp-nav">
           <button onclick="dispShift(-1)">◀</button>
           <span class="disp-title" id="dispTitle"></span>
@@ -464,11 +503,12 @@
           <button data-c="C" onclick="setDispCrew('C')">Crew C</button>
           <button data-c="un" onclick="setDispCrew('un')">⬜ Unassigned</button>
         </div>
+        <button class="dev-btn" style="border-radius:999px;padding:8px 14px;" onclick="openBizEditor()">🏢 Businesses</button>
         <div class="disp-legend">
           <span><i style="background:#22c55e"></i>Crew A</span><span><i style="background:#38bdf8"></i>Crew B</span>
           <span><i style="background:#fbbf24"></i>Crew C</span><span><i style="background:#f87171"></i>Unassigned</span>
           <span><i style="background:#2e7d32"></i>Archived ✓</span>
-          <span style="color:var(--dim);">↔ drag a job onto a day to reschedule</span>
+          <span style="color:var(--dim);">↔ drag between rows to reassign · between days to reschedule · along the Day timeline to retime</span>
         </div>
       </div>
       <div class="disp-stats" id="dispStats"></div>
@@ -555,6 +595,16 @@
     <input type="text" id="addNotes" class="field" placeholder="Notes (optional)" style="margin-top:10px;">
     <button class="primary" id="addGo" onclick="doAddJob()" style="margin-top:12px;">Schedule job</button>
     <button class="ghost" onclick="closeSheet('addSheet')">Cancel</button>
+  </div>
+</div>
+<div class="sheet-wrap" id="bizSheet" onclick="if(event.target===this)closeSheet('bizSheet')">
+  <div class="sheet">
+    <h3>🏢 Businesses</h3>
+    <div class="sub">These become the sections on the Dispatch board. Keywords (comma-separated) route jobs into a business by matching the job's services &amp; notes — a business with no keywords catches everything else.</div>
+    <div id="bizList"></div>
+    <button class="act" onclick="bizAdd()"><span class="em">＋</span> Add business</button>
+    <button class="primary" onclick="bizSaveFromUI()">Save businesses</button>
+    <button class="ghost" onclick="closeSheet('bizSheet')">Close</button>
   </div>
 </div>
 <div id="toast"></div>
@@ -1098,13 +1148,53 @@ document.addEventListener('keydown',function(e){
   if(e.key==='1') setTab('live'); if(e.key==='2') setTab('dispatch'); if(e.key==='3') setTab('sites'); if(e.key==='4') setTab('dev');
 });
 
-/* ═══════════════════════ DISPATCH — every business, one calendar ═══════════════════════ */
-let _dispView='month', _dispAnchor=new Date(), _dispCrew='all', _completed=[], _completedLoaded=false, _dispInit=false, _dispDrag=null;
-function initDispatch(){
-  renderDispatch();
-  if(!_completedLoaded){ _completedLoaded=true; loadCompleted(); }
-  if(!_dispInit){ _dispInit=true; }
+/* ═══════════════════════ DISPATCH — every business, one board ═══════════════════════
+   ServiceTitan-style: Month = classic calendar. Week & Day = swimlanes —
+   one section per BUSINESS, one row per CREW. Drag a job to another row to
+   reassign the crew, to another day to reschedule, along the Day timeline to
+   change its time. Businesses are configurable (⚙) and route by keywords. */
+let _dispView='week', _dispAnchor=new Date(), _dispCrew='all', _completed=[], _completedLoaded=false, _dispDrag=null;
+
+/* ── Businesses config ── */
+const BIZ_KEY='hq_biz_v1';
+const BIZ_DEFAULT=[ {e:'🌿',n:'Lawn Care',c:'#22c55e',kw:''} ];   // no keywords = catch-all
+function _bizLoad(){ try{ const b=JSON.parse(localStorage.getItem(BIZ_KEY)||'null'); if(Array.isArray(b)&&b.length) return b; }catch(e){} return BIZ_DEFAULT.slice(); }
+function _bizSave(l){ try{ localStorage.setItem(BIZ_KEY,JSON.stringify(l)); }catch(e){} }
+function _bizOf(b,biz){
+  biz=biz||_bizLoad();
+  const txt=(String(b.services||'')+' '+String(b.notes||'')+' '+String(b.frequency||'')).toLowerCase();
+  let def=0;
+  for(let i=0;i<biz.length;i++){
+    const kws=String(biz[i].kw||'').split(',').map(function(s){return s.trim().toLowerCase();}).filter(Boolean);
+    if(!kws.length){ def=i; continue; }
+    for(let j=0;j<kws.length;j++){ if(txt.indexOf(kws[j])>=0) return i; }
+  }
+  return def;
 }
+function openBizEditor(){
+  const list=_bizLoad();
+  document.getElementById('bizList').innerHTML=list.map(function(z,i){ return _bizRowHtml(z); }).join('');
+  openSheet('bizSheet');
+}
+function _bizRowHtml(z){
+  z=z||{e:'🏢',n:'',c:'#38bdf8',kw:''};
+  return '<div class="biz-row">'
+    +'<input type="text" class="bz-e" value="'+esc(z.e||'🏢')+'" style="width:44px;text-align:center;" title="Emoji">'
+    +'<input type="text" class="bz-n" value="'+esc(z.n||'')+'" placeholder="Business name" style="flex:1;min-width:90px;">'
+    +'<input type="text" class="bz-k" value="'+esc(z.kw||'')+'" placeholder="keywords, comma,separated" style="flex:1.2;min-width:110px;">'
+    +'<input type="color" class="bz-c" value="'+esc(z.c||'#38bdf8')+'" title="Color">'
+    +'<button class="bdel" onclick="this.parentNode.remove()">🗑</button></div>';
+}
+function bizAdd(){ document.getElementById('bizList').insertAdjacentHTML('beforeend',_bizRowHtml(null)); }
+function bizSaveFromUI(){
+  const rows=[].slice.call(document.querySelectorAll('#bizList .biz-row'));
+  const list=rows.map(function(r){ return { e:r.querySelector('.bz-e').value.trim()||'🏢', n:r.querySelector('.bz-n').value.trim(), c:r.querySelector('.bz-c').value||'#38bdf8', kw:r.querySelector('.bz-k').value.trim() }; }).filter(function(z){return z.n;});
+  if(!list.length){ toast('Keep at least one business'); return; }
+  _bizSave(list); closeSheet('bizSheet'); renderDispatch(); toast('🏢 Businesses saved');
+}
+
+/* ── data ── */
+function initDispatch(){ renderDispatch(); if(!_completedLoaded){ _completedLoaded=true; loadCompleted(); } }
 async function loadCompleted(){
   try{
     const d=await fetch(SCRIPT_URL+'?action=completed_jobs&limit=1500&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null);
@@ -1122,82 +1212,136 @@ function _dispFilter(list){
   if(_dispCrew==='un') return list.filter(function(b){ return !String(b.crew||'').trim(); });
   return list.filter(function(b){ return String(b.crew||'').toUpperCase().trim()===_dispCrew; });
 }
-function _dispByDate(){
-  const m={};
-  _dispFilter(_dispJobs()).forEach(function(b){ const d=dateOf(b); if(!d) return; (m[d]=m[d]||[]).push(b); });
-  Object.keys(m).forEach(function(d){
-    m[d].sort(function(a,b){
-      const ca=String(a.crew||'~'), cb=String(b.crew||'~');
-      if(ca!==cb) return ca<cb?-1:1;
-      const ord=_savedOrderFor(ca);
-      if(ord.length){ let pa=ord.indexOf(_svKey(a)), pb=ord.indexOf(_svKey(b)); pa=pa<0?9999:pa; pb=pb<0?9999:pb; if(pa!==pb) return pa-pb; }
-      const x=a.jobTime||'99:99', y=b.jobTime||'99:99'; return x<y?-1:x>y?1:0;
-    });
-  });
-  return m;
-}
 function _iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function _isArch(b){ return !!b.rowCompleted; }
 function _dispPC(b){ return _isArch(b)?'#2e7d32':(isDone(b)?'#64748b':(String(b.crew||'').trim()?crewColor(b.crew):'#f87171')); }
+function _jobSort(a,b){
+  const ord=_savedOrderFor(String(a.crew||''));
+  if(ord.length){ let pa=ord.indexOf(_svKey(a)), pb=ord.indexOf(_svKey(b)); pa=pa<0?9999:pa; pb=pb<0?9999:pb; if(pa!==pb) return pa-pb; }
+  const x=a.jobTime||'99:99', y=b.jobTime||'99:99'; return x<y?-1:x>y?1:0;
+}
+function _activeCrews(rangeJobs){
+  const s={}; (rangeJobs||_dispJobs()).forEach(function(b){ const c=String(b.crew||'').toUpperCase().trim(); if(c) s[c]=1; });
+  const arr=Object.keys(s).sort(); return arr.length?arr:['A'];
+}
+
+/* ── nav ── */
 function setDispView(v){ _dispView=v; renderDispatch(); }
 function setDispCrew(c){ _dispCrew=c; renderDispatch(); }
 function dispShift(n){
   const d=new Date(_dispAnchor);
-  if(_dispView==='month') d.setMonth(d.getMonth()+n); else d.setDate(d.getDate()+n*7);
+  if(_dispView==='month') d.setMonth(d.getMonth()+n);
+  else if(_dispView==='week') d.setDate(d.getDate()+n*7);
+  else d.setDate(d.getDate()+n);
   _dispAnchor=d; renderDispatch();
 }
 function dispToday(){ _dispAnchor=new Date(); renderDispatch(); }
 function dispPickDate(v){ if(!v) return; const p=v.split('-'); _dispAnchor=new Date(+p[0],+p[1]-1,+p[2]); renderDispatch(); }
 function dispGotoWeek(iso){ const p=iso.split('-'); _dispAnchor=new Date(+p[0],+p[1]-1,+p[2]); _dispView='week'; renderDispatch(); }
+function dispGotoDay(iso){ const p=iso.split('-'); _dispAnchor=new Date(+p[0],+p[1]-1,+p[2]); _dispView='day'; renderDispatch(); }
+
+const MO=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+/* ── render ── */
 function renderDispatch(){
   const board=document.getElementById('dispBoard'); if(!board) return;
-  document.getElementById('dvMonth').classList.toggle('on',_dispView==='month');
-  document.getElementById('dvWeek').classList.toggle('on',_dispView==='week');
+  ['dvMonth','dvWeek','dvDay'].forEach(function(id){ const el=document.getElementById(id); if(el) el.classList.toggle('on', id==='dv'+_dispView.charAt(0).toUpperCase()+_dispView.slice(1)); });
   document.querySelectorAll('#dispCrews button').forEach(function(b){ b.classList.toggle('on',b.dataset.c===_dispCrew); });
-  const byDate=_dispByDate(), todayIso=todayISO();
-  const MO=['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  let h='<div class="disp-dow">'+DOW.map(function(d){return '<div>'+d+'</div>';}).join('')+'</div>';
-  let rangeStart,rangeEnd;
+  const todayIso=todayISO();
+  let rangeStart, rangeEnd, h='';
   if(_dispView==='month'){
     const y=_dispAnchor.getFullYear(), mo=_dispAnchor.getMonth();
     document.getElementById('dispTitle').textContent=MO[mo]+' '+y;
     const first=new Date(y,mo,1); const start=new Date(first); start.setDate(1-first.getDay());
     rangeStart=_iso(start);
-    h+='<div class="disp-month">';
+    const byDate={};
+    _dispFilter(_dispJobs()).forEach(function(b){ const d=dateOf(b); if(d) (byDate[d]=byDate[d]||[]).push(b); });
+    Object.keys(byDate).forEach(function(d){ byDate[d].sort(_jobSort); });
+    h+='<div class="disp-dow">'+DOW.map(function(d){return '<div>'+d+'</div>';}).join('')+'</div><div class="disp-month">';
     for(let i=0;i<42;i++){
       const d=new Date(start); d.setDate(start.getDate()+i); const iso=_iso(d);
       if(i===41) rangeEnd=iso;
-      const jobs=byDate[iso]||[];
-      const amt=jobs.reduce(function(s,b){return s+amtOf(b);},0);
-      const MAXP=4;
-      h+='<div class="disp-cell'+(d.getMonth()!==mo?' dim':'')+(iso===todayIso?' today':'')+'" data-d="'+iso+'" ondragover="dispOver(event,this)" ondragleave="this.classList.remove(\'dragover\')" ondrop="dispDrop(event,\''+iso+'\')">'
-        +'<div class="dnum" onclick="dispGotoWeek(\''+iso+'\')" title="Open week view">'+d.getDate()+(jobs.length?'<span class="dsum">'+jobs.length+' · $'+amt.toFixed(0)+'</span>':'')+'</div>';
+      const jobs=byDate[iso]||[]; const amt=jobs.reduce(function(s,b){return s+amtOf(b);},0); const MAXP=4;
+      h+='<div class="disp-cell'+(d.getMonth()!==mo?' dim':'')+(iso===todayIso?' today':'')+'" ondragover="dispOver(event,this)" ondragleave="this.classList.remove(\'dragover\')" ondrop="dispDropCell(event,null,\''+iso+'\')">'
+        +'<div class="dnum" onclick="dispGotoDay(\''+iso+'\')" title="Open day board">'+d.getDate()+(jobs.length?'<span class="dsum">'+jobs.length+' · $'+amt.toFixed(0)+'</span>':'')+'</div>';
       jobs.slice(0,MAXP).forEach(function(b){ h+=_dispPill(b); });
-      if(jobs.length>MAXP) h+='<div class="disp-more" onclick="dispGotoWeek(\''+iso+'\')">+'+(jobs.length-MAXP)+' more…</div>';
+      if(jobs.length>MAXP) h+='<div class="disp-more" onclick="dispGotoDay(\''+iso+'\')">+'+(jobs.length-MAXP)+' more…</div>';
       h+='</div>';
     }
     h+='</div>';
-  } else {
-    const start=new Date(_dispAnchor); start.setDate(start.getDate()-start.getDay());
-    const end=new Date(start); end.setDate(start.getDate()+6);
-    rangeStart=_iso(start); rangeEnd=_iso(end);
-    document.getElementById('dispTitle').textContent=MO[start.getMonth()].slice(0,3)+' '+start.getDate()+' – '+MO[end.getMonth()].slice(0,3)+' '+end.getDate()+', '+end.getFullYear();
-    h+='<div class="disp-week">';
-    for(let i=0;i<7;i++){
-      const d=new Date(start); d.setDate(start.getDate()+i); const iso=_iso(d);
-      const jobs=byDate[iso]||[];
-      const amt=jobs.reduce(function(s,b){return s+amtOf(b);},0);
-      h+='<div class="disp-day'+(iso===todayIso?' today':'')+'" data-d="'+iso+'" ondragover="dispOver(event,this)" ondragleave="this.classList.remove(\'dragover\')" ondrop="dispDrop(event,\''+iso+'\')">'
-        +'<div class="dh"><span>'+DOW[d.getDay()]+' '+d.getDate()+'</span><span class="dm">'+(jobs.length?jobs.length+' · $'+amt.toFixed(0):'—')+'</span></div>';
-      jobs.forEach(function(b){ h+=_dispCard(b); });
-      h+='</div>';
-    }
-    h+='</div>';
+    board.innerHTML=h;
+    _dispStats(rangeStart,rangeEnd);
+    return;
   }
+  // ── swimlane views (week / day) ──
+  let days=[];
+  if(_dispView==='week'){
+    const start=new Date(_dispAnchor); start.setDate(start.getDate()-start.getDay());
+    for(let i=0;i<7;i++){ const d=new Date(start); d.setDate(start.getDate()+i); days.push(d); }
+    const end=days[6];
+    document.getElementById('dispTitle').textContent=MO[start.getMonth()].slice(0,3)+' '+start.getDate()+' – '+MO[end.getMonth()].slice(0,3)+' '+end.getDate()+', '+end.getFullYear();
+  } else {
+    days=[new Date(_dispAnchor)];
+    document.getElementById('dispTitle').textContent=DOW[days[0].getDay()]+', '+MO[days[0].getMonth()].slice(0,3)+' '+days[0].getDate()+' '+days[0].getFullYear();
+  }
+  rangeStart=_iso(days[0]); rangeEnd=_iso(days[days.length-1]);
+  const biz=_bizLoad();
+  const jobs=_dispFilter(_dispJobs()).filter(function(b){ const d=dateOf(b); return d>=rangeStart&&d<=rangeEnd; });
+  // index: bizIdx → crew → date → [jobs]
+  const idx={};
+  jobs.forEach(function(b){
+    const bi=_bizOf(b,biz), c=String(b.crew||'').toUpperCase().trim()||'un', d=dateOf(b);
+    idx[bi]=idx[bi]||{}; idx[bi][c]=idx[bi][c]||{}; (idx[bi][c][d]=idx[bi][c][d]||[]).push(b);
+  });
+  const crews=_activeCrews();
+  const crewRows=(_dispCrew==='all')?crews.concat(['un']):[_dispCrew==='un'?'un':_dispCrew];
+  // headers
+  if(_dispView==='week'){
+    h+='<div class="st-dowhead"><div></div>'+days.map(function(d){ const iso=_iso(d); return '<div class="'+(iso===todayIso?'today':'')+'" style="cursor:pointer;" onclick="dispGotoDay(\''+iso+'\')">'+DOW[d.getDay()]+' '+(d.getMonth()+1)+'/'+d.getDate()+'</div>'; }).join('')+'</div>';
+  } else {
+    h+='<div class="st-hourshead"><div></div><div class="st-hours">'+(function(){ let x=''; for(let hh=7;hh<=19;hh++){ x+='<span style="left:'+(((hh-7)/12)*100)+'%">'+(hh%12||12)+(hh<12?'a':'p')+'</span>'; } return x; })()+'</div></div>';
+  }
+  // sections
+  biz.forEach(function(z,zi){
+    const bjobs=jobs.filter(function(b){ return _bizOf(b,biz)===zi; });
+    if(!bjobs.length && biz.length>1 && zi!==0 && !(idx[zi])){ /* still render as drop target? only if it has crews */ }
+    const amt=bjobs.reduce(function(s,b){return s+amtOf(b);},0);
+    h+='<div class="st-section"><div class="st-bizhead" style="--bc:'+esc(z.c||'#22c55e')+'"><span class="bl"></span><span class="be">'+esc(z.e||'🏢')+'</span>'+esc(z.n||'Business')
+      +'<span class="bt">'+bjobs.length+' jobs · $'+amt.toFixed(0)+'</span></div>';
+    crewRows.forEach(function(c){
+      const rowJobsAll=(idx[zi]&&idx[zi][c])?idx[zi][c]:{};
+      const rowCount=Object.keys(rowJobsAll).reduce(function(s,d){return s+rowJobsAll[d].length;},0);
+      if(c==='un'&&!rowCount&&_dispCrew==='all'&&biz.length>1&&zi>0){} // keep unassigned row everywhere as a drop target
+      const col=(c==='un')?'#f87171':crewColor(c);
+      const lab='<div class="st-rowlab"><span class="cdot" style="background:'+col+';color:'+col+'"></span>'+(c==='un'?'⬜ Unassigned':'Crew '+esc(c))+'<span class="cnt">'+rowCount+'</span></div>';
+      if(_dispView==='week'){
+        h+='<div class="st-grid">'+lab+days.map(function(d){
+          const iso=_iso(d); const cell=(rowJobsAll[iso]||[]).slice().sort(_jobSort);
+          return '<div class="st-cell'+(iso===todayIso?' today':'')+'" ondragover="dispOver(event,this)" ondragleave="this.classList.remove(\'dragover\')" ondrop="dispDropCell(event,\''+c+'\',\''+iso+'\')">'
+            +cell.map(function(b){ return _dispPill(b); }).join('')+'</div>';
+        }).join('')+'</div>';
+      } else {
+        const iso=rangeStart; const cell=(rowJobsAll[iso]||[]).slice().sort(_jobSort);
+        const timed=cell.filter(function(b){return /^\d{1,2}:\d{2}$/.test(String(b.jobTime||'').trim());});
+        const untimed=cell.filter(function(b){return !/^\d{1,2}:\d{2}$/.test(String(b.jobTime||'').trim());});
+        let now='';
+        if(iso===todayIso){ const n=new Date(); const mins=n.getHours()*60+n.getMinutes(); if(mins>=420&&mins<=1140) now='<div class="st-nowline" style="left:'+(((mins-420)/720)*100)+'%"></div>'; }
+        h+='<div class="st-grid day">'+lab
+          +'<div><div class="st-tl" ondragover="dispOver(event,this)" ondragleave="this.classList.remove(\'dragover\')" ondrop="dispDropTL(event,\''+c+'\',\''+iso+'\')">'
+          +now+timed.map(function(b){ return _stBlock(b); }).join('')+'</div>'
+          +(untimed.length?('<div class="st-untimed">'+untimed.map(function(b){ return _dispPill(b); }).join('')+'</div>'):'')
+          +'</div></div>';
+      }
+    });
+    h+='</div>';
+  });
+  if(!jobs.length) h+='<div class="st-empty">📭 Nothing scheduled in this range'+(_dispCrew!=='all'?' for this crew':'')+'. Drag jobs here from another week, or add one from the Live tab.</div>';
   board.innerHTML=h;
-  // range stats
-  const all=[].concat.apply([],Object.keys(byDate).filter(function(d){return d>=rangeStart&&d<=rangeEnd;}).map(function(d){return byDate[d];}));
+  _dispStats(rangeStart,rangeEnd);
+}
+function _dispStats(rangeStart,rangeEnd){
+  const all=_dispFilter(_dispJobs()).filter(function(b){ const d=dateOf(b); return d>=rangeStart&&d<=rangeEnd; });
   const doneN=all.filter(function(b){return isDone(b)||_isArch(b);}).length;
   document.getElementById('dispStats').innerHTML=
     '<span>📋 <b>'+all.length+'</b> jobs</span><span>✅ <b>'+doneN+'</b> done</span><span>🕐 <b>'+(all.length-doneN)+'</b> open</span>'
@@ -1208,33 +1352,67 @@ function _dispPill(b){
   const bi=_bookings.indexOf(b), arch=_isArch(b), done=isDone(b)||arch;
   return '<div class="disp-pill'+(done?' done':'')+(arch?' arch':'')+'" style="--pc:'+_dispPC(b)+'" '
     +(arch?'title="Archived — completed job"':'draggable="true" ondragstart="dispDragStart(event,'+bi+')" ondragend="dispDragEnd(event)" onclick="openJobSheet('+bi+')"')
-    +'>'+(done?'✓ ':'')+esc(b.name||'?')+' <span class="pp">'+esc(String(b.price||''))+'</span></div>';
+    +'>'+(done?'✓ ':'')+esc(b.name||'?')+' <span class="pp">'+(b.jobTime?esc(b.jobTime)+' · ':'')+esc(String(b.price||''))+'</span></div>';
 }
-function _dispCard(b){
-  const bi=_bookings.indexOf(b), arch=_isArch(b), done=isDone(b)||arch, pb=payBadge(b);
-  const crew=String(b.crew||'').toUpperCase().trim();
-  return '<div class="disp-card'+(done?' done':'')+(arch?' arch':'')+'" style="--pc:'+_dispPC(b)+'" '
-    +(arch?'':'draggable="true" ondragstart="dispDragStart(event,'+bi+')" ondragend="dispDragEnd(event)" onclick="openJobSheet('+bi+')"')+'>'
-    +'<div class="cn">'+(done?'✓ ':'')+esc(b.name||'Customer')+'</div>'
-    +'<div class="ca">'+esc(b.address||'')+(b.jobTime?(' · '+esc(b.jobTime)):'')+'</div>'
-    +'<div class="cf">'+(crew?'<span class="chip" style="background:'+crewColor(crew)+'26;color:'+crewColor(crew)+'">Crew '+esc(crew)+'</span>':(arch?'':'<span class="chip" style="background:#f8717126;color:#f87171">unassigned</span>'))
-    +'<span class="chip" style="background:'+pb.c+'26;color:'+pb.c+'">'+(arch?'Archived':pb.t)+'</span>'
-    +(b.price?'<span class="jamt" style="margin-left:auto;">'+esc(String(b.price))+'</span>':'')+'</div></div>';
+function _stBlock(b){
+  const bi=_bookings.indexOf(b), arch=_isArch(b), done=isDone(b)||arch;
+  const t=String(b.jobTime||'8:00').split(':'); const mins=(+t[0])*60+(+t[1]||0);
+  const left=Math.max(0,Math.min(97,((mins-420)/720)*100));
+  const width=Math.min(100-left, (45/720)*100);
+  return '<div class="st-block'+(done?' done':'')+(arch?' arch':'')+'" style="--pc:'+_dispPC(b)+';left:'+left+'%;width:'+width+'%;min-width:74px;" '
+    +(arch?'title="Archived"':'draggable="true" ondragstart="dispDragStart(event,'+bi+')" ondragend="dispDragEnd(event)" onclick="openJobSheet('+bi+')"')
+    +'>'+(done?'✓ ':'')+esc(b.name||'?')+'<span class="bt2">'+esc(b.jobTime||'')+(b.price?' · '+esc(String(b.price)):'')+'</span></div>';
 }
+
+/* ── drag & drop ── */
 function dispDragStart(ev,bi){ _dispDrag=bi; ev.currentTarget.classList.add('dragging'); ev.dataTransfer.effectAllowed='move'; try{ev.dataTransfer.setData('text/plain','');}catch(e){} }
-function dispDragEnd(ev){ ev.currentTarget.classList.remove('dragging'); document.querySelectorAll('.disp-cell.dragover,.disp-day.dragover').forEach(function(el){el.classList.remove('dragover');}); _dispDrag=null; }
+function dispDragEnd(ev){ ev.currentTarget.classList.remove('dragging'); document.querySelectorAll('.dragover').forEach(function(el){el.classList.remove('dragover');}); _dispDrag=null; }
 function dispOver(ev,el){ if(_dispDrag==null) return; ev.preventDefault(); ev.dataTransfer.dropEffect='move'; el.classList.add('dragover'); }
-function dispDrop(ev,iso){
+function _applyCrew(b,crewKey){
+  if(crewKey==null) return false;                       // month view: crew untouched
+  const target=(crewKey==='un')?'':crewKey;
+  const cur=String(b.crew||'').toUpperCase().trim();
+  if(target===cur) return false;
+  const prev=b.crew; b.crew=target;
+  fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'set_crew', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), crew:target, adminToken:token}))
+    .then(r=>r.json()).then(function(d){ if(!(d&&d.success)){ b.crew=prev; toast('⚠ Crew change didn\'t save'); render(); } }).catch(function(){});
+  return true;
+}
+function dispDropCell(ev,crewKey,iso){
   ev.preventDefault();
   if(_dispDrag==null) return;
   const b=_bookings[_dispDrag]; _dispDrag=null;
-  if(!b||dateOf(b)===iso) { renderDispatch(); return; }
-  _jobBi=_bookings.indexOf(b);
-  document.getElementById('reschedSub').textContent=(b.name||'Customer')+' · '+(dateOf(b)||'no date')+' → '+iso;
-  document.getElementById('reschedDate').value=iso;
-  document.getElementById('reschedSeries').checked=false;
-  document.getElementById('reschedNotify').checked=true;
-  openSheet('reschedSheet');
+  if(!b) return;
+  const crewChanged=_applyCrew(b,crewKey);
+  if(iso&&dateOf(b)!==iso){
+    _jobBi=_bookings.indexOf(b);
+    document.getElementById('reschedSub').textContent=(b.name||'Customer')+' · '+(dateOf(b)||'no date')+' → '+iso+(crewChanged?' · crew updated':'');
+    document.getElementById('reschedDate').value=iso;
+    document.getElementById('reschedSeries').checked=false;
+    document.getElementById('reschedNotify').checked=true;
+    openSheet('reschedSheet');
+    return;
+  }
+  if(crewChanged) toast('👷 '+(b.name||'Job')+' → '+(String(b.crew||'').trim()?('Crew '+b.crew):'Unassigned'));
+  renderDispatch();
+}
+function dispDropTL(ev,crewKey,iso){
+  ev.preventDefault();
+  if(_dispDrag==null) return;
+  const b=_bookings[_dispDrag]; _dispDrag=null;
+  if(!b) return;
+  const crewChanged=_applyCrew(b,crewKey);
+  const r=ev.currentTarget.getBoundingClientRect();
+  let mins=420+Math.round(((ev.clientX-r.left)/r.width)*720/15)*15;
+  mins=Math.max(420,Math.min(1125,mins));
+  const hh=String(Math.floor(mins/60)).padStart(2,'0'), mm=String(mins%60).padStart(2,'0');
+  const newTime=hh+':'+mm, prev=b.jobTime;
+  b.jobTime=newTime;
+  fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'set_job_time', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), jobTime:newTime, adminToken:token}))
+    .then(r2=>r2.json()).then(function(d){ if(!(d&&d.success)){ b.jobTime=prev; toast('⚠ Time change didn\'t save'); } renderDispatch(); }).catch(function(){ renderDispatch(); });
+  toast('🕐 '+(b.name||'Job')+' → '+((+hh)%12||12)+':'+mm+((+hh)<12?' AM':' PM')+(crewChanged?' · crew updated':''));
+  if(dateOf(b)!==iso){ /* timeline is single-day; date can't change here */ }
+  renderDispatch();
 }
 
 /* ═══════════════════════ SITES — the empire board ═══════════════════════ */
