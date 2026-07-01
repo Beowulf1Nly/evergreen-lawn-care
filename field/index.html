@@ -1187,7 +1187,7 @@ async function fmSubmitComplete(){
   const _jMin=_jStart?Math.max(0,Math.round((Date.now()-new Date(_jStart).getTime())/60000)):null;
   extra.push({ kind:'endchk', idemKey:'endck:'+base, method:'GET', params:{ action:'log_checklist', type:'job_complete', date:svcDate, rowIndex, by:adminName||'Crew', items:JSON.stringify({checklist:Object.keys(_fmcEndChk), jobMinutes:_jMin, startedAt:_jStart||null, completedAt:_jEnd}), adminToken } });
   delete _jobTimers[_jk];
-  _fmcPhotos.forEach((p,i)=>extra.push({ kind:'photo', idemKey:'photo:'+base+':'+_uuid(), method:'POST', body:{ action:'upload_job_photo', base64Data:p.b64, fileName:p.fileName, mimeType:p.mimeType, rowIndex, jobLabel:(bk.name||'')+' - '+svcDate+(_fmcPhotos.length>1?' ('+(i+1)+')':''), markedBy:adminName||'Crew', adminToken } }));
+  _fmcPhotos.forEach((p,i)=>extra.push({ kind:'photo', idemKey:'photo:'+base+':'+_uuid(), method:'POST', body:{ action:'upload_job_photo', base64Data:p.b64, fileName:p.fileName, mimeType:p.mimeType, rowIndex, email, serviceDate:svcDate, jobLabel:(bk.name||'')+' - '+svcDate+(_fmcPhotos.length>1?' ('+(i+1)+')':''), markedBy:adminName||'Crew', adminToken } }));
 
   const finish=(offline)=>{
     const lbl=new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
