@@ -13,8 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-04.1 */
-(function(){ var V='2026-07-04.1'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-04.2 */
+(function(){ var V='2026-07-04.2'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1410,11 +1410,13 @@ function renderDispatch(){
     Object.keys(byDate).forEach(function(d){ byDate[d].sort(_jobSort); });
     // per-crew month economics (booked / est hours / expected profit / 50% target)
     const mJobs=[].concat.apply([],Object.keys(byDate).map(function(d){return byDate[d];})).filter(function(b){ const dd=dateOf(b); const cur=new Date(y,mo,1), nxt=new Date(y,mo+1,1); const jd=new Date(dd+'T12:00:00'); return jd>=cur&&jd<nxt; });
+    const mBiz=_bizLoad();
     const mCrews={};
-    mJobs.forEach(function(b){ const cw=String(b.crew||'').toUpperCase().trim(); if(cw) (mCrews[cw]=mCrews[cw]||[]).push(b); });
+    mJobs.forEach(function(b){ const cw=String(b.crew||'').toUpperCase().trim(); if(!cw) return; const bz=_bizOf(b,mBiz); (mCrews[bz+'|'+cw]=mCrews[bz+'|'+cw]||[]).push(b); });
     let mEcon='';
-    Object.keys(mCrews).sort().forEach(function(cw){
-      mEcon+=_econStrip(cw,mCrews[cw],null,'<span class="ro-num" style="background:'+crewColor(cw)+';margin-right:2px;">'+esc(cw)+'</span>');
+    Object.keys(mCrews).sort().forEach(function(k){
+      const bz=+k.split('|')[0], cw=k.split('|')[1];
+      mEcon+=_econStrip(cw,mCrews[k],null,'<span class="ro-num" style="background:'+crewColor(cw)+';margin-right:2px;">'+esc(cw)+'</span><span style="margin-right:4px;">'+esc((mBiz[bz]||{}).e||'')+'</span>',bz);
     });
     if(mEcon) h+='<div style="margin-bottom:8px;">'+mEcon+'</div>';
     h+='<div class="disp-dow">'+DOW.map(function(d){return '<div>'+d+'</div>';}).join('')+'</div><div class="disp-month">';
@@ -1453,8 +1455,6 @@ function renderDispatch(){
     const bi=_bizOf(b,biz), c=String(b.crew||'').toUpperCase().trim()||'un', d=dateOf(b);
     idx[bi]=idx[bi]||{}; idx[bi][c]=idx[bi][c]||{}; (idx[bi][c][d]=idx[bi][c][d]||[]).push(b);
   });
-  const crews=_activeCrews();
-  const crewRows=(_dispCrew==='all')?crews.concat(['un']):[_dispCrew==='un'?'un':_dispCrew];
   // headers
   if(_dispView==='week'){
     h+='<div class="st-dowhead"><div></div>'+days.map(function(d){ const iso=_iso(d); return '<div class="'+(iso===todayIso?'today':'')+'" style="cursor:pointer;" onclick="dispGotoDay(\''+iso+'\')">'+DOW[d.getDay()]+' '+(d.getMonth()+1)+'/'+d.getDate()+'</div>'; }).join('')+'</div>';
@@ -1467,6 +1467,9 @@ function renderDispatch(){
     if(!bjobs.length && biz.length>1 && zi!==0 && !(idx[zi])){ /* still render as drop target? only if it has crews */ }
     const amt=bjobs.reduce(function(s,b){return s+amtOf(b);},0);
     const _colB=!!_bizCol()[z.n];
+    const _bcs={}; bjobs.forEach(function(b){ const cw=String(b.crew||'').toUpperCase().trim(); if(cw) _bcs[cw]=1; });
+    const bizCrews=Object.keys(_bcs).sort();
+    const crewRows=(_dispCrew==='all')?bizCrews.concat(['un']):[_dispCrew==='un'?'un':_dispCrew];
     h+='<div class="st-section"><div class="st-bizhead" style="--bc:'+esc(z.c||'#22c55e')+';cursor:pointer;" onclick="bizToggle(\''+esc(z.n)+'\')" title="Click to '+(_colB?'expand':'collapse')+'">'
       +'<span style="color:var(--dim);font-size:11px;width:14px;">'+(_colB?'▸':'▾')+'</span>'
       +'<span class="bl"></span><span class="be">'+esc(z.e||'🏢')+'</span>'+esc(z.n||'Business')
@@ -1485,7 +1488,7 @@ function renderDispatch(){
             +cell.map(function(b){ return _dispPill(b); }).join('')+'</div>';
         }).join('')+'</div>';
         const weekAll=[].concat.apply([],Object.keys(rowJobsAll).map(function(d){return rowJobsAll[d];}));
-        h+=_econStrip(c,weekAll,todayIso);
+        h+=_econStrip(c,weekAll,todayIso,null,zi);
       } else {
         const iso=rangeStart; _ensureDayRoute(iso);
         const rec=_dispRoute[iso]||{times:{},order:{}};
@@ -1525,7 +1528,7 @@ function renderDispatch(){
           +now+evs.map(function(ev){ return _stBlockEv(ev.b,ev.st,ev.en,7+ev.lane*42,ev.proj); }).join('')+'</div>'
           +(hasProj?'<div style="font-size:10.5px;color:var(--dim);padding:3px 2px 0;">┅ dashed = projected · push times from /invoice, or reorder below</div>':'')
           +_dayOrderPanel(c,iso,cell)
-          +_econStrip(c,cell,iso)
+          +_econStrip(c,cell,iso,null,zi)
           +'</div></div>';
       }
     });
@@ -1581,8 +1584,13 @@ const CREWRATE_KEY='hq_crewrate_v1', DRIVE_BUF=12;   // est. minutes between sto
 let _crewPay=null, _crewPayTried=false;
 async function loadCrewPay(){
   if(_crewPayTried) return; _crewPayTried=true;
-  try{
-    const d=await fetch(SCRIPT_URL+'?action=get_crew_pay&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null);
+  // Crew A (Lawn) and Crew A (Cleaning) are different people — every business's
+  // backend has its OWN 'Crew Pay' tab, and rates are keyed business+crew.
+  const biz=_bizLoad();
+  const all={};
+  await Promise.all(biz.map(async function(z,zi){
+    if(!_bizConnected(z)) return;
+    const d=await bizGet(z,{action:'get_crew_pay'});
     if(d&&d.success&&Array.isArray(d.members)&&d.members.length){
       const m={};
       d.members.forEach(function(r){
@@ -1594,20 +1602,27 @@ async function loadCrewPay(){
           m[c].who.push(r.name+' ($'+(Math.round(hourly*100)/100)+'/hr'+(/sal/i.test(String(r.type||''))?' salary':'')+')');
         });
       });
-      _crewPay=m;
-      if(_activeTab==='dispatch') renderDispatch();
+      if(Object.keys(m).length) all[zi]=m;
     }
-  }catch(e){}
+  }));
+  if(Object.keys(all).length){ _crewPay=all; if(_activeTab==='dispatch') renderDispatch(); }
 }
 const BIZCOL_KEY='hq_bizcol_v1';
 function _bizCol(){ try{ return JSON.parse(localStorage.getItem(BIZCOL_KEY)||'{}'); }catch(e){ return {}; } }
 function bizToggle(n){ const c=_bizCol(); c[n]=!c[n]; try{ localStorage.setItem(BIZCOL_KEY,JSON.stringify(c)); }catch(e){} renderDispatch(); }
-function _crewRate(c){
-  if(_crewPay&&_crewPay[c]&&_crewPay[c].rate>0) return Math.round(_crewPay[c].rate*100)/100;   // Crew Pay sheet wins
-  try{ const r=JSON.parse(localStorage.getItem(CREWRATE_KEY)||'{}'); if(+r[c]>0) return +r[c]; }catch(e){}
+function _crewPayFor(zi,c){ return (_crewPay&&_crewPay[zi]&&_crewPay[zi][c]&&_crewPay[zi][c].rate>0)?_crewPay[zi][c]:null; }
+function _crewRate(c,zi){
+  zi=zi||0;
+  const cp=_crewPayFor(zi,c);
+  if(cp) return Math.round(cp.rate*100)/100;                         // that business's Crew Pay sheet wins
+  try{
+    const r=JSON.parse(localStorage.getItem(CREWRATE_KEY)||'{}');
+    if(+r[zi+'|'+c]>0) return +r[zi+'|'+c];
+    if(zi===0&&+r[c]>0) return +r[c];                                 // legacy plain-letter keys (main business)
+  }catch(e){}
   return 50;
 }
-function setCrewRate(c,v){ try{ const r=JSON.parse(localStorage.getItem(CREWRATE_KEY)||'{}'); r[c]=Math.max(1,parseFloat(v)||50); localStorage.setItem(CREWRATE_KEY,JSON.stringify(r)); }catch(e){} try{ if(document.activeElement) document.activeElement.blur(); }catch(e){} renderDispatch(); toast('💲 Crew '+c+' rate saved'); }
+function setCrewRate(zi,c,v){ try{ const r=JSON.parse(localStorage.getItem(CREWRATE_KEY)||'{}'); r[zi+'|'+c]=Math.max(1,parseFloat(v)||50); localStorage.setItem(CREWRATE_KEY,JSON.stringify(r)); }catch(e){} try{ if(document.activeElement) document.activeElement.blur(); }catch(e){} renderDispatch(); toast('💲 '+((_bizLoad()[zi]||{}).n||'')+' Crew '+c+' rate saved'); }
 function _crewWorkedHrs(c){
   let best=0;
   (_crews||[]).forEach(function(x){
@@ -1617,27 +1632,28 @@ function _crewWorkedHrs(c){
   });
   return best;
 }
-function _econParts(c,jobs){
+function _econParts(c,jobs,zi){
   const R=jobs.reduce(function(s2,b){return s2+amtOf(b);},0);
   // drive buffers reset each day — group by date so week/month math is honest
   const byD={};
   jobs.forEach(function(b){ const d=dateOf(b)||'?'; (byD[d]=byD[d]||[]).push(b); });
   let estM=0;
   Object.values(byD).forEach(function(list){ estM+=list.reduce(function(s2,b){return s2+_jobMins(b);},0)+Math.max(0,list.length-1)*DRIVE_BUF; });
-  const rate=_crewRate(c);
+  const rate=_crewRate(c,zi);
   const tgtH=R>0?(R*0.5)/rate:0;                                          // hours where labor = 50% of revenue
   const estProfit=R-(estM/60)*rate;                                       // revenue − expected labor cost
   const pct=R>0?Math.round((estProfit/R)*100):0;
   return { R:R, estM:estM, rate:rate, tgtH:tgtH, estProfit:estProfit, pct:pct, days:Object.keys(byD).length };
 }
-function _econStrip(c,jobs,iso,labelHtml){
+function _econStrip(c,jobs,iso,labelHtml,zi){
+  zi=zi||0;
   if(c==='un'||!jobs.length) return '';
-  const p=_econParts(c,jobs);
+  const p=_econParts(c,jobs,zi);
   const estH=Math.floor(p.estM/60), estMm=p.estM%60;
   const ok=p.pct>=50;
   const span=(_dispView==='month')?'month':(_dispView==='week')?'week':'day';
   let live='';
-  if(iso&&iso===todayISO()){
+  if(iso&&iso===todayISO()&&zi===0){                                  // GPS heartbeats are main-backend only
     const w=_crewWorkedHrs(c);
     if(w>0){ const diff=p.tgtH-w;
       live=' · ⏱ on clock <b>'+w.toFixed(1)+'h</b> '+(diff>=0
@@ -1649,9 +1665,10 @@ function _econStrip(c,jobs,iso,labelHtml){
     +' · 🧮 est '+span+' <b>'+estH+'h '+String(estMm).padStart(2,'0')+'m</b> <span style="color:var(--dim)">(jobs + drive'+(p.days>1?' · '+p.days+' days':'')+')</span>'
     +' · 💰 est profit <b style="color:'+(ok?'#34d399':'#fbbf24')+'">$'+Math.round(p.estProfit)+'</b> <span class="dev-pill '+(ok?'g':'y')+'">'+p.pct+'% margin'+(ok?' ✓':' — under 50%')+'</span>'
     +' · 🎯 50% profit ($'+Math.round(p.R*0.5)+') needs ≤ <b>'+p.tgtH.toFixed(1)+'h</b> @ '
-    +((_crewPay&&_crewPay[c]&&_crewPay[c].rate>0)
-      ?('<b>$'+p.rate+'/hr</b> <span class="dev-pill" style="background:rgba(56,189,248,.13);color:#7dd3fc;cursor:help;" title="'+esc(_crewPay[c].who.join(' + '))+' — edit the Crew Pay tab in your Google Sheet">👥 '+_crewPay[c].who.length+' on crew</span>')
-      :('$<input class="st-rate" type="number" min="1" value="'+p.rate+'" onchange="setCrewRate(\''+c+'\',this.value)" onkeydown="if(event.key===\'Enter\')this.blur()" title="What this crew costs you per hour — or set up the Crew Pay sheet (Ops backend) and this fills itself">/hr'))
+    +(function(){ const cp=_crewPayFor(zi,c);
+      return cp
+      ?('<b>$'+p.rate+'/hr</b> <span class="dev-pill" style="background:rgba(56,189,248,.13);color:#7dd3fc;cursor:help;" title="'+esc(cp.who.join(' + '))+' — edit the Crew Pay tab in that business\'s Google Sheet">👥 '+cp.who.length+' on crew</span>')
+      :('$<input class="st-rate" type="number" min="1" value="'+p.rate+'" onchange="setCrewRate('+zi+',\''+c+'\',this.value)" onkeydown="if(event.key===\'Enter\')this.blur()" title="What this crew costs you per hour — or fill that business\'s Crew Pay sheet and this fills itself">/hr'); })()
     +live+'</div>';
 }
 
