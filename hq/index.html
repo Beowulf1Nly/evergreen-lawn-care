@@ -13,8 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-03.4 */
-(function(){ var V='2026-07-03.4'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-03.6 */
+(function(){ var V='2026-07-03.6'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1336,6 +1336,15 @@ function renderDispatch(){
     const byDate={};
     _dispFilter(_dispJobs()).forEach(function(b){ const d=dateOf(b); if(d) (byDate[d]=byDate[d]||[]).push(b); });
     Object.keys(byDate).forEach(function(d){ byDate[d].sort(_jobSort); });
+    // per-crew month economics (booked / est hours / expected profit / 50% target)
+    const mJobs=[].concat.apply([],Object.keys(byDate).map(function(d){return byDate[d];})).filter(function(b){ const dd=dateOf(b); const cur=new Date(y,mo,1), nxt=new Date(y,mo+1,1); const jd=new Date(dd+'T12:00:00'); return jd>=cur&&jd<nxt; });
+    const mCrews={};
+    mJobs.forEach(function(b){ const cw=String(b.crew||'').toUpperCase().trim(); if(cw) (mCrews[cw]=mCrews[cw]||[]).push(b); });
+    let mEcon='';
+    Object.keys(mCrews).sort().forEach(function(cw){
+      mEcon+=_econStrip(cw,mCrews[cw],null,'<span class="ro-num" style="background:'+crewColor(cw)+';margin-right:2px;">'+esc(cw)+'</span>');
+    });
+    if(mEcon) h+='<div style="margin-bottom:8px;">'+mEcon+'</div>';
     h+='<div class="disp-dow">'+DOW.map(function(d){return '<div>'+d+'</div>';}).join('')+'</div><div class="disp-month">';
     for(let i=0;i<42;i++){
       const d=new Date(start); d.setDate(start.getDate()+i); const iso=_iso(d);
@@ -1385,9 +1394,13 @@ function renderDispatch(){
     const bjobs=jobs.filter(function(b){ return _bizOf(b,biz)===zi; });
     if(!bjobs.length && biz.length>1 && zi!==0 && !(idx[zi])){ /* still render as drop target? only if it has crews */ }
     const amt=bjobs.reduce(function(s,b){return s+amtOf(b);},0);
-    h+='<div class="st-section"><div class="st-bizhead" style="--bc:'+esc(z.c||'#22c55e')+'"><span class="bl"></span><span class="be">'+esc(z.e||'🏢')+'</span>'+esc(z.n||'Business')
-      +'<span class="bt">'+bjobs.length+' jobs · $'+amt.toFixed(0)+'</span></div>';
+    const _colB=!!_bizCol()[z.n];
+    h+='<div class="st-section"><div class="st-bizhead" style="--bc:'+esc(z.c||'#22c55e')+';cursor:pointer;" onclick="bizToggle(\''+esc(z.n)+'\')" title="Click to '+(_colB?'expand':'collapse')+'">'
+      +'<span style="color:var(--dim);font-size:11px;width:14px;">'+(_colB?'▸':'▾')+'</span>'
+      +'<span class="bl"></span><span class="be">'+esc(z.e||'🏢')+'</span>'+esc(z.n||'Business')
+      +'<span class="bt">'+bjobs.length+' jobs · $'+amt.toFixed(0)+(_colB?' · collapsed':'')+'</span></div>';
     crewRows.forEach(function(c){
+      if(_colB) return;
       const rowJobsAll=(idx[zi]&&idx[zi][c])?idx[zi][c]:{};
       const rowCount=Object.keys(rowJobsAll).reduce(function(s,d){return s+rowJobsAll[d].length;},0);
       if(c==='un'&&!rowCount&&_dispCrew==='all'&&biz.length>1&&zi>0){} // keep unassigned row everywhere as a drop target
@@ -1399,6 +1412,8 @@ function renderDispatch(){
           return '<div class="st-cell'+(iso===todayIso?' today':'')+'">'
             +cell.map(function(b){ return _dispPill(b); }).join('')+'</div>';
         }).join('')+'</div>';
+        const weekAll=[].concat.apply([],Object.keys(rowJobsAll).map(function(d){return rowJobsAll[d];}));
+        h+=_econStrip(c,weekAll,todayIso);
       } else {
         const iso=rangeStart; _ensureDayRoute(iso);
         const rec=_dispRoute[iso]||{times:{},order:{}};
@@ -1488,6 +1503,9 @@ function _t12(mins){ const h=Math.floor(mins/60), m=mins%60; return ((h%12)||12)
 
 /* ── crew day economics ── */
 const CREWRATE_KEY='hq_crewrate_v1', DRIVE_BUF=12;   // est. minutes between stops
+const BIZCOL_KEY='hq_bizcol_v1';
+function _bizCol(){ try{ return JSON.parse(localStorage.getItem(BIZCOL_KEY)||'{}'); }catch(e){ return {}; } }
+function bizToggle(n){ const c=_bizCol(); c[n]=!c[n]; try{ localStorage.setItem(BIZCOL_KEY,JSON.stringify(c)); }catch(e){} renderDispatch(); }
 function _crewRate(c){ try{ const r=JSON.parse(localStorage.getItem(CREWRATE_KEY)||'{}'); if(+r[c]>0) return +r[c]; }catch(e){} return 50; }
 function setCrewRate(c,v){ try{ const r=JSON.parse(localStorage.getItem(CREWRATE_KEY)||'{}'); r[c]=Math.max(1,parseFloat(v)||50); localStorage.setItem(CREWRATE_KEY,JSON.stringify(r)); }catch(e){} renderDispatch(); }
 function _crewWorkedHrs(c){
@@ -1499,26 +1517,38 @@ function _crewWorkedHrs(c){
   });
   return best;
 }
-function _econStrip(c,jobs,iso){
-  if(c==='un'||!jobs.length) return '';
+function _econParts(c,jobs){
   const R=jobs.reduce(function(s2,b){return s2+amtOf(b);},0);
-  const estM=jobs.reduce(function(s2,b){return s2+_jobMins(b);},0)+Math.max(0,jobs.length-1)*DRIVE_BUF;
+  // drive buffers reset each day — group by date so week/month math is honest
+  const byD={};
+  jobs.forEach(function(b){ const d=dateOf(b)||'?'; (byD[d]=byD[d]||[]).push(b); });
+  let estM=0;
+  Object.values(byD).forEach(function(list){ estM+=list.reduce(function(s2,b){return s2+_jobMins(b);},0)+Math.max(0,list.length-1)*DRIVE_BUF; });
   const rate=_crewRate(c);
   const tgtH=R>0?(R*0.5)/rate:0;                                          // hours where labor = 50% of revenue
-  const estH=Math.floor(estM/60), estMm=estM%60;
-  const planOk=(estM/60)<=tgtH;
+  const estProfit=R-(estM/60)*rate;                                       // revenue − expected labor cost
+  const pct=R>0?Math.round((estProfit/R)*100):0;
+  return { R:R, estM:estM, rate:rate, tgtH:tgtH, estProfit:estProfit, pct:pct, days:Object.keys(byD).length };
+}
+function _econStrip(c,jobs,iso,labelHtml){
+  if(c==='un'||!jobs.length) return '';
+  const p=_econParts(c,jobs);
+  const estH=Math.floor(p.estM/60), estMm=p.estM%60;
+  const ok=p.pct>=50;
+  const span=(_dispView==='month')?'month':(_dispView==='week')?'week':'day';
   let live='';
-  if(iso===todayISO()){
+  if(iso&&iso===todayISO()){
     const w=_crewWorkedHrs(c);
-    if(w>0){ const diff=tgtH-w;
+    if(w>0){ const diff=p.tgtH-w;
       live=' · ⏱ on clock <b>'+w.toFixed(1)+'h</b> '+(diff>=0
         ?'<span class="dev-pill g">🟢 under target · '+diff.toFixed(1)+'h left</span>'
         :'<span class="dev-pill r">🔴 OVER 50% target by '+Math.abs(diff).toFixed(1)+'h</span>'); }
   }
-  return '<div class="st-econ">💵 <b>$'+R.toFixed(0)+'</b> booked'
-    +' · 🧮 est day <b>'+estH+'h '+String(estMm).padStart(2,'0')+'m</b> <span style="color:var(--dim)">(jobs + drive)</span> '
-    +(R>0?(planOk?'<span class="dev-pill g">plan fits 50% target ✓</span>':'<span class="dev-pill y">plan runs past target</span>'):'')
-    +' · 🎯 50% profit ≤ <b>'+tgtH.toFixed(1)+'h</b> @ $<input class="st-rate" type="number" min="1" value="'+rate+'" onchange="setCrewRate(\''+c+'\',this.value)" title="What this crew costs you per hour (wages, both guys)">/hr'
+  return '<div class="st-econ">'+(labelHtml||'')
+    +'💵 <b>$'+p.R.toFixed(0)+'</b> booked'
+    +' · 🧮 est '+span+' <b>'+estH+'h '+String(estMm).padStart(2,'0')+'m</b> <span style="color:var(--dim)">(jobs + drive'+(p.days>1?' · '+p.days+' days':'')+')</span>'
+    +' · 💰 est profit <b style="color:'+(ok?'#34d399':'#fbbf24')+'">$'+Math.round(p.estProfit)+'</b> <span class="dev-pill '+(ok?'g':'y')+'">'+p.pct+'% margin'+(ok?' ✓':' — under 50%')+'</span>'
+    +' · 🎯 50% profit ($'+Math.round(p.R*0.5)+') needs ≤ <b>'+p.tgtH.toFixed(1)+'h</b> @ $<input class="st-rate" type="number" min="1" value="'+p.rate+'" onchange="setCrewRate(\''+c+'\',this.value)" title="What this crew costs you per hour (wages, both guys)">/hr'
     +live+'</div>';
 }
 
