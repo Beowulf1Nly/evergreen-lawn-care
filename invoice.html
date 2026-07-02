@@ -12,9 +12,9 @@
 <!-- Auto-updater: pulls the latest version in the background and reloads once when a new
      deploy is live, so phones never get stuck on an old cached build. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-02.3 */
+/* APP_VER:2026-07-03.2 */
 (function(){
-  var V = '2026-07-02.3';
+  var V = '2026-07-03.2';
   window.__APP_VER = V;
   var reloads = 0, lastCheck = 0;
   function check(){
@@ -28,11 +28,13 @@
       .then(function(html){
         if (!html) return;
         var m = html.match(/APP_VER:([0-9.\-]+)/);
-        var last = +(sessionStorage.getItem('evg_ver_reload')||0);
-        if (m && m[1] && m[1] !== V && (now - last) > 60000){
-          reloads++;
-          try { sessionStorage.setItem('evg_ver_reload', String(now)); } catch(e){}
-          location.replace(location.pathname + '?_=' + now);   // fresh, cache-busted load
+        // NEVER hard-reload while you're working — just offer the update.
+        if (m && m[1] && m[1] !== V && !document.getElementById('evgUpdateBar')){
+          var bar = document.createElement('div');
+          bar.id = 'evgUpdateBar';
+          bar.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:99999;background:#1a3a1a;color:#fff;border-radius:12px;padding:10px 16px;font-size:13.5px;font-weight:600;display:flex;gap:12px;align-items:center;box-shadow:0 12px 40px rgba(0,0,0,.35);font-family:inherit;';
+          bar.innerHTML = '🔄 New version ready <button onclick="location.replace(location.pathname+\'?_=\'+Date.now())" style="background:#22c55e;color:#04150b;border:none;border-radius:8px;padding:6px 14px;font-weight:700;font-family:inherit;font-size:12.5px;cursor:pointer;">Reload</button><button onclick="this.parentNode.remove()" style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:15px;">✕</button>';
+          document.body.appendChild(bar);
         }
       }).catch(function(){});
   }
@@ -9793,6 +9795,8 @@ async function syncRouteToCalendar(silent) {
     // aggregate the counts so every yard gets written.
     const BATCH = 8;
     let updated = 0, created = 0, failed = 0;
+    const _pushFailedNames = [];
+    console.log('📅 Pushing ' + updates.length + ' stops:', updates.map(u => u.name + ' ' + u.startIso.slice(11,16)));
     for (let i = 0; i < updates.length; i += BATCH) {
       const chunk = updates.slice(i, i + BATCH);
       const syncParams = new URLSearchParams({
@@ -9802,9 +9806,12 @@ async function syncRouteToCalendar(silent) {
       try {
         const res  = await fetch(SCRIPT_URL + '?' + syncParams + '&' + authParam());
         const data = await res.json();
-        if (data && data.success) { updated += data.updated || 0; created += data.created || 0; failed += data.failed || 0; }
-        else { failed += chunk.length; }   // batch errored — count it but keep going so later crews/yards still sync
-      } catch(e) { failed += chunk.length; }
+        if (data && data.success) {
+          updated += data.updated || 0; created += data.created || 0; failed += data.failed || 0;
+          (data.details || []).forEach(d => { if (d.status === 'failed') _pushFailedNames.push(d.name + (d.error ? ' (' + d.error + ')' : '')); });
+        }
+        else { failed += chunk.length; chunk.forEach(u => _pushFailedNames.push(u.name || '?')); }
+      } catch(e) { failed += chunk.length; chunk.forEach(u => _pushFailedNames.push(u.name || '?')); }
       if (calBtn) calBtn.textContent = '📅 Syncing… ' + Math.min(i + BATCH, updates.length) + '/' + updates.length;
     }
     {
@@ -9812,7 +9819,8 @@ async function syncRouteToCalendar(silent) {
       if (updated) parts.push(updated + ' updated');
       if (created) parts.push(created + ' created');
       if (failed)  parts.push(failed + ' failed');
-      const msg = '📅 Pushed to HQ + Google Calendar — ' + (parts.join(' · ') || 'no changes');
+      let msg = '📅 Pushed to HQ + Google Calendar — ' + (parts.join(' · ') || 'no changes');
+      if (_pushFailedNames.length) msg += ' · ⚠ FAILED: ' + _pushFailedNames.join(', ');
       showToast(msg);
       if (!silent) {
         const tl = document.getElementById('routeTimeline');
