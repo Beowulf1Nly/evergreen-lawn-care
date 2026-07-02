@@ -13,8 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-03.6 */
-(function(){ var V='2026-07-03.6'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-03.8 */
+(function(){ var V='2026-07-03.8'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -739,10 +739,16 @@ async function refreshStatus(){
     rb.innerHTML='<span class="pdot"></span>live · '+new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
   }catch(e){ rb.innerHTML='<span class="pdot" style="background:#f87171"></span>offline'; }
 }
+function _fixTimes(list){
+  // Sheets converts saved "08:20" into a time cell whose date is Dec-30-1899;
+  // pre-fix backends serialize that as "Sat, Dec 30, 1899". Blank the garbage.
+  (list||[]).forEach(function(b){ const t=String(b.jobTime||''); if(t&&!/^\d{1,2}:\d{2}$/.test(t.trim())) b.jobTime=''; });
+  return list;
+}
 async function refreshBookings(){
   try{
     const bk=await fetch(SCRIPT_URL+'?action=bookings&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null);
-    if(bk&&bk.success&&Array.isArray(bk.bookings)){ _bookings=bk.bookings; render(); }
+    if(bk&&bk.success&&Array.isArray(bk.bookings)){ _bookings=_fixTimes(bk.bookings); render(); }
   }catch(e){}
 }
 async function refresh(force){ await Promise.all([refreshRouteOrder(), refreshStatus(), (force||!_bookings.length)?refreshBookings():Promise.resolve()]); }
@@ -1207,12 +1213,22 @@ function _bizLoad(){ try{ const b=JSON.parse(localStorage.getItem(BIZ_KEY)||'nul
 function _bizSave(l){ try{ localStorage.setItem(BIZ_KEY,JSON.stringify(l)); }catch(e){} }
 function _bizOf(b,biz){
   biz=biz||_bizLoad();
+  // A job belongs to the backend it was booked on. Cleaning jobs live in the
+  // cleaning backend — a mow from the lawn backend can NEVER land there just
+  // because its notes say "clean up the leaves". Keywords only pick between
+  // businesses that share the job's backend (e.g. HVAC booked through lawn).
+  const srcIdx=(b&&b._srcBiz!=null)?b._srcBiz:0;
+  const srcUrl=_bizUrl(biz[srcIdx]||biz[0]||{});
   const txt=(String(b.services||'')+' '+String(b.notes||'')+' '+String(b.frequency||'')).toLowerCase();
-  let def=0;
+  let def=srcIdx;
   for(let i=0;i<biz.length;i++){
-    const kws=String(biz[i].kw||'').split(',').map(function(s){return s.trim().toLowerCase();}).filter(Boolean);
-    if(!kws.length){ def=i; continue; }
-    for(let j=0;j<kws.length;j++){ if(txt.indexOf(kws[j])>=0) return i; }
+    if(_bizUrl(biz[i])!==srcUrl) continue;
+    const kws=String(biz[i].kw||'').split(',').map(function(s2){return s2.trim().toLowerCase();}).filter(Boolean);
+    if(!kws.length){ if(i===srcIdx||def===srcIdx) def=i; continue; }
+    for(let j=0;j<kws.length;j++){
+      const esc2=kws[j].replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      if(new RegExp('(^|[^a-z])'+esc2+'([^a-z]|$)').test(txt)) return i;   // word-edge match, not substring
+    }
   }
   return def;
 }
@@ -1242,7 +1258,23 @@ function bizSaveFromUI(){
 }
 
 /* ── data ── */
-function initDispatch(){ renderDispatch(); if(!_completedLoaded){ _completedLoaded=true; loadCompleted(); } }
+let _bizExtra={}, _bizExtraLoaded=false;
+function initDispatch(){ renderDispatch(); if(!_completedLoaded){ _completedLoaded=true; loadCompleted(); } if(!_bizExtraLoaded){ _bizExtraLoaded=true; loadBizBookings(); } }
+async function loadBizBookings(){
+  const biz=_bizLoad();
+  for(let i=0;i<biz.length;i++){
+    const z=biz[i];
+    if(!z.su||_bizUrl(z)===SCRIPT_URL||!_bizConnected(z)) continue;
+    try{
+      const d=await bizGet(z,{action:'bookings'});
+      if(d&&d.success&&Array.isArray(d.bookings)){
+        d.bookings.forEach(function(b){ b._srcBiz=i; });
+        _bizExtra[i]=_fixTimes(d.bookings.filter(function(b){ return !b.rowCancelled; }));
+      }
+    }catch(e){}
+  }
+  if(_activeTab==='dispatch') renderDispatch();
+}
 
 /* Per-date route record (order + planned times pushed from /invoice) */
 const _dispRoute={};   // iso → { times:{key:HH:MM}, order:{crew:[keys]}, loading, at }
@@ -1283,7 +1315,9 @@ function _dispJobs(){
   const live=(_bookings||[]).filter(function(b){ return !b.rowCancelled; });
   const seen={}; live.forEach(function(b){ seen[_svKey(b)]=1; });
   const arch=(_completed||[]).filter(function(b){ return dateOf(b) && !seen[_svKey(b)]; });
-  return live.concat(arch);
+  let out=live.concat(arch);
+  Object.values(_bizExtra||{}).forEach(function(list){ out=out.concat(list); });
+  return out;
 }
 function _dispFilter(list){
   if(_dispCrew==='all') return list;
@@ -1472,9 +1506,11 @@ function _dispStats(rangeStart,rangeEnd){
     +'<span>⚠️ <b>'+all.filter(function(b){return !_isArch(b)&&!String(b.crew||'').trim();}).length+'</b> unassigned</span>';
 }
 function _dispPill(b){
-  const bi=_bookings.indexOf(b), arch=_isArch(b), done=isDone(b)||arch;
-  return '<div class="disp-pill'+(done?' done':'')+(arch?' arch':'')+'" style="--pc:'+_dispPC(b)+'" '
-    +(arch?'title="Archived — completed job"':'onclick="openJobSheet('+bi+')"')
+  const bi=_bookings.indexOf(b), arch=_isArch(b), done=isDone(b)||arch, ext=(b._srcBiz!=null&&b._srcBiz>0);
+  const click=arch?'title="Archived — completed job"'
+    :ext?'onclick="toast(\'🧹 \'+esc(_bizLoad()['+b._srcBiz+'].n)+\' job — manage it on that site\\u2019s portal\')" title="Booked on '+esc((_bizLoad()[b._srcBiz]||{}).n||'another business')+' — view-only here"'
+    :'onclick="openJobSheet('+bi+')"';
+  return '<div class="disp-pill'+(done?' done':'')+(arch?' arch':'')+'" style="--pc:'+_dispPC(b)+'" '+click
     +'>'+(done?'✓ ':'')+esc(b.name||'?')+' <span class="pp">'+(b.jobTime?esc(b.jobTime)+' · ':'')+esc(String(b.price||''))+'</span></div>';
 }
 /* ── expected job duration — same model /invoice's route optimizer uses ── */

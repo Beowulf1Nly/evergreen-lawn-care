@@ -12,9 +12,9 @@
 <!-- Auto-updater: pulls the latest version in the background and reloads once when a new
      deploy is live, so phones never get stuck on an old cached build. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-03.5 */
+/* APP_VER:2026-07-03.6 */
 (function(){
-  var V = '2026-07-03.5';
+  var V = '2026-07-03.6';
   window.__APP_VER = V;
   var reloads = 0, lastCheck = 0;
   function check(){
@@ -4657,6 +4657,8 @@ async function loadBookings() {
     }
 
     allBookings = data.bookings || [];
+    // blank jobTimes mangled into "Sat, Dec 30, 1899" by time-cell conversion
+    allBookings.forEach(b => { const t = String(b.jobTime||''); if (t && !/^\d{1,2}:\d{2}$/.test(t.trim())) b.jobTime = ''; });
     // Pick up crews from server if not already set
     if (data.crews && !adminCrews) {
       adminCrews = data.crews;
