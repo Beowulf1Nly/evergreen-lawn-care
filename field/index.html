@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-02.7 */
+/* APP_VER:2026-07-02.8 */
 (function(){
-  var V='2026-07-02.7'; window.__APP_VER=V;
+  var V='2026-07-02.8'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -910,7 +910,13 @@ async function fmApplyStartAddr(){
   _fmRenderRouteSetup(); _reoptimizeNow();
 }
 
-function fmSelectCrew(c){ _crewSel=c; _saveCrewSel(c); _fmRenderStart(); _reoptimizeNow(); }
+function fmSelectCrew(c){
+  if(!_fmIsBoss()){
+    const mine=String(adminCrews||'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
+    if(mine.length&&mine.indexOf(c)<0){ showToast('🔒 You\'re assigned to Crew '+mine.join(' & ')+' — ask the owner to switch you'); return; }
+  }
+  _crewSel=c; _saveCrewSel(c); _fmRenderStart(); _reoptimizeNow();
+}
 
 // Render the start-point note + crew chips on the start screen.
 function _fmRenderRouteSetup(){
@@ -924,11 +930,19 @@ function _fmRenderRouteSetup(){
   if(addr && _startPoint && _startPoint.src==='address' && !addr.value) addr.value=_startPoint.label||'';
   // crew chips: only when there's a real choice (multiple crews today, or no staff assignment)
   const wrap=document.getElementById('fmCrewChips'); if(!wrap) return;
-  const av=_availableCrews(); const opts=[];
+  const av=_availableCrews(); let opts=[];
   av.crews.forEach(c=>opts.push({v:c,label:'Crew '+c}));
   if(av.hasUnassigned) opts.push({v:'UNASSIGNED',label:'Unassigned'});
   opts.push({v:'ALL',label:'All'});
-  const meaningful = opts.length>2 || !adminCrews;
+  // employees only ever see their OWN crew(s) — no running someone else's route
+  if(!_fmIsBoss()){
+    const mine=String(adminCrews||'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
+    if(mine.length){
+      opts=opts.filter(function(o){ return mine.indexOf(o.v)>=0; });
+      if(_crewSel&&mine.indexOf(_crewSel)<0){ _crewSel=null; try{ _saveCrewSel(''); }catch(e){} }   // clear a stale/foreign override
+    }
+  }
+  const meaningful = _fmIsBoss() ? (opts.length>2 || !adminCrews) : opts.length>1;
   if(!meaningful){ wrap.style.display='none'; return; }
   wrap.style.display='';
   const eff=_crewSel||(String(adminCrews||'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean)[0])||'ALL';
