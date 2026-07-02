@@ -13,8 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-04.6 */
-(function(){ var V='2026-07-04.6'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-05.1 */
+(function(){ var V='2026-07-05.1'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -2284,11 +2284,19 @@ async function renderStats(force){
   const months=[]; const now=new Date();
   for(let k=5;k>=0;k--){ const d=new Date(now.getFullYear(),now.getMonth()-k,1); months.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); }
   let h='';
+  // weekly revenue from REAL completed jobs (backend weekOverWeek counts bookings created, not money made)
+  function _wkRev(jobs){
+    const now=Date.now(), d7=now-7*864e5, d14=now-14*864e5;
+    let tw=0,lw=0;
+    (jobs||[]).forEach(function(j){ const d=new Date(String(dateOf(j)||'')+'T12:00:00').getTime(); if(isNaN(d)) return;
+      if(d>d7&&d<=now+864e5) tw+=amtOf(j); else if(d>d14&&d<=d7) lw+=amtOf(j); });
+    return {tw:tw,lw:lw};
+  }
   // empire totals
   let totRev=0,totDone=0,totCust=0,twr=0,lwr=0;
   results.forEach(function(r){ if(r.locked||!r.st) return; const b=r.st.bookings||{};
     totRev+=r.jobs.reduce(function(s,j){return s+amtOf(j);},0); totDone+=(+b.done||0); totCust+=(+b.customers||0);
-    const w=(b.weekOverWeek||{}); twr+=(+w.thisWeekRev||0); lwr+=(+w.lastWeekRev||0); });
+    const w=_wkRev(r.jobs); twr+=w.tw; lwr+=w.lw; });
   const wowPct=lwr>0?Math.round((twr-lwr)/lwr*100):null;
   h+='<div class="dev-card" style="grid-column:1/-1;"><div class="dev-h">👑 Empire totals — all businesses</div><div class="dev-b"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">'
     +'<div><div class="kn" style="font-size:26px;font-family:var(--mono);font-weight:800;background:linear-gradient(180deg,#fff,#4ade80);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">'+_fmtMoney(totRev)+'</div><div class="kl" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-top:4px;">Collected (archived jobs)</div></div>'
@@ -2299,7 +2307,7 @@ async function renderStats(force){
   results.forEach(function(r){
     const z=r.z;
     if(r.locked){ h+='<div class="dev-card"><div class="dev-h" style="--bc:'+esc(z.c)+'">'+esc(z.e)+' '+esc(z.n)+'</div><div class="dev-b"><div class="dev-row" style="color:var(--dim);">🔒 Not connected — link it in ⚙ 🏢 Businesses to pull its numbers.</div></div></div>'; return; }
-    const b=(r.st&&r.st.bookings)||{}; const w=b.weekOverWeek||{};
+    const b=(r.st&&r.st.bookings)||{}; const w0=_wkRev(r.jobs); const w={thisWeekRev:w0.tw,lastWeekRev:w0.lw};
     const byMonth={}; months.forEach(function(m){ byMonth[m]=0; });
     r.jobs.forEach(function(j){ const m=String(dateOf(j)||'').slice(0,7); if(m in byMonth) byMonth[m]+=amtOf(j); });
     const max=Math.max.apply(null,months.map(function(m){return byMonth[m];}).concat([1]));
@@ -2325,7 +2333,12 @@ function setOutView(v){ _outView=v;
   renderOutreach();
 }
 function setEstBiz(i){ _estBiz=i; _estList=null; renderOutreach(true); }
-function setMailBiz(i){ _mailBiz=i; _mailCust=null; _mailSel={}; renderOutreach(true); }
+let _mmDraft=null;
+function setMailBiz(i){
+  const sEl=document.getElementById('mmSubject'), bEl=document.getElementById('mmBody');
+  if(sEl||bEl) _mmDraft={ subject:sEl?sEl.value:'', body:bEl?bEl.value:'' };   // keep your draft across the switch
+  _mailBiz=i; _mailCust=null; _mailSel={}; renderOutreach(true);
+}
 async function renderOutreach(force){
   _bizChips('outBiz', _outView==='est'?_estBiz:_mailBiz, _outView==='est'?'setEstBiz':'setMailBiz', true);
   if(_outView==='est') renderEstimates(force); else renderMassMail(force);
@@ -2420,7 +2433,8 @@ function _mailCfg(zi){
   let all={}; try{ all=JSON.parse(localStorage.getItem(MAILCFG_KEY)||'{}'); }catch(e){}
   const z=_bizLoad()[zi]||{};
   const defWeb=(zi===1||/clean/i.test(z.n||''))?'evergreencleaningservicesflorida.com':'evergreenlawncareflorida.com';
-  return Object.assign({ on:true, web:defWeb, tag:'Locally owned & operated in Citrus County',
+  const defBrand=/clean/i.test(z.n||'')?'Evergreen Cleaning Services':(/lawn/i.test(z.n||'')?'Evergreen Lawn Care & Landscaping':(z.n||'Evergreen'));
+  return Object.assign({ on:true, web:defWeb, brandName:defBrand, tag:'Locally owned & operated in Citrus County',
     foot:'Thanks for being a '+(z.n||'Evergreen')+' customer! Reply to this email with any questions — we read every one.',
     ctaText:'', ctaUrl:'https://'+defWeb }, all[zi]||{});
 }
@@ -2441,7 +2455,7 @@ function _mailBrandHtml(zi,subject,bodyText){
     // ── header band ──
     +'<div style="background:'+col+';padding:28px 32px 24px;">'
     +'<div style="width:52px;height:52px;border-radius:14px;background:rgba(255,255,255,.18);text-align:center;line-height:52px;font-size:28px;margin-bottom:12px;">'+esc(z.e||'🌿')+'</div>'
-    +'<div style="color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-.3px;">'+esc(z.n||'Evergreen')+'</div>'
+    +'<div style="color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-.3px;">'+esc(cfg.brandName||z.n||'Evergreen')+'</div>'
     +(cfg.tag?'<div style="color:rgba(255,255,255,.88);font-size:13px;margin-top:4px;">'+esc(cfg.tag)+'</div>':'')
     +'</div>'
     // ── body ──
@@ -2450,11 +2464,11 @@ function _mailBrandHtml(zi,subject,bodyText){
     // ── footer ──
     +'<div style="padding:20px 32px 24px;background:#f7faf8;border-top:1px solid #eef2ef;">'
     +'<div style="color:#5b6b62;font-size:12.5px;line-height:1.7;">'+esc(cfg.foot||'')+'</div>'
-    +'<div style="margin-top:12px;color:#8a978f;font-size:12.5px;font-weight:bold;">— The '+esc(z.n||'Evergreen')+' team '+esc(z.e||'')+'</div>'
+    +'<div style="margin-top:12px;color:#59685f;font-size:13px;font-weight:bold;">— The '+esc(cfg.brandName||z.n||'Evergreen')+' Team</div>'
     +'</div></div>'
     // ── small print ──
     +'<div style="text-align:center;padding:18px 8px 6px;color:#9aa69f;font-size:11.5px;line-height:1.8;">'
-    +esc(z.n||'')+' · <a href="https://'+esc(cfg.web||'')+'" style="color:'+col+';text-decoration:none;font-weight:600;">'+esc(cfg.web||'')+'</a><br>'
+    +esc(cfg.brandName||z.n||'')+' · <a href="https://'+esc(cfg.web||'')+'" style="color:'+col+';text-decoration:none;font-weight:600;">'+esc(cfg.web||'')+'</a><br>'
     +'You\'re receiving this because you\'re a customer. Just hit reply to reach us directly.'
     +'</div></div></div>';
 }
@@ -2465,7 +2479,16 @@ async function renderMassMail(force){
   if(_mailCust===null||force||_mmBuiltBiz!==_mailBiz){
     el.innerHTML='<div class="empty">⏳ Loading '+esc(z.n)+' customers…</div>';
     const d=await bizGet(z,{action:'customers_list'});
-    _mailCust=(d&&d.success&&Array.isArray(d.customers))?d.customers.filter(function(c){return String(c.email||'').includes('@');}):[];
+    const raw=(d&&d.success&&Array.isArray(d.customers))?d.customers:[];
+    // backend returns RAW sheet headers ('Email','Name',…) — normalize both shapes
+    _mailCust=raw.map(function(c){ return {
+      name:String(c.name||c.Name||'').trim(),
+      email:String(c.email||c.Email||'').toLowerCase().trim(),
+      frequency:String(c.frequency||c.Frequency||'').trim(),
+      status:String(c.status||c.Status||'').trim(),
+      zip:String(c.zip||c.Zip||'').trim(),
+      address:String(c.address||c.Address||'').trim() };
+    }).filter(function(c){ return c.email.indexOf('@')>0; });
     _mmBuildSkeleton(z);
     _mmBuiltBiz=_mailBiz;
   }
@@ -2489,6 +2512,11 @@ function _mmBuildSkeleton(z){
     +'</div></div>'
     // ── compose ──
     +'<div class="dev-card"><div class="dev-h">✍️ Compose<span class="grow"></span><span class="dev-pill y">owner only</span></div><div class="dev-b">'
+    +'<div class="dev-row" style="font-weight:800;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);">📤 Sending as</div>'
+    +'<div class="dev-row"><select class="dev-inp" id="mmFrom" style="flex:1;font-family:inherit;font-size:13.5px;" onchange="setMailBiz(+this.value)">'
+    +_bizLoad().map(function(z2,i2){ const ok=_bizConnected(z2); return '<option value="'+i2+'" '+(i2===_mailBiz?'selected':'')+(ok?'':' disabled')+'>'+z2.e+' '+esc(_mailCfg(i2).brandName||z2.n)+(ok?'':' — 🔒 connect first')+'</option>'; }).join('')
+    +'</select></div>'
+    +'<div class="dev-row" style="color:var(--dim);font-size:11px;margin-top:-4px;">Sends from that business\'s Gmail — theme, footer &amp; customer list follow automatically.</div>'
     +'<div class="dev-row"><select class="dev-inp" id="mmTpl" style="flex:1;" onchange="mmLoadTpl(this.value)"><option value="">📄 templates…</option>'
     +tpls.map(function(t,i){return '<option value="'+i+'">'+esc(t.name)+'</option>';}).join('')+'</select>'
     +'<button class="dev-btn" onclick="mmSaveTpl()" title="Save current subject+body as a template">💾</button></div>'
@@ -2496,6 +2524,7 @@ function _mmBuildSkeleton(z){
     +'<div class="dev-row"><textarea class="dev-inp" id="mmBody" rows="9" placeholder="Hey {{name}},&#10;&#10;Write your message. Blank line = new paragraph.&#10;{{name}} becomes each customer\'s first name." style="flex:1;resize:vertical;font-family:inherit;font-size:14px;" oninput="_mmPreview()"></textarea></div>'
     +'<div class="dev-row"><div class="dev-toggle '+(cfg.on?'on':'')+'" id="mmBrandTgl" onclick="mmToggleBrand()"></div>Branded header &amp; footer</div>'
     +'<div id="mmBrandCfg" style="display:'+(cfg.on?'block':'none')+';">'
+    +'<div class="dev-row"><input class="dev-inp" id="mmBrand" value="'+esc(cfg.brandName||'')+'" placeholder="Business name shown in the email" style="flex:1;" oninput="_mailCfgSave(_mailBiz,{brandName:this.value});_mmPreview()"></div>'
     +'<div class="dev-row"><input class="dev-inp" id="mmTag" value="'+esc(cfg.tag||'')+'" placeholder="Tagline under the business name" style="flex:1;" oninput="_mailCfgSave(_mailBiz,{tag:this.value});_mmPreview()"></div>'
     +'<div class="dev-row"><input class="dev-inp" id="mmWeb" value="'+esc(cfg.web)+'" style="flex:1;" oninput="_mailCfgSave(_mailBiz,{web:this.value});_mmPreview()" title="Website shown in the footer"></div>'
     +'<div class="dev-row"><input class="dev-inp" id="mmCtaT" value="'+esc(cfg.ctaText||'')+'" placeholder="Button text (optional) — e.g. Book Now" style="flex:1;" oninput="_mailCfgSave(_mailBiz,{ctaText:this.value});_mmPreview()">'
@@ -2514,6 +2543,7 @@ function _mmBuildSkeleton(z){
   (_mailCust||[]).forEach(function(c){ if(c.frequency) freqs[c.frequency]=1; if(c.status) statuses[c.status]=1; });
   document.getElementById('mmFreq').innerHTML='<option value="">any frequency</option>'+Object.keys(freqs).sort().map(function(f){return '<option>'+esc(f)+'</option>';}).join('');
   document.getElementById('mmStatus').innerHTML='<option value="">any status</option>'+Object.keys(statuses).sort().map(function(f){return '<option>'+esc(f)+'</option>';}).join('');
+  if(_mmDraft){ const sEl=document.getElementById('mmSubject'), bEl=document.getElementById('mmBody'); if(sEl) sEl.value=_mmDraft.subject; if(bEl) bEl.value=_mmDraft.body; _mmDraft=null; }
   _mailFilters.q='';_mailFilters.freq='';_mailFilters.status='';_mailFilters.zip='';
   // one-tap audiences — select exactly that group, across all customers
   const stats={}, fqs={};
