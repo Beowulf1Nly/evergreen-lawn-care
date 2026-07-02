@@ -2031,7 +2031,7 @@
         <div class="form-row"><label>Full Name</label><input type="text" id="lq-name" placeholder="Jane Smith" autocomplete="name"/></div>
         <div class="form-row"><label>Email Address</label><input type="email" id="lq-email" placeholder="you@email.com" autocomplete="email"/></div>
         <div class="form-row"><label>Phone Number <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label><input type="tel" id="lq-phone" placeholder="(352) 555-0123" autocomplete="tel"/></div>
-        <div class="form-row"><label>Preferred Date <span style="color:var(--text-muted);font-weight:400;">(no weekends)</span></label><input type="date" id="lq-date" onchange="if(window.lqDateGuard)lqDateGuard(this)"/></div>
+        <div class="form-row" id="lqDateRow"><label>Preferred Date</label><div id="lqCalMount" style="margin-top:4px;"></div></div>
       </div>
       <div id="q-step1-error" style="color:#e53e3e;font-size:13px;margin-bottom:12px;display:none;"></div>
       <button id="lqOrigBtn" class="btn-primary" onclick="quoteStep1Submit()" style="width:100%;font-size:16px;padding:16px;border:none;cursor:pointer;">
@@ -4632,7 +4632,8 @@ if (window.QUOTE_ONLY_MODE) document.addEventListener('DOMContentLoaded', functi
   window.lqDateGuard=function(el){ if(!el||!el.value) return; var d=new Date(el.value+'T12:00:00'); var w=d.getDay(); if(w===0||w===6){ el.value=''; showErr("We don't service weekends \u2014 please pick a weekday."); } };
   window.submitLawnQuoteSingle=function(){
     var g=function(id){ var el=document.getElementById(id); return el? (el.value||'').trim() : ''; };
-    var name=g('lq-name'), email=g('lq-email'), phone=g('lq-phone'), address=g('q-address'), zip=g('q-zip'), date=g('lq-date');
+    var name=g('lq-name'), email=g('lq-email'), phone=g('lq-phone'), address=g('q-address'), zip=g('q-zip');
+    var date=(typeof qState!=='undefined' && qState.startDate)?qState.startDate:'';
     if(!address){ showErr('Please enter your property address.'); return; }
     if(!/^\d{5}$/.test(zip)){ showErr('Please enter your 5-digit zip code.'); return; }
     try{ if(typeof VALID_ZIPS!=='undefined' && VALID_ZIPS.size && !VALID_ZIPS.has(zip)){ showErr("That zip isn't in our service area yet. Call (352) 462-0627 \u2014 we may still be able to help!"); return; } }catch(e){}
@@ -4658,10 +4659,10 @@ if (window.QUOTE_ONLY_MODE) document.addEventListener('DOMContentLoaded', functi
     if(typeof _open==='function') _open(p);
     var bar=document.getElementById('quoteStepsBar'); if(bar) bar.style.display='none';
     var ex=document.getElementById('lqExtra'); if(ex) ex.style.display='block';
+    try{ var _g=document.getElementById('qCalGrid'); var _cal=_g?_g.closest('.cal-widget'):null; var _m=document.getElementById('lqCalMount'); if(_cal&&_m&&_cal.parentElement!==_m){ _m.appendChild(_cal); } if(typeof initQCal==='function') initQCal(); }catch(e){}
     var sb=document.getElementById('lqSubmitBtn'); if(sb){ sb.style.display='block'; sb.disabled=false; sb.textContent='Request My Free Quote \u2192'; }
     var ob=document.getElementById('lqOrigBtn'); if(ob) ob.style.display='none';
-    ['lq-name','lq-email','lq-phone','lq-date'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
-    var dt=document.getElementById('lq-date'); if(dt){ try{ dt.min=new Date().toISOString().split('T')[0]; }catch(e){} }
+    ['lq-name','lq-email','lq-phone'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
     var sub=document.getElementById('lqStep1Sub'); if(sub) sub.textContent="Fill this out and we'll come give you a free on-site quote \u2014 no payment now, you pay after the job's done.";
     var note=document.getElementById('lqStep1Note'); if(note) note.textContent="\u2705 No commitment \u00b7 Free on-site quote \u00b7 Pay after the job's done";
   };
