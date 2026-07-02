@@ -13,8 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-04.4 */
-(function(){ var V='2026-07-04.4'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-04.5 */
+(function(){ var V='2026-07-04.5'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1372,6 +1372,7 @@ function bizSaveFromUI(){
   if(!list.length){ toast('Keep at least one business'); return; }
   _bizSave(list); closeSheet('bizSheet');
   _bizExtraLoaded=false; _bizExtra={};                       // re-pull sister-business bookings with fresh connections
+  _crewPayTried=false; _crewPay=null; loadCrewPay(true);     // …and every business's Crew Pay sheet
   initDispatch();
   toast('🏢 Businesses saved');
 }
@@ -1696,8 +1697,8 @@ const CREWRATE_KEY='hq_crewrate_v1', DRIVE_BUF=12;   // est. minutes between sto
 /* Crew Pay sheet: who's in each crew + hourly/salary — the real labor cost.
    Backend action get_crew_pay reads the 'Crew Pay' tab (Name|Crew|Type|Rate|Active). */
 let _crewPay=null, _crewPayTried=false;
-async function loadCrewPay(){
-  if(_crewPayTried) return; _crewPayTried=true;
+async function loadCrewPay(force){
+  if(_crewPayTried&&!force) return; _crewPayTried=true;
   // Crew A (Lawn) and Crew A (Cleaning) are different people — every business's
   // backend has its OWN 'Crew Pay' tab, and rates are keyed business+crew.
   const biz=_bizLoad();
@@ -2395,7 +2396,9 @@ function _mailCfg(zi){
   let all={}; try{ all=JSON.parse(localStorage.getItem(MAILCFG_KEY)||'{}'); }catch(e){}
   const z=_bizLoad()[zi]||{};
   const defWeb=(zi===1||/clean/i.test(z.n||''))?'evergreencleaningservicesflorida.com':'evergreenlawncareflorida.com';
-  return Object.assign({ on:true, web:defWeb, foot:'Thanks for being a '+(z.n||'Evergreen')+' customer! Reply to this email with any questions — we read every one.' }, all[zi]||{});
+  return Object.assign({ on:true, web:defWeb, tag:'Locally owned & operated in Citrus County',
+    foot:'Thanks for being a '+(z.n||'Evergreen')+' customer! Reply to this email with any questions — we read every one.',
+    ctaText:'', ctaUrl:'https://'+defWeb }, all[zi]||{});
 }
 function _mailCfgSave(zi,patch){
   let all={}; try{ all=JSON.parse(localStorage.getItem(MAILCFG_KEY)||'{}'); }catch(e){}
@@ -2405,15 +2408,31 @@ function _mailCfgSave(zi,patch){
 function _mailTpls(){ try{ const t=JSON.parse(localStorage.getItem(MAILTPL_KEY)||'[]'); return Array.isArray(t)?t:[]; }catch(e){ return []; } }
 function _mailBrandHtml(zi,subject,bodyText){
   const z=_bizLoad()[zi]||{}; const cfg=_mailCfg(zi); const col=z.c||'#10b981';
-  const paras='<p style="margin:0 0 14px;">'+esc(bodyText).replace(/\n{2,}/g,'</p><p style="margin:0 0 14px;">').replace(/\n/g,'<br>')+'</p>';
-  return '<div style="background:#f2f5f3;padding:26px 12px;font-family:Arial,Helvetica,sans-serif;">'
-    +'<div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e3e9e5;">'
-    +'<div style="background:'+col+';padding:18px 26px;"><span style="font-size:20px;">'+esc(z.e||'🌿')+'</span> <span style="color:#ffffff;font-size:18px;font-weight:bold;vertical-align:middle;">'+esc(z.n||'Evergreen')+'</span></div>'
-    +'<div style="padding:26px;color:#1f2937;font-size:15px;line-height:1.65;">'+paras+'</div>'
-    +'<div style="padding:16px 26px;background:#f8faf9;border-top:1px solid #edf1ee;color:#6b7280;font-size:12.5px;line-height:1.6;">'+esc(cfg.foot||'')+'</div>'
+  const paras='<p style="margin:0 0 16px;">'+esc(bodyText).replace(/\n{2,}/g,'</p><p style="margin:0 0 16px;">').replace(/\n/g,'<br>')+'</p>';
+  const cta=(cfg.ctaText&&cfg.ctaUrl)
+    ?'<div style="text-align:center;padding:4px 30px 26px;"><a href="'+esc(cfg.ctaUrl)+'" style="background:'+col+';color:#ffffff;text-decoration:none;font-weight:bold;font-size:15px;padding:14px 38px;border-radius:999px;display:inline-block;box-shadow:0 3px 10px rgba(20,60,40,.18);">'+esc(cfg.ctaText)+'</a></div>':'';
+  return '<div style="background:#edf1ee;padding:32px 14px;font-family:-apple-system,\'Segoe UI\',Arial,Helvetica,sans-serif;">'
+    +'<div style="max-width:600px;margin:0 auto;">'
+    +'<div style="background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e2e8e4;box-shadow:0 3px 14px rgba(15,40,25,.07);">'
+    // ── header band ──
+    +'<div style="background:'+col+';padding:28px 32px 24px;">'
+    +'<div style="width:52px;height:52px;border-radius:14px;background:rgba(255,255,255,.18);text-align:center;line-height:52px;font-size:28px;margin-bottom:12px;">'+esc(z.e||'🌿')+'</div>'
+    +'<div style="color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-.3px;">'+esc(z.n||'Evergreen')+'</div>'
+    +(cfg.tag?'<div style="color:rgba(255,255,255,.88);font-size:13px;margin-top:4px;">'+esc(cfg.tag)+'</div>':'')
     +'</div>'
-    +'<div style="text-align:center;color:#9ca3af;font-size:11px;padding-top:14px;">'+esc(z.n||'')+' · <a href="https://'+esc(cfg.web||'')+'" style="color:#9ca3af;">'+esc(cfg.web||'')+'</a></div>'
-    +'</div>';
+    // ── body ──
+    +'<div style="padding:30px 32px 8px;color:#2f3b35;font-size:15.5px;line-height:1.75;">'+paras+'</div>'
+    +cta
+    // ── footer ──
+    +'<div style="padding:20px 32px 24px;background:#f7faf8;border-top:1px solid #eef2ef;">'
+    +'<div style="color:#5b6b62;font-size:12.5px;line-height:1.7;">'+esc(cfg.foot||'')+'</div>'
+    +'<div style="margin-top:12px;color:#8a978f;font-size:12.5px;font-weight:bold;">— The '+esc(z.n||'Evergreen')+' team '+esc(z.e||'')+'</div>'
+    +'</div></div>'
+    // ── small print ──
+    +'<div style="text-align:center;padding:18px 8px 6px;color:#9aa69f;font-size:11.5px;line-height:1.8;">'
+    +esc(z.n||'')+' · <a href="https://'+esc(cfg.web||'')+'" style="color:'+col+';text-decoration:none;font-weight:600;">'+esc(cfg.web||'')+'</a><br>'
+    +'You\'re receiving this because you\'re a customer. Just hit reply to reach us directly.'
+    +'</div></div></div>';
 }
 function _mmPersonalize(txt,c){ const first=String(c&&c.name||'').split(' ')[0]||'there'; return String(txt||'').replace(/{{\s*name\s*}}/gi,first); }
 async function renderMassMail(force){
@@ -2436,6 +2455,7 @@ function _mmBuildSkeleton(z){
   el.innerHTML='<div class="dev-grid" style="grid-template-columns:repeat(auto-fit,minmax(310px,1fr));">'
     // ── recipients ──
     +'<div class="dev-card"><div class="dev-h">👥 Recipients<span class="grow"></span><span class="ph-c" id="mmCount">—</span></div><div class="dev-b">'
+    +'<div class="dev-row" style="flex-wrap:wrap;gap:5px;" id="mmPresets"></div>'
     +'<div class="dev-row"><input class="dev-inp" id="mmQ" placeholder="🔎 search name / email / address" style="flex:1;" oninput="_mailFilters.q=this.value;_mmRenderList()"></div>'
     +'<div class="dev-row"><select class="dev-inp" id="mmFreq" style="flex:1;" onchange="_mailFilters.freq=this.value;_mmRenderList()"></select>'
     +'<select class="dev-inp" id="mmStatus" style="flex:1;" onchange="_mailFilters.status=this.value;_mmRenderList()"></select>'
@@ -2452,7 +2472,10 @@ function _mmBuildSkeleton(z){
     +'<div class="dev-row"><textarea class="dev-inp" id="mmBody" rows="9" placeholder="Hey {{name}},&#10;&#10;Write your message. Blank line = new paragraph.&#10;{{name}} becomes each customer\'s first name." style="flex:1;resize:vertical;font-family:inherit;font-size:14px;" oninput="_mmPreview()"></textarea></div>'
     +'<div class="dev-row"><div class="dev-toggle '+(cfg.on?'on':'')+'" id="mmBrandTgl" onclick="mmToggleBrand()"></div>Branded header &amp; footer</div>'
     +'<div id="mmBrandCfg" style="display:'+(cfg.on?'block':'none')+';">'
+    +'<div class="dev-row"><input class="dev-inp" id="mmTag" value="'+esc(cfg.tag||'')+'" placeholder="Tagline under the business name" style="flex:1;" oninput="_mailCfgSave(_mailBiz,{tag:this.value});_mmPreview()"></div>'
     +'<div class="dev-row"><input class="dev-inp" id="mmWeb" value="'+esc(cfg.web)+'" style="flex:1;" oninput="_mailCfgSave(_mailBiz,{web:this.value});_mmPreview()" title="Website shown in the footer"></div>'
+    +'<div class="dev-row"><input class="dev-inp" id="mmCtaT" value="'+esc(cfg.ctaText||'')+'" placeholder="Button text (optional) — e.g. Book Now" style="flex:1;" oninput="_mailCfgSave(_mailBiz,{ctaText:this.value});_mmPreview()">'
+    +'<input class="dev-inp" id="mmCtaU" value="'+esc(cfg.ctaUrl||'')+'" placeholder="Button link" style="flex:1;" oninput="_mailCfgSave(_mailBiz,{ctaUrl:this.value});_mmPreview()"></div>'
     +'<div class="dev-row"><textarea class="dev-inp" id="mmFoot" rows="2" style="flex:1;resize:vertical;font-family:inherit;font-size:12px;" oninput="_mailCfgSave(_mailBiz,{foot:this.value});_mmPreview()" title="Footer text">'+esc(cfg.foot)+'</textarea></div>'
     +'</div>'
     +'<div class="dev-row"><button class="dev-btn" onclick="mmTest()">📨 Send test to me</button><span class="grow"></span><button class="dev-btn go" id="mmSendBtn" onclick="mmSend()">📬 Send to 0</button></div>'
@@ -2468,7 +2491,29 @@ function _mmBuildSkeleton(z){
   document.getElementById('mmFreq').innerHTML='<option value="">any frequency</option>'+Object.keys(freqs).sort().map(function(f){return '<option>'+esc(f)+'</option>';}).join('');
   document.getElementById('mmStatus').innerHTML='<option value="">any status</option>'+Object.keys(statuses).sort().map(function(f){return '<option>'+esc(f)+'</option>';}).join('');
   _mailFilters.q='';_mailFilters.freq='';_mailFilters.status='';_mailFilters.zip='';
+  // one-tap audiences — select exactly that group, across all customers
+  const stats={}, fqs={};
+  (_mailCust||[]).forEach(function(c){ if(c.status) stats[String(c.status).trim()]=1; if(c.frequency) fqs[String(c.frequency).trim()]=1; });
+  let ph='<button class="dev-btn go" onclick="mmPreset(\'all\')">Everyone</button>';
+  Object.keys(stats).sort().forEach(function(st2){ ph+='<button class="dev-btn" onclick="mmPreset(\'status\',\''+esc(st2)+'\')">'+esc(st2)+'</button>'; });
+  Object.keys(fqs).sort().forEach(function(f){ ph+='<button class="dev-btn" onclick="mmPreset(\'freq\',\''+esc(f)+'\')">'+esc(f)+'</button>'; });
+  ph+='<button class="dev-btn danger" onclick="mmPreset(\'clear\')">✕ Clear</button>';
+  document.getElementById('mmPresets').innerHTML=ph;
   _mmRenderCamps();
+}
+function mmPreset(kind,val){
+  _mailSel={};
+  let n=0;
+  (_mailCust||[]).forEach(function(c){
+    const k=String(c.email).toLowerCase();
+    let pick=false;
+    if(kind==='all') pick=true;
+    else if(kind==='status') pick=String(c.status||'').trim().toLowerCase()===String(val).toLowerCase();
+    else if(kind==='freq') pick=String(c.frequency||'').trim()===val;
+    if(pick){ _mailSel[k]=true; n++; }
+  });
+  _mmRenderList();
+  toast(kind==='clear'?'Selection cleared':'✅ '+n+' selected — '+(kind==='all'?'everyone':val));
 }
 function _mmFiltered(){
   return (_mailCust||[]).filter(function(c){
