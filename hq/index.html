@@ -13,8 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-04.3 */
-(function(){ var V='2026-07-04.3'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-04.4 */
+(function(){ var V='2026-07-04.4'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -214,18 +214,6 @@
   #toast{ position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(8px); background:#1a211e; color:#fff; border:1px solid var(--line2); padding:13px 20px; border-radius:12px; font-size:14px; font-weight:600; z-index:6000; opacity:0; transition:.25s; pointer-events:none; max-width:90vw; text-align:center; box-shadow:0 18px 50px rgba(0,0,0,.65); }
   #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
-  /* ── responsive: phone falls back to a clean single column ── */
-  @media (max-width:900px){
-    body{ overflow:auto; }
-    .kpis{ grid-template-columns:repeat(2,1fr); }
-    .grid{ grid-template-columns:1fr; overflow-y:visible; }
-    .colL,.colR{ min-height:0; }
-    .panel-b{ overflow:visible; }
-    .crews-panel .panel-b{ max-height:none; }
-    .colR{ min-height:420px; }
-    #map{ height:280px; }
-    .hclock,.dayring{ display:none; }
-  }
 
   /* ═══ HQ tab strip ═══ */
   .hqtabs{ display:flex; gap:6px; padding:10px 20px 0; flex-shrink:0; align-items:center; }
@@ -335,15 +323,6 @@
   .dev-toggle.on{ background:rgba(16,185,129,.4); border-color:rgba(16,185,129,.6); }
   .dev-toggle.on::after{ left:19px; background:#34d399; }
 
-  @media (max-width:900px){
-    .hqtabs{ overflow-x:auto; padding:8px 12px 0; }
-    .hqtab .k{ display:none; }
-    .disp-month{ grid-template-columns:repeat(7,1fr); } .disp-cell{ min-height:64px; padding:4px; }
-    .disp-pill{ font-size:9px; padding:2px 3px 2px 6px; }
-    .disp-week{ grid-template-columns:1fr; } .disp-day{ min-height:0; }
-    .disp-legend{ display:none; }
-    .dev-grid{ grid-template-columns:1fr; }
-  }
 
 
   /* ═══ ServiceTitan-style swimlane board (week/day) ═══ */
@@ -390,6 +369,80 @@
   .biz-row input[type=color]{ width:34px; height:36px; border:none; background:none; cursor:pointer; padding:0; }
   .biz-row .bdel{ background:rgba(248,113,113,.1); color:#fca5a5; border:1px solid rgba(248,113,113,.3); border-radius:9px; width:34px; height:36px; cursor:pointer; font-size:14px; flex-shrink:0; }
 
+
+  /* ═══ MOBILE — real phone layout: bottom tab bar, stacked panels ═══ */
+  @media (max-width:900px){
+    body{ overflow:auto; }
+    #app{ height:auto; min-height:100vh; padding-bottom:78px; }   /* room for the bottom nav */
+    .topbar{ position:sticky; top:0; z-index:4500; flex-wrap:wrap; gap:8px; padding:10px 12px; }
+    .hclock,.dayring{ display:none; }
+    .brand .t{ font-size:15.5px; } .brand .s{ font-size:10px; } .brand .logo{ width:34px; height:34px; font-size:18px; }
+    .tbtn{ padding:8px 11px; font-size:12px; }
+    .livepill{ padding:6px 10px; font-size:11px; }
+    /* tabs become a fixed bottom app bar */
+    .hqtabs{ position:fixed; left:0; right:0; bottom:0; z-index:5000; margin:0;
+      padding:6px 4px calc(6px + env(safe-area-inset-bottom)); background:rgba(16,21,20,.97);
+      backdrop-filter:blur(12px); border-top:1px solid var(--line2); justify-content:space-around; gap:2px; }
+    .hqtab{ flex:1; min-width:0; flex-direction:column; gap:1px; padding:6px 2px; font-size:9px;
+      letter-spacing:0; border:none; border-radius:10px; text-align:center; }
+    .hqtab.on{ background:rgba(16,185,129,.13); }
+    .hqtab.on::after{ display:none; }
+    .hqtab .k{ display:none; }
+    /* Live tab */
+    .kpis{ grid-template-columns:repeat(3,1fr); gap:8px; padding:10px 12px 2px; }
+    .kpi{ padding:9px 10px; border-radius:11px; }
+    .kpi .kico{ display:none; }
+    .kpi .kn{ font-size:19px; } .kpi .kl{ font-size:8px; letter-spacing:.05em; margin-top:3px; }
+    .grid{ grid-template-columns:1fr; gap:12px; padding:10px 12px 16px; overflow:visible; }
+    .colL,.colR{ min-height:0; }
+    .panel-b{ overflow:visible; }
+    .colR{ min-height:400px; }
+    #map{ height:230px; }
+    .jbar{ flex-wrap:wrap; gap:6px; }
+    .jfilt{ flex-wrap:wrap; } .jfilt button{ padding:7px 9px; font-size:11px; }
+    .seg button{ padding:7px 10px; font-size:11.5px; }
+    /* Dispatch */
+    .disp-wrap{ padding:8px 10px 16px; gap:9px; }
+    .disp-controls{ gap:6px; }
+    .disp-title{ min-width:0; font-size:13px; }
+    .disp-nav{ flex-wrap:wrap; }
+    .disp-nav button,.disp-nav input[type=date]{ padding:7px 9px; font-size:12px; }
+    .disp-chips button{ padding:6px 10px; font-size:11px; }
+    .disp-legend{ display:none; }
+    .disp-stats{ gap:9px; font-size:10.5px; }
+    .disp-board{ padding:6px; -webkit-overflow-scrolling:touch; }
+    .st-section,.st-dowhead,.st-hourshead{ min-width:660px; }        /* board pans sideways */
+    .st-dowhead{ grid-template-columns:92px repeat(7,minmax(66px,1fr)); }
+    .st-grid{ grid-template-columns:92px repeat(7,minmax(66px,1fr)); gap:3px; }
+    .st-grid.day{ grid-template-columns:92px 1fr; }
+    .st-rowlab{ padding:6px 7px; font-size:10.5px; min-height:42px; gap:5px; border-radius:9px; }
+    .st-rowlab .cdot{ width:8px; height:8px; }
+    .st-cell{ min-height:40px; padding:2px; border-radius:8px; }
+    .disp-pill{ font-size:9px; padding:2px 4px 2px 7px; border-radius:6px; }
+    .st-block{ height:34px; padding:3px 6px; font-size:9px; }
+    .st-block .bt2{ font-size:8px; }
+    .st-econ{ font-size:10.5px; padding:6px 8px; gap:4px; }
+    .st-bizhead{ font-size:12.5px; }
+    .disp-month{ gap:3px; }
+    .disp-cell{ min-height:56px; padding:3px; border-radius:8px; }
+    .disp-cell .dnum{ font-size:10px; } .disp-cell .dnum .dsum{ display:none; }
+    .disp-more{ font-size:9px; }
+    /* other panes */
+    .dev-wrap,.sites-wrap{ padding:10px 12px 18px; }
+    .dev-grid{ grid-template-columns:1fr !important; gap:10px; }
+    .sites-grid{ grid-template-columns:1fr 1fr; gap:10px; }
+    .site-card{ padding:12px; } .site-card .se{ font-size:21px; } .site-card .sn{ font-size:13.5px; }
+    /* sheets slide from the bottom like an app */
+    .sheet-wrap{ padding:0; align-items:flex-end; }
+    .sheet{ max-width:100%; border-radius:18px 18px 0 0; max-height:88vh; padding:20px 16px calc(18px + env(safe-area-inset-bottom)); }
+    .crewpick button{ padding:11px 8px; font-size:14px; }
+    #toast{ bottom:86px; }
+    #undoBar{ bottom:86px !important; }
+    .ro-stop{ padding:8px 6px; }
+    .ro-arrows button{ width:30px; height:24px; font-size:12px; }   /* fat fingers welcome */
+    .biz-row input[type=text]{ font-size:16px; }                     /* stop iOS zoom */
+    .field,.jsearch{ font-size:16px; }
+  }
 </style>
 </head>
 <body>
@@ -2287,10 +2340,10 @@ async function renderEstimates(force){
     +'<div class="dev-row"><input class="dev-inp" id="esPhone" placeholder="Phone (optional)" style="flex:1;"><input class="dev-inp" id="esAddr" placeholder="Address (optional)" style="flex:1;"></div>'
     +'<div class="dev-row" style="font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);">Services</div>'
     +'<div id="esItems">'+_esItems.map(function(it,i){ return _esItemRow(it,i); }).join('')+'</div>'
-    +'<div class="dev-row"><button class="dev-btn" onclick="_esItems.push({desc:\'\',price:\'\'});_esReRender();">＋ line</button></div>'
+    +'<div class="dev-row"><button class="dev-btn" onclick="_esItems.push({desc:\'\',price:\'\'});_esReRender();">＋ line</button><span class="grow"></span><span style="font-family:var(--mono);font-weight:700;" id="esTotal">$0</span></div>'
     +'<div class="dev-row"><input class="dev-inp" id="esSummary" placeholder="Summary shown at top of the estimate (optional)" style="flex:1;"></div>'
     +'<div class="dev-row"><input class="dev-inp" id="esMsg" placeholder="Personal message in the email (optional)" style="flex:1;"></div>'
-    +'<div class="dev-row"><input class="dev-inp" id="esValid" type="date" title="Valid through" style="flex:1;"><button class="dev-btn go" style="flex:1;" onclick="estSend()">'+(myRole==='owner'?'📧 Send estimate':'📤 Submit for approval')+'</button></div>'
+    +'<div class="dev-row"><input class="dev-inp" id="esValid" type="date" title="Valid through" value="'+(function(){const d=new Date();d.setDate(d.getDate()+14);return _iso(d);})()+'" style="flex:1;"><button class="dev-btn go" style="flex:1;" onclick="estSend()">'+(myRole==='owner'?'📧 Send estimate':'📤 Submit for approval')+'</button></div>'
     +'<div class="dev-row" id="esStatus" style="color:var(--dim);"></div>'
     +'</div></div>';
   h+='</div>';
@@ -2298,10 +2351,11 @@ async function renderEstimates(force){
 }
 function _esItemRow(it,i){
   return '<div class="dev-row"><input class="dev-inp es-desc" data-i="'+i+'" value="'+esc(it.desc)+'" placeholder="Service description" style="flex:2.2;" oninput="_esItems['+i+'].desc=this.value">'
-    +'<input class="dev-inp es-price" data-i="'+i+'" value="'+esc(it.price)+'" placeholder="$" style="flex:.6;" oninput="_esItems['+i+'].price=this.value">'
+    +'<input class="dev-inp es-price" data-i="'+i+'" value="'+esc(it.price)+'" placeholder="$" style="flex:.6;" oninput="_esItems['+i+'].price=this.value;_esTotal()">'
     +(i>0?'<button class="dev-btn danger" onclick="_esItems.splice('+i+',1);_esReRender();">✕</button>':'')+'</div>';
 }
-function _esReRender(){ const el=document.getElementById('esItems'); if(el) el.innerHTML=_esItems.map(function(it,i){ return _esItemRow(it,i); }).join(''); }
+function _esReRender(){ const el=document.getElementById('esItems'); if(el) el.innerHTML=_esItems.map(function(it,i){ return _esItemRow(it,i); }).join(''); _esTotal(); }
+function _esTotal(){ const t=document.getElementById('esTotal'); if(t) t.textContent='$'+_esItems.reduce(function(s2,it){return s2+(parseFloat(it.price)||0);},0).toFixed(0); }
 async function estApprove(rowNum,name){
   if(!confirm('Approve and EMAIL this estimate to '+name+'?')) return;
   const z=_bizLoad()[_estBiz];
@@ -2333,52 +2387,161 @@ async function estSend(){
   if(d&&d.success){ st.textContent='✅ Sent to '+email; toast('📧 Estimate sent'); _esItems=[{desc:'',price:''}]; _estList=null; renderEstimates(true); }
   else st.textContent='⚠ '+((d&&d.error)||'Failed — is that backend connected?');
 }
-/* ── mass email ── */
+/* ── mass email v2 — branded, previewed, templated ── */
 const _mailFilters={q:'',freq:'',zip:'',status:''};
+const MAILCFG_KEY='hq_mailcfg_v1', MAILTPL_KEY='hq_mailtpl_v1', CAMP_KEY='hq_campaigns_v1';
+let _mmBuiltBiz=-1;
+function _mailCfg(zi){
+  let all={}; try{ all=JSON.parse(localStorage.getItem(MAILCFG_KEY)||'{}'); }catch(e){}
+  const z=_bizLoad()[zi]||{};
+  const defWeb=(zi===1||/clean/i.test(z.n||''))?'evergreencleaningservicesflorida.com':'evergreenlawncareflorida.com';
+  return Object.assign({ on:true, web:defWeb, foot:'Thanks for being a '+(z.n||'Evergreen')+' customer! Reply to this email with any questions — we read every one.' }, all[zi]||{});
+}
+function _mailCfgSave(zi,patch){
+  let all={}; try{ all=JSON.parse(localStorage.getItem(MAILCFG_KEY)||'{}'); }catch(e){}
+  all[zi]=Object.assign(_mailCfg(zi),patch);
+  try{ localStorage.setItem(MAILCFG_KEY,JSON.stringify(all)); }catch(e){}
+}
+function _mailTpls(){ try{ const t=JSON.parse(localStorage.getItem(MAILTPL_KEY)||'[]'); return Array.isArray(t)?t:[]; }catch(e){ return []; } }
+function _mailBrandHtml(zi,subject,bodyText){
+  const z=_bizLoad()[zi]||{}; const cfg=_mailCfg(zi); const col=z.c||'#10b981';
+  const paras='<p style="margin:0 0 14px;">'+esc(bodyText).replace(/\n{2,}/g,'</p><p style="margin:0 0 14px;">').replace(/\n/g,'<br>')+'</p>';
+  return '<div style="background:#f2f5f3;padding:26px 12px;font-family:Arial,Helvetica,sans-serif;">'
+    +'<div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e3e9e5;">'
+    +'<div style="background:'+col+';padding:18px 26px;"><span style="font-size:20px;">'+esc(z.e||'🌿')+'</span> <span style="color:#ffffff;font-size:18px;font-weight:bold;vertical-align:middle;">'+esc(z.n||'Evergreen')+'</span></div>'
+    +'<div style="padding:26px;color:#1f2937;font-size:15px;line-height:1.65;">'+paras+'</div>'
+    +'<div style="padding:16px 26px;background:#f8faf9;border-top:1px solid #edf1ee;color:#6b7280;font-size:12.5px;line-height:1.6;">'+esc(cfg.foot||'')+'</div>'
+    +'</div>'
+    +'<div style="text-align:center;color:#9ca3af;font-size:11px;padding-top:14px;">'+esc(z.n||'')+' · <a href="https://'+esc(cfg.web||'')+'" style="color:#9ca3af;">'+esc(cfg.web||'')+'</a></div>'
+    +'</div>';
+}
+function _mmPersonalize(txt,c){ const first=String(c&&c.name||'').split(' ')[0]||'there'; return String(txt||'').replace(/{{\s*name\s*}}/gi,first); }
 async function renderMassMail(force){
   const el=document.getElementById('outMail'); if(!el) return;
   const z=_bizLoad()[_mailBiz]||_bizLoad()[0];
-  if(_mailCust===null||force){
+  if(_mailCust===null||force||_mmBuiltBiz!==_mailBiz){
     el.innerHTML='<div class="empty">⏳ Loading '+esc(z.n)+' customers…</div>';
     const d=await bizGet(z,{action:'customers_list'});
     _mailCust=(d&&d.success&&Array.isArray(d.customers))?d.customers.filter(function(c){return String(c.email||'').includes('@');}):[];
+    _mmBuildSkeleton(z);
+    _mmBuiltBiz=_mailBiz;
   }
-  const freqs={}, statuses={};
-  _mailCust.forEach(function(c){ if(c.frequency) freqs[c.frequency]=1; if(c.status) statuses[c.status]=1; });
-  const list=_mailCust.filter(function(c){
+  _mmRenderList();
+  _mmPreview();
+}
+function _mmBuildSkeleton(z){
+  const el=document.getElementById('outMail');
+  const cfg=_mailCfg(_mailBiz);
+  const tpls=_mailTpls();
+  el.innerHTML='<div class="dev-grid" style="grid-template-columns:repeat(auto-fit,minmax(310px,1fr));">'
+    // ── recipients ──
+    +'<div class="dev-card"><div class="dev-h">👥 Recipients<span class="grow"></span><span class="ph-c" id="mmCount">—</span></div><div class="dev-b">'
+    +'<div class="dev-row"><input class="dev-inp" id="mmQ" placeholder="🔎 search name / email / address" style="flex:1;" oninput="_mailFilters.q=this.value;_mmRenderList()"></div>'
+    +'<div class="dev-row"><select class="dev-inp" id="mmFreq" style="flex:1;" onchange="_mailFilters.freq=this.value;_mmRenderList()"></select>'
+    +'<select class="dev-inp" id="mmStatus" style="flex:1;" onchange="_mailFilters.status=this.value;_mmRenderList()"></select>'
+    +'<input class="dev-inp" id="mmZip" placeholder="zip" style="width:64px;flex:none;" oninput="_mailFilters.zip=this.value;_mmRenderList()"></div>'
+    +'<div class="dev-row"><button class="dev-btn" onclick="mmSelAll(true)">Select all shown</button><button class="dev-btn" onclick="mmSelAll(false)">Clear</button></div>'
+    +'<div id="mmList" style="max-height:340px;overflow:auto;margin-top:6px;"></div>'
+    +'</div></div>'
+    // ── compose ──
+    +'<div class="dev-card"><div class="dev-h">✍️ Compose<span class="grow"></span><span class="dev-pill y">owner only</span></div><div class="dev-b">'
+    +'<div class="dev-row"><select class="dev-inp" id="mmTpl" style="flex:1;" onchange="mmLoadTpl(this.value)"><option value="">📄 templates…</option>'
+    +tpls.map(function(t,i){return '<option value="'+i+'">'+esc(t.name)+'</option>';}).join('')+'</select>'
+    +'<button class="dev-btn" onclick="mmSaveTpl()" title="Save current subject+body as a template">💾</button></div>'
+    +'<div class="dev-row"><input class="dev-inp" id="mmSubject" placeholder="Subject — {{name}} works here too" style="flex:1;" oninput="_mmPreview()"></div>'
+    +'<div class="dev-row"><textarea class="dev-inp" id="mmBody" rows="9" placeholder="Hey {{name}},&#10;&#10;Write your message. Blank line = new paragraph.&#10;{{name}} becomes each customer\'s first name." style="flex:1;resize:vertical;font-family:inherit;font-size:14px;" oninput="_mmPreview()"></textarea></div>'
+    +'<div class="dev-row"><div class="dev-toggle '+(cfg.on?'on':'')+'" id="mmBrandTgl" onclick="mmToggleBrand()"></div>Branded header &amp; footer</div>'
+    +'<div id="mmBrandCfg" style="display:'+(cfg.on?'block':'none')+';">'
+    +'<div class="dev-row"><input class="dev-inp" id="mmWeb" value="'+esc(cfg.web)+'" style="flex:1;" oninput="_mailCfgSave(_mailBiz,{web:this.value});_mmPreview()" title="Website shown in the footer"></div>'
+    +'<div class="dev-row"><textarea class="dev-inp" id="mmFoot" rows="2" style="flex:1;resize:vertical;font-family:inherit;font-size:12px;" oninput="_mailCfgSave(_mailBiz,{foot:this.value});_mmPreview()" title="Footer text">'+esc(cfg.foot)+'</textarea></div>'
+    +'</div>'
+    +'<div class="dev-row"><button class="dev-btn" onclick="mmTest()">📨 Send test to me</button><span class="grow"></span><button class="dev-btn go" id="mmSendBtn" onclick="mmSend()">📬 Send to 0</button></div>'
+    +'<div class="dev-row" id="mmProg" style="color:var(--dim);"></div>'
+    +'<div id="mmCamps"></div>'
+    +'</div></div>'
+    // ── preview ──
+    +'<div class="dev-card"><div class="dev-h">👁 Live preview</div><div class="dev-b" style="padding:8px;"><div id="mmPrev" style="border-radius:10px;overflow:auto;max-height:520px;background:#f2f5f3;"></div></div></div>'
+    +'</div>';
+  // fill filter dropdowns
+  const freqs={},statuses={};
+  (_mailCust||[]).forEach(function(c){ if(c.frequency) freqs[c.frequency]=1; if(c.status) statuses[c.status]=1; });
+  document.getElementById('mmFreq').innerHTML='<option value="">any frequency</option>'+Object.keys(freqs).sort().map(function(f){return '<option>'+esc(f)+'</option>';}).join('');
+  document.getElementById('mmStatus').innerHTML='<option value="">any status</option>'+Object.keys(statuses).sort().map(function(f){return '<option>'+esc(f)+'</option>';}).join('');
+  _mailFilters.q='';_mailFilters.freq='';_mailFilters.status='';_mailFilters.zip='';
+  _mmRenderCamps();
+}
+function _mmFiltered(){
+  return (_mailCust||[]).filter(function(c){
     if(_mailFilters.q){ const t=(String(c.name||'')+' '+String(c.email||'')+' '+String(c.address||'')).toLowerCase(); if(t.indexOf(_mailFilters.q.toLowerCase())<0) return false; }
     if(_mailFilters.freq&&String(c.frequency||'')!==_mailFilters.freq) return false;
     if(_mailFilters.status&&String(c.status||'')!==_mailFilters.status) return false;
     if(_mailFilters.zip&&String(c.zip||'').indexOf(_mailFilters.zip)!==0) return false;
     return true;
   });
-  const selN=Object.keys(_mailSel).filter(function(k){return _mailSel[k];}).length;
-  let h='<div class="dev-grid">';
-  h+='<div class="dev-card"><div class="dev-h">👥 Pick recipients<span class="grow"></span><span class="ph-c">'+selN+' of '+list.length+' selected</span></div><div class="dev-b">'
-    +'<div class="dev-row"><input class="dev-inp" placeholder="🔎 search" value="'+esc(_mailFilters.q)+'" oninput="_mailFilters.q=this.value;renderMassMail()" style="flex:1.4;">'
-    +'<select class="dev-inp" onchange="_mailFilters.freq=this.value;renderMassMail()"><option value="">any frequency</option>'+Object.keys(freqs).map(function(f){return '<option '+(_mailFilters.freq===f?'selected':'')+'>'+esc(f)+'</option>';}).join('')+'</select>'
-    +'<select class="dev-inp" onchange="_mailFilters.status=this.value;renderMassMail()"><option value="">any status</option>'+Object.keys(statuses).map(function(f){return '<option '+(_mailFilters.status===f?'selected':'')+'>'+esc(f)+'</option>';}).join('')+'</select>'
-    +'<input class="dev-inp" placeholder="zip" value="'+esc(_mailFilters.zip)+'" oninput="_mailFilters.zip=this.value;renderMassMail()" style="width:70px;flex:none;"></div>'
-    +'<div class="dev-row"><button class="dev-btn" onclick="list_selAll(true)">Select all shown</button><button class="dev-btn" onclick="list_selAll(false)">Clear selection</button></div>'
-    +'<div style="max-height:320px;overflow:auto;margin-top:6px;">'
-    +list.map(function(c){ const k=String(c.email).toLowerCase(); const on=!!_mailSel[k];
-      return '<label style="display:flex;gap:9px;align-items:center;padding:7px 8px;border-radius:9px;cursor:pointer;'+(on?'background:rgba(34,197,94,.09);':'')+'">'
-        +'<input type="checkbox" '+(on?'checked':'')+' onchange="_mailSel[\''+esc(k)+'\']=this.checked;renderMassMail()" style="accent-color:#22c55e;">'
-        +'<div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(c.name||k)+'</div>'
-        +'<div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(k)+(c.frequency?' · '+esc(c.frequency):'')+(c.zip?' · '+esc(c.zip):'')+'</div></div></label>'; }).join('')
-    +'</div></div></div>';
-  h+='<div class="dev-card"><div class="dev-h">✍️ Compose<span class="grow"></span><span class="dev-pill y">owner only</span></div><div class="dev-b">'
-    +'<div class="dev-row"><input class="dev-inp" id="mmSubject" placeholder="Subject" style="flex:1;"></div>'
-    +'<div class="dev-row"><textarea class="dev-inp" id="mmBody" rows="9" placeholder="Hey {{name}},&#10;&#10;…write your blast. {{name}} becomes each customer\'s first name." style="flex:1;resize:vertical;font-family:inherit;"></textarea></div>'
-    +'<div class="dev-row"><button class="dev-btn go" style="flex:1;" onclick="mmSend()" '+(_mailSending?'disabled':'')+'>📬 Send to '+selN+' customer'+(selN!==1?'s':'')+'</button></div>'
-    +'<div class="dev-row" id="mmProg" style="color:var(--dim);"></div>'
-    +'<div class="dev-row" style="color:var(--dim);font-size:11px;">Sends one-by-one through the '+esc(z.n)+' backend (Gmail). Every send is logged to an “Outreach” sheet. Needs the owner_send_email handler — already in your apps-script.txt, paste &amp; redeploy if sends fail.</div>'
-    +'</div></div>';
-  h+='</div>';
-  el.innerHTML=h;
-  window.__mmList=list;
 }
-function list_selAll(on){ (window.__mmList||[]).forEach(function(c){ _mailSel[String(c.email).toLowerCase()]=on; }); renderMassMail(); }
+function _mmRenderList(){
+  const list=_mmFiltered();
+  const box=document.getElementById('mmList'); if(!box) return;
+  box.innerHTML=list.map(function(c){ const k=String(c.email).toLowerCase(); const on=!!_mailSel[k];
+    return '<label style="display:flex;gap:9px;align-items:center;padding:7px 8px;border-radius:9px;cursor:pointer;'+(on?'background:rgba(16,185,129,.09);':'')+'">'
+      +'<input type="checkbox" '+(on?'checked':'')+' onchange="_mailSel[\''+esc(k)+'\']=this.checked;_mmCounts()" style="accent-color:#10b981;min-width:16px;height:16px;">'
+      +'<div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(c.name||k)+'</div>'
+      +'<div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(k)+(c.frequency?' · '+esc(c.frequency):'')+(c.zip?' · '+esc(c.zip):'')+'</div></div></label>'; }).join('')
+    ||'<div class="dev-row" style="color:var(--dim);">No customers match these filters.</div>';
+  window.__mmList=list;
+  _mmCounts();
+}
+function _mmCounts(){
+  const selN=Object.keys(_mailSel).filter(function(k){return _mailSel[k];}).length;
+  const c=document.getElementById('mmCount'); if(c) c.textContent=selN+' of '+(window.__mmList||[]).length+' selected';
+  const b=document.getElementById('mmSendBtn'); if(b){ b.textContent='📬 Send to '+selN; const secs=Math.ceil(selN*0.8); b.title=selN?('~'+(secs>60?Math.ceil(secs/60)+' min':secs+'s')+' to send'):''; }
+}
+function mmSelAll(on){ (window.__mmList||[]).forEach(function(c){ _mailSel[String(c.email).toLowerCase()]=on; }); _mmRenderList(); }
+function mmToggleBrand(){ const cfg=_mailCfg(_mailBiz); _mailCfgSave(_mailBiz,{on:!cfg.on});
+  document.getElementById('mmBrandTgl').classList.toggle('on',!cfg.on);
+  document.getElementById('mmBrandCfg').style.display=!cfg.on?'block':'none'; _mmPreview(); }
+function mmLoadTpl(i){ if(i==='') return; const t=_mailTpls()[+i]; if(!t) return;
+  document.getElementById('mmSubject').value=t.subject||''; document.getElementById('mmBody').value=t.body||''; _mmPreview(); toast('📄 Template loaded'); }
+function mmSaveTpl(){
+  const subject=(document.getElementById('mmSubject').value||'').trim();
+  const body=(document.getElementById('mmBody').value||'').trim();
+  if(!subject&&!body){ toast('Nothing to save'); return; }
+  const name=prompt('Template name:',subject.slice(0,30)||'My template'); if(!name) return;
+  const t=_mailTpls(); t.unshift({name:name,subject:subject,body:body});
+  try{ localStorage.setItem(MAILTPL_KEY,JSON.stringify(t.slice(0,20))); }catch(e){}
+  _mmBuildSkeleton(_bizLoad()[_mailBiz]); _mmRenderList(); _mmPreview();
+  document.getElementById('mmSubject').value=subject; document.getElementById('mmBody').value=body; _mmPreview();
+  toast('💾 Template saved');
+}
+function _mmPreview(){
+  const box=document.getElementById('mmPrev'); if(!box) return;
+  const cfg=_mailCfg(_mailBiz);
+  const sample=(window.__mmList&&window.__mmList[0])||{name:'Sample Customer'};
+  const subj=_mmPersonalize(document.getElementById('mmSubject')?document.getElementById('mmSubject').value:'',sample)||'(no subject yet)';
+  const body=_mmPersonalize(document.getElementById('mmBody')?document.getElementById('mmBody').value:'',sample)||'Start typing to see your email here…';
+  const subjBar='<div style="background:#e8ede9;padding:9px 14px;font-family:Arial;font-size:12.5px;color:#374151;border-bottom:1px solid #dde3df;"><b>Subject:</b> '+esc(subj)+'</div>';
+  if(cfg.on) box.innerHTML=subjBar+_mailBrandHtml(_mailBiz,subj,body);
+  else box.innerHTML=subjBar+'<div style="background:#fff;padding:22px;font-family:Arial;font-size:14.5px;line-height:1.6;color:#1f2937;white-space:pre-wrap;">'+esc(body)+'</div>';
+}
+function _mmRenderCamps(){
+  const box=document.getElementById('mmCamps'); if(!box) return;
+  let camps=[]; try{ camps=JSON.parse(localStorage.getItem(CAMP_KEY)||'[]'); }catch(e){}
+  box.innerHTML=camps.length?'<div class="dev-row" style="font-weight:800;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);margin-top:6px;">Recent blasts</div>'
+    +camps.slice(0,5).map(function(c){ return '<div class="dev-row" style="font-size:11.5px;color:var(--muted);">'+esc(c.ts)+' · <b style="color:var(--text);">'+esc(c.subj)+'</b> · '+c.ok+' sent'+(c.fail?' · <span style="color:#f87171;">'+c.fail+' failed</span>':'')+'</div>'; }).join(''):'';
+}
+async function mmTest(){
+  if(!myEmail){ toast('No login email'); return; }
+  const subj=(document.getElementById('mmSubject').value||'').trim();
+  const body=(document.getElementById('mmBody').value||'').trim();
+  if(!subj||!body){ toast('Subject + body first'); return; }
+  const cfg=_mailCfg(_mailBiz); const z=_bizLoad()[_mailBiz];
+  const me={name:myName||'Test'};
+  toast('📨 Sending test to '+myEmail+'…');
+  const params={ action:'owner_send_email', to:myEmail, subject:'[TEST] '+_mmPersonalize(subj,me), body:_mmPersonalize(body,me), campaign:'test', idemKey:'test:'+Date.now() };
+  if(cfg.on) params.htmlBody=_mailBrandHtml(_mailBiz,subj,_mmPersonalize(body,me));
+  const d=await bizGet(z,params);
+  toast(d&&d.success?'✅ Test sent — check your inbox':'⚠ '+((d&&d.error)||'failed — backend redeployed?'));
+}
 async function mmSend(){
   if(myRole!=='owner'){ toast('Owner only'); return; }
   if(_mailSending) return;
@@ -2387,23 +2550,27 @@ async function mmSend(){
   const targets=(_mailCust||[]).filter(function(c){ return _mailSel[String(c.email).toLowerCase()]; });
   if(!subj||!body){ toast('Subject + body required'); return; }
   if(!targets.length){ toast('Pick at least one recipient'); return; }
-  if(!confirm('Send this email to '+targets.length+' customer'+(targets.length!==1?'s':'')+'?\n\nSubject: '+subj)) return;
+  if(!confirm('Send to '+targets.length+' customer'+(targets.length!==1?'s':'')+'?\n\nSubject: '+subj+'\n'+(_mailCfg(_mailBiz).on?'Branded header & footer ON':'Plain text'))) return;
   _mailSending=true;
-  const z=_bizLoad()[_mailBiz]; const camp='hq-'+Date.now();
-  const prog=document.getElementById('mmProg');
+  const z=_bizLoad()[_mailBiz]; const cfg=_mailCfg(_mailBiz); const camp='hq-'+Date.now();
+  const prog=document.getElementById('mmProg'); const btn=document.getElementById('mmSendBtn'); btn.disabled=true;
   let ok=0,fail=0;
   for(let i=0;i<targets.length;i++){
     const c=targets[i];
-    const first=String(c.name||'').split(' ')[0]||'there';
-    prog.textContent='📤 '+(i+1)+'/'+targets.length+' — '+(c.email);
-    const d=await bizGet(z,{ action:'owner_send_email', to:c.email, subject:subj.replace(/{{\s*name\s*}}/gi,first),
-      body:body.replace(/{{\s*name\s*}}/gi,first), campaign:camp, idemKey:camp+':'+String(c.email).toLowerCase() });
-    if(d&&d.success) ok++; else { fail++; if(fail===1&&d&&/unknown|unauthorized|not.*function/i.test(String(d.error||''))){ prog.textContent='⛔ Backend rejected: '+(d.error||'?')+' — redeploy apps-script.txt'; _mailSending=false; return; } }
+    prog.innerHTML='📤 <b>'+(i+1)+'/'+targets.length+'</b> — '+esc(c.email);
+    const params={ action:'owner_send_email', to:c.email, subject:_mmPersonalize(subj,c), body:_mmPersonalize(body,c), campaign:camp, idemKey:camp+':'+String(c.email).toLowerCase() };
+    if(cfg.on){ const html=_mailBrandHtml(_mailBiz,params.subject,_mmPersonalize(body,c)); if((html.length+body.length)<6500) params.htmlBody=html; }
+    const d=await bizGet(z,params);
+    if(d&&d.success) ok++;
+    else { fail++;
+      if(fail===1&&d&&/unknown|unauthorized|not.*function|script/i.test(String(d.error||''))){ prog.innerHTML='⛔ Backend rejected: '+esc(d.error||'?')+' — paste &amp; redeploy that backend'; _mailSending=false; btn.disabled=false; return; } }
     await new Promise(function(r){ setTimeout(r,650); });
   }
-  prog.textContent='✅ Sent '+ok+(fail?(' · ⚠ failed '+fail):'')+' — campaign '+camp;
+  prog.innerHTML='✅ <b>'+ok+'</b> sent'+(fail?' · <span style="color:#f87171;">'+fail+' failed</span>':'')+' — campaign '+camp;
+  try{ let camps=JSON.parse(localStorage.getItem(CAMP_KEY)||'[]'); camps.unshift({ts:new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}),subj:subj,n:targets.length,ok:ok,fail:fail}); localStorage.setItem(CAMP_KEY,JSON.stringify(camps.slice(0,8))); }catch(e){}
+  _mmRenderCamps();
   toast('📬 Blast done: '+ok+' sent'+(fail?', '+fail+' failed':''));
-  _mailSending=false;
+  _mailSending=false; btn.disabled=false;
 }
 
 window.addEventListener('DOMContentLoaded', ()=>{
