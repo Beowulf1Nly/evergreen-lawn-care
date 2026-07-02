@@ -13,8 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-03.9 */
-(function(){ var V='2026-07-03.9'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-04.1 */
+(function(){ var V='2026-07-04.1'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -590,6 +590,8 @@
   <div class="sheet">
     <h3>📅 Reschedule</h3><div class="sub" id="reschedSub"></div>
     <div class="lbl">New date</div><input type="date" id="reschedDate" class="field">
+    <div class="lbl">Reason <span style="font-weight:400;text-transform:none;letter-spacing:0;">— goes in the customer's email</span></div>
+    <input type="text" id="reschedReason" class="field" placeholder="e.g. weather delay, crew scheduling conflict">
     <div class="toggle-row"><input type="checkbox" id="reschedSeries"><label for="reschedSeries">Move this &amp; all future visits</label></div>
     <div class="toggle-row"><input type="checkbox" id="reschedNotify" checked><label for="reschedNotify">Email the customer</label></div>
     <button class="primary" id="reschedGo" onclick="doReschedule()">Move job</button>
@@ -1005,14 +1007,16 @@ function _roCommit(crews){
 }
 
 /* ═════════ JOB ACTIONS ═════════ */
-function openJobSheet(bi){
-  const b=_bookings[bi]; if(!b) return; _jobBi=bi;
+function openJobSheet(bi){ const b=_bookings[bi]; if(b) openJobSheetFor(b); }
+function openJobSheetFor(b){
+  if(!b) return; _jobCur=b; _jobBi=_bookings.indexOf(b);
+  const be=_jobBE(b);
   const done=isDone(b);
   const photos=String(b.photos||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
   const eNotes=String(b.employeeNotes||'').trim();
   const cNotes=String(b.notes||'').replace(/\blot:\s*[\d.]+ac\b/gi,'').replace(/\s*\|\s*$/,'').trim();
-  document.getElementById('jobSheetBody').innerHTML='<h3>'+esc(b.name||'Customer')+'</h3>'
-    +'<div class="sub">📍 '+esc(b.address||'')+(b.zip?', '+esc(b.zip):'')+' · '+esc(dateOf(b)||'no date')+(b.crew?(' · Crew '+esc(b.crew)):' · unassigned')+(b.price?(' · '+esc(b.price)):'')+'</div>'
+  document.getElementById('jobSheetBody').innerHTML='<h3>'+_jobIcon(b)+' '+esc(b.name||'Customer')+'</h3>'
+    +'<div class="sub">📍 '+esc(b.address||'')+(b.zip?', '+esc(b.zip):'')+(_zoneOf(b)?' · '+_zoneOf(b):'')+' · '+esc(dateOf(b)||'no date')+(b.crew?(' · Crew '+esc(b.crew)):' · unassigned')+(b.price?(' · '+esc(b.price)):'')+(b._srcBiz?(' · '+esc(be.e2+' '+be.n)):'')+'</div>'
     +(cNotes?'<div class="rs-note">📝 '+esc(cNotes)+'</div>':'')
     +(eNotes?'<div class="rs-note crew">👷 '+esc(eNotes)+'</div>':'')
     +(photos.length?'<div class="rs-photos">'+photos.map(function(u){return '<a href="'+esc(u)+'" target="_blank"><img class="rs-thumb" src="'+esc(_driveThumb(u))+'" onerror="this.replaceWith(document.createTextNode(String.fromCodePoint(0x1F4F7)))"></a>';}).join('')+'</div>':'')
@@ -1029,38 +1033,38 @@ function openJobSheet(bi){
   openSheet('jobSheet');
 }
 async function doAssign(crew){
-  const b=_bookings[_jobBi]; if(!b) return; const prev=b.crew||''; b.crew=crew; toast(crew?('Assigning to Crew '+crew+'…'):'Clearing crew…');
-  try{ const p=new URLSearchParams({action:'set_crew', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), crew:crew, adminToken:token});
-    const d=await(await fetch(SCRIPT_URL+'?'+p)).json();
-    if(d.success){ toast(crew?('👷 Assigned to Crew '+crew):'Crew cleared'); render(); refreshBookings(); closeSheet('jobSheet'); }
+  const b=_jobCur; if(!b) return; const be=_jobBE(b); const prev=b.crew||''; b.crew=crew; toast(crew?('Assigning to Crew '+crew+'…'):'Clearing crew…');
+  try{ const p=new URLSearchParams({action:'set_crew', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), crew:crew, adminToken:be.t});
+    const d=await(await fetch(be.u+'?'+p)).json();
+    if(d.success){ toast(crew?('👷 Assigned to Crew '+crew):'Crew cleared'); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings(); closeSheet('jobSheet'); }
     else { b.crew=prev; toast('Error: '+(d.error||'could not assign')); }
   }catch(e){ b.crew=prev; toast('Network error'); }
 }
 async function doMarkDone(){
-  const b=_bookings[_jobBi]; if(!b) return; toast('Marking done…');
-  try{ const p=new URLSearchParams({action:'mark_done', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), amount:amtOf(b).toFixed(2), markedBy:myName||'Owner', adminToken:token});
-    const d=await(await fetch(SCRIPT_URL+'?'+p)).json();
-    if(d.success){ b.done='✓ Done'; toast('✅ Marked done'); render(); refreshBookings(); closeSheet('jobSheet'); }
+  const b=_jobCur; if(!b) return; const be=_jobBE(b); toast('Marking done…');
+  try{ const p=new URLSearchParams({action:'mark_done', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), amount:amtOf(b).toFixed(2), markedBy:myName||'Owner', adminToken:be.t});
+    const d=await(await fetch(be.u+'?'+p)).json();
+    if(d.success){ b.done='✓ Done'; toast('✅ Marked done'); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings(); closeSheet('jobSheet'); }
     else toast('Error: '+(d.error||'could not mark done'));
   }catch(e){ toast('Network error'); }
 }
-function openResched(){ const b=_bookings[_jobBi]; if(!b) return; document.getElementById('reschedSub').textContent=(b.name||'Customer')+' · currently '+(dateOf(b)||'no date'); document.getElementById('reschedDate').value=dateOf(b)||todayISO(); document.getElementById('reschedSeries').checked=false; document.getElementById('reschedNotify').checked=true; closeSheet('jobSheet'); openSheet('reschedSheet'); }
+function openResched(){ const b=_jobCur; if(!b) return; document.getElementById('reschedSub').textContent=(b.name||'Customer')+' · currently '+(dateOf(b)||'no date'); document.getElementById('reschedDate').value=dateOf(b)||todayISO(); document.getElementById('reschedReason').value=''; document.getElementById('reschedSeries').checked=false; document.getElementById('reschedNotify').checked=true; closeSheet('jobSheet'); openSheet('reschedSheet'); }
 async function doReschedule(){
-  const b=_bookings[_jobBi]; if(!b) return; const nd=document.getElementById('reschedDate').value; if(!nd){ toast('Pick a date'); return; }
+  const b=_jobCur; if(!b) return; const be=_jobBE(b); const nd=document.getElementById('reschedDate').value; if(!nd){ toast('Pick a date'); return; }
   const btn=document.getElementById('reschedGo'); btn.disabled=true; btn.textContent='Moving…';
-  try{ const p=new URLSearchParams({ action:'owner_reschedule', rowIndex:_ri(b), newDate:nd, scope:(document.getElementById('reschedSeries').checked?'all':'single'), reason:'', expectedEmail:b.email||'', skipEmail:(document.getElementById('reschedNotify').checked?'false':'true'), adminToken:token });
-    const d=await(await fetch(SCRIPT_URL+'?'+p)).json();
-    if(d.success){ b.serviceDate=nd; b.serviceDateRaw=nd; toast('📅 Rescheduled to '+nd); closeSheet('reschedSheet'); render(); refreshBookings(); }
+  try{ const p=new URLSearchParams({ action:'owner_reschedule', rowIndex:_ri(b), newDate:nd, scope:(document.getElementById('reschedSeries').checked?'all':'single'), reason:(document.getElementById('reschedReason').value||'').trim(), expectedEmail:b.email||'', skipEmail:(document.getElementById('reschedNotify').checked?'false':'true'), adminToken:be.t });
+    const d=await(await fetch(be.u+'?'+p)).json();
+    if(d.success){ b.serviceDate=nd; b.serviceDateRaw=nd; toast('📅 Rescheduled to '+nd); closeSheet('reschedSheet'); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings(); }
     else toast('Error: '+(d.error||'could not reschedule'));
   }catch(e){ toast('Network error'); }
   btn.disabled=false; btn.textContent='Move job';
 }
-function openCancel(){ const b=_bookings[_jobBi]; if(!b) return; document.getElementById('cancelSub').textContent=(b.name||'Customer')+' · '+(dateOf(b)||'no date'); document.getElementById('cancelReason').value=''; document.getElementById('cancelNotify').checked=true; closeSheet('jobSheet'); openSheet('cancelSheet'); }
+function openCancel(){ const b=_jobCur; if(!b) return; document.getElementById('cancelSub').textContent=(b.name||'Customer')+' · '+(dateOf(b)||'no date'); document.getElementById('cancelReason').value=''; document.getElementById('cancelNotify').checked=true; closeSheet('jobSheet'); openSheet('cancelSheet'); }
 async function doCancel(){
-  const b=_bookings[_jobBi]; if(!b) return; const btn=document.getElementById('cancelGo'); btn.disabled=true; btn.textContent='Cancelling…';
-  try{ const p=new URLSearchParams({ action:'cancel_job', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), reason:document.getElementById('cancelReason').value.trim(), skipEmail:(document.getElementById('cancelNotify').checked?'false':'true'), adminToken:token });
-    const d=await(await fetch(SCRIPT_URL+'?'+p)).json();
-    if(d.success){ b.rowCancelled=true; toast('🗑 Job cancelled'); closeSheet('cancelSheet'); render(); refreshBookings(); }
+  const b=_jobCur; if(!b) return; const be=_jobBE(b); const btn=document.getElementById('cancelGo'); btn.disabled=true; btn.textContent='Cancelling…';
+  try{ const p=new URLSearchParams({ action:'cancel_job', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), reason:document.getElementById('cancelReason').value.trim(), skipEmail:(document.getElementById('cancelNotify').checked?'false':'true'), adminToken:be.t });
+    const d=await(await fetch(be.u+'?'+p)).json();
+    if(d.success){ b.rowCancelled=true; toast('🗑 Job cancelled'); closeSheet('cancelSheet'); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings(); }
     else toast('Error: '+(d.error||'could not cancel'));
   }catch(e){ toast('Network error'); }
   btn.disabled=false; btn.textContent='Cancel this job';
@@ -1260,6 +1264,34 @@ function bizSaveFromUI(){
   toast('🏢 Businesses saved');
 }
 
+/* ── zones + job-type icons ── */
+const ZIP_ZONE={
+  '34428':'Z1','34429':'Z1','34423':'Z1',
+  '34450':'Z2','34451':'Z2','34452':'Z2','34453':'Z2','34436':'Z2','34442':'Z2',
+  '34460':'Z3','34461':'Z3','34464':'Z3','34465':'Z3','34446':'Z3','34447':'Z3','34448':'Z3',
+  '34431':'Z4','34432':'Z4','34433':'Z4','34434':'Z4',
+  '34470':'Z5','34471':'Z5','34472':'Z5','34473':'Z5','34474':'Z5',
+  '34475':'Z5','34476':'Z5','34479':'Z5','34480':'Z5','34481':'Z5',
+  '34482':'Z5','34491':'Z5','34488':'Z5','34489':'Z5'
+};
+function _zoneOf(b){ return ZIP_ZONE[String(b.zip||'').trim().slice(0,5)]||null; }
+function _jobIcon(b){
+  const t=(String(b.frequency||'')+' '+String(b.service||b.serviceType||'')+' '+String(b.services||'')+' '+String(b.notes||'')).toLowerCase();
+  if(t.includes('quote')) return '📋';                              // quote visit (any business)
+  if((b._srcBiz||0)>0) return '🫧';                                 // cleaning & sister businesses
+  if(/landscap|mulch|hedge|sod|planting|install|flower|bed |leaf|clean.?up/.test(t)) return '🌿';   // landscaping
+  return '🌱';                                                      // mow
+}
+/* every rendered job gets a ref id so the sheet can open ANY job, any backend */
+let _jobRefs=[], _jobCur=null;
+function _jr(b){ _jobRefs.push(b); return _jobRefs.length-1; }
+function openJobRef(i){ const b=_jobRefs[i]; if(b) openJobSheetFor(b); }
+function _jobBE(b){
+  const i=(b&&b._srcBiz)||0;
+  const z=_bizLoad()[i];
+  return (i&&z)?{u:_bizUrl(z),t:_bizTok(z),n:z.n||'',e2:z.e||''}:{u:SCRIPT_URL,t:token,n:'',e2:''};
+}
+
 /* ── data ── */
 let _bizExtra={}, _bizExtraLoaded=false;
 function initDispatch(){ renderDispatch(); if(!_completedLoaded){ _completedLoaded=true; loadCompleted(); } if(!_bizExtraLoaded){ _bizExtraLoaded=true; loadBizBookings(); } loadCrewPay(); }
@@ -1363,6 +1395,7 @@ function renderDispatch(){
   const board=document.getElementById('dispBoard'); if(!board) return;
   const ae=document.activeElement;
   if(ae&&ae.classList&&ae.classList.contains('st-rate')) return;   // mid-edit — the 20s auto-refresh was wiping the input before your change saved
+  _jobRefs=[];
   ['dvMonth','dvWeek','dvDay'].forEach(function(id){ const el=document.getElementById(id); if(el) el.classList.toggle('on', id==='dv'+_dispView.charAt(0).toUpperCase()+_dispView.slice(1)); });
   document.querySelectorAll('#dispCrews button').forEach(function(b){ b.classList.toggle('on',b.dataset.c===_dispCrew); });
   const todayIso=todayISO();
@@ -1511,12 +1544,11 @@ function _dispStats(rangeStart,rangeEnd){
     +'<span>⚠️ <b>'+all.filter(function(b){return !_isArch(b)&&!String(b.crew||'').trim();}).length+'</b> unassigned</span>';
 }
 function _dispPill(b){
-  const bi=_bookings.indexOf(b), arch=_isArch(b), done=isDone(b)||arch, ext=(b._srcBiz!=null&&b._srcBiz>0);
-  const click=arch?'title="Archived — completed job"'
-    :ext?'onclick="toast(\'🧹 \'+esc(_bizLoad()['+b._srcBiz+'].n)+\' job — manage it on that site\\u2019s portal\')" title="Booked on '+esc((_bizLoad()[b._srcBiz]||{}).n||'another business')+' — view-only here"'
-    :'onclick="openJobSheet('+bi+')"';
+  const arch=_isArch(b), done=isDone(b)||arch;
+  const zone=_zoneOf(b);
+  const click=arch?'title="Archived — completed job"':'onclick="openJobRef('+_jr(b)+')"';
   return '<div class="disp-pill'+(done?' done':'')+(arch?' arch':'')+'" style="--pc:'+_dispPC(b)+'" '+click
-    +'>'+(done?'✓ ':'')+esc(b.name||'?')+' <span class="pp">'+(b.jobTime?esc(b.jobTime)+' · ':'')+esc(String(b.price||''))+'</span></div>';
+    +'>'+(done?'✓ ':'')+_jobIcon(b)+' '+esc(b.name||'?')+' <span class="pp">'+(zone?zone+' · ':'')+(b.jobTime?esc(b.jobTime)+' · ':'')+esc(String(b.price||''))+'</span></div>';
 }
 /* ── expected job duration — same model /invoice's route optimizer uses ── */
 function _jobMins(b){
@@ -1624,15 +1656,15 @@ function _econStrip(c,jobs,iso,labelHtml){
 }
 
 function _stBlockEv(b,stMin,enMin,top,proj){
-  const bi=_bookings.indexOf(b), arch=_isArch(b), done=isDone(b)||arch;
+  const arch=_isArch(b), done=isDone(b)||arch, zone=_zoneOf(b);
   const left=Math.max(0,Math.min(98,((stMin-420)/720)*100));
   const width=Math.max(2,Math.min(100-left,((enMin-stMin)/720)*100));
   const dur=(enMin-stMin);
   const tRange=(proj?'~':'')+_t12(stMin)+'–'+_t12(enMin)+' · '+dur+'m';
   const tip=esc(b.name||'')+' · '+(proj?'projected ':'')+_t12(stMin)+'–'+_t12(enMin)+' ('+dur+' min expected)'+(b.price?' · '+esc(String(b.price)):'')+(proj?' — no set time; drag to lock one in':'');
   return '<div class="st-block'+(done?' done':'')+(arch?' arch':'')+(proj?' proj':'')+'" style="--pc:'+_dispPC(b)+';left:'+left+'%;width:'+width+'%;top:'+top+'px;" '
-    +(arch?'title="'+tip+'"':'onclick="openJobSheet('+bi+')" title="'+tip+'"')
-    +'>'+(done?'✓ ':'')+esc(b.name||'?')+'<span class="bt2">'+tRange+(b.price?' · '+esc(String(b.price)):'')+'</span></div>';
+    +(arch?'title="'+tip+'"':'onclick="openJobRef('+_jr(b)+')" title="'+tip+'"')
+    +'>'+(done?'✓ ':'')+_jobIcon(b)+' '+esc(b.name||'?')+'<span class="bt2">'+(zone?zone+' · ':'')+tRange+(b.price?' · '+esc(String(b.price)):'')+'</span></div>';
 }
 
 /* ── drag & drop ── */
@@ -1662,9 +1694,10 @@ function dispDropCell(ev,crewKey,iso){
   if(!b) return;
   const crewChanged=_applyCrew(b,crewKey);
   if(iso&&dateOf(b)!==iso){
-    _jobBi=_bookings.indexOf(b);
+    _jobBi=_bookings.indexOf(b); _jobCur=b;
     document.getElementById('reschedSub').textContent=(b.name||'Customer')+' · '+(dateOf(b)||'no date')+' → '+iso+(crewChanged?' · crew updated':'');
     document.getElementById('reschedDate').value=iso;
+    document.getElementById('reschedReason').value='';
     document.getElementById('reschedSeries').checked=false;
     document.getElementById('reschedNotify').checked=true;
     openSheet('reschedSheet');
@@ -1706,7 +1739,7 @@ function dispDropTL(ev,crewKey,iso){
 const _dayReorderOpen={}, _dayPushTimers={};
 function toggleDayOrder(c,iso){ const k=c+'|'+iso; _dayReorderOpen[k]=!_dayReorderOpen[k]; renderDispatch(); }
 function _dayOrderPanel(c,iso,cell){
-  const jobs=cell.filter(function(b){ return !_isArch(b)&&!isDone(b); });
+  const jobs=cell.filter(function(b){ return !_isArch(b)&&!isDone(b)&&!(b._srcBiz>0); });
   if(!jobs.length) return '';
   const k=c+'|'+iso, open=_dayReorderOpen[k];
   let h='<div style="padding:5px 2px 0;"><button class="dev-btn" style="font-size:11px;padding:5px 11px;" onclick="toggleDayOrder(\''+c+'\',\''+iso+'\')">'+(open?'▾':'▸')+' ↕ Reorder run ('+jobs.length+')</button>';
@@ -1716,8 +1749,8 @@ function _dayOrderPanel(c,iso,cell){
       const dur=_jobMins(b); if(i>0) st+=DRIVE_BUF;
       const row='<div class="ro-stop" style="cursor:default;background:var(--panel2);border:1px solid var(--line);margin-bottom:4px;">'
         +'<span class="ro-num" style="background:'+_dispPC(b)+'">'+(i+1)+'</span>'
-        +'<div class="ro-main"><div class="ro-n">'+esc(b.name||'?')+'</div>'
-        +'<div class="ro-a">~'+_t12(st)+'–'+_t12(st+dur)+' · '+dur+'m'+(b.price?' · '+esc(String(b.price)):'')+'</div></div>'
+        +'<div class="ro-main"><div class="ro-n">'+_jobIcon(b)+' '+esc(b.name||'?')+'</div>'
+        +'<div class="ro-a">'+(_zoneOf(b)?_zoneOf(b)+' · ':'')+'~'+_t12(st)+'–'+_t12(st+dur)+' · '+dur+'m'+(b.price?' · '+esc(String(b.price)):'')+'</div></div>'
         +'<div class="ro-arrows">'
         +'<button onclick="dayMove(\''+c+'\',\''+iso+'\','+i+',-1)" '+(i===0?'disabled':'')+'>▲</button>'
         +'<button onclick="dayMove(\''+c+'\',\''+iso+'\','+i+',1)" '+(i===jobs.length-1?'disabled':'')+'>▼</button></div></div>';
@@ -1774,7 +1807,7 @@ function _dayJobsInOrder(c,iso){
   return _dispFilter(_dispJobs()).filter(function(b){
     if(dateOf(b)!==iso) return false;
     const bc=String(b.crew||'').toUpperCase().trim()||'un';
-    return bc===c&&!_isArch(b)&&!isDone(b);
+    return bc===c&&!_isArch(b)&&!isDone(b)&&!(b._srcBiz>0);
   }).sort(function(a,b2){
     if(ordKeys.length){ let pa=ordKeys.indexOf(_svKey(a)), pb=ordKeys.indexOf(_svKey(b2)); pa=pa<0?9999:pa; pb=pb<0?9999:pb; if(pa!==pb) return pa-pb; }
     return _jobSort(a,b2);
