@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-02.2 */
+/* APP_VER:2026-07-02.3 */
 (function(){
-  var V='2026-07-02.2'; window.__APP_VER=V;
+  var V='2026-07-02.3'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -353,8 +353,8 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
 const SESSION_KEY = 'eg_staff_session';
 const STATE_KEY   = 'evg_field_state_v2';
-const START_CHECKLIST = ['Mower full on gas','Gas cans full','Leaf blower','Mower','Whacker','String','Knife','Water'];
-const END_CHECKLIST   = ['Walked the yard','Closed all gates','Leaf blowed'];
+const START_CHECKLIST = ['⛽ Mower & gas cans full','🚜 Mower, whacker & blower on the trailer','💧 Water, string & knife packed'];
+const END_CHECKLIST   = ['Walked the yard — nothing left behind','Closed all gates','Leaf blowed','Mower strapped down & all gear secured','Trailer closed & latched'];
 
 let adminToken='', adminName='', adminEmail='', adminRole='employee', adminCrews='';
 let allBookings=[], allCustomers=[], _savedOrderKeys=null, _optOrderKeys=null;
@@ -2242,18 +2242,11 @@ function _pmcsSend(params){
 // FieldLog sheet (type=loadout) via the same offline-safe queue.
 // ═══════════════════════════════════════════════════════════════════════════
 const LOADOUT_ITEMS = [
-  { id:'lo_mower',   label:'Mower(s) loaded & strapped down' },
-  { id:'lo_trimmer', label:'Weed whacker / string trimmer' },
-  { id:'lo_edger',   label:'Edger' },
-  { id:'lo_blower',  label:'Blower' },
-  { id:'lo_gas',     label:'Gas cans filled (mix + regular)' },
-  { id:'lo_line',    label:'Spare trimmer line / blades' },
-  { id:'lo_hand',    label:'Hand tools (rake, broom, shears)' },
-  { id:'lo_bags',    label:'Trash bags / tarp' },
-  { id:'lo_ppe',     label:'Eye + ear protection' },
-  { id:'lo_water',   label:'Water / cooler' },
-  { id:'lo_ramp',    label:'Trailer ramp up & latched' },
-  { id:'lo_phone',   label:'Phone + charger / job list' },
+  { id:'lo_mower',  label:'🚜 Mower loaded & strapped · ramp up & latched' },
+  { id:'lo_tools',  label:'🔧 Trimmer, edger & blower on board' },
+  { id:'lo_gas',    label:'⛽ Gas cans full (mix + regular) · spare line & blades' },
+  { id:'lo_kit',    label:'🧰 Hand tools, bags/tarp, eye & ear pro' },
+  { id:'lo_go',     label:'💧 Water/cooler · phone charged' },
 ];
 let _loadoutState = {};
 let _loadoutResolve = null;
@@ -2333,14 +2326,10 @@ function loadoutConfirm(){
    (log_checklist type=end_of_day) so the office sees daily mileage + shutdown.
    ═══════════════════════════════════════════════════════════════════════════ */
 const ENDOFDAY_ITEMS = [
-  { id:'ed_blowmower', label:'Leaf-blowed / cleaned the mower deck' },
-  { id:'ed_blowequip', label:'Blew off edger, trimmer & blower' },
-  { id:'ed_fuel',      label:'Fueled up mowers & gas cans for tomorrow' },
-  { id:'ed_blades',    label:'Blades & trimmer line good for tomorrow' },
-  { id:'ed_unload',    label:'Equipment unloaded / secured in shop' },
-  { id:'ed_fluids',    label:'Checked mower oil / no leaks on the trailer' },
-  { id:'ed_trash',     label:'Trash & clippings emptied' },
-  { id:'ed_lock',      label:'Trailer, truck & shop locked up' },
+  { id:'ed_clean',  label:'🍃 Blew everything off: mower deck, edger, trimmer, blower' },
+  { id:'ed_ready',  label:'⛽ Ready for tomorrow: fueled up + blades & line good' },
+  { id:'ed_stow',   label:'📦 Unloaded & secured · trash emptied · no leaks on trailer' },
+  { id:'ed_lock',   label:'🔒 Trailer, truck & shop locked up' },
 ];
 let _eodState={}, _eodResolve=null, _eodOdo='', _eodTrip='';
 function _eodInject(){

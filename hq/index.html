@@ -13,8 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-05.2 */
-(function(){ var V='2026-07-05.2'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-05.3 */
+(function(){ var V='2026-07-05.3'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -765,6 +765,7 @@ function enterApp(){
   if(_bookInt) clearInterval(_bookInt);   _bookInt=setInterval(refreshBookings,60000);
   if(_routeInt) clearInterval(_routeInt); _routeInt=setInterval(refreshRouteOrder,30000);
   if(_tick) clearInterval(_tick); _tick=setInterval(updateClocks,1000);
+  loadCrewPay();                                   // roster names for crew cards
   let t0tab='live'; try{ t0tab=(location.hash||'').replace('#','')||localStorage.getItem('hq_tab')||'live'; }catch(e){}
   setTab(['live','dispatch','ops','stats','outreach','sites','dev'].indexOf(t0tab)>=0?t0tab:'live');
 }
@@ -947,9 +948,9 @@ function crewCard(c, isWorking){
   return '<div class="crewcard'+(open?' exp':'')+'">'
     +'<div class="crewhead" onclick="toggle(\''+esc(c.email)+'\')">'
     +'<div class="avatar" style="background:'+col+'">'+esc(initials(c.name))+'</div>'
-    +'<div style="min-width:0;"><div class="crewname">'+esc(c.name||'Crew')+(crewBadge?' <span class="badge">Crew '+esc(crewBadge)+'</span>':'')+'</div>'
-    +'<div class="crewmeta" style="margin-top:2px;">'+where+(+c.helpers>0?(' · 🧍 +'+c.helpers):'')+(isWorking&&c.staleMin>3?(' · <span style="color:#fbbf24;">⚠ '+c.staleMin+'m ago</span>'):'')+'</div></div>'
-    +'<span class="grow"></span><span class="dot '+freshClass+'"></span><span class="clk" data-clk="'+esc(c.clockIn||'')+'">'+durStr(c.clockIn)+'</span></div>'
+    +'<div style="min-width:0;"><div class="crewname">'+esc(c.name||'Crew')+(crewBadge?' <span class="badge">🌱 Lawn Mowing · Crew '+esc(crewBadge)+'</span>':'')+'</div>'
+    +'<div class="crewmeta" style="margin-top:2px;">'+(function(){ const r=_crewRosterNames(0,crewBadge.split(',')[0].trim()); return r?('👥 '+esc(r)+' · '):''; })()+where+(+c.helpers>0?(' · 🧍 +'+c.helpers):'')+(isWorking&&c.staleMin>3?(' · <span style="color:#fbbf24;">⚠ '+c.staleMin+'m ago</span>'):'')+'</div></div>'
+    +'<span class="grow"></span><span class="dot '+freshClass+'"></span>'+(isWorking?('<span class="clk" data-clk="'+esc(c.clockIn||'')+'">'+durStr(c.clockIn)+'</span>'):'<span class="clk" style="color:var(--dim);">🏁 done</span>')+'</div>'
     +'<div class="bar"><div class="fill" style="width:'+pct+'%"></div></div>'
     +'<div class="crow">'
     +'<button class="mini map" onclick="showRouteOnMap(\''+esc(c.email)+'\')">🗺 Route on map</button>'
@@ -1620,7 +1621,8 @@ function renderDispatch(){
       const rowCount=Object.keys(rowJobsAll).reduce(function(s,d){return s+rowJobsAll[d].length;},0);
       if(c==='un'&&!rowCount&&_dispCrew==='all'&&biz.length>1&&zi>0){} // keep unassigned row everywhere as a drop target
       const col=(c==='un')?'#f87171':crewColor(c);
-      const lab='<div class="st-rowlab"><span class="cdot" style="background:'+col+';color:'+col+'"></span>'+(c==='un'?'⬜ Unassigned':'Crew '+esc(c))+'<span class="cnt">'+rowCount+'</span></div>';
+      const _rn=(c==='un')?'':_crewRosterNames(zi,c);
+      const lab='<div class="st-rowlab" '+(_rn?'title="'+esc(_rn)+'"':'')+'><span class="cdot" style="background:'+col+';color:'+col+'"></span><span style="min-width:0;overflow:hidden;"><span style="display:block;">'+(c==='un'?'⬜ Unassigned':'Crew '+esc(c))+'</span>'+(_rn?'<span style="display:block;font-size:9px;font-weight:600;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(_rn)+'</span>':'')+'</span><span class="cnt">'+rowCount+'</span></div>';
       if(_dispView==='week'){
         h+='<div class="st-grid">'+lab+days.map(function(d){
           const iso=_iso(d); const cell=(rowJobsAll[iso]||[]).slice().sort(_jobSort);
@@ -1754,6 +1756,10 @@ const BIZCOL_KEY='hq_bizcol_v1';
 function _bizCol(){ try{ return JSON.parse(localStorage.getItem(BIZCOL_KEY)||'{}'); }catch(e){ return {}; } }
 function bizToggle(n){ const c=_bizCol(); c[n]=!c[n]; try{ localStorage.setItem(BIZCOL_KEY,JSON.stringify(c)); }catch(e){} renderDispatch(); }
 function _crewPayFor(zi,c){ const cp=_crewPay&&_crewPay[zi]&&_crewPay[zi][c]; return (cp&&(cp.rate>0||cp.pct>0))?cp:null; }
+function _crewRosterNames(zi,c){
+  const cp=_crewPayFor(zi,c); if(!cp||!cp.who||!cp.who.length) return '';
+  return cp.who.map(function(w){ return String(w).split(' (')[0]; }).join(' & ');
+}
 function _crewRate(c,zi){
   zi=zi||0;
   const cp=_crewPayFor(zi,c);
