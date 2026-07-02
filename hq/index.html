@@ -13,8 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-04.5 */
-(function(){ var V='2026-07-04.5'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-04.6 */
+(function(){ var V='2026-07-04.6'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1363,9 +1363,32 @@ function _bizRowHtml(z){
     +'<button class="bdel" onclick="this.parentNode.remove()">🗑</button>'
     +'<input type="text" class="bz-u" value="'+esc(z.su||'')+'" placeholder="Backend URL (Apps Script /exec) — empty = main backend" style="flex:1 1 100%;font-family:var(--mono);font-size:11px;">'
     +'<button class="dev-btn" style="flex:0 0 auto;" onclick="bizConnectRow(this)" title="Sign in to that backend">'+((z.su&&z.tk)||!z.su?'✅':'🔗')+' connect</button>'
+    +'<button class="dev-btn" style="flex:0 0 auto;" onclick="bizDiag(this)" title="Check the connection, the deploy, and the Crew Pay sheet">🧪 test</button>'
     +'</div>';
 }
 function bizAdd(){ document.getElementById('bizList').insertAdjacentHTML('beforeend',_bizRowHtml(null)); }
+async function bizDiag(btn){
+  const row=btn.closest('.biz-row');
+  const url=(row.querySelector('.bz-u').value||'').trim()||SCRIPT_URL;
+  const tk=(url===SCRIPT_URL)?token:(row.dataset.tk||'');
+  const name=row.querySelector('.bz-n').value||'this business';
+  btn.textContent='🧪 …';
+  let verdict='';
+  if(!tk){ verdict='🔒 NOT CONNECTED — hit 🔗 connect first (email + 6-digit code). Without a token the backend rejects everything, so no Crew Pay tab gets created.'; }
+  else{
+    let txt='', d=null;
+    try{ txt=await fetch(url+'?action=get_crew_pay&adminToken='+encodeURIComponent(tk)).then(r=>r.text()); }catch(e){ verdict='⛔ CAN\'T REACH that backend URL at all — double-check the /exec link.'; }
+    if(!verdict){
+      try{ d=JSON.parse(txt); }catch(e){}
+      if(d&&d.success) verdict='✅ ALL GOOD — get_crew_pay works, Crew Pay tab exists in '+name+'\'s spreadsheet with '+((d.members||[]).length)+' member(s). Fill in rows there and refresh HQ.';
+      else if(d&&/unauthorized/i.test(String(d.error||''))) verdict='🔑 TOKEN REJECTED — the saved login for '+name+' expired. Hit 🔗 connect again, then Save.';
+      else if(d&&d.error) verdict='⚠ Backend answered but errored: "'+d.error+'"';
+      else verdict='📦 BACKEND NOT REDEPLOYED — it responded but doesn\'t know get_crew_pay. Paste the updated cleaning-apps-script.txt into its Apps Script editor → Deploy → New version, then test again.';
+    }
+  }
+  btn.textContent='🧪 test';
+  alert('🧪 '+name+' backend check\n\n'+verdict);
+}
 function bizSaveFromUI(){
   const rows=[].slice.call(document.querySelectorAll('#bizList .biz-row'));
   const list=rows.map(function(r){ return { e:r.querySelector('.bz-e').value.trim()||'🏢', n:r.querySelector('.bz-n').value.trim(), c:r.querySelector('.bz-c').value||'#38bdf8', kw:r.querySelector('.bz-k').value.trim(), su:(r.querySelector('.bz-u')?r.querySelector('.bz-u').value.trim():''), tk:(r.dataset.tk||'') }; }).filter(function(z){return z.n;});
@@ -1704,8 +1727,9 @@ async function loadCrewPay(force){
   const biz=_bizLoad();
   const all={};
   await Promise.all(biz.map(async function(z,zi){
-    if(!_bizConnected(z)) return;
+    if(!_bizConnected(z)){ if(z.su) console.warn('CrewPay: '+z.n+' not connected — skipped'); return; }
     const d=await bizGet(z,{action:'get_crew_pay'});
+    if(!d||!d.success) console.warn('CrewPay: '+z.n+' → '+((d&&d.error)||'no/invalid response — backend redeployed?'));
     if(d&&d.success&&Array.isArray(d.members)&&d.members.length){
       const m={};
       d.members.forEach(function(r){
