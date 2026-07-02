@@ -12,9 +12,9 @@
 <!-- Auto-updater: pulls the latest version in the background and reloads once when a new
      deploy is live, so phones never get stuck on an old cached build. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-02.1 */
+/* APP_VER:2026-07-02.2 */
 (function(){
-  var V = '2026-07-02.1';
+  var V = '2026-07-02.2';
   window.__APP_VER = V;
   var reloads = 0, lastCheck = 0;
   function check(){
@@ -9721,24 +9721,62 @@ async function buildRoute() {
 }
 
 // ── Sync optimized route times to Google Calendar ───────────────────────
+// Build calendar events from the CURRENT on-screen stop order — never from a
+// stale optimize snapshot, and never by re-optimizing behind your back. What
+// you see on the Route tab is exactly what lands on the calendar and in HQ.
+function _buildCalendarUpdatesFromCurrentOrder() {
+  const updates = [];
+  const startTimeStr = document.getElementById('routeStartTime')?.value || '08:00';
+  const [startH, startM] = startTimeStr.split(':').map(Number);
+  for (const dateStr of Object.keys(_routeCustomOrder || {}).sort()) {
+    const dayOrder = _routeCustomOrder[dateStr];
+    if (!dayOrder) continue;
+    const [y, mo, d] = dateStr.split('-').map(Number);
+    const crews = Array.isArray(dayOrder) ? { '': dayOrder } : dayOrder;
+    for (const [crewKey, stops] of Object.entries(crews)) {
+      if (!Array.isArray(stops)) continue;
+      const crew = (crewKey === '_legacy' || crewKey === 'unassigned') ? '' : crewKey;
+      let cursor = new Date(y, mo - 1, d, startH || 8, startM || 0, 0, 0);
+      for (const stop of stops) {
+        const bk = stop && stop.bk;
+        if (!bk) continue;
+        cursor = new Date(cursor.getTime() + routeDriveMin(stop) * 60000);
+        const doneAt = new Date(cursor.getTime() + mowMinutes(bk) * 60000);
+        updates.push({
+          eventId:   bk.eventId   || '',
+          rowIndex:  bk._rowIndex || 0,
+          name:      bk.name      || '',
+          address:   (bk.address || '') + (bk.zip ? ', ' + bk.zip : '') + ', FL',
+          service:   bk.service   || bk.frequency || 'Lawn Service',
+          frequency: bk.frequency || '',
+          crew:      crew,
+          startIso:  cursor.toISOString(),
+          endIso:    doneAt.toISOString(),
+        });
+        // keep bk.jobTime identical to the calendar so HQ + Field Mode match it exactly
+        bk.jobTime = String(cursor.getHours()).padStart(2, '0') + ':' + String(cursor.getMinutes()).padStart(2, '0');
+        cursor = doneAt;
+      }
+    }
+  }
+  return updates;
+}
+
 async function syncRouteToCalendar(silent) {
   const calBtn = document.getElementById('routeCalSyncBtn');
-  if (calBtn) { calBtn.disabled = true; calBtn.textContent = '📅 Syncing…'; }
+  if (calBtn) { calBtn.disabled = true; calBtn.textContent = '📅 Pushing…'; }
 
-  // The calendar ALWAYS covers every crew, even if you're viewing just one.
-  // If a single crew is selected, rebuild the route for all crews to collect
-  // their calendar times, then rebuild again to restore your filtered view.
-  let updates = _lastCalendarUpdates;
-  const _prevCrewFilter = routeCrewFilter;
-  if (_prevCrewFilter !== 'all') {
-    try { routeCrewFilter = 'all'; await buildRoute(); updates = (_lastCalendarUpdates || []).slice(); } catch(e) {}
-    try { routeCrewFilter = _prevCrewFilter; await buildRoute(); } catch(e) {}
-  }
-  if (!updates || !updates.length) {
-    showToast('No route to sync — optimize first');
+  const updates = _buildCalendarUpdatesFromCurrentOrder();
+  if (!updates.length) {
+    showToast('No route to push — optimize first');
     if (calBtn) { calBtn.disabled = false; calBtn.textContent = '📅 Push to Calendar & HQ'; }
     return;
   }
+  if (routeCrewFilter !== 'all') showToast('Heads up: pushing only what\'s on screen (Crew ' + routeCrewFilter + ')');
+
+  // Push the route record (this exact order + these exact times) to the backend
+  // FIRST, so /hq Dispatch and the crews' /field mirror the calendar 1:1.
+  try { Object.keys(_routeCustomOrder || {}).forEach(ds => pushRouteToCrews(ds)); } catch(e){}
 
   try {
     // Batch the updates: one giant GET URL overflows length limits (dropping
@@ -9765,7 +9803,7 @@ async function syncRouteToCalendar(silent) {
       if (updated) parts.push(updated + ' updated');
       if (created) parts.push(created + ' created');
       if (failed)  parts.push(failed + ' failed');
-      const msg = '📅 Google Calendar synced — ' + (parts.join(' · ') || 'no changes');
+      const msg = '📅 Pushed to HQ + Google Calendar — ' + (parts.join(' · ') || 'no changes');
       showToast(msg);
       if (!silent) {
         const tl = document.getElementById('routeTimeline');
@@ -9777,7 +9815,7 @@ async function syncRouteToCalendar(silent) {
           setTimeout(() => b.remove(), 5000);
         }
       }
-      if (calBtn) calBtn.style.display = 'none'; // hide after sync
+      if (calBtn) { calBtn.disabled = false; calBtn.textContent = '✅ Pushed — push again'; }
     }
   } catch(err) {
     showToast('❌ Calendar sync error: ' + err.message);
