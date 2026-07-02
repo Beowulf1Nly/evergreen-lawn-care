@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-01.2 */
+/* APP_VER:2026-07-02.1 */
 (function(){
-  var V='2026-07-01.2'; window.__APP_VER=V;
+  var V='2026-07-02.1'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -640,8 +640,23 @@ function _hydrateFromCache(){ try{ const b=localStorage.getItem('evg_field_booki
 function _extractRouteKeys(rRes){
   try{
     if(!rRes||!rRes.success||!Array.isArray(rRes.routes)||!rRes.routes.length) return null;
-    const keys=[];
-    rRes.routes.forEach(rt=>{ (rt.stops||[]).forEach(st=>{ const em=String(st.email||st.Email||'').toLowerCase().trim(); const d=String(st.serviceDate||st.date||'').trim(); if(em) keys.push(em+'|'+d); }); });
+    // The Routes sheet can hold MULTIPLE rows for one date (per crew, plus stale
+    // ''/unassigned rows from older pushes). Sort by updatedAt so the NEWEST push
+    // owns every stop it contains — old rows can no longer hijack the order.
+    const routes=rRes.routes.slice().sort(function(a,b){
+      const ta=new Date(a.updatedAt||0).getTime()||0, tb=new Date(b.updatedAt||0).getTime()||0;
+      return ta-tb;
+    });
+    const seq={}; let base=0;
+    routes.forEach(function(rt){
+      (rt.stops||[]).forEach(function(st,idx){
+        const em=String(st.email||st.Email||'').toLowerCase().trim();
+        const d=String(st.serviceDate||st.date||'').trim();
+        if(em) seq[em+'|'+d]=base+idx;              // later (newer) rows overwrite duplicates
+      });
+      base+=1000;
+    });
+    const keys=Object.keys(seq).sort(function(a,b){ return seq[a]-seq[b]; });
     return keys.length?keys:null;
   }catch(e){ return null; }
 }
@@ -1019,8 +1034,8 @@ function _crewMatch(bk){ if(_crewSel){ if(_crewSel==='ALL') return true; const c
 function _fmTodayRawJobs(){ const ds=todayISOStr(); return (allBookings||[]).filter(b=>!b.rowCancelled&&dateOf(b)===ds&&_crewMatch(b)); } // completed jobs stay so progress counts them as done
 function _fmStops(){
   const jobs=_fmTodayRawJobs().map(bk=>({bk}));
-  const order=(_startPoint&&_optOrderKeys&&_optOrderKeys.length)?_optOrderKeys   // crew set a start point → their tight route wins
-             :(_savedOrderKeys&&_savedOrderKeys.length)?_savedOrderKeys
+  const order=(_savedOrderKeys&&_savedOrderKeys.length)?_savedOrderKeys           // owner's pushed route is LAW
+             :(_startPoint&&_optOrderKeys&&_optOrderKeys.length)?_optOrderKeys   // no pushed route → start-point optimization
              :(_optOrderKeys&&_optOrderKeys.length)?_optOrderKeys:null;
   if(order){
     const pos=k=>{ const i=order.indexOf(k); return i<0?9999:i; };   // (a) saved canonical route, else (b) self-optimized order
