@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-03.1 */
+/* APP_VER:2026-07-03.2 */
 (function(){
-  var V='2026-07-03.1'; window.__APP_VER=V;
+  var V='2026-07-03.2'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -564,7 +564,7 @@ function _payType(bk){
   if((s.includes('auto')||s.includes('stripe')) && !s.includes('not paid') && !s.includes('pending')) return 'autopay';
   return 'invoice';
 }
-function mowMinutes(bk){ const c=parseInt(String(bk.mowMinutes||bk.customMowMins||'')); if(c>0) return c; const n=String(bk.notes||'').toLowerCase(); if(String(bk.frequency||'').toLowerCase().includes('quote')) return 15; const m=n.match(/lot[:\s]+([\d.]+)\s*ac/i); if(m){ const a=parseFloat(m[1]); if(a>0) return Math.min(120,Math.max(25,Math.round(20+a*45))); } return 40; }
+function mowMinutes(bk){ const c=parseInt(String(bk.mowMinutes||bk.customMowMins||'')); if(c>0) return c; const n=String(bk.notes||'').toLowerCase(); if(_isQuoteJob(bk)) return 15; const m=n.match(/lot[:\s]+([\d.]+)\s*ac/i); if(m){ const a=parseFloat(m[1]); if(a>0) return Math.min(120,Math.max(25,Math.round(20+a*45))); } return 40; }
 function parseServices(str){ return String(str||'').split(';').map(s=>s.trim()).filter(Boolean).map(s=>{ const m=s.match(/^(.*?):\s*\$?([\d.]+)\s*$/); return m?{name:m[1].trim(),price:parseFloat(m[2])||0}:null; }).filter(s=>s&&s.name&&s.price>0); }
 function customerServicesFor(email){ const em=String(email||'').toLowerCase().trim(); if(!em) return []; const c=(allCustomers||[]).find(x=>String(x.Email||'').toLowerCase().trim()===em); return parseServices(c?(c.Services||''):''); }
 function _fmMapsUrl(bk){ return 'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent((bk.address||'')+(bk.zip?', '+bk.zip:'')+', FL'); }
@@ -864,6 +864,7 @@ async function _reoptimizeNow(){
   _fmRender();
   if(!ok){
     if(navigator.onLine===false) showToast('📴 Offline — using last saved order');
+    else if(_fmTodayRawJobs().length<2){ showToast('✅ Only '+_fmTodayRawJobs().length+' stop today — nothing to optimize'); }
     else {
       // geocoders unreachable → cluster by zip + street so the day still flows sensibly
       const ds=_fmTodayRawJobs();
@@ -1542,7 +1543,7 @@ window.addEventListener('focus', function(){ _fmResume(); });
 
 
 /* ═══════════ QUOTE CLOSER — a quote visit ends in an OUTCOME, not a payment ═══════════ */
-function _isQuoteJob(bk){ const t=(String(bk.frequency||'')+' '+String(bk.service||bk.serviceType||'')).toLowerCase(); return t.includes('quote'); }
+function _isQuoteJob(bk){ const t=(String(bk.frequency||'')+' '+String(bk.service||bk.serviceType||'')+' '+String(bk.price||'')+' '+String(bk.notes||'')+' '+String(bk.payMethod||'')).toLowerCase(); return t.indexOf('quote')>=0; }
 let _qjBk=null;
 function fmQuoteCloser(bk){
   _qjBk=bk;
