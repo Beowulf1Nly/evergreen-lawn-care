@@ -2008,7 +2008,7 @@
     <!-- ── STEP 1: Address + Zip ── -->
     <div id="quoteStep1">
       <h2 style="font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:var(--green-deep);margin-bottom:6px;">Get your free quote</h2>
-      <p style="font-size:14px;color:var(--text-muted);margin-bottom:14px;line-height:1.6;">Enter your address and we'll calculate your price instantly. First cut as low as $19.</p>
+      <p id="lqStep1Sub" style="font-size:14px;color:var(--text-muted);margin-bottom:14px;line-height:1.6;">Enter your address and we'll calculate your price instantly. First cut as low as $19.</p>
       <div style="background:var(--green-pale);border-radius:12px;padding:12px 16px;margin-bottom:18px;">
         <div style="font-size:12px;font-weight:700;color:var(--green-bright);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;">✅ Every visit includes</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;">
@@ -2027,11 +2027,20 @@
         <input type="text" id="q-zip" placeholder="34450" maxlength="5" inputmode="numeric" pattern="\d{5}" autocomplete="postal-code" style="max-width:140px;"/>
         <div id="q-zip-error" style="color:#e53e3e;font-size:13px;margin-top:4px;display:none;">We don't have that zip on file yet. Call <a href="tel:+13524620627">(352) 462-0627</a> — we may still be able to help!</div>
       </div>
+      <div id="lqExtra" style="display:none;">
+        <div class="form-row"><label>Full Name</label><input type="text" id="lq-name" placeholder="Jane Smith" autocomplete="name"/></div>
+        <div class="form-row"><label>Email Address</label><input type="email" id="lq-email" placeholder="you@email.com" autocomplete="email"/></div>
+        <div class="form-row"><label>Phone Number <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label><input type="tel" id="lq-phone" placeholder="(352) 555-0123" autocomplete="tel"/></div>
+        <div class="form-row"><label>Preferred Date <span style="color:var(--text-muted);font-weight:400;">(no weekends)</span></label><input type="date" id="lq-date" onchange="if(window.lqDateGuard)lqDateGuard(this)"/></div>
+      </div>
       <div id="q-step1-error" style="color:#e53e3e;font-size:13px;margin-bottom:12px;display:none;"></div>
-      <button class="btn-primary" onclick="quoteStep1Submit()" style="width:100%;font-size:16px;padding:16px;border:none;cursor:pointer;">
+      <button id="lqOrigBtn" class="btn-primary" onclick="quoteStep1Submit()" style="width:100%;font-size:16px;padding:16px;border:none;cursor:pointer;">
         Get My Price →
       </button>
-      <div style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:10px;">✅ No commitment · Under 2 minutes · First cut as low as $19</div>
+      <button id="lqSubmitBtn" class="btn-primary" onclick="submitLawnQuoteSingle()" style="display:none;width:100%;font-size:16px;padding:16px;border:none;cursor:pointer;">
+        Request My Free Quote →
+      </button>
+      <div id="lqStep1Note" style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:10px;">✅ No commitment · Under 2 minutes · First cut as low as $19</div>
     </div>
 
     <!-- ── STEP 2: Analyzing animation ── -->
@@ -4614,6 +4623,49 @@ if (window.QUOTE_ONLY_MODE) document.addEventListener('DOMContentLoaded', functi
   var b = document.getElementById('heroQuoteBtn');
   if (b) b.textContent = 'Get a Free Quote';
 });
+</script>
+<script>
+/* QUOTE-FIRST single-form override (gated by window.QUOTE_ONLY_MODE) */
+(function(){
+  if(!window.QUOTE_ONLY_MODE) return;
+  function showErr(m){ var e=document.getElementById('q-step1-error'); if(e){ e.textContent=m; e.style.display='block'; } }
+  window.lqDateGuard=function(el){ if(!el||!el.value) return; var d=new Date(el.value+'T12:00:00'); var w=d.getDay(); if(w===0||w===6){ el.value=''; showErr("We don't service weekends \u2014 please pick a weekday."); } };
+  window.submitLawnQuoteSingle=function(){
+    var g=function(id){ var el=document.getElementById(id); return el? (el.value||'').trim() : ''; };
+    var name=g('lq-name'), email=g('lq-email'), phone=g('lq-phone'), address=g('q-address'), zip=g('q-zip'), date=g('lq-date');
+    if(!address){ showErr('Please enter your property address.'); return; }
+    if(!/^\d{5}$/.test(zip)){ showErr('Please enter your 5-digit zip code.'); return; }
+    try{ if(typeof VALID_ZIPS!=='undefined' && VALID_ZIPS.size && !VALID_ZIPS.has(zip)){ showErr("That zip isn't in our service area yet. Call (352) 462-0627 \u2014 we may still be able to help!"); return; } }catch(e){}
+    if(!name || !email){ showErr('Please enter your name and email.'); return; }
+    if(!date){ showErr('Please choose a preferred date.'); return; }
+    var dd=new Date(date+'T12:00:00'), w=dd.getDay(); if(w===0||w===6){ showErr('Please choose a weekday (no weekends).'); return; }
+    var er=document.getElementById('q-step1-error'); if(er) er.style.display='none';
+    try{ qState.address=address; qState.zip=zip; qState.name=name; qState.email=email; qState.phone=phone; qState.startDate=date; }catch(e){}
+    var btn=document.getElementById('lqSubmitBtn'); if(btn){ btn.disabled=true; btn.textContent='Scheduling\u2026'; }
+    var dateFmt=new Date(date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+    try{ var params=new URLSearchParams({action:'xl_quote_visit',name:name,email:email,phone:phone,address:address,zip:zip,quoteDateRaw:date,quoteDate:dateFmt}); fetch(SHEETS_SCRIPT_URL+'?'+params.toString(),{method:'GET',mode:'no-cors'}).catch(function(){}); }catch(e){}
+    try{ if(typeof gtag_report_conversion==='function') gtag_report_conversion(); }catch(e){}
+    try{ _quoteCurrentStep=0; }catch(e){}
+    var s1=document.getElementById('quoteStep1'); if(s1) s1.style.display='none';
+    var bar=document.getElementById('quoteStepsBar'); if(bar) bar.style.display='none';
+    var msgEl=document.getElementById('q-success-msg'), dateEl=document.getElementById('q-success-date');
+    if(dateEl) dateEl.textContent=new Date(date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+    if(msgEl) msgEl.innerHTML="Your free quote is booked for <strong>"+dateFmt+"</strong>! We'll text to confirm the details, then come take a look and give you your price. No payment until the job's done. \ud83c\udf3f";
+    var suc=document.getElementById('quoteSuccess'); if(suc) suc.style.display='block';
+  };
+  var _open=window.openQuoteModal;
+  window.openQuoteModal=function(p){
+    if(typeof _open==='function') _open(p);
+    var bar=document.getElementById('quoteStepsBar'); if(bar) bar.style.display='none';
+    var ex=document.getElementById('lqExtra'); if(ex) ex.style.display='block';
+    var sb=document.getElementById('lqSubmitBtn'); if(sb){ sb.style.display='block'; sb.disabled=false; sb.textContent='Request My Free Quote \u2192'; }
+    var ob=document.getElementById('lqOrigBtn'); if(ob) ob.style.display='none';
+    ['lq-name','lq-email','lq-phone','lq-date'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+    var dt=document.getElementById('lq-date'); if(dt){ try{ dt.min=new Date().toISOString().split('T')[0]; }catch(e){} }
+    var sub=document.getElementById('lqStep1Sub'); if(sub) sub.textContent="Fill this out and we'll come give you a free on-site quote \u2014 no payment now, you pay after the job's done.";
+    var note=document.getElementById('lqStep1Note'); if(note) note.textContent="\u2705 No commitment \u00b7 Free on-site quote \u00b7 Pay after the job's done";
+  };
+})();
 </script>
 </body>
 </html>
