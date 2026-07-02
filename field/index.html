@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-02.9 */
+/* APP_VER:2026-07-03.1 */
 (function(){
-  var V='2026-07-02.9'; window.__APP_VER=V;
+  var V='2026-07-03.1'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -862,7 +862,21 @@ async function _reoptimizeNow(){
   const res=await _fmComputeOptimizedOrder();
   const ok=!!(res && res.ok);
   _fmRender();
-  if(!ok){ if(navigator.onLine===false) showToast('📴 Offline — using last saved order'); else showToast('Could not optimize — check addresses/signal'); }
+  if(!ok){
+    if(navigator.onLine===false) showToast('📴 Offline — using last saved order');
+    else {
+      // geocoders unreachable → cluster by zip + street so the day still flows sensibly
+      const ds=_fmTodayRawJobs();
+      if(ds.length){
+        const keys=ds.slice().sort(function(a,b){
+          const za=String(a.zip||''), zb=String(b.zip||'');
+          return za===zb?String(a.address||'').localeCompare(String(b.address||'')):za.localeCompare(zb);
+        }).map(function(b){ return _stopKey(b); });
+        _optOrderKeys=keys; _saveOptOrderCache(keys); _fmRender();
+        showToast('📍 Rough order by area — geocoder unreachable right now');
+      } else showToast('No stops today');
+    }
+  }
   else showToast('✅ Route optimized from your start point');
 }
 
@@ -1317,6 +1331,9 @@ function fmRecordSkip(reason){
 
 /* ───────── Complete sheet ───────── */
 function fmOpenComplete(){
+  // Quote visits close with an OUTCOME (book / email estimate / no) — not a payment.
+  const _qbk=(_fmStops()[_fmViewIdx]||{}).bk;
+  if(_qbk&&_isQuoteJob(_qbk)){ fmQuoteCloser(_qbk); return; }
   const stop=_fmStops()[_fmViewIdx]; if(!stop) return;
   const bk=stop.bk;
   _fmcStop=stop; _fmcRowIdx=(allBookings||[]).indexOf(bk); _fmcPayType=_payType(bk);
@@ -1522,6 +1539,107 @@ window.addEventListener('focus', function(){ _fmResume(); });
   if(window.visualViewport) window.visualViewport.addEventListener('resize',function(){ setTimeout(snap,120); });
   window.addEventListener('orientationchange',function(){ setTimeout(snap,300); });
 })();
+
+
+/* ═══════════ QUOTE CLOSER — a quote visit ends in an OUTCOME, not a payment ═══════════ */
+function _isQuoteJob(bk){ const t=(String(bk.frequency||'')+' '+String(bk.service||bk.serviceType||'')).toLowerCase(); return t.includes('quote'); }
+let _qjBk=null;
+function fmQuoteCloser(bk){
+  _qjBk=bk;
+  if(!document.getElementById('qjOverlay')){
+    const o=document.createElement('div');
+    o.id='qjOverlay';
+    o.style.cssText='display:none;position:fixed;inset:0;z-index:3450;background:rgba(0,0,0,.6);align-items:flex-end;justify-content:center;';
+    o.onclick=function(e){ if(e.target===o) qjClose(); };
+    o.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:640px;max-height:calc(100dvh - max(20px, env(safe-area-inset-top)) - 8px);display:flex;flex-direction:column;color:#10233a;">'
+      +'<div style="padding:16px 18px 12px;border-bottom:1.5px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">'
+      +'<div><div style="font-size:18px;font-weight:800;">🧾 Close this quote</div><div id="qjName" style="font-size:12.5px;color:#64748b;margin-top:2px;"></div></div>'
+      +'<button onclick="qjClose()" style="background:#f3f4f6;border:none;font-size:22px;color:#374151;cursor:pointer;line-height:1;padding:8px 14px;border-radius:12px;">×</button></div>'
+      +'<div style="overflow-y:auto;flex:1;padding:14px 16px 6px;">'
+      +'<div id="qjBuilder"></div>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0 4px;padding:12px 14px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;">'
+      +'<div><div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">Quoted price</div>'
+      +'<div style="font-size:32px;font-weight:800;color:#0f172a;" id="qjPriceShow">$0</div></div>'
+      +'<div style="text-align:right;"><div style="font-size:11px;color:#94a3b8;font-weight:700;">adjust</div>'
+      +'<input id="qjPriceOverride" type="number" inputmode="decimal" placeholder="—" style="width:92px;padding:9px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:16px;font-weight:800;text-align:center;font-family:inherit;" oninput="qjRefresh()"></div></div>'
+      +'</div>'
+      +'<div style="padding:10px 16px calc(14px + env(safe-area-inset-bottom));border-top:1.5px solid #e2e8f0;display:flex;flex-direction:column;gap:8px;">'
+      +'<div style="display:flex;gap:8px;align-items:center;">'
+      +'<button onclick="qjOutcome(\'book\')" style="flex:1.4;padding:14px 8px;border:none;border-radius:12px;background:#16a34a;color:#fff;font-family:inherit;font-size:14.5px;font-weight:800;cursor:pointer;">📅 Book it</button>'
+      +'<input id="qjDate" type="date" style="flex:1;padding:12px 8px;border:1.5px solid #cbd5e1;border-radius:12px;font-family:inherit;font-size:13px;"></div>'
+      +'<button onclick="qjOutcome(\'estimate\')" style="width:100%;padding:13px;border:none;border-radius:12px;background:#0284c7;color:#fff;font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;">✉️ Email them the estimate (owner approves)</button>'
+      +'<button onclick="qjOutcome(\'no\')" style="width:100%;padding:12px;border:1.5px solid #fecaca;border-radius:12px;background:#fef2f2;color:#b91c1c;font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer;">❌ Customer said no</button>'
+      +'</div></div>';
+    document.body.appendChild(o);
+  }
+  document.getElementById('qjName').textContent=(bk.name||'Customer')+' · '+(bk.address||'');
+  const d=new Date(); d.setDate(d.getDate()+1);
+  document.getElementById('qjDate').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  document.getElementById('qjPriceOverride').value='';
+  qjRefresh();
+  document.getElementById('qjOverlay').style.display='flex';
+}
+function qjClose(){ const o=document.getElementById('qjOverlay'); if(o) o.style.display='none'; }
+function qjRefresh(){
+  qjRenderBuilder();
+  const el=document.getElementById('qjPriceShow'); if(el) el.textContent='$'+qjPriceVal();
+}
+function qjPriceVal(){
+  const o=parseFloat((document.getElementById('qjPriceOverride')||{}).value);
+  if(o>0) return Math.round(o);
+  const p=_qjCalcPrice();
+  return p==null?0:Math.round(p);
+}
+async function qjOutcome(kind){
+  const bk=_qjBk; if(!bk) return;
+  const price=qjPriceVal(), desc=_qjDesc();
+  if(kind!=='no'&&(!price||price<=0)){ showToast('Set a price first'); return; }
+  const base=_stopKey(bk);
+  if(kind==='book'){
+    const date=document.getElementById('qjDate').value;
+    if(!date){ showToast('Pick a start date'); return; }
+    if(!confirm('Book '+(bk.name||'customer')+':\n'+desc+'\n$'+price+' starting '+date+'?')) return;
+    _fmEnqueue({ kind:'quotebook', idemKey:'qb:'+base, method:'GET', params:{ action:'manual_schedule', name:bk.name||'', email:bk.email||'', phone:String(bk.phone||''), address:bk.address||'', zip:String(bk.zip||''), frequency:_qjFreqLabel(), price:String(price), serviceDate:date, notes:'Booked at quote visit — '+desc+' — by '+(adminName||'crew'), payMethod:'card', adminToken } });
+    _qjFinish('✅ Booked! '+desc+' · $'+price+' · starts '+date, 'Quote WON — booked '+_qjFreqLabel()+' $'+price+' ('+desc+')');
+  } else if(kind==='estimate'){
+    _fmEnqueue({ kind:'quoteest', idemKey:'qe:'+base, method:'GET', params:{ action:'submit_estimate_for_approval', submittedBy:adminName||'Crew', name:bk.name||'', email:bk.email||'', phone:String(bk.phone||''), address:(bk.address||'')+(bk.zip?', '+bk.zip:''), summary:desc, items:JSON.stringify([{desc:desc,price:price,included:'true'}]), notes:'[]', estimateDate:todayISOStr(), adminToken } });
+    _qjFinish('✉️ Estimate queued — the owner approves & it emails '+(bk.email||'the customer'), 'Estimate submitted for approval — $'+price+' ('+desc+')');
+  } else {
+    if(!confirm('Log this quote as a NO for '+(bk.name||'customer')+'?')) return;
+    _qjFinish('👍 Logged — maybe next time', 'Quote declined ('+desc+' · quoted $'+price+')');
+  }
+}
+function _qjFinish(toastMsg,note){
+  const bk=_qjBk, base=_stopKey(bk);
+  _fmEnqueue({ kind:'quotedone', idemKey:'qd:'+base, method:'GET', params:{ action:'mark_done', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), amount:'0', markedBy:adminName||'Crew', adminToken } });
+  _fmEnqueue({ kind:'quotenote', idemKey:'qn:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), note:note, markedBy:adminName||'Crew', adminToken } });
+  _fmFlushQueue();
+  bk.done='✓ Done';
+  qjClose(); showToast(toastMsg); _persist(); _fmRender();
+}
+
+/* lawn quote builder: lot tier + frequency → plan price (same table as the website) */
+const QJ_TIERS=[
+  {key:'small',label:'Small · up to ¼ ac'},{key:'medium',label:'Medium · ¼–½ ac'},
+  {key:'threequarter',label:'Large · ½–¾ ac'},{key:'one',label:'XL · ¾–1 ac'},{key:'xl',label:'1+ acre (custom)'}
+];
+const QJ_PRICING={ small:49, medium:49, threequarter:65, one:79, xl:null };
+let _qj={tier:'medium',freq:'weekly'};
+function qjSet(k,v){ _qj[k]=v; qjRefresh(); }
+function _qjCalcPrice(){ return QJ_PRICING[_qj.tier]; }
+function _qjFreqLabel(){ return _qj.freq==='weekly'?'Weekly Plan':_qj.freq==='biweekly'?'Bi-Weekly Plan':'One-time'; }
+function _qjDesc(){ const t=QJ_TIERS.find(x=>x.key===_qj.tier); return (t?t.label:'yard')+' — '+_qjFreqLabel()+' mowing'; }
+function qjRenderBuilder(){
+  const b=document.getElementById('qjBuilder'); if(!b) return;
+  const chip=(t)=>'<button onclick="qjSet(\'tier\',\''+t.key+'\')" style="padding:9px 12px;border-radius:999px;border:1.5px solid '+(_qj.tier===t.key?'#16a34a':'#e2e8f0')+';background:'+(_qj.tier===t.key?'#f0fdf4':'#fff')+';font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;margin:0 6px 6px 0;">'+t.label+'</button>';
+  const seg=(v,l)=>'<button onclick="qjSet(\'freq\',\''+v+'\')" style="flex:1;padding:10px 6px;border-radius:10px;border:1.5px solid '+(_qj.freq===v?'#16a34a':'#e2e8f0')+';background:'+(_qj.freq===v?'#f0fdf4':'#fff')+';font-family:inherit;font-size:12.5px;font-weight:800;cursor:pointer;">'+l+'</button>';
+  b.innerHTML='<div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">Yard size (walk it & eyeball)</div>'
+    +'<div>'+QJ_TIERS.map(chip).join('')+'</div>'
+    +'<div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:10px 0 7px;">Frequency</div>'
+    +'<div style="display:flex;gap:7px;">'+seg('weekly','Weekly')+seg('biweekly','Bi-Weekly')+seg('onetime','One-time')+'</div>'
+    +(_qj.tier==='xl'?'<div style="font-size:12px;color:#b45309;font-weight:700;margin-top:8px;">1+ acre — type your price in the adjust box →</div>':'')
+    +(_qj.freq!=='onetime'&&_qj.tier!=='xl'?'<div style="font-size:11.5px;color:#64748b;margin-top:8px;">💡 First-mow promo: $19 (small/medium) · $29 (large/XL) — mention it!</div>':'');
+}
 
 window.addEventListener('DOMContentLoaded', ()=>{
   if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').then(function(reg){ try{ reg.update(); }catch(e){} }).catch(()=>{}); }
