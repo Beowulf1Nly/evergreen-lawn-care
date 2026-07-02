@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-02.6 */
+/* APP_VER:2026-07-02.7 */
 (function(){
-  var V='2026-07-02.6'; window.__APP_VER=V;
+  var V='2026-07-02.7'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -380,7 +380,7 @@ let _clockInTime=null, _clockOutTime=null, _clockedOut=false, _fmTimerInt=null, 
 let _fmStarted=false, _fmViewIdx=null, _fmCashTotal=0, _fmBilledTotal=0, _fmSkipped={}, _startChkState=[], _jobTimers={}, _helpers=[]; let _lastSync={ok:null,ts:0,msg:''};
 let _fmAtBase=false, _homeBase='', _homeBaseGeo=null, _fmBasePoll=null;
 let _savedTimes={};   // key → planned HH:MM from the owner's push
-function _fmIsBoss(){ return adminRole==='owner'||adminRole==='manager'; }
+function _fmIsBoss(){ const r=String(adminRole||'').toLowerCase().trim(); return r==='owner'||r==='manager'; }
 let _fmBooted=false;   // false until the crew taps Start/Continue → land on the Start screen on every fresh app open (never auto-drop into a job)
 // complete-sheet state
 let _fmcStop=null, _fmcRowIdx=-1, _fmcPayType='invoice', _fmcCash=false, _fmcInvoiceSent=false, _fmcChargeChosen=false, _fmcBase=0, _fmcAddons=[], _fmcPhotos=[], _fmcEndChk={};
@@ -641,8 +641,10 @@ async function loadData(refreshToast){
     // Refresh role + crew assignment LIVE from the server (the booking fetch returns them),
     // so editing the Crews column in the sheet takes effect on next refresh — no re-login needed.
     if(bRes&&bRes.success){
-      if(typeof bRes.role==='string' && bRes.role) adminRole=bRes.role;
+      const prevRole=adminRole;
+      if(typeof bRes.role==='string' && bRes.role) adminRole=String(bRes.role).toLowerCase().trim();
       if(typeof bRes.crews==='string') adminCrews=bRes.crews;
+      if(prevRole&&adminRole!==prevRole) showToast('👤 Role updated: '+adminRole.replace(/_/g,' ')+' — view adjusted');
       saveSession(adminToken,adminName,adminEmail,adminRole, adminRole==='owner'?30:7);
     }
     if(cRes&&cRes.success&&Array.isArray(cRes.customers)){ allCustomers=cRes.customers; try{ localStorage.setItem('evg_field_customers', JSON.stringify(allCustomers)); }catch(e){} }
@@ -1104,7 +1106,7 @@ function _fmRenderStart(){
   _fmShow('fmScreenStart');
   const hr=new Date().getHours(); const greet=hr<12?'Good morning':hr<17?'Good afternoon':'Good evening';
   document.getElementById('fmGreet').textContent=greet+', '+((adminName||'').split(' ')[0]||'crew');
-  document.getElementById('fmStartDate').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  document.getElementById('fmStartDate').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})+' · 👤 '+String(adminRole||'employee').replace(/_/g,' ');
   const raw=_fmTodayRawJobs(), n=raw.length;
   document.getElementById('fmStartCount').textContent=n;
   const total=raw.reduce((s,b)=>s+_fmAmt(b),0), cashN=raw.filter(b=>_payType(b)==='cash').length;
