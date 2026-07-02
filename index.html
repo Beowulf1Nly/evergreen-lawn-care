@@ -3768,6 +3768,15 @@ async function quoteStep1Submit() {
   qState.isReturning = false; // will check when email is entered at booking step
   qState.address=address; qState.zip=zip;
 
+  // QUOTE-FIRST: skip the visible property scan — open the quote form directly
+  if (window.QUOTE_ONLY_MODE) {
+    _lotLookupPromise = lookupLotSize(address, zip);
+    _lotLookupDone = false;
+    _lotLookupPromise.then(() => { _lotLookupDone = true; }).catch(() => { _lotLookupDone = true; });
+    buildStep3(); showQuoteStep(3); initQCal();
+    return;
+  }
+
   // Load satellite image into the orb
   const satFrame = document.getElementById('qSatFrame');
   if (satFrame) satFrame.src = 'https://maps.google.com/maps?q=' + encodeURIComponent(address + ', FL ' + zip) + '&t=k&z=19&output=embed';
