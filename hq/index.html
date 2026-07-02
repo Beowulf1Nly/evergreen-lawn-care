@@ -13,8 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-05.5 */
-(function(){ var V='2026-07-05.5'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-05.8 */
+(function(){ var V='2026-07-05.8'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -2485,30 +2485,38 @@ function _mailCfgSave(zi,patch){
 function _mailTpls(){ try{ const t=JSON.parse(localStorage.getItem(MAILTPL_KEY)||'[]'); return Array.isArray(t)?t:[]; }catch(e){ return []; } }
 function _mailBrandHtml(zi,subject,bodyText){
   const z=_bizLoad()[zi]||{}; const cfg=_mailCfg(zi); const col=z.c||'#10b981';
-  const paras='<p style="margin:0 0 16px;">'+esc(bodyText).replace(/\n{2,}/g,'</p><p style="margin:0 0 16px;">').replace(/\n/g,'<br>')+'</p>';
+  const paras='<p style="margin:0 0 17px;">'+esc(bodyText).replace(/\n{2,}/g,'</p><p style="margin:0 0 17px;">').replace(/\n/g,'<br>')+'</p>';
   const cta=(cfg.ctaText&&cfg.ctaUrl)
-    ?'<div style="text-align:center;padding:4px 30px 26px;"><a href="'+esc(cfg.ctaUrl)+'" style="background:'+col+';color:#ffffff;text-decoration:none;font-weight:bold;font-size:15px;padding:14px 38px;border-radius:999px;display:inline-block;box-shadow:0 3px 10px rgba(20,60,40,.18);">'+esc(cfg.ctaText)+'</a></div>':'';
-  return '<div style="background:#edf1ee;padding:32px 14px;font-family:-apple-system,\'Segoe UI\',Arial,Helvetica,sans-serif;">'
-    +'<div style="max-width:600px;margin:0 auto;">'
-    +'<div style="background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e2e8e4;box-shadow:0 3px 14px rgba(15,40,25,.07);">'
-    // ── header band ──
-    +'<div style="background:'+col+';padding:28px 32px 24px;">'
-    +'<div style="width:52px;height:52px;border-radius:14px;background:rgba(255,255,255,.18);text-align:center;line-height:52px;font-size:28px;margin-bottom:12px;">'+esc(z.e||'🌿')+'</div>'
-    +'<div style="color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-.3px;">'+esc(cfg.brandName||z.n||'Evergreen')+'</div>'
-    +(cfg.tag?'<div style="color:rgba(255,255,255,.88);font-size:13px;margin-top:4px;">'+esc(cfg.tag)+'</div>':'')
-    +'</div>'
-    // ── body ──
-    +'<div style="padding:30px 32px 8px;color:#2f3b35;font-size:15.5px;line-height:1.75;">'+paras+'</div>'
+    ?'<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px auto 28px;"><tr><td style="border-radius:10px;background:'+col+';">'
+      +'<a href="'+esc(cfg.ctaUrl)+'" style="display:inline-block;padding:14px 40px;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;letter-spacing:.2px;">'+esc(cfg.ctaText)+' →</a></td></tr></table>':'';
+  return '<div style="background:#f0f2f1;padding:36px 14px;font-family:-apple-system,\'Segoe UI\',Roboto,Helvetica,Arial,sans-serif;">'
+    +'<div style="max-width:580px;margin:0 auto;">'
+    +'<div style="background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e5e8e6;">'
+    // thin brand accent
+    +'<div style="height:5px;background:'+col+';"></div>'
+    // logo row — quiet and confident, no color slab
+    +'<table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr>'
+    +'<td style="padding:26px 34px 0;">'
+    +'<table role="presentation" cellpadding="0" cellspacing="0"><tr>'
+    +'<td style="width:46px;height:46px;border-radius:50%;background:'+col+'1a;text-align:center;font-size:23px;line-height:46px;">'+esc(z.e||'🌿')+'</td>'
+    +'<td style="padding-left:13px;">'
+    +'<div style="font-size:16.5px;font-weight:700;color:#131b17;letter-spacing:-.2px;">'+esc(cfg.brandName||z.n||'Evergreen')+'</div>'
+    +(cfg.tag?'<div style="font-size:12px;color:#7b8781;margin-top:2px;">'+esc(cfg.tag)+'</div>':'')
+    +'</td></tr></table>'
+    +'</td></tr></table>'
+    +'<div style="height:1px;background:#eef1ef;margin:22px 34px 0;"></div>'
+    // body
+    +'<div style="padding:26px 34px 6px;color:#374151;font-size:15.5px;line-height:1.75;">'+paras+'</div>'
     +cta
-    // ── footer ──
-    +'<div style="padding:20px 32px 24px;background:#f7faf8;border-top:1px solid #eef2ef;">'
-    +'<div style="color:#5b6b62;font-size:12.5px;line-height:1.7;">'+esc(cfg.foot||'')+'</div>'
-    +'<div style="margin-top:12px;color:#59685f;font-size:13px;font-weight:bold;">— The '+esc(cfg.brandName||z.n||'Evergreen')+' Team</div>'
+    // footer
+    +'<div style="border-top:1px solid #eef1ef;padding:20px 34px 26px;">'
+    +'<div style="color:#6b7671;font-size:12.5px;line-height:1.7;">'+esc(cfg.foot||'')+'</div>'
+    +'<div style="margin-top:14px;font-size:13.5px;font-weight:700;color:#131b17;">— The '+esc(cfg.brandName||z.n||'Evergreen')+' Team</div>'
+    +'<div style="margin-top:3px;"><a href="https://'+esc(cfg.web||'')+'" style="color:'+col+';text-decoration:none;font-size:12.5px;font-weight:600;">'+esc(cfg.web||'')+'</a></div>'
     +'</div></div>'
-    // ── small print ──
-    +'<div style="text-align:center;padding:18px 8px 6px;color:#9aa69f;font-size:11.5px;line-height:1.8;">'
-    +esc(cfg.brandName||z.n||'')+' · <a href="https://'+esc(cfg.web||'')+'" style="color:'+col+';text-decoration:none;font-weight:600;">'+esc(cfg.web||'')+'</a><br>'
-    +'You\'re receiving this because you\'re a customer. Just hit reply to reach us directly.'
+    // small print
+    +'<div style="text-align:center;padding:16px 8px 4px;color:#a3aca7;font-size:11px;line-height:1.8;">'
+    +'You\'re receiving this as a '+esc(cfg.brandName||z.n||'')+' customer · just hit reply to reach us'
     +'</div></div></div>';
 }
 function _mmPersonalize(txt,c){ const first=String(c&&c.name||'').split(' ')[0]||'there'; return String(txt||'').replace(/{{\s*name\s*}}/gi,first); }
@@ -2657,7 +2665,11 @@ function _mmPreview(){
   const sample=(window.__mmList&&window.__mmList[0])||{name:'Sample Customer'};
   const subj=_mmPersonalize(document.getElementById('mmSubject')?document.getElementById('mmSubject').value:'',sample)||'(no subject yet)';
   const body=_mmPersonalize(document.getElementById('mmBody')?document.getElementById('mmBody').value:'',sample)||'Start typing to see your email here…';
-  const subjBar='<div style="background:#e8ede9;padding:9px 14px;font-family:Arial;font-size:12.5px;color:#374151;border-bottom:1px solid #dde3df;"><b>Subject:</b> '+esc(subj)+'</div>';
+  const zP=_bizLoad()[_mailBiz]||{}; const cfgP=_mailCfg(_mailBiz);
+  const subjBar='<div style="background:#f6f8f7;padding:11px 16px;font-family:Arial;font-size:12px;color:#4b5563;border-bottom:1px solid #e5e8e6;line-height:1.7;">'
+    +'<div><span style="color:#9ca3af;">From:</span> <b style="color:#111827;">'+esc(cfgP.brandName||zP.n||'')+'</b> <span style="color:#9ca3af;">(this business\'s Gmail)</span></div>'
+    +'<div><span style="color:#9ca3af;">To:</span> '+esc(sample.name||'Customer')+'</div>'
+    +'<div><span style="color:#9ca3af;">Subject:</span> <b style="color:#111827;">'+esc(subj)+'</b></div></div>';
   if(cfg.on) box.innerHTML=subjBar+_mailBrandHtml(_mailBiz,subj,body);
   else box.innerHTML=subjBar+'<div style="background:#fff;padding:22px;font-family:Arial;font-size:14.5px;line-height:1.6;color:#1f2937;white-space:pre-wrap;">'+esc(body)+'</div>';
 }
@@ -2680,6 +2692,8 @@ async function mmTest(){
   const d=await bizGet(z,params);
   toast(d&&d.success?'✅ Test sent — check your inbox':'⚠ '+((d&&d.error)||'failed — backend redeployed?'));
 }
+let _mmAbort=false;
+window.addEventListener('beforeunload',function(e){ if(_mailSending){ e.preventDefault(); e.returnValue='A blast is mid-send — leaving now cuts it off.'; } });
 async function mmSend(){
   if(myRole!=='owner'){ toast('Owner only'); return; }
   if(_mailSending) return;
@@ -2688,24 +2702,49 @@ async function mmSend(){
   const targets=(_mailCust||[]).filter(function(c){ return _mailSel[String(c.email).toLowerCase()]; });
   if(!subj||!body){ toast('Subject + body required'); return; }
   if(!targets.length){ toast('Pick at least one recipient'); return; }
-  if(!confirm('Send to '+targets.length+' customer'+(targets.length!==1?'s':'')+'?\n\nSubject: '+subj+'\n'+(_mailCfg(_mailBiz).on?'Branded header & footer ON':'Plain text'))) return;
-  _mailSending=true;
+
+  /* ── fail-safes: no accidental spam ───────────────────────────── */
+  // 1. unknown {{placeholders}} would go out literally — block hard
+  const probe=_mmPersonalize(subj+' \n '+body,{name:'Probe Name'});
+  if(/{{[^}]*}}/.test(probe)){ alert('⛔ Not sending.\n\nFound a placeholder that isn\'t {{name}}: '+(probe.match(/{{[^}]*}}/)||[''])[0]+'\n\nOnly {{name}} is supported — fix it first.'); return; }
+  if(/(^|[^{])\{name\}([^}]|$)/i.test(subj+' '+body)&&!confirm('⚠ You wrote {name} with SINGLE braces — that will NOT be replaced, customers will see it literally.\n\nSend anyway?')) return;
+  // 2. suspiciously short body
+  if(body.length<20&&!confirm('⚠ The body is only '+body.length+' characters. Really send it?')) return;
+  // 3. same subject already blasted in the last 24h → repeat warning
+  try{
+    const camps=JSON.parse(localStorage.getItem(CAMP_KEY)||'[]');
+    const dup=camps.find(function(c){ return c.subj===subj&&c.tsMs&&(Date.now()-c.tsMs)<86400000; });
+    if(dup&&!confirm('⚠ You already sent "'+subj+'" to '+dup.n+' customer'+(dup.n!==1?'s':'')+' in the last 24h ('+dup.ts+').\n\nSend it AGAIN?')) return;
+  }catch(e){}
+  // 4. the normal confirm
+  if(!confirm('Send to '+targets.length+' customer'+(targets.length!==1?'s':'')+'?\n\nFrom: '+(_mailCfg(_mailBiz).brandName||'')+'\nSubject: '+subj+'\n'+(_mailCfg(_mailBiz).on?'Branded header & footer ON':'Plain text'))) return;
+  // 5. big blast → type the number to prove you mean it
+  if(targets.length>25){
+    const typed=prompt('🚨 BIG BLAST: '+targets.length+' customers.\n\nType the number '+targets.length+' to confirm (tip: use 📨 Send test to me first):');
+    if(String(typed||'').trim()!==String(targets.length)){ toast('❌ Cancelled — number didn\'t match'); return; }
+  }
+  // 6. Gmail daily-cap heads-up
+  if(targets.length>400&&!confirm('⚠ '+targets.length+' emails may hit Gmail\'s daily sending cap (~500). Some could fail. Continue?')) return;
+
+  _mailSending=true; _mmAbort=false;
   const z=_bizLoad()[_mailBiz]; const cfg=_mailCfg(_mailBiz); const camp='hq-'+Date.now();
   const prog=document.getElementById('mmProg'); const btn=document.getElementById('mmSendBtn'); btn.disabled=true;
   let ok=0,fail=0;
+  let sent=0;
   for(let i=0;i<targets.length;i++){
+    if(_mmAbort){ prog.innerHTML='✋ <b>Stopped</b> at '+sent+'/'+targets.length+' — the rest were NOT sent.'; toast('✋ Blast stopped — '+sent+' sent'); break; }
     const c=targets[i];
-    prog.innerHTML='📤 <b>'+(i+1)+'/'+targets.length+'</b> — '+esc(c.email);
+    prog.innerHTML='📤 <b>'+(i+1)+'/'+targets.length+'</b> — '+esc(c.email)+' <button class="dev-btn danger" style="padding:3px 10px;font-size:10.5px;margin-left:8px;" onclick="_mmAbort=true">✋ Stop</button>';
     const params={ action:'owner_send_email', to:c.email, subject:_mmPersonalize(subj,c), body:_mmPersonalize(body,c), campaign:camp, idemKey:camp+':'+String(c.email).toLowerCase() };
     if(cfg.on){ const html=_mailBrandHtml(_mailBiz,params.subject,_mmPersonalize(body,c)); if((html.length+body.length)<6500) params.htmlBody=html; }
     const d=await bizGet(z,params);
-    if(d&&d.success) ok++;
+    if(d&&d.success){ ok++; sent++; }
     else { fail++;
       if(fail===1&&d&&/unknown|unauthorized|not.*function|script/i.test(String(d.error||''))){ prog.innerHTML='⛔ Backend rejected: '+esc(d.error||'?')+' — paste &amp; redeploy that backend'; _mailSending=false; btn.disabled=false; return; } }
     await new Promise(function(r){ setTimeout(r,650); });
   }
-  prog.innerHTML='✅ <b>'+ok+'</b> sent'+(fail?' · <span style="color:#f87171;">'+fail+' failed</span>':'')+' — campaign '+camp;
-  try{ let camps=JSON.parse(localStorage.getItem(CAMP_KEY)||'[]'); camps.unshift({ts:new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}),subj:subj,n:targets.length,ok:ok,fail:fail}); localStorage.setItem(CAMP_KEY,JSON.stringify(camps.slice(0,8))); }catch(e){}
+  if(!_mmAbort) prog.innerHTML='✅ <b>'+ok+'</b> sent'+(fail?' · <span style="color:#f87171;">'+fail+' failed</span>':'')+' — campaign '+camp;
+  try{ let camps=JSON.parse(localStorage.getItem(CAMP_KEY)||'[]'); camps.unshift({ts:new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}),tsMs:Date.now(),subj:subj,n:targets.length,ok:ok,fail:fail}); localStorage.setItem(CAMP_KEY,JSON.stringify(camps.slice(0,8))); }catch(e){}
   _mmRenderCamps();
   toast('📬 Blast done: '+ok+' sent'+(fail?', '+fail+' failed':''));
   _mailSending=false; btn.disabled=false;
