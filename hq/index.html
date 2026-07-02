@@ -13,8 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-02.8 */
-(function(){ var V='2026-07-02.8'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-02.9 */
+(function(){ var V='2026-07-02.9'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -370,7 +370,7 @@
   .st-tl{ position:relative; height:58px; background:rgba(255,255,255,.025); border:1px solid var(--line); border-radius:11px;
     background-image:repeating-linear-gradient(90deg, rgba(152,166,160,.07) 0, rgba(152,166,160,.07) 1px, transparent 1px, transparent calc(100%/12)); transition:.12s; }
   .st-tl.dragover{ border-color:var(--green2); background-color:rgba(16,185,129,.09); }
-  .st-block{ position:absolute; height:38px; border-radius:9px; background:rgba(14,34,22,.92); border:1px solid var(--line2); padding:5px 8px; font-size:10.5px; font-weight:700; overflow:hidden; cursor:grab; box-shadow:0 5px 14px rgba(0,0,0,.35); white-space:nowrap; text-overflow:ellipsis; transition:filter .12s; }
+  .st-block{ position:absolute; height:38px; border-radius:9px; background:rgba(20,27,25,.95); border:1px solid var(--line2); padding:5px 8px; font-size:10.5px; font-weight:700; overflow:hidden; cursor:pointer; box-shadow:0 3px 10px rgba(0,0,0,.3); white-space:nowrap; text-overflow:ellipsis; transition:filter .12s; }
   .st-block::before{ content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--pc,#10b981); }
   .st-block:hover{ filter:brightness(1.3); z-index:3; }
   .st-block .bt2{ font-family:var(--mono); font-size:9px; color:var(--muted); display:block; }
@@ -506,7 +506,7 @@
           <span><i style="background:#22c55e"></i>Crew A</span><span><i style="background:#38bdf8"></i>Crew B</span>
           <span><i style="background:#fbbf24"></i>Crew C</span><span><i style="background:#f87171"></i>Unassigned</span>
           <span><i style="background:#2e7d32"></i>Archived ✓</span>
-          <span style="color:var(--dim);">↔ drag between rows to reassign · between days to reschedule · along the Day timeline to retime</span>
+          <span style="color:var(--dim);">plan on /invoice → 📅 Push to Calendar &amp; HQ · reorder runs here with ↕ (times re-chain automatically)</span>
         </div>
       </div>
       <div class="disp-stats" id="dispStats"></div>
@@ -1243,6 +1243,34 @@ function bizSaveFromUI(){
 
 /* ── data ── */
 function initDispatch(){ renderDispatch(); if(!_completedLoaded){ _completedLoaded=true; loadCompleted(); } }
+
+/* Per-date route record (order + planned times pushed from /invoice) */
+const _dispRoute={};   // iso → { times:{key:HH:MM}, order:{crew:[keys]}, loading }
+function _ensureDayRoute(iso){
+  if(_dispRoute[iso]) return;
+  _dispRoute[iso]={ times:{}, order:{}, loading:true };
+  fetch(SCRIPT_URL+'?action=get_route&date='+iso+'&adminToken='+encodeURIComponent(token)).then(r=>r.json()).then(function(d){
+    const rec=_dispRoute[iso]; rec.loading=false;
+    if(d&&d.success&&Array.isArray(d.routes)){
+      d.routes.forEach(function(rt){
+        const cw=String(rt.crew||'').toUpperCase().trim();
+        rec.order[cw]=(rt.stops||[]).map(function(st){ return String(st.email||'').toLowerCase().trim()+'|'+String(st.serviceDate||st.date||''); });
+        (rt.stops||[]).forEach(function(st){
+          const k=String(st.email||'').toLowerCase().trim()+'|'+String(st.serviceDate||st.date||'');
+          if(/^\d{1,2}:\d{2}$/.test(String(st.jobTime||'').trim())) rec.times[k]=String(st.jobTime).trim();
+        });
+      });
+    }
+    if(_activeTab==='dispatch'&&_dispView==='day') renderDispatch();
+  }).catch(function(){ if(_dispRoute[iso]) _dispRoute[iso].loading=false; });
+}
+function _dayTimeOf(b,iso){
+  const rec=_dispRoute[iso];
+  const k=_svKey(b);
+  if(rec&&rec.times[k]) return rec.times[k];                      // pushed from /invoice = authority
+  const t=String(b.jobTime||'').trim();
+  return /^\d{1,2}:\d{2}$/.test(t)?t:null;
+}
 async function loadCompleted(){
   try{
     const d=await fetch(SCRIPT_URL+'?action=completed_jobs&limit=1500&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null);
@@ -1311,7 +1339,7 @@ function renderDispatch(){
       const d=new Date(start); d.setDate(start.getDate()+i); const iso=_iso(d);
       if(i===41) rangeEnd=iso;
       const jobs=byDate[iso]||[]; const amt=jobs.reduce(function(s,b){return s+amtOf(b);},0); const MAXP=4;
-      h+='<div class="disp-cell'+(d.getMonth()!==mo?' dim':'')+(iso===todayIso?' today':'')+'" ondragover="dispOver(event,this)" ondragleave="this.classList.remove(\'dragover\')" ondrop="dispDropCell(event,null,\''+iso+'\')">'
+      h+='<div class="disp-cell'+(d.getMonth()!==mo?' dim':'')+(iso===todayIso?' today':'')+'">'
         +'<div class="dnum" onclick="dispGotoDay(\''+iso+'\')" title="Open day board">'+d.getDate()+(jobs.length?'<span class="dsum">'+jobs.length+' · $'+amt.toFixed(0)+'</span>':'')+'</div>';
       jobs.slice(0,MAXP).forEach(function(b){ h+=_dispPill(b); });
       if(jobs.length>MAXP) h+='<div class="disp-more" onclick="dispGotoDay(\''+iso+'\')">+'+(jobs.length-MAXP)+' more…</div>';
@@ -1366,17 +1394,23 @@ function renderDispatch(){
       if(_dispView==='week'){
         h+='<div class="st-grid">'+lab+days.map(function(d){
           const iso=_iso(d); const cell=(rowJobsAll[iso]||[]).slice().sort(_jobSort);
-          return '<div class="st-cell'+(iso===todayIso?' today':'')+'" ondragover="dispOver(event,this)" ondragleave="this.classList.remove(\'dragover\')" ondrop="dispDropCell(event,\''+c+'\',\''+iso+'\')">'
+          return '<div class="st-cell'+(iso===todayIso?' today':'')+'">'
             +cell.map(function(b){ return _dispPill(b); }).join('')+'</div>';
         }).join('')+'</div>';
       } else {
-        const iso=rangeStart; const cell=(rowJobsAll[iso]||[]).slice().sort(_jobSort);
-        const timed=cell.filter(function(b){return /^\d{1,2}:\d{2}$/.test(String(b.jobTime||'').trim());});
-        const untimed=cell.filter(function(b){return !/^\d{1,2}:\d{2}$/.test(String(b.jobTime||'').trim());});
+        const iso=rangeStart; _ensureDayRoute(iso);
+        const rec=_dispRoute[iso]||{times:{},order:{}};
+        const ordKeys=rec.order[c==='un'?'':c]||[];
+        const cell=(rowJobsAll[iso]||[]).slice().sort(function(a,b2){
+          if(ordKeys.length){ let pa=ordKeys.indexOf(_svKey(a)), pb=ordKeys.indexOf(_svKey(b2)); pa=pa<0?9999:pa; pb=pb<0?9999:pb; if(pa!==pb) return pa-pb; }
+          return _jobSort(a,b2);
+        });
+        const timed=cell.filter(function(b){return !!_dayTimeOf(b,iso);});
+        const untimed=cell.filter(function(b){return !_dayTimeOf(b,iso);});
         // Google-Calendar-style: real start + real expected length; overlaps stack into lanes.
         // Jobs WITHOUT a set time get PROJECTED onto the lane in run order (dashed),
         // starting 8:00 or after the last placed job, with drive buffer between stops.
-        const evs=timed.map(function(b){ const t=String(b.jobTime).split(':'); const st2=(+t[0])*60+(+t[1]||0); return {b:b,st:st2,en:st2+_jobMins(b),proj:false}; }).sort(function(a,b2){ return a.st-b2.st||a.en-b2.en; });
+        const evs=timed.map(function(b){ const t=_dayTimeOf(b,iso).split(':'); const st2=(+t[0])*60+(+t[1]||0); return {b:b,st:st2,en:st2+_jobMins(b),proj:false}; }).sort(function(a,b2){ return a.st-b2.st||a.en-b2.en; });
         let cursor=480;                                                   // projected day starts 8:00
         untimed.forEach(function(b,ui){
           const dur=_jobMins(b);
@@ -1398,9 +1432,10 @@ function renderDispatch(){
         if(iso===todayIso){ const n=new Date(); const mins=n.getHours()*60+n.getMinutes(); if(mins>=420&&mins<=1140) now='<div class="st-nowline" style="left:'+(((mins-420)/720)*100)+'%"></div>'; }
         const hasProj=evs.some(function(ev){return ev.proj;});
         h+='<div class="st-grid day">'+lab
-          +'<div><div class="st-tl" style="height:'+tlH+'px;" ondragover="dispOver(event,this)" ondragleave="this.classList.remove(\'dragover\')" ondrop="dispDropTL(event,\''+c+'\',\''+iso+'\')">'
+          +'<div><div class="st-tl" style="height:'+tlH+'px;">'
           +now+evs.map(function(ev){ return _stBlockEv(ev.b,ev.st,ev.en,7+ev.lane*42,ev.proj); }).join('')+'</div>'
-          +(hasProj?'<div style="font-size:10.5px;color:var(--dim);padding:3px 2px 0;">┅ dashed = no set time — projected from run order &amp; expected length (drag a block to lock in a real time)</div>':'')
+          +(hasProj?'<div style="font-size:10.5px;color:var(--dim);padding:3px 2px 0;">┅ dashed = projected · push times from /invoice, or reorder below</div>':'')
+          +_dayOrderPanel(c,iso,cell)
           +_econStrip(c,cell,iso)
           +'</div></div>';
       }
@@ -1422,7 +1457,7 @@ function _dispStats(rangeStart,rangeEnd){
 function _dispPill(b){
   const bi=_bookings.indexOf(b), arch=_isArch(b), done=isDone(b)||arch;
   return '<div class="disp-pill'+(done?' done':'')+(arch?' arch':'')+'" style="--pc:'+_dispPC(b)+'" '
-    +(arch?'title="Archived — completed job"':'draggable="true" ondragstart="dispDragStart(event,'+bi+')" ondragend="dispDragEnd(event)" onclick="openJobSheet('+bi+')"')
+    +(arch?'title="Archived — completed job"':'onclick="openJobSheet('+bi+')"')
     +'>'+(done?'✓ ':'')+esc(b.name||'?')+' <span class="pp">'+(b.jobTime?esc(b.jobTime)+' · ':'')+esc(String(b.price||''))+'</span></div>';
 }
 /* ── expected job duration — same model /invoice's route optimizer uses ── */
@@ -1493,7 +1528,7 @@ function _stBlockEv(b,stMin,enMin,top,proj){
   const tRange=(proj?'~':'')+_t12(stMin)+'–'+_t12(enMin)+' · '+dur+'m';
   const tip=esc(b.name||'')+' · '+(proj?'projected ':'')+_t12(stMin)+'–'+_t12(enMin)+' ('+dur+' min expected)'+(b.price?' · '+esc(String(b.price)):'')+(proj?' — no set time; drag to lock one in':'');
   return '<div class="st-block'+(done?' done':'')+(arch?' arch':'')+(proj?' proj':'')+'" style="--pc:'+_dispPC(b)+';left:'+left+'%;width:'+width+'%;top:'+top+'px;" '
-    +(arch?'title="'+tip+'"':'draggable="true" ondragstart="dispDragStart(event,'+bi+')" ondragend="dispDragEnd(event)" onclick="openJobSheet('+bi+')" title="'+tip+'"')
+    +(arch?'title="'+tip+'"':'onclick="openJobSheet('+bi+')" title="'+tip+'"')
     +'>'+(done?'✓ ':'')+esc(b.name||'?')+'<span class="bt2">'+tRange+(b.price?' · '+esc(String(b.price)):'')+'</span></div>';
 }
 
@@ -1562,6 +1597,72 @@ function dispDropTL(ev,crewKey,iso){
     renderDispatch(); toast('↩ Undone');
   });
   renderDispatch();
+}
+
+/* ── Day-view run reorder: arrows only, times re-chain automatically ── */
+const _dayReorderOpen={}, _dayPushTimers={};
+function toggleDayOrder(c,iso){ const k=c+'|'+iso; _dayReorderOpen[k]=!_dayReorderOpen[k]; renderDispatch(); }
+function _dayOrderPanel(c,iso,cell){
+  const jobs=cell.filter(function(b){ return !_isArch(b)&&!isDone(b); });
+  if(!jobs.length) return '';
+  const k=c+'|'+iso, open=_dayReorderOpen[k];
+  let h='<div style="padding:5px 2px 0;"><button class="dev-btn" style="font-size:11px;padding:5px 11px;" onclick="toggleDayOrder(\''+c+'\',\''+iso+'\')">'+(open?'▾':'▸')+' ↕ Reorder run ('+jobs.length+')</button>';
+  if(open){
+    let st=480;
+    h+='<div style="margin-top:5px;">'+jobs.map(function(b,i){
+      const dur=_jobMins(b); if(i>0) st+=DRIVE_BUF;
+      const row='<div class="ro-stop" style="cursor:default;background:var(--panel2);border:1px solid var(--line);margin-bottom:4px;">'
+        +'<span class="ro-num" style="background:'+_dispPC(b)+'">'+(i+1)+'</span>'
+        +'<div class="ro-main"><div class="ro-n">'+esc(b.name||'?')+'</div>'
+        +'<div class="ro-a">~'+_t12(st)+'–'+_t12(st+dur)+' · '+dur+'m'+(b.price?' · '+esc(String(b.price)):'')+'</div></div>'
+        +'<div class="ro-arrows">'
+        +'<button onclick="dayMove(\''+c+'\',\''+iso+'\','+i+',-1)" '+(i===0?'disabled':'')+'>▲</button>'
+        +'<button onclick="dayMove(\''+c+'\',\''+iso+'\','+i+',1)" '+(i===jobs.length-1?'disabled':'')+'>▼</button></div></div>';
+      st+=dur;
+      return row;
+    }).join('')
+    +'<div style="font-size:10.5px;color:var(--dim);padding:2px 0 4px;">Times re-chain from 8:00 with drive buffer — saved to HQ + crews\' phones automatically.</div></div>';
+  }
+  return h+'</div>';
+}
+function dayMove(c,iso,idx,dir){
+  const rec=_dispRoute[iso]||(_dispRoute[iso]={times:{},order:{},loading:false});
+  const g=_dayJobsInOrder(c,iso);
+  const to=idx+dir; if(to<0||to>=g.length) return;
+  const t=g[idx]; g[idx]=g[to]; g[to]=t;
+  // re-chain times from 8:00 and store as the new plan
+  let st=480; const crewKey=(c==='un')?'':c;
+  rec.order[crewKey]=[];
+  const stops=g.map(function(b,i){
+    if(i>0) st+=DRIVE_BUF;
+    const dur=_jobMins(b);
+    const hh=String(Math.floor(st/60)).padStart(2,'0'), mm=String(st%60).padStart(2,'0');
+    const key=_svKey(b);
+    rec.times[key]=hh+':'+mm; rec.order[crewKey].push(key);
+    const stop={ order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:iso, name:b.name||'', address:b.address||'', zip:b.zip||'', crew:crewKey, jobTime:hh+':'+mm };
+    st+=dur;
+    return stop;
+  });
+  renderDispatch();
+  const tk=c+'|'+iso;
+  clearTimeout(_dayPushTimers[tk]);
+  _dayPushTimers[tk]=setTimeout(function(){
+    fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'put_route', date:iso, crew:crewKey, stops:JSON.stringify(stops), updatedBy:myName||'Owner', idemKey:'hqday:'+iso+':'+crewKey+':'+Date.now(), adminToken:token }))
+      .then(r=>r.json()).then(function(d){ toast(d&&d.success?'📲 Run order saved — crews follow it':'⚠ Could not save order'); })
+      .catch(function(){ toast('⚠ Network error saving order'); });
+  },800);
+}
+function _dayJobsInOrder(c,iso){
+  const rec=_dispRoute[iso]||{times:{},order:{}};
+  const ordKeys=rec.order[c==='un'?'':c]||[];
+  return _dispFilter(_dispJobs()).filter(function(b){
+    if(dateOf(b)!==iso) return false;
+    const bc=String(b.crew||'').toUpperCase().trim()||'un';
+    return bc===c&&!_isArch(b)&&!isDone(b);
+  }).sort(function(a,b2){
+    if(ordKeys.length){ let pa=ordKeys.indexOf(_svKey(a)), pb=ordKeys.indexOf(_svKey(b2)); pa=pa<0?9999:pa; pb=pb<0?9999:pb; if(pa!==pb) return pa-pb; }
+    return _jobSort(a,b2);
+  });
 }
 
 /* bottom bar with an Undo button (auto-hides) */
