@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-02.3 */
+/* APP_VER:2026-07-02.4 */
 (function(){
-  var V='2026-07-02.3'; window.__APP_VER=V;
+  var V='2026-07-02.4'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -276,6 +276,19 @@
       <button class="fm-skip" onclick="fmReviewStops()" style="margin-top:18px;">← Review stops</button>
     </div>
   </div>
+
+  <!-- LAST YARD DONE → HEAD TO HOME BASE -->
+  <div class="fm-screen" id="fmScreenReturn">
+    <div class="fm-done-center">
+      <div class="fm-done-emoji">🏠</div>
+      <div class="fm-done-title">Last yard done!</div>
+      <div class="fm-done-sub" id="fmReturnSub">Head back to home base for drop-off.</div>
+      <div id="fmReturnAddr" style="color:#9ed8b1;font-size:16px;font-weight:700;margin:6px 0 22px;"></div>
+      <a class="fm-btn fm-btn-xl fm-btn-start" id="fmReturnNav" href="#" target="_blank" style="min-width:260px;display:inline-block;text-decoration:none;">🧭 Navigate to Home Base</a>
+      <button class="fm-btn fm-btn-xl" onclick="fmArrivedBase()" style="min-width:260px;margin-top:14px;background:#1d4ed8;color:#fff;">✅ I'm here — Start End-of-Day PMCS</button>
+      <div id="fmReturnGps" style="color:#6b8b7a;font-size:12.5px;margin-top:16px;">📡 I'll notice when you pull in and start it for you.</div>
+    </div>
+  </div>
 </div>
 
 <!-- COMPLETE SHEET -->
@@ -361,6 +374,7 @@ let allBookings=[], allCustomers=[], _savedOrderKeys=null, _optOrderKeys=null;
 let _startPoint=null, _crewSel=null;   // employee-chosen route origin + crew override
 let _clockInTime=null, _clockOutTime=null, _clockedOut=false, _fmTimerInt=null, _fmSyncInt=null, _fmPollInt=null, _geoWatch=null, _lastPos=null, _wakeLock=null;
 let _fmStarted=false, _fmViewIdx=null, _fmCashTotal=0, _fmBilledTotal=0, _fmSkipped={}, _startChkState=[], _jobTimers={}, _helpers=[]; let _lastSync={ok:null,ts:0,msg:''};
+let _fmAtBase=false, _homeBase='', _homeBaseGeo=null, _fmBasePoll=null;
 let _fmBooted=false;   // false until the crew taps Start/Continue → land on the Start screen on every fresh app open (never auto-drop into a job)
 // complete-sheet state
 let _fmcStop=null, _fmcRowIdx=-1, _fmcPayType='invoice', _fmcCash=false, _fmcInvoiceSent=false, _fmcChargeChosen=false, _fmcBase=0, _fmcAddons=[], _fmcPhotos=[], _fmcEndChk={};
@@ -592,7 +606,7 @@ function _persist(){
   try{ localStorage.setItem(STATE_KEY, JSON.stringify({
     dayISO: todayISOStr(), started:_fmStarted, viewIdx:_fmViewIdx,
     clockInTime:_clockInTime?_clockInTime.toISOString():null, clockOutTime:_clockOutTime?_clockOutTime.toISOString():null, clockedOut:_clockedOut,
-    cashTotal:_fmCashTotal, billedTotal:_fmBilledTotal, skipped:_fmSkipped, startChk:_startChkState, jobTimers:_jobTimers, helpers:_helpers
+    cashTotal:_fmCashTotal, billedTotal:_fmBilledTotal, skipped:_fmSkipped, startChk:_startChkState, jobTimers:_jobTimers, helpers:_helpers, atBase:_fmAtBase
   })); }catch(e){}
 }
 function _restoreState(){
@@ -602,7 +616,7 @@ function _restoreState(){
     if(s.dayISO!==todayISOStr()){ localStorage.removeItem(STATE_KEY); return; }  // new day → fresh start
     _fmStarted=!!s.started; _fmViewIdx=(s.viewIdx==null?null:s.viewIdx);
     _clockInTime=s.clockInTime?new Date(s.clockInTime):null; _clockOutTime=s.clockOutTime?new Date(s.clockOutTime):null; _clockedOut=!!s.clockedOut;
-    _fmCashTotal=+s.cashTotal||0; _fmBilledTotal=+s.billedTotal||0; _fmSkipped=s.skipped||{}; _startChkState=Array.isArray(s.startChk)?s.startChk:[]; _jobTimers=s.jobTimers||{}; _helpers=Array.isArray(s.helpers)?s.helpers:[];
+    _fmCashTotal=+s.cashTotal||0; _fmBilledTotal=+s.billedTotal||0; _fmSkipped=s.skipped||{}; _startChkState=Array.isArray(s.startChk)?s.startChk:[]; _jobTimers=s.jobTimers||{}; _helpers=Array.isArray(s.helpers)?s.helpers:[]; _fmAtBase=!!s.atBase;
   }catch(e){}
 }
 
@@ -627,6 +641,14 @@ async function loadData(refreshToast){
     }
     if(cRes&&cRes.success&&Array.isArray(cRes.customers)){ allCustomers=cRes.customers; try{ localStorage.setItem('evg_field_customers', JSON.stringify(allCustomers)); }catch(e){} }
     _savedOrderKeys=_extractRouteKeys(rRes);
+    // home base (owner-set, shared via schedule config) — cached for offline
+    fetch(SCRIPT_URL+'?action=get_schedule_config&'+authParam()).then(r=>r.json()).then(function(d){
+      if(d&&d.success&&d.config&&typeof d.config.homeBase==='string'){
+        _homeBase=d.config.homeBase.trim();
+        try{ localStorage.setItem('evg_homebase',_homeBase); }catch(e){}
+      }
+    }).catch(function(){ try{ _homeBase=localStorage.getItem('evg_homebase')||''; }catch(e){} });
+    try{ if(!_homeBase) _homeBase=localStorage.getItem('evg_homebase')||''; }catch(e){}
     if(!allBookings.length) _hydrateFromCache();
     if(_savedOrderKeys&&_savedOrderKeys.length){ _optOrderKeys=null; }   // (a) canonical route from backend wins; drop any stale self-optimized order
     else { _optOrderKeys=_loadOptOrderCache();                           // (b) no canonical route → self-optimize (show cached order instantly, refine in background)
@@ -1060,7 +1082,10 @@ function _fmRender(){
   const stops=_fmStops();
   if(!_fmBooted||!_fmStarted||!stops.length){ _fmRenderStart(stops); return; }
   const total=stops.length, resolved=stops.filter(_fmResolved).length;
-  if(resolved>=total){ _fmRenderDone(stops); return; }   // stay clocked in until the end-of-day drop-off PMCS
+  if(resolved>=total){
+    if(_homeBase&&!_fmAtBase&&!_clockedOut){ _fmRenderReturn(); return; }   // last yard → drive to home base first
+    _fmRenderDone(stops); return;                                           // then drop-off PMCS + clock out
+  }
   let idx=_fmViewIdx;
   if(idx==null||idx<0||idx>=total||_fmResolved(stops[idx])) idx=stops.findIndex(s=>!_fmResolved(s));
   _fmViewIdx=idx; _persist(); _fmRenderJob(stops,idx);
@@ -1152,6 +1177,7 @@ function fmCrewAddManual(){ const n=prompt('Helper name:'); if(n&&n.trim()&&!_fm
 function fmCrewConfirm(){ const ov=document.getElementById('fmCrewPicker'); if(ov) ov.style.display='none'; const r=_crewPickerResolve; _crewPickerResolve=null; if(r) r(true); }
 function fmCrewCancel(){ const ov=document.getElementById('fmCrewPicker'); if(ov) ov.style.display='none'; const r=_crewPickerResolve; _crewPickerResolve=null; if(r) r(false); }
 function fmEmergencyEnd(){
+  _fmAtBase=true;   // emergency: don't force the drive-to-base leg
   if(!confirm('End your route now? You\'ll be clocked out and your hours logged. Any stops left stay open for follow-up.')) return;
   _autoClockOut();
   showToast('🚨 Route ended — clocked out');
@@ -1365,6 +1391,25 @@ function _fmRenderDone(stops){
   _fmUpdateSyncBadge(); _fmSyncTimerSlots();
 }
 function fmReviewStops(){ const s=_fmStops(); _fmStarted=true; _fmBooted=true; _fmViewIdx=0; _persist(); _fmRenderJob(s,0); }
+function _fmRenderReturn(){
+  _fmShow('fmScreenReturn');
+  document.getElementById('fmReturnAddr').textContent='📍 '+_homeBase;
+  document.getElementById('fmReturnNav').href='https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(_homeBase);
+  // auto-arrival: geocode base once, then watch the GPS we already track
+  if(!_homeBaseGeo){ _geocodeAddr(_homeBase).then(function(g){ _homeBaseGeo=g||false; }).catch(function(){ _homeBaseGeo=false; }); }
+  if(_fmBasePoll) clearInterval(_fmBasePoll);
+  _fmBasePoll=setInterval(function(){
+    if(!_homeBaseGeo||_homeBaseGeo===false||!_lastPos||_lastPos.lat==null) return;
+    const mi=haversineMiles(_lastPos.lat,_lastPos.lon,_homeBaseGeo.lat,_homeBaseGeo.lon);
+    if(mi<=0.15){ showToast('🏠 Welcome back — starting End-of-Day PMCS'); fmArrivedBase(); }
+  },15000);
+}
+function fmArrivedBase(){
+  if(_fmBasePoll){ clearInterval(_fmBasePoll); _fmBasePoll=null; }
+  _fmAtBase=true; _persist();
+  _fmRenderDone(_fmStops());
+  fmEndOfDay();                                   // straight into drop-off PMCS → clock out
+}
 async function fmEndOfDay(){
   let ok=true;
   try{ if(typeof endOfDayGate==='function') ok=await endOfDayGate(); }catch(e){}
@@ -1375,7 +1420,7 @@ function fmFinishRoute(){
   _autoClockOut(); _fmFlushQueue();
   showToast('🏁 Logged out — great work!');
   // reset the day's session so a fresh start is clean
-  _fmStarted=false; _fmViewIdx=null; _clockInTime=null; _clockOutTime=null; _clockedOut=false; _fmCashTotal=0; _fmBilledTotal=0; _startChkState=[]; _jobTimers={}; _helpers=[];
+  _fmStarted=false; _fmViewIdx=null; _clockInTime=null; _clockOutTime=null; _clockedOut=false; _fmCashTotal=0; _fmBilledTotal=0; _startChkState=[]; _jobTimers={}; _helpers=[]; _fmAtBase=false; if(_fmBasePoll){ clearInterval(_fmBasePoll); _fmBasePoll=null; }
   try{ localStorage.removeItem(STATE_KEY); }catch(e){}
   _fmShow('fmScreenStart'); _fmRenderStart();
 }

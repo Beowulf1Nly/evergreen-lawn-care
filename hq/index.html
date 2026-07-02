@@ -13,8 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-05.3 */
-(function(){ var V='2026-07-05.3'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-05.4 */
+(function(){ var V='2026-07-05.4'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -571,6 +571,11 @@
   <div id="pane-ops" class="hq-pane">
     <div class="dev-wrap">
       <div class="dev-row" style="margin-bottom:10px;"><div class="disp-chips" id="opsBiz"></div><span class="grow"></span><button class="dev-btn" onclick="renderOps(true)">↻ Refresh</button></div>
+      <div class="dev-row" style="margin-bottom:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;">
+        <span style="font-weight:800;font-size:12px;white-space:nowrap;">🏠 Home base</span>
+        <input class="dev-inp" id="opsHomeBase" placeholder="Shop address — crews get routed here after their last yard" style="flex:1;font-size:16px;">
+        <button class="dev-btn go" onclick="saveHomeBase()">Save</button>
+      </div>
       <div class="dev-grid" id="opsGrid"><div class="empty">Loading…</div></div>
     </div>
   </div>
@@ -2215,8 +2220,26 @@ function _pmcsChip(label,last,period){
   else if(days<=period*2){ cls='y'; }
   return '<span class="dev-pill '+cls+'" title="'+label+' — last: '+last+'">'+label+' · '+txt+'</span>';
 }
+async function loadHomeBase(){
+  const z=_bizLoad()[_opsBiz]||_bizLoad()[0];
+  const el=document.getElementById('opsHomeBase'); if(!el) return;
+  const d=await bizGet(z,{action:'get_schedule_config'});
+  el.value=(d&&d.success&&d.config&&d.config.homeBase)?d.config.homeBase:'';
+  el.placeholder='Shop address for '+(z.n||'this business')+' — crews get routed here after their last yard';
+}
+async function saveHomeBase(){
+  const z=_bizLoad()[_opsBiz]||_bizLoad()[0];
+  const addr=(document.getElementById('opsHomeBase').value||'').trim();
+  // merge into the existing schedule config — don't clobber other settings
+  const cur=await bizGet(z,{action:'get_schedule_config'});
+  const cfg=(cur&&cur.success&&cur.config&&typeof cur.config==='object')?cur.config:{};
+  cfg.homeBase=addr;
+  const d=await bizGet(z,{action:'set_schedule_config',config:JSON.stringify(cfg)});
+  toast(d&&d.success?('🏠 Home base saved — '+(z.n||'')+' crews get routed there after their last yard'):'⚠ '+((d&&d.error)||'could not save'));
+}
 async function renderOps(force){
   _bizChips('opsBiz',_opsBiz,'setOpsBiz',true);
+  loadHomeBase();
   const grid=document.getElementById('opsGrid'); if(!grid) return;
   const z=_bizLoad()[_opsBiz]||_bizLoad()[0];
   grid.innerHTML='<div class="empty">⏳ Pulling PMCS + checklists for '+esc(z.n)+'…</div>';
