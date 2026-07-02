@@ -11,7 +11,7 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-03.2 */
+/* APP_VER:2026-07-06.1 */
 (function(){
   var V='2026-07-03.2'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
@@ -1568,8 +1568,8 @@ function fmQuoteCloser(bk){
       +'<div style="display:flex;gap:8px;align-items:center;">'
       +'<button onclick="qjOutcome(\'book\')" style="flex:1.4;padding:14px 8px;border:none;border-radius:12px;background:#16a34a;color:#fff;font-family:inherit;font-size:14.5px;font-weight:800;cursor:pointer;">📅 Book it</button>'
       +'<input id="qjDate" type="date" style="flex:1;padding:12px 8px;border:1.5px solid #cbd5e1;border-radius:12px;font-family:inherit;font-size:13px;"></div>'
-      +'<button onclick="qjOutcome(\'estimate\')" style="width:100%;padding:13px;border:none;border-radius:12px;background:#0284c7;color:#fff;font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;">✉️ Email them the estimate (owner approves)</button>'
-      +'<button onclick="qjOutcome(\'no\')" style="width:100%;padding:12px;border:1.5px solid #fecaca;border-radius:12px;background:#fef2f2;color:#b91c1c;font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer;">❌ Customer said no</button>'
+      +'<button onclick="qjOutcome(\'estimate\')" style="width:100%;padding:13px;border:none;border-radius:12px;background:#0284c7;color:#fff;font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;">✉️ Email estimate to customer</button>'
+      +'<button onclick="qjOutcome(\'no\')" style="width:100%;padding:12px;border:1.5px solid #fecaca;border-radius:12px;background:#fef2f2;color:#b91c1c;font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer;">🚫 Not interested</button>'
       +'</div></div>';
     document.body.appendChild(o);
   }
@@ -1603,11 +1603,14 @@ async function qjOutcome(kind){
     _fmEnqueue({ kind:'quotebook', idemKey:'qb:'+base, method:'GET', params:{ action:'manual_schedule', name:bk.name||'', email:bk.email||'', phone:String(bk.phone||''), address:bk.address||'', zip:String(bk.zip||''), frequency:_qjFreqLabel(), price:String(price), serviceDate:date, notes:'Booked at quote visit — '+desc+' — by '+(adminName||'crew'), payMethod:'card', adminToken } });
     _qjFinish('✅ Booked! '+desc+' · $'+price+' · starts '+date, 'Quote WON — booked '+_qjFreqLabel()+' $'+price+' ('+desc+')');
   } else if(kind==='estimate'){
-    _fmEnqueue({ kind:'quoteest', idemKey:'qe:'+base, method:'GET', params:{ action:'submit_estimate_for_approval', submittedBy:adminName||'Crew', name:bk.name||'', email:bk.email||'', phone:String(bk.phone||''), address:(bk.address||'')+(bk.zip?', '+bk.zip:''), summary:desc, items:JSON.stringify([{desc:desc,price:price,included:'true'}]), notes:'[]', estimateDate:todayISOStr(), adminToken } });
-    _qjFinish('✉️ Estimate queued — the owner approves & it emails '+(bk.email||'the customer'), 'Estimate submitted for approval — $'+price+' ('+desc+')');
+    if(!bk.email||String(bk.email).indexOf('@')<0){ showToast('No email on file — add one first'); return; }
+    if(!confirm('Email this estimate to '+bk.email+'?\n\n'+desc+'\n$'+price+(_qj.freq!=='onetime'?'/visit':'')+'\n\nIt includes a Book Now button they can tap to schedule.')) return;
+    const vt=new Date(); vt.setDate(vt.getDate()+14);
+    _fmEnqueue({ kind:'quoteest', idemKey:'qe:'+base, method:'GET', params:{ action:'send_quote_email', submittedBy:adminName||'Crew', name:bk.name||'', email:bk.email||'', phone:String(bk.phone||''), address:(bk.address||'')+(bk.zip?', '+bk.zip:''), summary:desc, items:JSON.stringify([{desc:desc,price:price,included:'false'}]), notes:'[]', estimateDate:todayISOStr(), validThru:vt.getFullYear()+'-'+String(vt.getMonth()+1).padStart(2,'0')+'-'+String(vt.getDate()).padStart(2,'0'), frequency:_qjFreqLabel(), adminToken } });
+    _qjFinish('✉️ Estimate emailed to '+bk.email, 'Estimate sent — $'+price+' ('+desc+')');
   } else {
-    if(!confirm('Log this quote as a NO for '+(bk.name||'customer')+'?')) return;
-    _qjFinish('👍 Logged — maybe next time', 'Quote declined ('+desc+' · quoted $'+price+')');
+    if(!confirm('Mark this quote as \u201cNot interested\u201d for '+(bk.name||'customer')+'?')) return;
+    _qjFinish('👍 Logged — maybe next time', 'Quote — not interested ('+desc+' · quoted $'+price+')');
   }
 }
 function _qjFinish(toastMsg,note){

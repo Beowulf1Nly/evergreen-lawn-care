@@ -3149,11 +3149,10 @@ function qtFillFromCustomer() {
 
 // ── Set up quote tab UI based on current role ─────────
 function qtSetupForRole() {
-  const isEmployee = !window._isAtLeast('manager'); // crew_leader / helper → submit for approval
   const notice   = document.getElementById('qt-employee-notice');
   const sendBtn  = document.getElementById('qt-send-btn');
-  if (notice)  notice.style.display  = isEmployee ? 'block' : 'none';
-  if (sendBtn) sendBtn.textContent   = isEmployee ? '📤 Submit for Approval' : '📧 Send Estimate';
+  if (notice)  notice.style.display  = 'none';
+  if (sendBtn) sendBtn.textContent   = '📧 Send Estimate';
 }
 
 // ── SEND (or submit for approval) ─────────────────────
@@ -3173,15 +3172,16 @@ async function qtSend() {
   if (!email) { showToast('Enter customer email'); return; }
   if (!qtItems.length || qtItems.every(it => !it.desc.trim())) { showToast('Add at least one service'); return; }
 
+  if (!confirm('Send this estimate to ' + email + '?\n\nThe email includes a Book Now button the customer can use to schedule.')) return;
+
   const btn    = document.getElementById('qt-send-btn');
   const status = document.getElementById('qt-status');
   btn.disabled = true;
-  const isEmployee = !window._isAtLeast('manager'); // crew_leader / helper → submit for approval
-  btn.textContent  = isEmployee ? '⏳ Submitting…' : '📧 Sending…';
+  btn.textContent  = '📧 Sending…';
   if (status) { status.textContent = ''; status.style.color = ''; }
 
-  // Employees submit for owner approval; owners send directly
-  const action = isEmployee ? 'submit_estimate_for_approval' : 'send_quote_email';
+  // Everyone sends directly — the approval flow is retired
+  const action = 'send_quote_email';
 
   const params = new URLSearchParams({
     action,
@@ -3208,13 +3208,7 @@ async function qtSend() {
     const res  = await fetch(SCRIPT_URL + '?' + params.toString());
     const data = await res.json();
     if (data.success) {
-      if (isEmployee) {
-        if (status) {
-          status.textContent = '✅ Estimate submitted for owner approval!';
-          status.style.color = '#16a34a';
-        }
-        showToast('✅ Estimate sent to owner for approval');
-      } else {
+      {
         if (status) {
           status.textContent = '✅ Estimate ' + (data.quoteNumber || estNum) + ' sent to ' + email + ' — $' + (data.subtotal || '0');
           status.style.color = '#16a34a';
@@ -3228,14 +3222,15 @@ async function qtSend() {
         }
       }
     } else {
-      throw new Error(data.error || (isEmployee ? 'Failed to submit estimate' : 'Failed to send estimate'));
+      throw new Error(data.error || 'Failed to send estimate');
     }
   } catch(err) {
     if (status) { status.textContent = '❌ ' + err.message; status.style.color = '#e53e3e'; }
     showToast('Error: ' + err.message);
   }
   btn.disabled = false;
-  btn.textContent = isEmployee ? '📤 Submit for Approval' : '📧 Send Estimate';
+  btn.textContent = '📧 Send Estimate';
+  if (typeof loadPendingEstimates === 'function' && window._isAtLeast && _isAtLeast('owner')) loadPendingEstimates();
 }
 
 // ═══════════════════════════════════════════════════════
