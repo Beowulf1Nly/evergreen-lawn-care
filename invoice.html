@@ -12,9 +12,9 @@
 <!-- Auto-updater: pulls the latest version in the background and reloads once when a new
      deploy is live, so phones never get stuck on an old cached build. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-03.3 */
+/* APP_VER:2026-07-03.5 */
 (function(){
-  var V = '2026-07-03.3';
+  var V = '2026-07-03.5';
   window.__APP_VER = V;
   var reloads = 0, lastCheck = 0;
   function check(){
@@ -9800,7 +9800,32 @@ async function _persistJobTimes(calBtn) {
 
 async function syncRouteToCalendar(silent) {
   const calBtn = document.getElementById('routeCalSyncBtn');
-  if (calBtn) { calBtn.disabled = true; calBtn.textContent = '📅 Pushing…'; }
+  if (calBtn) { calBtn.disabled = true; calBtn.textContent = '📅 Refreshing sheet…'; }
+
+  // Re-pull bookings and RE-LINK each stop's Event ID + row number before
+  // building events. Without this, the push sends whatever Event ID was cached
+  // when the page loaded — so clearing an Event ID in the sheet (to force a
+  // fresh calendar event) gets silently ignored.
+  try {
+    const fresh = await fetch(SCRIPT_URL + '?action=bookings&' + authParam()).then(r => r.json());
+    if (fresh && fresh.success && Array.isArray(fresh.bookings)) {
+      const map = {};
+      fresh.bookings.forEach(fb => { map[String(fb.email||'').toLowerCase().trim() + '|' + dateOf(fb)] = fb; });
+      for (const dayOrder of Object.values(_routeCustomOrder || {})) {
+        const crews = Array.isArray(dayOrder) ? { '': dayOrder } : dayOrder;
+        for (const stops of Object.values(crews)) {
+          if (!Array.isArray(stops)) continue;
+          for (const st of stops) {
+            const bk = st && st.bk;
+            if (!bk) continue;
+            const fb = map[String(bk.email||'').toLowerCase().trim() + '|' + dateOf(bk)];
+            if (fb) { bk.eventId = fb.eventId || ''; if (fb._rowIndex) bk._rowIndex = fb._rowIndex; }
+          }
+        }
+      }
+    }
+  } catch(e) { console.warn('pre-push booking refresh failed:', e); }
+  if (calBtn) calBtn.textContent = '📅 Pushing…';
 
   const updates = _buildCalendarUpdatesFromCurrentOrder();
   if (!updates.length) {
