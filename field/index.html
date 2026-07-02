@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-02.1 */
+/* APP_VER:2026-07-02.2 */
 (function(){
-  var V='2026-07-02.1'; window.__APP_VER=V;
+  var V='2026-07-02.2'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1421,17 +1421,13 @@ window.addEventListener('DOMContentLoaded', ()=>{
    ═══════════════════════════════════════════════════════════════════════════ */
 let PMCS_EQUIPMENT = [
   { key:'truck', name:'Work Truck', icon:'🛻', items:[
-    { id:'t_tires',   label:'Tires & pressure (incl. spare) — no damage', cad:'daily', crit:true },
-    { id:'t_lights',  label:'Lights: head / tail / brake / turn / hazard', cad:'daily', crit:true },
-    { id:'t_brakes',  label:'Brakes feel firm, no pulling', cad:'daily', crit:true },
-    { id:'t_oil',     label:'Engine oil level', cad:'daily', crit:false },
-    { id:'t_cool',    label:'Coolant level', cad:'daily', crit:false },
-    { id:'t_wash',    label:'Windshield, wipers & washer fluid', cad:'daily', crit:false },
-    { id:'t_horn',    label:'Horn & mirrors', cad:'daily', crit:false },
-    { id:'t_belt',    label:'Seatbelts latch & retract', cad:'daily', crit:true },
-    { id:'t_fuel',    label:'Fuel level ≥ ½ tank', cad:'daily', crit:false },
-    { id:'t_leak',    label:'No leaks under truck (oil / coolant / fuel)', cad:'daily', crit:true },
-    { id:'t_docs',    label:'Registration & insurance in glovebox', cad:'daily', crit:false },
+    // ── daily: one lap + hood up. Under a minute. ──
+    { id:'t_walk',    label:'Walk-around: tires look right, lights work, nothing leaking underneath', cad:'daily', crit:true },
+    { id:'t_fluid',   label:'Hood up: oil & coolant on the marks', cad:'daily', crit:false },
+    { id:'t_brake',   label:'Brakes feel firm · seatbelts click', cad:'daily', crit:true },
+    { id:'t_fuel',    label:'Fuel ≥ ½ tank', cad:'daily', crit:false },
+    { id:'t_wash',    label:'Windshield, wipers, washer fluid, horn & mirrors', cad:'weekly', crit:false },
+    { id:'t_docs',    label:'Registration & insurance in glovebox', cad:'weekly', crit:false },
     { id:'t_tread',   label:'Tire tread depth & even wear', cad:'weekly', crit:false },
     { id:'t_batt',    label:'Battery terminals clean & tight', cad:'weekly', crit:false },
     { id:'t_pwrfl',   label:'Power-steering & brake fluid', cad:'weekly', crit:false },
@@ -1444,13 +1440,10 @@ let PMCS_EQUIPMENT = [
     { id:'t_oilint',  label:'Oil-change interval check (mileage)', cad:'monthly', crit:false },
   ]},
   { key:'trailer', name:'Trailer', icon:'🚚', items:[
-    { id:'r_tires',   label:'Tires & pressure (incl. spare)', cad:'daily', crit:true },
-    { id:'r_lights',  label:'Trailer lights plugged & working (brake/turn/marker)', cad:'daily', crit:true },
-    { id:'r_coupler', label:'Coupler latched & locked to hitch ball', cad:'daily', crit:true },
-    { id:'r_chains',  label:'Safety chains crossed & attached', cad:'daily', crit:true },
-    { id:'r_ramp',    label:'Ramp / gate operates & latches', cad:'daily', crit:false },
-    { id:'r_cargo',   label:'Equipment strapped & secured', cad:'daily', crit:true },
-    { id:'r_break',   label:'Breakaway cable connected (if equipped)', cad:'daily', crit:false },
+    // ── daily: hitch, lights, load. Three checks. ──
+    { id:'r_hitch',   label:'Hitched right: coupler locked, chains crossed, breakaway clipped', cad:'daily', crit:true },
+    { id:'r_lights',  label:'Lights plugged in & working (brake/turn/marker)', cad:'daily', crit:true },
+    { id:'r_load',    label:'Tires look right · gate latched · everything strapped', cad:'daily', crit:true },
     { id:'r_tread',   label:'Tire tread & sidewall condition', cad:'weekly', crit:false },
     { id:'r_bear',    label:'Wheel bearings/hubs — no play, not hot', cad:'weekly', crit:false },
     { id:'r_floor',   label:'Floor & ramp boards solid', cad:'weekly', crit:false },
@@ -1462,16 +1455,13 @@ let PMCS_EQUIPMENT = [
     { id:'r_jack',    label:'Coupler & jack lubricated', cad:'monthly', crit:false },
   ]},
   { key:'mower', name:'Mower', icon:'🚜', items:[
-    { id:'m_oil',     label:'Engine oil level', cad:'daily', crit:true },
-    { id:'m_fuel',    label:'Fuel level & no leaks', cad:'daily', crit:true },
-    { id:'m_blades',  label:'Blades secure, sharp, no cracks', cad:'daily', crit:true },
-    { id:'m_tires',   label:'Tire pressure (all)', cad:'daily', crit:false },
-    { id:'m_air',     label:'Air filter clean', cad:'daily', crit:false },
-    { id:'m_deck',    label:'Deck clear of debris/build-up', cad:'daily', crit:false },
-    { id:'m_safety',  label:'Safety / operator-presence switches work', cad:'daily', crit:true },
-    { id:'m_belts',   label:'Belts in place & intact', cad:'daily', crit:false },
-    { id:'m_grease',  label:'Daily grease points hit', cad:'daily', crit:false },
-    { id:'m_ctrl',    label:'Controls / steering smooth', cad:'daily', crit:false },
+    // ── daily: fluids, blades, kill-switch, once-over. ──
+    { id:'m_fluid',   label:'Oil & fuel good — no leaks', cad:'daily', crit:true },
+    { id:'m_blade',   label:'Blades tight & sharp · deck clear', cad:'daily', crit:true },
+    { id:'m_safe',    label:'Safety switches kill the blades (seat / handles)', cad:'daily', crit:true },
+    { id:'m_once',    label:'30-sec once-over: tires, belts, controls feel right', cad:'daily', crit:false },
+    { id:'m_grease',  label:'Hit the grease points', cad:'weekly', crit:false },
+    { id:'m_air',     label:'Air filter clean', cad:'weekly', crit:false },
     { id:'m_sharp',   label:'Sharpen / rotate blades', cad:'weekly', crit:false },
     { id:'m_spindle', label:'Spindle play check', cad:'weekly', crit:false },
     { id:'m_batt',    label:'Battery charge & terminals', cad:'weekly', crit:false },
@@ -1484,13 +1474,12 @@ let PMCS_EQUIPMENT = [
     { id:'m_level',   label:'Deck level & pitch', cad:'monthly', crit:false },
   ]},
   { key:'edger', name:'Edger', icon:'🔪', items:[
-    { id:'e_mix',     label:'Fuel/oil mix correct & topped off', cad:'daily', crit:true },
-    { id:'e_blade',   label:'Blade secure, sharp, not worn past line', cad:'daily', crit:true },
-    { id:'e_guard',   label:'Blade guard in place', cad:'daily', crit:true },
-    { id:'e_thr',     label:'Throttle returns to idle', cad:'daily', crit:true },
-    { id:'e_air',     label:'Air filter clean', cad:'daily', crit:false },
-    { id:'e_shaft',   label:'Handle / shaft tight', cad:'daily', crit:false },
-    { id:'e_leak',    label:'No fuel leaks', cad:'daily', crit:true },
+    // ── daily: gas, blade, throttle. ──
+    { id:'e_fuel',    label:'Mix topped off — no leaks', cad:'daily', crit:true },
+    { id:'e_blade',   label:'Blade sharp & tight · guard on', cad:'daily', crit:true },
+    { id:'e_idle',    label:'Throttle snaps back to idle', cad:'daily', crit:true },
+    { id:'e_air',     label:'Air filter clean', cad:'weekly', crit:false },
+    { id:'e_shaft',   label:'Handle / shaft tight', cad:'weekly', crit:false },
     { id:'e_rot',     label:'Rotate / replace blade', cad:'weekly', crit:false },
     { id:'e_gear',    label:'Grease gearhead', cad:'weekly', crit:false },
     { id:'e_spark',   label:'Spark-arrestor screen', cad:'weekly', crit:false },
@@ -1501,14 +1490,11 @@ let PMCS_EQUIPMENT = [
     { id:'e_carb',    label:'Carb / idle adjust', cad:'monthly', crit:false },
   ]},
   { key:'whacker', name:'Weed Whacker', icon:'🌿', items:[
-    { id:'w_mix',     label:'Fuel/oil mix correct & topped off', cad:'daily', crit:true },
-    { id:'w_line',    label:'Trimmer line/head loaded & feeds', cad:'daily', crit:false },
-    { id:'w_guard',   label:'Guard / deflector in place', cad:'daily', crit:true },
-    { id:'w_thr',     label:'Throttle returns to idle', cad:'daily', crit:true },
-    { id:'w_harn',    label:'Harness / strap good', cad:'daily', crit:false },
-    { id:'w_air',     label:'Air filter clean', cad:'daily', crit:false },
-    { id:'w_leak',    label:'No fuel leaks', cad:'daily', crit:true },
-    { id:'w_head',    label:'Cutting head secure', cad:'daily', crit:false },
+    // ── daily: gas, line & guard, throttle. ──
+    { id:'w_fuel',    label:'Mix topped off — no leaks', cad:'daily', crit:true },
+    { id:'w_line',    label:'Line loaded · head tight · guard on', cad:'daily', crit:true },
+    { id:'w_idle',    label:'Throttle snaps back to idle', cad:'daily', crit:true },
+    { id:'w_harn',    label:'Harness / strap good', cad:'weekly', crit:false },
     { id:'w_spool',   label:'Replace line spool / check head', cad:'weekly', crit:false },
     { id:'w_airw',    label:'Clean air filter', cad:'weekly', crit:false },
     { id:'w_spark',   label:'Spark-arrestor screen', cad:'weekly', crit:false },
@@ -1525,7 +1511,7 @@ let PMCS_EQUIPMENT = [
 // edits are saved to the sheet (pmcs_config) so every crew's phone gets the same
 // checklists, with a localStorage fallback for instant local use.
 const PMCS_DEFAULT_EQUIPMENT = JSON.parse(JSON.stringify(PMCS_EQUIPMENT));
-const _PMCS_CFG_KEY = 'evg_pmcs_config_v1';
+const _PMCS_CFG_KEY = 'evg_pmcs_config_v2';
 let _pmcsConfigLoaded = false;
 
 function _pmcsApplyConfig(list){
@@ -1533,6 +1519,11 @@ function _pmcsApplyConfig(list){
   // sanity: each machine needs key/name/items[]
   const ok = list.every(e => e && e.key && e.name && Array.isArray(e.items));
   if (!ok) return false;
+  // 2026-07 cleanup: a saved config still carrying the old 40+ item daily grind is
+  // the pre-cleanup default, not an owner customization — ignore it so the new
+  // streamlined dailies apply. (Re-saving on the PMCS tab writes the new set.)
+  const dailyN = list.reduce((s, e) => s + e.items.filter(i => i.cad === 'daily').length, 0);
+  if (dailyN > 30) return false;
   PMCS_EQUIPMENT = list;
   return true;
 }
