@@ -13,8 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-03.1 */
-(function(){ var V='2026-07-03.1'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-03.4 */
+(function(){ var V='2026-07-03.4'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1628,19 +1628,22 @@ function _dayOrderPanel(c,iso,cell){
   return h+'</div>';
 }
 function dayMove(c,iso,idx,dir){
-  const rec=_dispRoute[iso]||(_dispRoute[iso]={times:{},order:{},loading:false});
+  const rec=_dispRoute[iso]||(_dispRoute[iso]={times:{},order:{},loading:false,at:Date.now()});
   const g=_dayJobsInOrder(c,iso);
   const to=idx+dir; if(to<0||to>=g.length) return;
   const t=g[idx]; g[idx]=g[to]; g[to]=t;
   // re-chain times from 8:00 and store as the new plan
   let st=480; const crewKey=(c==='un')?'':c;
-  rec.order[crewKey]=[];
+  rec.order[crewKey]=[]; rec.at=Date.now();
+  const jobs=[];
   const stops=g.map(function(b,i){
     if(i>0) st+=DRIVE_BUF;
     const dur=_jobMins(b);
     const hh=String(Math.floor(st/60)).padStart(2,'0'), mm=String(st%60).padStart(2,'0');
     const key=_svKey(b);
     rec.times[key]=hh+':'+mm; rec.order[crewKey].push(key);
+    b.jobTime=hh+':'+mm;                       // local bookings copy follows immediately
+    jobs.push(b);
     const stop={ order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:iso, name:b.name||'', address:b.address||'', zip:b.zip||'', crew:crewKey, jobTime:hh+':'+mm };
     st+=dur;
     return stop;
@@ -1648,10 +1651,20 @@ function dayMove(c,iso,idx,dir){
   renderDispatch();
   const tk=c+'|'+iso;
   clearTimeout(_dayPushTimers[tk]);
-  _dayPushTimers[tk]=setTimeout(function(){
-    fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'put_route', date:iso, crew:crewKey, stops:JSON.stringify(stops), updatedBy:myName||'Owner', idemKey:'hqday:'+iso+':'+crewKey+':'+Date.now(), adminToken:token }))
-      .then(r=>r.json()).then(function(d){ toast(d&&d.success?'📲 Run order saved — crews follow it':'⚠ Could not save order'); })
-      .catch(function(){ toast('⚠ Network error saving order'); });
+  _dayPushTimers[tk]=setTimeout(async function(){
+    _dayPushTimers[tk]=null;
+    // 1. route record (order + times) — what /field follows
+    try{
+      const d=await fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'put_route', date:iso, crew:crewKey, stops:JSON.stringify(stops), updatedBy:myName||'Owner', idemKey:'hqday:'+iso+':'+crewKey+':'+Date.now(), adminToken:token })).then(r=>r.json());
+      if(!(d&&d.success)){ toast('⚠ Could not save order'); return; }
+    }catch(e){ toast('⚠ Network error saving order'); return; }
+    // 2. persist each stop's time onto its Bookings row too, so the order
+    //    survives refresh even on backends without the get_route fix yet
+    for(let i=0;i<jobs.length;i++){
+      try{ await fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'set_job_time', rowIndex:_ri(jobs[i]), email:jobs[i].email||'', serviceDate:iso, jobTime:jobs[i].jobTime, adminToken:token })); }catch(e){}
+      await new Promise(function(r){ setTimeout(r,120); });
+    }
+    toast('📲 Run order saved — times locked in');
   },800);
 }
 function _dayJobsInOrder(c,iso){

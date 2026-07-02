@@ -12,9 +12,9 @@
 <!-- Auto-updater: pulls the latest version in the background and reloads once when a new
      deploy is live, so phones never get stuck on an old cached build. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-03.2 */
+/* APP_VER:2026-07-03.3 */
 (function(){
-  var V = '2026-07-03.2';
+  var V = '2026-07-03.3';
   window.__APP_VER = V;
   var reloads = 0, lastCheck = 0;
   function check(){
@@ -9773,6 +9773,31 @@ function _buildCalendarUpdatesFromCurrentOrder() {
   return updates;
 }
 
+async function _persistJobTimes(calBtn) {
+  const all = [];
+  for (const [dateStr, dayOrder] of Object.entries(_routeCustomOrder || {})) {
+    const crews = Array.isArray(dayOrder) ? { '': dayOrder } : dayOrder;
+    for (const stops of Object.values(crews)) {
+      if (!Array.isArray(stops)) continue;
+      for (const st of stops) {
+        const bk = st && st.bk;
+        if (bk && bk.jobTime && !bk.rowCancelled) all.push({ bk, dateStr });
+      }
+    }
+  }
+  for (let i = 0; i < all.length; i++) {
+    const { bk, dateStr } = all[i];
+    if (calBtn) calBtn.textContent = '🕐 Saving times… ' + (i + 1) + '/' + all.length;
+    try {
+      await fetch(SCRIPT_URL + '?' + new URLSearchParams({
+        action: 'set_job_time', rowIndex: bk._rowIndex || 0, email: bk.email || '',
+        serviceDate: dateStr, jobTime: bk.jobTime, adminToken
+      }));
+    } catch(e){}
+    await new Promise(r => setTimeout(r, 120));
+  }
+}
+
 async function syncRouteToCalendar(silent) {
   const calBtn = document.getElementById('routeCalSyncBtn');
   if (calBtn) { calBtn.disabled = true; calBtn.textContent = '📅 Pushing…'; }
@@ -9788,6 +9813,11 @@ async function syncRouteToCalendar(silent) {
   // Push the route record (this exact order + these exact times) to the backend
   // FIRST, so /hq Dispatch and the crews' /field mirror the calendar 1:1.
   try { Object.keys(_routeCustomOrder || {}).forEach(ds => pushRouteToCrews(ds)); } catch(e){}
+
+  // ALSO persist each stop's planned time onto its Bookings row (set_job_time).
+  // /hq reads these directly, so the Day board matches this push even if the
+  // Routes record isn't readable yet (pre-redeploy backends).
+  try { await _persistJobTimes(calBtn); } catch(e){ console.warn('job time persist:', e); }
 
   try {
     // Batch the updates: one giant GET URL overflows length limits (dropping
