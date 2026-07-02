@@ -23,6 +23,12 @@
     return false;
   }
 </script>
+
+<!-- ===== QUOTE-FIRST MODE TOGGLE =====================================
+  true  = no-card "book a visit / request quote" flow (lead + pay after)
+  false = original instant-booking flow with Stripe card checkout
+  To switch back instantly: set this to false and redeploy. -->
+<script>window.QUOTE_ONLY_MODE = true;</script>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Evergreen Lawn Care & Landscaping LLC | Central Florida</title>
@@ -1723,10 +1729,10 @@
     <div class="hero-accent-line"></div>
     <div class="hero-content">
       <div class="hero-badge">A Solutions Based Company 🌿</div>
-      <h1>Professional Lawn Care<br/><em>Starting as Low as $19</em></h1>
+      <h1 id="heroH1">Professional Lawn Care<br/><em>Starting as Low as $19</em></h1>
       <p>Central Florida's professional lawn care & landscaping company. Instant price in 2 minutes, no contracts, cancel anytime.</p>
       <div class="hero-btns">
-        <button onclick="openQuoteModal()" class="btn-primary" style="border:none;cursor:pointer;">Get a Free Quote — First Cut from $19</button>
+        <button id="heroQuoteBtn" onclick="openQuoteModal()" class="btn-primary" style="border:none;cursor:pointer;">Get a Free Quote — First Cut from $19</button>
         <button class="btn-secondary" onclick="openContactModal()">📞 Contact Us</button>
       </div>
       <p style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:12px;">📅 Spots fill fast — book your first cut today.</p>
@@ -2155,13 +2161,13 @@
         <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:13px 16px;margin-bottom:16px;display:flex;align-items:flex-start;gap:10px;">
           <div style="font-size:18px;line-height:1;flex-shrink:0;">🗓️</div>
           <div>
-            <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:3px;">Free visit — no card required</div>
-            <div style="font-size:12px;color:#374151;line-height:1.5;">We'll come out on your selected date, measure the property, and give you an exact price on the spot. No obligation.</div>
+            <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:3px;">Book your visit — no card required</div>
+            <div style="font-size:12px;color:#374151;line-height:1.5;">Pick a date and we'll come take care of your lawn. We confirm your price first — you pay only after the job's done. No card, no obligation.</div>
           </div>
         </div>
         <button class="btn-pay" id="q-xl-book-btn" onclick="submitXLQuoteVisit()" style="background:var(--green-mid);">
           <div class="spinner"></div>
-          <span class="pay-text">📅 Schedule My Free Quote Visit</span>
+          <span class="pay-text">📅 Book My Lawn Service</span>
         </button>
       </div>
     </div>
@@ -2369,7 +2375,7 @@ function calNextMonth() {
 // ─────────────────────────────────────────────
 const PROMO_BANNER = {
   enabled: true,
-  text: '🌿 First mow starting as low as $19 — get your instant quote.',
+  text: (window.QUOTE_ONLY_MODE ? '🌿 Free quote in 2 minutes — book online, pay after the mow.' : '🌿 First mow starting as low as $19 — get your instant quote.'),
   cta: 'Get a Quote',
   action: 'quote',
 };
@@ -3835,14 +3841,14 @@ function buildStep3() {
   // Show/hide returning customer banner (not relevant for XL flow)
   const tierKey = LOT_TIERS[qState.lotTierIdx] ? LOT_TIERS[qState.lotTierIdx].key : '';
   const _bsp = PLAN_PRICING[tierKey] || {};
-  const isXL = tierKey === 'xl' || (_bsp.biweekly === null && _bsp.weekly === null);
+  const isXL = window.QUOTE_ONLY_MODE || tierKey === 'xl' || (_bsp.biweekly === null && _bsp.weekly === null);
   const banner = document.getElementById('q-returning-banner');
   if (banner) banner.style.display = (qState.isReturning && !isXL) ? 'block' : 'none';
   // Update date label for large lot / XL flow
   const allLabels = document.querySelectorAll('#quoteStep3 .form-row label');
   if (allLabels.length > 0) {
     const calLabel = allLabels[0];
-    calLabel.textContent = isXL ? 'Select a Date for Your Free Quote Visit' : 'Select Your Start Date';
+    calLabel.textContent = isXL ? 'Select Your Preferred Date' : 'Select Your Start Date';
   }
 }
 
@@ -3853,7 +3859,7 @@ function updateLotDisplay() {
   const sublabel = document.getElementById('q-lot-sublabel');
   const manual   = document.getElementById('q-lot-manual');
   const personalLink = document.getElementById('q-personal-quote-link');
-  const isXL    = qState.lotTierIdx === 4;
+  const isXL    = window.QUOTE_ONLY_MODE || qState.lotTierIdx === 4;
 
   if (labelEl) labelEl.textContent = (isXL && qState.personalQuoteRequested) ? 'Custom Quote · Free In-Person Visit' : (tier ? tier.label : '—');
   if (iconEl)  iconEl.textContent  = tier ? tier.icon : '🏡';
@@ -3904,15 +3910,15 @@ function renderPlanCards() {
   if (!LOT_TIERS[qState.lotTierIdx]) { qState.lotTierIdx = 0; } // safety guard — default Small
   const tierKey = LOT_TIERS[qState.lotTierIdx].key;
   const prices  = PLAN_PRICING[tierKey];
-  const isXL    = tierKey === 'xl' || (prices && prices.biweekly === null && prices.weekly === null);
+  const isXL    = window.QUOTE_ONLY_MODE || tierKey === 'xl' || (prices && prices.biweekly === null && prices.weekly === null);
 
   // ── Large/XL lots: replace plan cards with free quote visit info ──
   if (isXL) {
     const isPersonal = qState.personalQuoteRequested;
-    const cardTitle  = isPersonal ? 'Custom Quote · Free In-Person Visit' : 'Free On-Site Quote Visit';
+    const cardTitle  = isPersonal ? 'Custom Quote · Free In-Person Visit' : 'Book Your Lawn Service · Pay After';
     const cardDesc   = isPersonal
       ? "Not happy with the estimated size? We'll come out, measure your yard ourselves, and give you an exact price — completely free, no commitment required."
-      : "Properties over 1 acre get a custom quote. We'll come out, walk the lot, and give you an exact price — completely free, no commitment required.";
+      : "Pick a date and we'll come take care of your lawn. We confirm your exact price first, and you pay only after the job's done — no card, no commitment.";
     document.getElementById('quotePlanCards').innerHTML = `
       <div style="background:var(--green-pale);border:1.5px solid rgba(45,106,45,0.2);border-radius:14px;padding:20px 18px;margin-bottom:4px;">
         <div style="font-size:22px;margin-bottom:10px;">🗺️</div>
@@ -3926,7 +3932,7 @@ function renderPlanCards() {
       </div>`;
     // Update the "Next" button label for XL flow
     const nextBtn = document.querySelector('#quoteStep3 .btn-primary');
-    if (nextBtn) nextBtn.textContent = 'Book My Free Quote Visit →';
+    if (nextBtn) nextBtn.textContent = 'Book My Service →';
     return;
   }
 
@@ -3987,7 +3993,7 @@ function quoteStep3Submit() {
   const sel    = document.getElementById('q-lot-select');
   const tierKey = LOT_TIERS[qState.lotTierIdx] ? LOT_TIERS[qState.lotTierIdx].key : '';
   const _p3prices = PLAN_PRICING[tierKey] || {};
-  const isXL   = tierKey === 'xl' || (_p3prices.biweekly === null && _p3prices.weekly === null);
+  const isXL   = window.QUOTE_ONLY_MODE || tierKey === 'xl' || (_p3prices.biweekly === null && _p3prices.weekly === null);
 
   // If manual dropdown is visible, require a selection
   if (manual && manual.style.display !== 'none') {
@@ -4051,6 +4057,9 @@ async function submitXLQuoteVisit() {
     fetch(SHEETS_SCRIPT_URL + '?' + params.toString(), { method: 'GET', mode: 'no-cors' }).catch(() => {});
   } catch(e) { /* fire and forget */ }
 
+  // Fire Google Ads conversion (quote request / booking)
+  try { if (typeof gtag_report_conversion === 'function') gtag_report_conversion(); } catch(e) {}
+
   // Hide step 4, show success
   const step4 = document.getElementById('quoteStep4');
   if (step4) step4.style.display = 'none';
@@ -4061,14 +4070,14 @@ async function submitXLQuoteVisit() {
   const msgEl     = document.getElementById('q-success-msg');
   const dateEl    = document.getElementById('q-success-date');
   if (dateEl) dateEl.textContent = new Date(qState.startDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
-  if (msgEl)  msgEl.innerHTML = 'Free quote visit booked for <strong>' + dateFmt + '</strong>. We\'ll come out, walk the property, and give you exact pricing on the spot. See you soon! 🌿';
+  if (msgEl)  msgEl.innerHTML = 'You\'re booked for <strong>' + dateFmt + '</strong>! We\'ll text to confirm the details and your price, then come take care of your lawn. No payment until the job\'s done. 🌿';
   if (successEl) successEl.style.display = 'block';
 }
 
 function buildOrderSummary() {
   const tierKey   = LOT_TIERS[qState.lotTierIdx] ? LOT_TIERS[qState.lotTierIdx].key : 'xl';
   const prices    = PLAN_PRICING[tierKey] || { biweekly: null, weekly: null };
-  const isXL      = tierKey === 'xl' || (prices.biweekly === null && prices.weekly === null);
+  const isXL      = window.QUOTE_ONLY_MODE || tierKey === 'xl' || (prices.biweekly === null && prices.weekly === null);
   const planId    = qState.selectedPlan;
   const dateFmt   = new Date(qState.startDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
 
@@ -4590,5 +4599,14 @@ function closeMobileMenu() {
   </div>
 </div>
 
+<script>
+/* Quote-first hero copy (gated — flip QUOTE_ONLY_MODE=false to restore $19 originals) */
+if (window.QUOTE_ONLY_MODE) document.addEventListener('DOMContentLoaded', function () {
+  var h = document.getElementById('heroH1');
+  if (h) h.innerHTML = 'Professional Lawn Care<br/><em>Free Quote in 2 Minutes</em>';
+  var b = document.getElementById('heroQuoteBtn');
+  if (b) b.textContent = 'Get a Free Quote';
+});
+</script>
 </body>
 </html>
