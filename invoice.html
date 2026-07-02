@@ -12,9 +12,9 @@
 <!-- Auto-updater: pulls the latest version in the background and reloads once when a new
      deploy is live, so phones never get stuck on an old cached build. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-02.2 */
+/* APP_VER:2026-07-02.3 */
 (function(){
-  var V = '2026-07-02.2';
+  var V = '2026-07-02.3';
   window.__APP_VER = V;
   var reloads = 0, lastCheck = 0;
   function check(){
@@ -7816,8 +7816,10 @@ function moveRouteStop(dateStr, crew, fromIdx, dir) {
   const movedStop = order[toIdx];
   if (movedStop && movedStop.bk) movedStop.bk._routePinned = true;
 
-  // Re-render route — show banner with pin info
+  // Re-render route — keep your scroll position (no jumping back up to Crew A)
+  const _scrollY = window.scrollY;
   renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
+  window.scrollTo(0, _scrollY);
   const _tl = document.getElementById('routeTimeline');
   if (_tl && !document.getElementById('routeReorderBanner')) {
     const _b = document.createElement('div');
@@ -7830,10 +7832,8 @@ function moveRouteStop(dateStr, crew, fromIdx, dir) {
   // Sync times to dispatch board then update bookings
   _syncRouteOrderToDispatch(dateStr);
 
-  // Push the new order to the backend so /field & /live follow it
-  schedulePushRoute(dateStr);
-
-  showToast('↕ Stop moved · 📲 Sending new order to crews…');
+  _routePushStatus('✏️ Order changed — hit 📅 Push to Calendar & HQ to send it to crews', false);
+  showToast('↕ Stop moved — push when you\'re happy with it');
 }
 
 function _syncRouteOrderToDispatch(dateStr) {
@@ -7905,7 +7905,7 @@ function pushRouteToCrews(dateStr) {
   const reqs = [];
   for (const [crewKey, order] of Object.entries(crews)) {
     if (!Array.isArray(order)) continue;
-    const crew = (crewKey === '_legacy') ? '' : crewKey;
+    const crew = (crewKey === '_legacy' || crewKey === 'unassigned') ? '' : crewKey;
     const stops = order.map((s, i) => {
       const b = (s && s.bk) || {};
       return {
@@ -8276,10 +8276,12 @@ function routeDrop(ev, dateStr, crew, idx) {
   order.splice(idx, 0, moved);
   if (moved && moved.bk) moved.bk._routePinned = true;
   _dragSrc = null;
+  const _scrollY = window.scrollY;
   renderRouteDay(dateStr, _routeCustomOrder[dateStr]);
+  window.scrollTo(0, _scrollY);
   _syncRouteOrderToDispatch(dateStr);
-  schedulePushRoute(dateStr);   // crews' phones pick up the new order
-  showToast('↕ Stop moved · 📲 Sending new order to crews…');
+  _routePushStatus('✏️ Order changed — hit 📅 Push to Calendar & HQ to send it to crews', false);
+  showToast('↕ Stop moved — push when you\'re happy with it');
 }
 function routeDragEnd(ev) {
   ev.currentTarget.classList.remove('dragging');
@@ -9650,14 +9652,12 @@ async function buildRoute() {
     _routeViewDayIdx = 0;
     _updateRouteAllBtn();
 
-    // Push the optimized order to the backend so /field & /live follow it
-    try { sortedDates.forEach(ds => pushRouteToCrews(ds)); } catch(e) { console.warn('route push failed:', e); }
 
     // Show saved banner
     const banner = document.getElementById('routeSavedBanner');
     if (banner) {
       banner.style.display = '';
-      banner.innerHTML = `✅ Route optimized &amp; saved · ${sortedDates.length} day${sortedDates.length!==1?'s':''} · 📲 Sent to crews' Field Mode`;
+      banner.innerHTML = `✅ Route optimized &amp; saved · ${sortedDates.length} day${sortedDates.length!==1?'s':''} · 📅 hit “Push to Calendar &amp; HQ” to send it to crews`;
     }
 
     // Show calendar sync button (hidden until a route exists)
@@ -9759,6 +9759,15 @@ function _buildCalendarUpdatesFromCurrentOrder() {
       }
     }
   }
+  // Two bookings sharing one Event ID (recurring rows copy it) makes updates
+  // land on the SAME calendar event — the last write "eats" the first job.
+  // Keep the ID on the first stop only; later repeats create their own event.
+  const _seenEv = {};
+  updates.forEach(function(u){
+    if (!u.eventId) return;
+    if (_seenEv[u.eventId]) u.eventId = '';
+    else _seenEv[u.eventId] = true;
+  });
   return updates;
 }
 
