@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-02.8 */
+/* APP_VER:2026-07-02.9 */
 (function(){
-  var V='2026-07-02.8'; window.__APP_VER=V;
+  var V='2026-07-02.9'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -977,17 +977,23 @@ async function _fmFlushQueue(){
       const item=q[0];
       try{
         let res;
-        if(item.method==='POST') res=await fetch(SCRIPT_URL,{ method:'POST', body:JSON.stringify(item.body), headers:{'Content-Type':'application/json'} });
+        if(item.method==='POST') res=await fetch(SCRIPT_URL,{ method:'POST', body:JSON.stringify(item.body) });
         else res=await fetch(SCRIPT_URL+'?'+new URLSearchParams(item.params).toString());
         if(!res.ok) throw new Error('HTTP '+res.status);
         _fmMarkKeyDone(item.idemKey); q.shift(); _fmQueueSave(q);
-      }catch(netErr){ item.tries=(item.tries||0)+1; if(item.tries>12) q.shift(); _fmQueueSave(q); break; }
+      }catch(netErr){
+        item.tries=(item.tries||0)+1;
+        // photos are irreplaceable — NEVER drop them; other items give up after 12 tries
+        if(item.tries>12&&item.kind!=='photo') q.shift();
+        _fmQueueSave(q); break;
+      }
     }
   } finally { _fmFlushing=false; _fmUpdateSyncBadge(); }
 }
 function _fmUpdateSyncBadge(){
-  const n=_fmQueueLoad().length, online=navigator.onLine!==false;
-  document.querySelectorAll('.fm-sync').forEach(el=>{ if(n===0){ el.style.display='none'; return; } el.style.display=''; if(!online){ el.className='fm-sync offline'; el.textContent='📴 '+n+' to sync'; } else { el.className='fm-sync pending'; el.textContent='⏳ Syncing '+n+'…'; } });
+  const _q=_fmQueueLoad(); const n=_q.length, online=navigator.onLine!==false;
+  const stuck=_q.some(function(it){ return (it.tries||0)>5; });
+  document.querySelectorAll('.fm-sync').forEach(el=>{ if(n===0){ el.style.display='none'; return; } el.style.display=''; if(!online){ el.className='fm-sync offline'; el.textContent='📴 '+n+' to sync'; } else if(stuck){ el.className='fm-sync offline'; el.textContent='⚠ '+n+' stuck — stay on wifi & keep app open'; } else { el.className='fm-sync pending'; el.textContent='⏳ Syncing '+n+'…'; } });
   const b=document.getElementById('netBanner'); if(b){ if(navigator.onLine===false){ b.className='show'; b.textContent='📴 Offline — work is saved, syncs when you reconnect'+(n?(' · '+n+' pending'):''); } else b.className=''; }
 }
 
@@ -1669,8 +1675,8 @@ function pmcsSaveConfig(){
   const body = { action:'set_pmcs_config', config: json, by: adminName || adminEmail || '', adminToken };
   try {
     if (typeof _fmEnqueue === 'function'){ _fmEnqueue({ kind:'pmcs_config', method:'POST', body }); if (typeof _fmFlushQueue==='function') _fmFlushQueue(); }
-    else fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(body), headers:{ 'Content-Type':'application/json' } }).catch(()=>{});
-  } catch(e){ try { fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(body), headers:{ 'Content-Type':'application/json' } }).catch(()=>{}); } catch(_e){} }
+    else fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(body) }).catch(()=>{});
+  } catch(e){ try { fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(body) }).catch(()=>{}); } catch(_e){} }
 }
 
 // Weekly PMCS lands every Monday; monthly PMCS every 4 weeks (28 days) on a Monday,

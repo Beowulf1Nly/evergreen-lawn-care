@@ -12,9 +12,9 @@
 <!-- Auto-updater: pulls the latest version in the background and reloads once when a new
      deploy is live, so phones never get stuck on an old cached build. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-03.8 */
+/* APP_VER:2026-07-03.9 */
 (function(){
-  var V = '2026-07-03.8';
+  var V = '2026-07-03.9';
   window.__APP_VER = V;
   var reloads = 0, lastCheck = 0;
   function check(){
@@ -7475,8 +7475,7 @@ async function _jobSubmit() {
         markedBy:   adminName || 'Crew',
         adminToken,
       };
-      await fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(photoPayload),
-        headers:{'Content-Type':'application/json'} }).catch(() => {});
+      await fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(photoPayload) }).catch(() => {});
     }
 
     // Update local state
@@ -11546,7 +11545,7 @@ async function _fmFlushQueue(){
       try {
         let res;
         if (item.method === 'POST'){
-          res = await fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(item.body), headers:{ 'Content-Type':'application/json' } });
+          res = await fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(item.body) });
         } else {
           res = await fetch(SCRIPT_URL + '?' + new URLSearchParams(item.params).toString());
         }
@@ -11556,7 +11555,7 @@ async function _fmFlushQueue(){
       } catch(netErr){
         // Network still down — keep the item, retry later. Drop only after many tries.
         item.tries = (item.tries || 0) + 1;
-        if (item.tries > 12){ q.shift(); } // give up to avoid a stuck queue
+        if (item.tries > 12 && item.kind !== 'photo'){ q.shift(); } // photos are irreplaceable — never dropped
         _fmQueueSave(q);
         break;
       }
@@ -12342,8 +12341,8 @@ function pmcsSaveConfig(){
   const body = { action:'set_pmcs_config', config: json, by: adminName || adminEmail || '', adminToken };
   try {
     if (typeof _fmEnqueue === 'function'){ _fmEnqueue({ kind:'pmcs_config', method:'POST', body }); if (typeof _fmFlushQueue==='function') _fmFlushQueue(); }
-    else fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(body), headers:{ 'Content-Type':'application/json' } }).catch(()=>{});
-  } catch(e){ try { fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(body), headers:{ 'Content-Type':'application/json' } }).catch(()=>{}); } catch(_e){} }
+    else fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(body) }).catch(()=>{});
+  } catch(e){ try { fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(body) }).catch(()=>{}); } catch(_e){} }
 }
 
 // Weekly PMCS lands every Monday; monthly PMCS every 4 weeks (28 days) on a Monday,
