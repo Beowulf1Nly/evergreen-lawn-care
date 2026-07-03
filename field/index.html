@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-07.1 */
+/* APP_VER:2026-07-07.2 */
 (function(){
-  var V='2026-07-07.1'; window.__APP_VER=V;
+  var V='2026-07-07.2'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1136,6 +1136,22 @@ function _autoClockOut(){
 /* ───────── Stops / ordering ───────── */
 function _stopKey(bk){ return String(bk.email||'').toLowerCase().trim()+'|'+dateOf(bk); }
 function _crewMatch(bk){ if(_crewSel){ if(_crewSel==='ALL') return true; const c=String(bk.crew||'').toUpperCase().trim(); if(_crewSel==='UNASSIGNED') return !c; return c===_crewSel||!c; } return _crewOk(bk); } // explicit override else staff assignment
+
+/* ── Same-day additions: local insert so the new job is playable IMMEDIATELY ── */
+let _fmInsertAfter={}; try{ _fmInsertAfter=JSON.parse(localStorage.getItem('evg_fm_insafter')||'{}'); }catch(e){}
+function _fmInsAfterSave(){ try{ localStorage.setItem('evg_fm_insafter',JSON.stringify(_fmInsertAfter)); }catch(e){} }
+function _fmAddLocalSameDay(nb,anchorKey){
+  try{
+    nb._localTemp=true;
+    (allBookings=allBookings||[]).push(nb);
+    const nk=_stopKey(nb);
+    if(anchorKey&&anchorKey!==nk){ _fmInsertAfter[nk]=anchorKey; _fmInsAfterSave(); }
+    _persist(); _fmRender();
+    // the queued booking hits the backend in seconds — refresh swaps the temp for the real row
+    setTimeout(function(){ try{ loadData(true); }catch(e){} },6000);
+  }catch(e){}
+}
+
 function _fmTodayRawJobs(){ const ds=todayISOStr(); return (allBookings||[]).filter(b=>!b.rowCancelled&&dateOf(b)===ds&&_crewMatch(b)); } // completed jobs stay so progress counts them as done
 function _fmStops(){
   const jobs=_fmTodayRawJobs().map(bk=>({bk}));
@@ -1148,6 +1164,21 @@ function _fmStops(){
   } else {
     jobs.sort((a,b)=>{ const ta=a.bk.jobTime||'99:99', tb=b.bk.jobTime||'99:99'; return ta<tb?-1:ta>tb?1:0; }); // (c) job time last resort
   }
+  // Same-day additions slot in right after the stop they were sold at
+  try{
+    const iaKeys=Object.keys(_fmInsertAfter||{});
+    if(iaKeys.length){
+      iaKeys.forEach(function(nk){
+        const anchor=_fmInsertAfter[nk];
+        if(!anchor||anchor===nk) return;
+        const ni=jobs.findIndex(function(s){return _stopKey(s.bk)===nk;});
+        if(ni<0) return;
+        const moved=jobs.splice(ni,1)[0];
+        const ai=jobs.findIndex(function(s){return _stopKey(s.bk)===anchor;});
+        jobs.splice(ai<0?jobs.length:ai+1,0,moved);
+      });
+    }
+  }catch(e){}
   return jobs;
 }
 function _fmIsSkipped(bk){ return !!_fmSkipped[_stopKey(bk)]; }
@@ -1655,7 +1686,13 @@ function ncSubmit(){
   if(!confirm('Add '+name+'?\n'+freq+(price?(' · $'+price):'')+' · first visit '+date+'\n'+addr)) return;
   _fmEnqueue({ kind:'newcust', idemKey:'nc:'+_uuid(), method:'GET', params:{ action:'manual_schedule', name:name, email:email, phone:phone, address:addr, zip:zip, frequency:freq, price:price, serviceDate:date, notes:(notes?notes+' — ':'')+'Added on route by '+(adminName||'crew'), payMethod:pay||'card', adminToken:adminToken } });
   _fmFlushQueue();
-  ncClose(); showToast('✅ '+name+' added — they’ll show up on the schedule');
+  if(date===todayISOStr()){
+    const cur=(function(){ try{ const st=_fmStops(); return st[_fmViewIdx]?_stopKey(st[_fmViewIdx].bk):null; }catch(e){ return null; } })();
+    _fmAddLocalSameDay({ name:name, email:email, phone:phone, address:addr, zip:zip, frequency:freq, price:(price?('$'+price):''), serviceDate:date, notes:'Added on route (same-day)', crew:'', jobTime:'', payMethod:pay||'card' }, cur);
+    ncClose(); showToast('✅ '+name+' added — slotted in as your next stop');
+  } else {
+    ncClose(); showToast('✅ '+name+' added — they’ll show up on the schedule');
+  }
 }
 
 /* ═══════════ QUOTE CLOSER — a quote visit ends in an OUTCOME, not a payment ═══════════ */
@@ -1746,8 +1783,10 @@ async function qjOutcome(kind){
   if(kind!=='no'&&(!price||price<=0)){ showToast(_qj.tier==='xl'?'1+ acre — set a price in the adjust box first':'Set a price first'); return; }
   const base=_stopKey(bk);
   const og=_qj.overgrown, ogFee=Math.max(0,Math.round(_qj.ogFee)||0);
-  const firstPrice=(og&&ogFee>0)?price+ogFee:price;
-  const ogNote=(og&&ogFee>0)?(' · first cut +$'+ogFee+' overgrown (1st cut $'+firstPrice+')'):'';
+  const promo=_qj.promo&&_qj.tier!=='xl', promoPrice=Math.max(0,Math.round(_qj.promoPrice)||0);
+  const firstPrice=promo?promoPrice:((og&&ogFee>0)?price+ogFee:price);
+  const ogNote=promo?(' · first mow $'+promoPrice+' deal (then $'+price+'/cut)')
+              :((og&&ogFee>0)?(' · first cut +$'+ogFee+' overgrown (1st cut $'+firstPrice+')'):'');
   if(kind==='book'){
     if(_qj.tier==='xl'){ showToast('1+ acre needs owner approval — submit the estimate instead'); return; }
     if(_qjEditMode){
@@ -1762,8 +1801,13 @@ async function qjOutcome(kind){
     const date=document.getElementById('qjDate').value;
     if(!date){ showToast('Pick a start date'); return; }
     if(!confirm('Book '+(bk.name||'customer')+':\n'+desc+'\n'+(ogNote?('1st cut $'+firstPrice+' (overgrown +$'+ogFee+')'+(_qj.freq!=='onetime'?(' · then $'+price+'/cut'):'')):('$'+price+(_qj.freq!=='onetime'?'/cut':'')))+'\nstarting '+date+'?')) return;
-    _fmEnqueue({ kind:'quotebook', idemKey:'qb:'+base, method:'GET', params:{ action:'manual_schedule', name:bk.name||'', email:bk.email||'', phone:String(bk.phone||''), address:bk.address||'', zip:String(bk.zip||''), frequency:_qjFreqLabel(), price:String(firstPrice), serviceDate:date, notes:'Booked at quote visit — '+desc+ogNote+(ogNote&&_qj.freq!=='onetime'?(' · following cuts $'+price):'')+(_qjNote()?(' | 📝 '+_qjNote()):'')+' — by '+(adminName||'crew'), payMethod:'card', adminToken } });
+    _fmEnqueue({ kind:'quotebook', idemKey:'qb:'+base, method:'GET', params:{ action:'manual_schedule', name:bk.name||'', email:bk.email||'', phone:String(bk.phone||''), address:bk.address||'', zip:String(bk.zip||''), frequency:_qjFreqLabel(), price:String(promo?price:firstPrice), firstMowPromo:(promo?'true':''), firstMowPrice:(promo?String(promoPrice):''), serviceDate:date, notes:'Booked at quote visit — '+desc+ogNote+(ogNote&&_qj.freq!=='onetime'?(' · following cuts $'+price):'')+(_qjNote()?(' | 📝 '+_qjNote()):'')+' — by '+(adminName||'crew'), payMethod:'card', adminToken } });
     try{ _qjBookedStore[base]={ date:date, email:String(bk.email||'').toLowerCase().trim(), name:bk.name||'', freq:_qjFreqLabel(), price:String(firstPrice), qj:JSON.parse(JSON.stringify(_qj)), override:String((document.getElementById('qjPriceOverride')||{}).value||'') }; _qjBookedSave(); }catch(e){}
+    if(date===todayISOStr()){
+      _fmAddLocalSameDay({ name:bk.name||'', email:String(bk.email||'').toLowerCase(), phone:String(bk.phone||''), address:bk.address||'', zip:String(bk.zip||''), frequency:_qjFreqLabel(), price:'$'+firstPrice, serviceDate:date, notes:'Booked at quote visit (same-day)', crew:bk.crew||'', jobTime:'', payMethod:'card' }, base);
+      _qjFinish('✅ Booked for TODAY — it\u2019s your next stop after this quote. 1st cut $'+firstPrice, 'Quote WON — booked '+_qjFreqLabel()+' $'+price+ogNote+' ('+desc+') — same-day job added');
+      return;
+    }
     _qjFinish('✅ Booked! '+(ogNote?('1st cut $'+firstPrice):('$'+price))+' · starts '+date+' — ‹ Prev lets you edit it', 'Quote WON — booked '+_qjFreqLabel()+' $'+price+ogNote+' ('+desc+')');
   } else if(kind==='estimate'){
     let _em=prompt('Send the estimate to this email — fix it if it\u2019s wrong:', String(bk.email||'').trim());
@@ -1773,7 +1817,10 @@ async function qjOutcome(kind){
     bk.email=_em;
     const forApproval=_qj.tier==='xl';
     const items=[];
-    if(ogNote){
+    if(promo){
+      items.push({desc:'First mow — intro deal ('+desc+')',price:promoPrice,included:'false'});
+      items.push({desc:'Mowing — '+_qjFreqLabel(),price:price,after:'true'});
+    } else if(ogNote){
       items.push({desc:'First cut — overgrown lot ('+desc+')',price:firstPrice,included:'false'});
       if(_qj.freq!=='onetime') items.push({desc:'Mowing — '+_qjFreqLabel(),price:price,after:'true'});
     } else {
@@ -1813,10 +1860,12 @@ const QJ_TIERS=[
   {key:'xl',label:'1+ acre',price:null}
 ];
 const QJ_PRICING={ half:49, threequarter:65, one:79, xl:null };
-let _qj={tier:'half',freq:'onetime',overgrown:false,ogFee:49};
+let _qj={tier:'half',freq:'onetime',overgrown:false,ogFee:49,promo:false,promoPrice:19};
 function qjSet(k,v){ _qj[k]=v; qjRefresh(); }
 function qjRecTgl(){ _qj.freq=(_qj.freq==='onetime')?'weekly':'onetime'; qjRefresh(); }
-function qjOgTgl(){ _qj.overgrown=!_qj.overgrown; qjRefresh(); }
+function qjOgTgl(){ _qj.overgrown=!_qj.overgrown; if(_qj.overgrown) _qj.promo=false; qjRefresh(); }
+function qjPromoTgl(){ _qj.promo=!_qj.promo; if(_qj.promo){ _qj.overgrown=false; _qj.promoPrice=(_qj.tier==='half')?19:29; } qjRefresh(); }
+function qjPromoInput(el){ const v=parseFloat(el.value); _qj.promoPrice=(v>0?v:0); }
 function qjOgFeeInput(el){ const v=parseFloat(el.value); _qj.ogFee=(v>0?v:0); }
 function _qjCalcPrice(){ return QJ_PRICING[_qj.tier]; }
 function _qjFreqLabel(){ return _qj.freq==='weekly'?'Weekly Plan':_qj.freq==='biweekly'?'Bi-Weekly Plan':'One-time'; }
@@ -1837,11 +1886,15 @@ function qjRenderBuilder(){
     +row(_qj.overgrown,'🌾 Overgrown — added to the first cut only',
       _qj.overgrown?('<span onclick="event.stopPropagation();" style="display:inline-flex;align-items:center;gap:4px;font-size:14px;font-weight:800;">+$<input id="qjOgFee" type="number" inputmode="decimal" value="'+_qj.ogFee+'" oninput="qjOgFeeInput(this)" onclick="event.stopPropagation();" style="width:64px;padding:7px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;font-weight:800;text-align:center;font-family:inherit;"></span>'):'',
       "qjOgTgl()")
+    +(_qj.tier!=='xl'?row(_qj.promo,'🏷 First-mow deal — cheap first cut, then plan price',
+      _qj.promo?('<span onclick="event.stopPropagation();" style="display:inline-flex;align-items:center;gap:4px;font-size:14px;font-weight:800;">$<input id="qjPromoFee" type="number" inputmode="decimal" value="'+_qj.promoPrice+'" oninput="qjPromoInput(this)" onclick="event.stopPropagation();" style="width:64px;padding:7px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;font-weight:800;text-align:center;font-family:inherit;"></span>'):'',
+      "qjPromoTgl()"):'')
     +(_qj.tier==='xl'?'<div style="font-size:12.5px;color:#b45309;font-weight:700;margin-top:6px;">🔒 1+ acre — set the price in the adjust box. The estimate goes to the owner for approval before it emails the customer.</div>':'')
     +(recurring&&_qj.tier!=='xl'?'<div style="font-size:11.5px;color:#64748b;margin-top:8px;">💡 First-mow promo: $19 (up to ½ ac) · $29 (larger) — mention it!</div>':'');
   (function(){
     let items=['Full mow at the right height for Florida grass','Trim & edge — fences, beds, driveways, sidewalks','Every clipping cleared — driveway, walkways & porch'];
     if(_qj.overgrown) items.push('First-cut overgrowth recovery (+$'+(Math.round(_qj.ogFee)||0)+' — first cut only)');
+    if(_qj.promo&&_qj.tier!=='xl') items.push('🏷 First mow just $'+(Math.round(_qj.promoPrice)||0)+' — then plan price');
     b.innerHTML+='<div style="margin:14px 0 4px;padding:12px 14px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;">'
       +'<div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">📋 What\'s included at this price</div>'
       +items.map(function(x){ return '<div style="font-size:13px;line-height:1.85;"><span style="color:#16a34a;font-weight:800;">✓</span> '+x+'</div>'; }).join('')
