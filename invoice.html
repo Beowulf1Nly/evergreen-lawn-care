@@ -10604,6 +10604,19 @@ function renderDispatchBoard() {
       }
       resolved.push({b:item.b, start:start, dur:item.dur});
     });
+    // LIVE: today, an unfinished stop can't show a past time — cascade the remaining stops forward from
+    // "now" so the card times visibly slide later as the crew runs behind (matches the route view).
+    (function(){
+      var _n=new Date(); var _t=_n.getFullYear()+'-'+String(_n.getMonth()+1).padStart(2,'0')+'-'+String(_n.getDate()).padStart(2,'0');
+      if(dateStr!==_t) return;
+      var nowRel=(_n.getHours()*60+_n.getMinutes())-DISP_START*60; var cur2=-1;
+      resolved.forEach(function(it){
+        if(isDone(it.b)) return;
+        if(it.start<nowRel) it.start=nowRel;
+        if(it.start<cur2)  it.start=cur2;
+        cur2=it.start+it.dur+15;
+      });
+    })();
     var _cap = (k==='Unassigned') ? null : _crewDayCap(crews[k], dateStr);
     var cards = resolved.map(function(item) {
       var b     = item.b;
