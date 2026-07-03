@@ -9063,11 +9063,39 @@ function rcMatrixOrder(dur,stopPts,originPt){
     while(unv.length){ var best=-1,bestD=Infinity; for(var i=0;i<unv.length;i++){ var d=dur[cur][stopPts[unv[i]]]; if(d<bestD){ bestD=d; best=i; } } order.push(unv[best]); cur=stopPts[unv[best]]; unv.splice(best,1); } return order; };
   var tourLen=function(order){ var s=0; if(originPt!=null) s+=dur[originPt][stopPts[order[0]]]; for(var i=0;i<order.length-1;i++) s+=dur[stopPts[order[i]]][stopPts[order[i+1]]]; return s; };
   var starts;
-  if(originPt!=null){ var best=0,bd=Infinity; for(var k=0;k<n;k++){ var d=dur[originPt][stopPts[k]]; if(d<bd){ bd=d; best=k; } } starts=[best]; }
+  if(originPt!=null){
+    // try the 3 depot-nearest stops as seeds — a single greedy seed can trap NN
+    starts=stopPts.map(function(_,k){ return k; }).sort(function(a,b){ return dur[originPt][stopPts[a]]-dur[originPt][stopPts[b]]; }).slice(0,Math.min(3,n));
+  }
   else { starts=stopPts.map(function(_,k){ return k; }); }
   var bestOrder=null,bestLen=Infinity;
-  for(var si=0;si<starts.length;si++){ var o=rcTwoOptMatrix(nnFrom(starts[si]),dur,stopPts,originPt); var L=tourLen(o); if(L<bestLen){ bestLen=L; bestOrder=o; } }
+  for(var si=0;si<starts.length;si++){
+    var o=rcTwoOptMatrix(nnFrom(starts[si]),dur,stopPts,originPt);
+    o=rcOrOptMatrix(o,dur,stopPts,originPt);   // relocate short runs — fixes the "grabbed the close stop, giant backtrack later" trap
+    o=rcTwoOptMatrix(o,dur,stopPts,originPt);
+    var L=tourLen(o); if(L<bestLen){ bestLen=L; bestOrder=o; }
+  }
   return bestOrder||stopPts.map(function(_,k){ return k; });
+}
+// Or-opt over the duration matrix: relocate runs of 1-3 stops to cheaper positions.
+function rcOrOptMatrix(order,dur,stopPts,originPt){
+  var D=function(a,b){ return dur[a][b]; };
+  var len=function(o){ var s=0; if(originPt!=null) s+=D(originPt,stopPts[o[0]]); for(var i=0;i<o.length-1;i++) s+=D(stopPts[o[i]],stopPts[o[i+1]]); return s; };
+  var improved=true,guard=0;
+  while(improved&&guard++<60){ improved=false; var base=len(order);
+    outer: for(var L=1;L<=3&&L<order.length;L++){
+      for(var i=0;i+L<=order.length;i++){
+        var seg=order.slice(i,i+L); var rest=order.slice(0,i).concat(order.slice(i+L));
+        for(var j=0;j<=rest.length;j++){
+          var cand=rest.slice(0,j).concat(seg,rest.slice(j)); var same=true;
+          for(var k=0;k<cand.length;k++){ if(cand[k]!==order[k]){ same=false; break; } }
+          if(same) continue;
+          if(len(cand)+1e-6<base){ order=cand; improved=true; break outer; }
+        }
+      }
+    }
+  }
+  return order;
 }
 // Refine an already geographic-ordered list with real driving times. Returns a NEW
 // ordered array only if OSRM is reachable AND the new order's straight-line length
