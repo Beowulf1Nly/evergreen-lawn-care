@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-06.6 */
-(function(){ var V='2026-07-06.6'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-06.7 */
+(function(){ var V='2026-07-06.7'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -358,6 +358,10 @@
   .st-block.proj{ border-style:dashed; border-color:var(--line2); background:rgba(29,36,34,.66); }
   .st-block.proj::before{ opacity:.55; }
   .st-nowline{ position:absolute; top:0; bottom:0; width:2px; background:#f87171;  z-index:2; pointer-events:none; }
+  .st-clockline{ position:absolute; top:0; bottom:0; width:2px; z-index:3; pointer-events:none; }
+  .st-clockline.in{ background:#10b981; } .st-clockline.out{ background:#94a3b8; }
+  .st-clockline span{ position:absolute; top:-2px; font-size:8.5px; font-weight:800; white-space:nowrap; padding:0 3px; border-radius:3px; }
+  .st-clockline.in span{ left:3px; color:#34d399; background:rgba(16,185,129,.14); } .st-clockline.out span{ right:3px; color:#cbd5e1; background:rgba(148,163,184,.16); }
   .st-untimed{ display:flex; gap:4px; flex-wrap:wrap; padding:4px 2px 0; }
   .st-econ{ margin-top:6px; padding:8px 11px; background:var(--panel2); border:1px solid var(--line); border-radius:10px; font-size:11.5px; color:var(--muted); display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
   .st-econ b{ color:var(--text); font-family:var(--mono); font-weight:700; }
@@ -1806,7 +1810,11 @@ function renderDispatch(){
         // Jobs WITHOUT a set time get PROJECTED onto the lane in run order (dashed),
         // starting 8:00 or after the last placed job, with drive buffer between stops.
         const evs=timed.map(function(b){ const t=_dayTimeOf(b,iso).split(':'); const st2=(+t[0])*60+(+t[1]||0); return {b:b,st:st2,en:st2+_jobMins(b),proj:false}; }).sort(function(a,b2){ return a.st-b2.st||a.en-b2.en; });
-        let cursor=510;                                                   // projected day starts 8:30 — first 30 min is 🧰 PMCS & load-up
+        // Anchor the day to the crew's ACTUAL clock-in today (PMCS/load-up + jobs shift with it); else 8:00.
+        const _shift=(iso===todayIso)?_crewShift(c):null;
+        const _ciMin=(_shift&&_shift.clockIn)?(_shift.clockIn.getHours()*60+_shift.clockIn.getMinutes()):null;
+        const _pmcsSt=(_ciMin!=null)?_ciMin:480, _pmcsEn=_pmcsSt+30;
+        let cursor=_pmcsEn;                                               // first job starts after PMCS/load-up
         untimed.forEach(function(b,ui){
           const dur=_jobMins(b);
           let st2=cursor+((evs.length||ui)?DRIVE_BUF:0);
@@ -1818,6 +1826,20 @@ function renderDispatch(){
           }
           evs.push({b:b,st:st2,en:st2+dur,proj:true}); cursor=st2+dur;
         });
+        // LIVE scaling: today, an unfinished stop can't sit in the past — cascade remaining stops forward
+        // from now so the blocks slide right and re-lane as the route runs long.
+        if(iso===todayIso){
+          const _nowM=(new Date()).getHours()*60+(new Date()).getMinutes();
+          evs.sort(function(a,b2){ return a.st-b2.st||a.en-b2.en; });
+          let _c2=-1;
+          evs.forEach(function(ev){
+            if(isDone(ev.b)) return;
+            const _d=ev.en-ev.st; let _sv=ev.st;
+            if(_sv<_nowM) _sv=_nowM;
+            if(_sv<_c2)  _sv=_c2;
+            ev.st=_sv; ev.en=_sv+_d; _c2=ev.en+DRIVE_BUF;
+          });
+        }
         const laneEnds=[];
         evs.sort(function(a,b2){ return a.st-b2.st||a.en-b2.en; });
         evs.forEach(function(ev){ let L=0; while(L<laneEnds.length&&laneEnds[L]>ev.st+1) L++; ev.lane=L; laneEnds[L]=ev.en; });
@@ -1825,12 +1847,14 @@ function renderDispatch(){
         const tlH=12+lanes*42;
         let now='';
         if(iso===todayIso){ const n=new Date(); const mins=n.getHours()*60+n.getMinutes(); if(mins>=420&&mins<=1140) now='<div class="st-nowline" style="left:'+(((mins-420)/720)*100)+'%"></div>'; }
+        if(_shift&&_ciMin!=null&&_ciMin>=420&&_ciMin<=1140){ now+='<div class="st-clockline in" style="left:'+(((_ciMin-420)/720)*100)+'%"><span>▸ in '+_t12(_ciMin)+'</span></div>'; }
+        if(_shift&&_shift.clockOut){ const _coM=_shift.clockOut.getHours()*60+_shift.clockOut.getMinutes(); if(_coM>=420&&_coM<=1140) now+='<div class="st-clockline out" style="left:'+(((_coM-420)/720)*100)+'%"><span>out '+_t12(_coM)+' ◂</span></div>'; }
         const hasProj=evs.some(function(ev){return ev.proj;});
-        const lastEn=evs.length?Math.max.apply(null,evs.map(function(e){return e.en;})):510;
+        const lastEn=evs.length?Math.max.apply(null,evs.map(function(e){return e.en;})):_pmcsEn;
         const baseSt=Math.min(1105,lastEn+(evs.length?DRIVE_BUF:0)), baseEn=Math.min(1140,baseSt+30);
         h+='<div class="st-grid day">'+lab
           +'<div><div class="st-tl" style="height:'+tlH+'px;">'
-          +now+_stAuxBlock('🧰 PMCS & Load-up',480,510,7)
+          +now+_stAuxBlock('🧰 PMCS & Load-up',_pmcsSt,_pmcsEn,7)
           +evs.map(function(ev){ return _stBlockEv(ev.b,ev.st,ev.en,7+ev.lane*42,ev.proj); }).join('')
           +_stAuxBlock('🏠 Base & unload',baseSt,baseEn,7)+'</div>'
           +(hasProj?'<div style="font-size:10.5px;color:var(--dim);padding:3px 2px 0;">┅ dashed = projected · push times from /invoice, or reorder below</div>':'')
@@ -1937,6 +1961,18 @@ function _crewRate(c,zi){
   return 50;
 }
 function setCrewRate(zi,c,v){ try{ const r=JSON.parse(localStorage.getItem(CREWRATE_KEY)||'{}'); r[zi+'|'+c]=Math.max(1,parseFloat(v)||50); localStorage.setItem(CREWRATE_KEY,JSON.stringify(r)); }catch(e){} try{ if(document.activeElement) document.activeElement.blur(); }catch(e){} renderDispatch(); toast('💲 '+((_bizLoad()[zi]||{}).n||'')+' Crew '+c+' rate saved'); }
+function _crewShift(c){
+  // Actual shift bracket for a crew today: earliest clock-in; clock-out (lastSeen) only once the whole crew is off.
+  let ci=null, out=null, anyActive=false, hasMember=false;
+  (_crews||[]).forEach(function(x){
+    const set=String(x.crew||'').toUpperCase().split(/[^A-Z0-9]+/);
+    if(set.indexOf(c)<0) return; hasMember=true;
+    if(x.clockIn){ const d=new Date(x.clockIn); if(!isNaN(d)&&(!ci||d<ci)) ci=d; }
+    if(String(x.active)==='0'){ const t=x.clockOut||x.lastSeen; if(t){ const d=new Date(t); if(!isNaN(d)&&(!out||d>out)) out=d; } }
+    else anyActive=true;
+  });
+  return { clockIn:ci, clockOut:(hasMember&&!anyActive)?out:null, active:anyActive };
+}
 function _crewWorkedHrs(c){
   let best=0;
   (_crews||[]).forEach(function(x){
