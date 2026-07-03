@@ -1786,7 +1786,7 @@
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-end;">
           <div class="route-cp-field" style="flex:0 0 auto;">
             <label for="routeStartTime" style="font-size:11px;">🕗 Start</label>
-            <input type="time" id="routeStartTime" value="08:00" style="width:118px;">
+            <input type="time" id="routeStartTime" value="07:00" style="width:118px;">
           </div>
           <div class="route-cp-field addr-wrap" style="flex:1;min-width:200px;">
             <label for="routeStartAddr" style="font-size:11px;">📍 Starting from <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
@@ -8104,6 +8104,22 @@ function buildCrewStopsHtml(dateStr, crew, orderedStops, startTimeStr, startVal)
       </div>`;
   }
 
+  // 🧰 End-of-day unload / wrap-up at base — mirror of the 30-min morning load-up.
+  // Advances the projected finish so "Done by" reflects when the crew is truly wrapped up.
+  cursor = new Date(cursor.getTime() + 30*60000);
+  if (startVal) {
+    html += `<div class="route-stop" style="margin-bottom:12px;">
+      <div class="route-stop-controls"></div>
+      <div class="route-stop-badge" style="background:#374151;">🧰</div>
+      <div class="route-stop-card" style="border-color:#e2e8f0;">
+        <div class="route-stop-header">
+          <div class="route-stop-name" style="color:#374151;">Unload / wrap-up</div>
+          <div class="route-stop-time">${cursor.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</div>
+        </div>
+        <div class="route-stop-addr">${esc(startVal)}</div>
+      </div>
+    </div>`;
+  }
   // Finish chip
   const [y2,mo2,d2] = dateStr.split('-').map(Number);
   const dayLabelFin = new Date(y2,mo2-1,d2).toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
