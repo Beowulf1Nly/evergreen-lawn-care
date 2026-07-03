@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-06.5 */
-(function(){ var V='2026-07-06.5'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-06.6 */
+(function(){ var V='2026-07-06.6'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -925,11 +925,16 @@ function render(){
 function payBadge(b){
   const pm=(String(b.payMethod||'')+' '+String(b.calendarEvent||'')).toLowerCase();
   const inv=String(b.invoiced||'').toLowerCase();
+  // already collected
   if(pm.indexOf('✅')>=0||(pm.indexOf('paid')>=0&&pm.indexOf('not paid')<0)||inv.indexOf('paid')>=0) return {t:'Paid',c:'#22c55e'};
   if(pm.indexOf('cash')>=0) return {t:'Cash',c:'#fbbf24'};
   if(inv.indexOf('invoiced')>=0) return {t:'Invoiced',c:'#38bdf8'};
-  if(pm.indexOf('autopay')>=0||pm.indexOf('stripe')>=0) return {t:'Autopay',c:'#38bdf8'};
-  return {t:'Unpaid',c:'#f87171'};
+  // job done but nothing collected → needs attention (also catches a failed autopay charge)
+  if(isDone(b)) return {t:'Unpaid',c:'#f87171'};
+  // still scheduled — show how it WILL be billed. Real autopay only = autopay flag + a card on file;
+  // a card-on-file "pay after" job is Invoice, not Autopay (that mislabel is what you were seeing).
+  if(b.portalAutopay===true && String(b.cardLast4||'').trim()) return {t:'Autopay',c:'#38bdf8'};
+  return {t:'Invoice',c:'#94a3b8'};
 }
 
 // ⚠️ Completed-but-unpaid jobs today — the crew finished & moved on, but the charge/invoice
