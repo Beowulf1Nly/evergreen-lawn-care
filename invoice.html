@@ -10519,15 +10519,27 @@ function _dispDateOf(b) {
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
 
-function _crewDayCap(jobs){
-  var LOAD=30, UNLOAD=30, DRIVE=15, WINDOW=(DISP_END-DISP_START)*60;
+function _crewDayCap(jobs, dateStr){
+  var LOAD=30, UNLOAD=30, DRIVE=15, DAYSTART=DISP_START*60, DAYEND=DISP_END*60, WINDOW=DAYEND-DAYSTART;
   var arr=jobs||[], n=arr.length;
-  if(!n) return {n:0, endRel:0, over:false, room:WINDOW, more:99};
+  if(!n) return {n:0, endRel:0, over:false, room:WINDOW, more:99, live:false, remaining:0};
+  var _now=new Date();
+  var todayStr=_now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0')+'-'+String(_now.getDate()).padStart(2,'0');
+  var isToday=(dateStr===todayStr);
+  var remaining=arr.filter(function(b){ return !isDone(b); }); var rem=remaining.length;
+  var nowMin=_now.getHours()*60+_now.getMinutes();
+  if(isToday && rem>0 && nowMin>DAYSTART+LOAD){
+    // LIVE scaling: project the REMAINING stops from right now — if the crew's behind, the finish slides later.
+    var remWork=0; remaining.forEach(function(b){ remWork += _dispMowMin(b); });
+    var endAbs=nowMin + DRIVE + remWork + Math.max(0,rem-1)*DRIVE + UNLOAD;
+    var room=DAYEND-endAbs, avg=(remWork/rem)+DRIVE;
+    return {n:n, endRel:endAbs-DAYSTART, over:endAbs>DAYEND, room:room, more:(room>0?Math.floor(room/(avg||40)):0), live:true, remaining:rem};
+  }
+  // STATIC full-day estimate (future days, or before the shift starts)
   var work=0; arr.forEach(function(b){ work += _dispMowMin(b); });
-  var endRel = LOAD + work + Math.max(0,n-1)*DRIVE + UNLOAD;
-  var room = WINDOW - endRel;
-  var avg = (work/n) + DRIVE;
-  return {n:n, endRel:endRel, over:endRel>WINDOW, room:room, more:(room>0?Math.floor(room/(avg||40)):0)};
+  var endRel=LOAD + work + Math.max(0,n-1)*DRIVE + UNLOAD;
+  var room=WINDOW-endRel, avg=(work/n)+DRIVE;
+  return {n:n, endRel:endRel, over:endRel>WINDOW, room:room, more:(room>0?Math.floor(room/(avg||40)):0), live:false, remaining:rem};
 }
 function renderDispatchBoard() {
   var dateStr  = document.getElementById('dispatchDate') ? document.getElementById('dispatchDate').value : '';
@@ -10592,7 +10604,7 @@ function renderDispatchBoard() {
       }
       resolved.push({b:item.b, start:start, dur:item.dur});
     });
-    var _cap = (k==='Unassigned') ? null : _crewDayCap(crews[k]);
+    var _cap = (k==='Unassigned') ? null : _crewDayCap(crews[k], dateStr);
     var cards = resolved.map(function(item) {
       var b     = item.b;
       var ri    = allBookings.indexOf(b);
@@ -10610,7 +10622,11 @@ function renderDispatchBoard() {
     }).join('') || '<div class="dispatch-day-empty">No jobs</div>';
     colsHtml += '<div class="dispatch-day-col" ondragover="_dispDragOver(event)" ondragleave="_dispDragLeave(event)" ondrop="_dispDropDayCrew(event,\'' + k + '\')">'
       + '<div class="dispatch-day-col-hdr"><span class="dispatch-day-col-name">' + lbl + '</span><span class="dispatch-day-col-count">' + crews[k].length + ' job' + (crews[k].length!==1?'s':'') + '</span></div>'
-      + (_cap ? ('<div style="font-size:11px;font-weight:700;padding:1px 6px 6px;color:'+(_cap.over?'#dc2626':'#15803d')+';">'+(_cap.over?('⚠ Full · done ~'+_dispFmtTime(_cap.endRel)+' · over '+Math.abs(Math.round(_cap.room))+'m'):('✓ Room till '+_dispFmtTime(_cap.endRel)+' · ~'+_cap.more+' more fit'))+'</div>') : '')
+      + (_cap ? ('<div style="font-size:11px;font-weight:700;padding:1px 6px 6px;color:'+(_cap.over?'#dc2626':'#15803d')+';">'
+          +(_cap.live
+              ? ((_cap.over?'🔴 Behind — done ~':'🔴 On pace — done ~')+_dispFmtTime(_cap.endRel)+(_cap.over?(' · '+Math.abs(Math.round(_cap.room))+'m past 7 PM'):''))
+              : (_cap.over?('⚠ Full · done ~'+_dispFmtTime(_cap.endRel)+' · over '+Math.abs(Math.round(_cap.room))+'m'):('✓ Room till '+_dispFmtTime(_cap.endRel)+' · ~'+_cap.more+' more fit')))
+          +'</div>') : '')
       + '<div class="dispatch-day-col-body">' + cards + '</div>'
       + '</div>';
   });
@@ -10621,13 +10637,13 @@ function renderDispatchBoard() {
     var WINDOW=(DISP_END-DISP_START)*60;
     var _lbl=function(k){ return k==='A'?'Crew A':k==='B'?'Crew B':('Crew '+k); };
     var _real=crewOrder.filter(function(k){ return k!=='Unassigned' && crews[k] && crews[k].length; });
-    var caps={}; _real.forEach(function(k){ caps[k]=_crewDayCap(crews[k]); });
+    var caps={}; _real.forEach(function(k){ caps[k]=_crewDayCap(crews[k], dateStr); });
     var _dt=new Date(dateStr+'T12:00'); var dow=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][_dt.getDay()];
     var _covers=function(k,z){ try{ return (_getCrewDayZones(k,dow)||[]).some(function(e){ return e.zone===z; }); }catch(e){ return false; } };
     var msgs=[];
     _real.forEach(function(k){
       if(!caps[k].over) return;
-      var jobs=crews[k]; var job=jobs[jobs.length-1]; var ri=allBookings.indexOf(job);
+      var jobs=crews[k].filter(function(b){ return !isDone(b); }); if(!jobs.length) return; var job=jobs[jobs.length-1]; var ri=allBookings.indexOf(job);
       var jz=job.zone||getZoneFromZip(job.zip)||''; var jdur=_dispMowMin(job)+15;
       var cand=_real.filter(function(t){ return t!==k && (caps[t].endRel+jdur)<=WINDOW; });
       cand.sort(function(a,b){
