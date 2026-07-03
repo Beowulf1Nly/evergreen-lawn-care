@@ -10519,6 +10519,16 @@ function _dispDateOf(b) {
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
 
+function _crewDayCap(jobs){
+  var LOAD=30, UNLOAD=30, DRIVE=15, WINDOW=(DISP_END-DISP_START)*60;
+  var arr=jobs||[], n=arr.length;
+  if(!n) return {n:0, endRel:0, over:false, room:WINDOW, more:99};
+  var work=0; arr.forEach(function(b){ work += _dispMowMin(b); });
+  var endRel = LOAD + work + Math.max(0,n-1)*DRIVE + UNLOAD;
+  var room = WINDOW - endRel;
+  var avg = (work/n) + DRIVE;
+  return {n:n, endRel:endRel, over:endRel>WINDOW, room:room, more:(room>0?Math.floor(room/(avg||40)):0)};
+}
 function renderDispatchBoard() {
   var dateStr  = document.getElementById('dispatchDate') ? document.getElementById('dispatchDate').value : '';
   var crewFilt = document.getElementById('dispatchCrewFilter') ? document.getElementById('dispatchCrewFilter').value : 'all';
@@ -10560,7 +10570,6 @@ function renderDispatchBoard() {
   var crewOrder = ['A','B'].concat(Object.keys(crews).filter(function(k){return k!=='A'&&k!=='B';}));
 
   var colsHtml = '';
-  var _capResolved = {};                 // per-crew resolved schedule → capacity check below
   crewOrder.forEach(function(k) {
     if (!crews[k]) return;
     var lbl = k==='A'?'🔵 Crew A':k==='B'?'🩷 Crew B':k==='Unassigned'?'⬜ Unassigned':esc(k);
@@ -10583,7 +10592,7 @@ function renderDispatchBoard() {
       }
       resolved.push({b:item.b, start:start, dur:item.dur});
     });
-    _capResolved[k] = resolved;         // for the capacity-overflow suggestion
+    var _cap = (k==='Unassigned') ? null : _crewDayCap(crews[k]);
     var cards = resolved.map(function(item) {
       var b     = item.b;
       var ri    = allBookings.indexOf(b);
@@ -10601,43 +10610,42 @@ function renderDispatchBoard() {
     }).join('') || '<div class="dispatch-day-empty">No jobs</div>';
     colsHtml += '<div class="dispatch-day-col" ondragover="_dispDragOver(event)" ondragleave="_dispDragLeave(event)" ondrop="_dispDropDayCrew(event,\'' + k + '\')">'
       + '<div class="dispatch-day-col-hdr"><span class="dispatch-day-col-name">' + lbl + '</span><span class="dispatch-day-col-count">' + crews[k].length + ' job' + (crews[k].length!==1?'s':'') + '</span></div>'
+      + (_cap ? ('<div style="font-size:11px;font-weight:700;padding:1px 6px 6px;color:'+(_cap.over?'#dc2626':'#15803d')+';">'+(_cap.over?('⚠ Full · done ~'+_dispFmtTime(_cap.endRel)+' · over '+Math.abs(Math.round(_cap.room))+'m'):('✓ Room till '+_dispFmtTime(_cap.endRel)+' · ~'+_cap.more+' more fit'))+'</div>') : '')
       + '<div class="dispatch-day-col-body">' + cards + '</div>'
       + '</div>';
   });
-  // ⚖️ CAPACITY OVERFLOW — when a crew's day runs past 7 PM, suggest an owner-confirmed move
-  // of the overflow job to a crew that still has room (same zone preferred). Never auto-applied.
+  // ⚖️ CAPACITY (accurate: 7am + load-up + jobs + drive + unload vs 7 PM). Overflow job is suggested
+  // to the crew SCHEDULED to cover that zone this weekday (your zoneSchedule targeting), else least-loaded.
   var _capBanner = '';
   (function(){
-    var _UNLOAD = 30, _DRIVE = 15;
-    var _lbl = function(k){ return k==='A'?'Crew A':k==='B'?'Crew B':('Crew '+k); };
-    var _real = crewOrder.filter(function(k){ return k!=='Unassigned' && _capResolved[k] && _capResolved[k].length; });
-    var _end = {};
-    _real.forEach(function(k){ var r=_capResolved[k]; _end[k] = r[r.length-1].start + r[r.length-1].dur + _UNLOAD; });
-    var msgs = [];
+    var WINDOW=(DISP_END-DISP_START)*60;
+    var _lbl=function(k){ return k==='A'?'Crew A':k==='B'?'Crew B':('Crew '+k); };
+    var _real=crewOrder.filter(function(k){ return k!=='Unassigned' && crews[k] && crews[k].length; });
+    var caps={}; _real.forEach(function(k){ caps[k]=_crewDayCap(crews[k]); });
+    var _dt=new Date(dateStr+'T12:00'); var dow=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][_dt.getDay()];
+    var _covers=function(k,z){ try{ return (_getCrewDayZones(k,dow)||[]).some(function(e){ return e.zone===z; }); }catch(e){ return false; } };
+    var msgs=[];
     _real.forEach(function(k){
-      if (_end[k] <= DISP_TOTAL) return;                       // fits by 7 PM — no problem
-      var r = _capResolved[k]; var last = r[r.length-1];
-      var job = last.b; var ri = allBookings.indexOf(job);
-      var jz = job.zone || getZoneFromZip(job.zip) || '';
-      var cand = _real.filter(function(t){ return t!==k && (_end[t] + _DRIVE + last.dur + _UNLOAD) <= DISP_TOTAL; });
+      if(!caps[k].over) return;
+      var jobs=crews[k]; var job=jobs[jobs.length-1]; var ri=allBookings.indexOf(job);
+      var jz=job.zone||getZoneFromZip(job.zip)||''; var jdur=_dispMowMin(job)+15;
+      var cand=_real.filter(function(t){ return t!==k && (caps[t].endRel+jdur)<=WINDOW; });
       cand.sort(function(a,b){
-        var za = _capResolved[a].some(function(x){ return (x.b.zone||getZoneFromZip(x.b.zip)||'')===jz; })?0:1;
-        var zb = _capResolved[b].some(function(x){ return (x.b.zone||getZoneFromZip(x.b.zip)||'')===jz; })?0:1;
-        if (za!==zb) return za-zb;                             // same-zone crew first
-        return _end[a]-_end[b];                                // then least-loaded
+        var ca=_covers(a,jz)?0:1, cb=_covers(b,jz)?0:1; if(ca!==cb) return ca-cb;
+        return caps[a].endRel-caps[b].endRel;
       });
-      var t = cand[0], endStr = _dispFmtTime(_end[k]);
-      if (t) {
+      var t=cand[0], endStr=_dispFmtTime(caps[k].endRel);
+      if(t){
         msgs.push('<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:5px 0;">'
-          + '<span>⚠️ <b>'+_lbl(k)+'</b> runs past 7 PM (done ~'+endStr+'). Move <b>'+esc(job.name||'a job')+'</b> → <b>'+_lbl(t)+'</b>'+(jz?' (same '+esc(jz)+')':'')+'?</span>'
-          + (ri>=0?'<button onclick="assignCrew('+ri+',\''+t+'\')" style="background:#1a3a1a;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">✅ Confirm move to '+_lbl(t)+'</button>':'')
-          + '</div>');
+          +'<span>⚠️ <b>'+_lbl(k)+'</b> runs past 7 PM (done ~'+endStr+'). Move <b>'+esc(job.name||'a job')+'</b> → <b>'+_lbl(t)+'</b>'+(_covers(t,jz)?' (covers '+esc(jz)+' '+dow+')':(jz?' (same '+esc(jz)+')':''))+'?</span>'
+          +(ri>=0?'<button onclick="assignCrew('+ri+',\''+t+'\')" style="background:#1a3a1a;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">✅ Confirm move to '+_lbl(t)+'</button>':'')
+          +'</div>');
       } else {
-        msgs.push('<div style="margin:5px 0;">⚠️ <b>'+_lbl(k)+'</b> runs past 7 PM (done ~'+endStr+') and no other crew has room today — consider rescheduling a job to another day.</div>');
+        msgs.push('<div style="margin:5px 0;">⚠️ <b>'+_lbl(k)+'</b> runs past 7 PM (done ~'+endStr+') and no other crew has room — reschedule a job to another day.</div>');
       }
     });
-    if (msgs.length) _capBanner = '<div style="background:#fff8e1;border:1.5px solid #fde047;border-radius:10px;padding:11px 14px;margin-bottom:14px;font-size:13px;color:#78350f;">'
-      + '<div style="font-weight:800;margin-bottom:2px;">⚖️ Capacity check — suggestions only, you confirm every move</div>' + msgs.join('') + '</div>';
+    if(msgs.length) _capBanner='<div style="background:#fff8e1;border:1.5px solid #fde047;border-radius:10px;padding:11px 14px;margin-bottom:14px;font-size:13px;color:#78350f;">'
+      +'<div style="font-weight:800;margin-bottom:2px;">⚖️ Capacity — suggestions only, you confirm every move</div>'+msgs.join('')+'</div>';
   })();
   var rowsEl = document.getElementById('dispatchBoardRows');
   if (rowsEl) rowsEl.innerHTML = _capBanner + '<div class="dispatch-day-cols">' + colsHtml + '</div>';
