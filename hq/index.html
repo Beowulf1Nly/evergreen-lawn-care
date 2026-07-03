@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
+<link rel="preconnect" href="https://script.google.com"/><link rel="preconnect" href="https://script.googleusercontent.com"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <title>Evergreen — HQ</title>
 <meta name="robots" content="noindex,nofollow"/>
@@ -1569,10 +1570,14 @@ function _ensureDayRoute(iso){
   const rec0=_dispRoute[iso];
   const pushPending=Object.keys(_dayPushTimers||{}).some(function(k){ return k.indexOf('|'+iso)>=0&&_dayPushTimers[k]; });
   if(rec0&&(rec0.loading||pushPending||Date.now()-(rec0.at||0)<20000)) return;   // fresh enough / busy
-  _dispRoute[iso]={ times:{}, order:{}, loading:true, at:Date.now() };
+  // Stale-while-revalidate: KEEP the previous order/times while the refetch runs.
+  // Blanking them here made every render between expiry and fetch-completion fall
+  // back to jobTime order — new appointments visibly jumped around every 20s.
+  _dispRoute[iso]={ times:(rec0&&rec0.times)||{}, order:(rec0&&rec0.order)||{}, loading:true, at:Date.now() };
   fetch(SCRIPT_URL+'?action=get_route&date='+iso+'&adminToken='+encodeURIComponent(token)).then(r=>r.json()).then(function(d){
     const rec=_dispRoute[iso]; rec.loading=false; rec.at=Date.now();
     if(d&&d.success&&Array.isArray(d.routes)){
+      rec.times={}; rec.order={};   // fresh data arrived — replace the carried-over copy
       // newest push wins when stale rows ('' / unassigned crews from older pushes) share stops
       d.routes.slice().sort(function(a,b){ return (new Date(a.updatedAt||0).getTime()||0)-(new Date(b.updatedAt||0).getTime()||0); })
       .forEach(function(rt){
@@ -1619,7 +1624,9 @@ function _dispPC(b){ return _isArch(b)?'#2e7d32':(isDone(b)?'#64748b':(String(b.
 function _jobSort(a,b){
   const ord=_savedOrderFor(String(a.crew||''));
   if(ord.length){ let pa=ord.indexOf(_svKey(a)), pb=ord.indexOf(_svKey(b)); pa=pa<0?9999:pa; pb=pb<0?9999:pb; if(pa!==pb) return pa-pb; }
-  const x=a.jobTime||'99:99', y=b.jobTime||'99:99'; return x<y?-1:x>y?1:0;
+  const x=a.jobTime||'99:99', y=b.jobTime||'99:99'; if(x!==y) return x<y?-1:1;
+  // deterministic final tiebreaker — equal-key jobs must never swap between renders
+  const ka=_svKey(a), kb=_svKey(b); return ka<kb?-1:ka>kb?1:0;
 }
 function _activeCrews(rangeJobs){
   const s={}; (rangeJobs||_dispJobs()).forEach(function(b){ const c=String(b.crew||'').toUpperCase().trim(); if(c) s[c]=1; });
@@ -1758,7 +1765,7 @@ function renderDispatch(){
         // Jobs WITHOUT a set time get PROJECTED onto the lane in run order (dashed),
         // starting 8:00 or after the last placed job, with drive buffer between stops.
         const evs=timed.map(function(b){ const t=_dayTimeOf(b,iso).split(':'); const st2=(+t[0])*60+(+t[1]||0); return {b:b,st:st2,en:st2+_jobMins(b),proj:false}; }).sort(function(a,b2){ return a.st-b2.st||a.en-b2.en; });
-        let cursor=480;                                                   // projected day starts 8:00
+        let cursor=510;                                                   // projected day starts 8:30 — first 30 min is 🧰 PMCS & load-up
         untimed.forEach(function(b,ui){
           const dur=_jobMins(b);
           let st2=cursor+((evs.length||ui)?DRIVE_BUF:0);
@@ -1778,9 +1785,13 @@ function renderDispatch(){
         let now='';
         if(iso===todayIso){ const n=new Date(); const mins=n.getHours()*60+n.getMinutes(); if(mins>=420&&mins<=1140) now='<div class="st-nowline" style="left:'+(((mins-420)/720)*100)+'%"></div>'; }
         const hasProj=evs.some(function(ev){return ev.proj;});
+        const lastEn=evs.length?Math.max.apply(null,evs.map(function(e){return e.en;})):510;
+        const baseSt=Math.min(1105,lastEn+(evs.length?DRIVE_BUF:0)), baseEn=Math.min(1140,baseSt+30);
         h+='<div class="st-grid day">'+lab
           +'<div><div class="st-tl" style="height:'+tlH+'px;">'
-          +now+evs.map(function(ev){ return _stBlockEv(ev.b,ev.st,ev.en,7+ev.lane*42,ev.proj); }).join('')+'</div>'
+          +now+_stAuxBlock('🧰 PMCS & Load-up',480,510,7)
+          +evs.map(function(ev){ return _stBlockEv(ev.b,ev.st,ev.en,7+ev.lane*42,ev.proj); }).join('')
+          +_stAuxBlock('🏠 Base & unload',baseSt,baseEn,7)+'</div>'
           +(hasProj?'<div style="font-size:10.5px;color:var(--dim);padding:3px 2px 0;">┅ dashed = projected · push times from /invoice, or reorder below</div>':'')
           +_dayOrderPanel(c,iso,cell)
           +_econStrip(c,cell,iso,null,zi)
@@ -1942,6 +1953,11 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
     +live+'</div>';
 }
 
+function _stAuxBlock(label,stMin,enMin,top){
+  const left=Math.max(0,Math.min(98,((stMin-420)/720)*100));
+  const width=Math.max(2,Math.min(100-left,((enMin-stMin)/720)*100));
+  return '<div class="st-block" style="left:'+left+'%;width:'+width+'%;top:'+top+'px;opacity:.55;background:rgba(245,158,11,.14);border:1.5px dashed rgba(245,158,11,.6);color:#fbbf24;pointer-events:none;" title="'+esc(label)+' · '+_t12(stMin)+'–'+_t12(enMin)+'">'+esc(label)+'<span class="bt2">'+_t12(stMin)+'–'+_t12(enMin)+'</span></div>';
+}
 function _stBlockEv(b,stMin,enMin,top,proj){
   const arch=_isArch(b), done=isDone(b)||arch, zone=_zoneOf(b);
   const left=Math.max(0,Math.min(98,((stMin-420)/720)*100));
