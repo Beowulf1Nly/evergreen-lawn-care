@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-06.3 */
-(function(){ var V='2026-07-06.3'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-06.4 */
+(function(){ var V='2026-07-06.4'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -768,6 +768,15 @@ function enterApp(){
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{ maxZoom:19 }).addTo(map);
     setTimeout(function(){ try{ map.invalidateSize(); }catch(e){} }, 300);
   }
+  // ⚡ Instant paint (stale-while-revalidate): show the last data we saw immediately, then refresh
+  // in the background. Apps Script calls are 2–6s each; this makes HQ feel instant on every open.
+  try{
+    const _cb=JSON.parse(localStorage.getItem('hq_cache_bookings')||'null');
+    if(Array.isArray(_cb)&&_cb.length) _bookings=_fixTimes(_cb);
+    const _cc=JSON.parse(localStorage.getItem('hq_cache_crews')||'null');
+    if(Array.isArray(_cc)) _crews=_cc;
+    if((_bookings&&_bookings.length)||(_crews&&_crews.length)){ render(); const _rs=document.getElementById('refreshState'); if(_rs) _rs.innerHTML='<span class="pdot" style="background:#fbbf24"></span>updating…'; }
+  }catch(e){}
   refresh(true);
   // Throttled + in-flight-guarded polling. HQ used to fan out enough parallel
   // Apps Script calls to trip Google's simultaneous-execution limit — requests
@@ -811,7 +820,7 @@ async function refreshStatus(){
   try{
     const st=await fetch(SCRIPT_URL+'?action=get_field_status&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null);
     _statusBad=!(st&&st.success);
-    if(st&&st.success) _crews=(st.crews||[]).filter(c=>c.staleMin<=720);
+    if(st&&st.success){ _crews=(st.crews||[]).filter(c=>c.staleMin<=720); try{ localStorage.setItem('hq_cache_crews', JSON.stringify(_crews)); }catch(e){} }
     render();
     rb.innerHTML='<span class="pdot"></span>live · '+new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
   }catch(e){ rb.innerHTML='<span class="pdot" style="background:#f87171"></span>offline'; }
@@ -839,7 +848,7 @@ function _fixTimes(list){
 async function refreshBookings(){
   try{
     const bk=await fetch(SCRIPT_URL+'?action=bookings&includeCompleted=false&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null);
-    if(bk&&bk.success&&Array.isArray(bk.bookings)){ _bookings=_applyPending(_fixTimes(bk.bookings)); render(); }
+    if(bk&&bk.success&&Array.isArray(bk.bookings)){ _bookings=_applyPending(_fixTimes(bk.bookings)); try{ localStorage.setItem('hq_cache_bookings', JSON.stringify(_bookings)); }catch(e){} render(); }
   }catch(e){}
 }
 async function refresh(force){ await Promise.all([refreshRouteOrder(), refreshStatus(), (force||!_bookings.length)?refreshBookings():Promise.resolve()]); }
