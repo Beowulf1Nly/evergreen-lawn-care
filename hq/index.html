@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-06.4 */
-(function(){ var V='2026-07-06.4'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-06.5 */
+(function(){ var V='2026-07-06.5'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -501,6 +501,8 @@
     <div class="kpi" style="--kc:#f87171"><div class="kico">⚠️</div><div class="kn" id="sUnassigned">—</div><div class="kl">Unassigned</div></div>
   </div>
 
+  <div id="unpaidAlert" style="display:none;"></div>
+
   <div class="grid">
     <div class="colL">
       <div class="panel map-panel">
@@ -873,6 +875,7 @@ function todaysJobs(){ const t=todayISO(); return (_bookings||[]).filter(functio
 
 function render(){
   const todays=todaysJobs();
+  _renderUnpaidAlert(todays);
   const doneN=todays.filter(isDone).length;
   document.getElementById('sDone').textContent=doneN;
   document.getElementById('sLeft').textContent=todays.length-doneN;
@@ -927,6 +930,25 @@ function payBadge(b){
   if(inv.indexOf('invoiced')>=0) return {t:'Invoiced',c:'#38bdf8'};
   if(pm.indexOf('autopay')>=0||pm.indexOf('stripe')>=0) return {t:'Autopay',c:'#38bdf8'};
   return {t:'Unpaid',c:'#f87171'};
+}
+
+// ⚠️ Completed-but-unpaid jobs today — the crew finished & moved on, but the charge/invoice
+// didn't go through (usually a choked sync). Surfaces it so the owner can collect.
+function _unpaidDone(list){
+  return (list||[]).filter(function(b){ return isDone(b) && !b.rowCancelled && amtOf(b)>0 && payBadge(b).t==='Unpaid'; });
+}
+function _renderUnpaidAlert(todays){
+  const el=document.getElementById('unpaidAlert'); if(!el) return;
+  const u=_unpaidDone(todays||todaysJobs());
+  if(!u.length){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display='';
+  el.innerHTML='<div style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.4);border-radius:12px;padding:12px 16px;margin:0 20px 10px;">'
+    +'<div style="font-weight:800;font-size:13px;margin-bottom:6px;color:#fca5a5;">⚠️ '+u.length+' completed job'+(u.length!==1?'s':'')+' today not paid yet — crew moved on, but this still needs collecting:</div>'
+    +u.map(function(b){ return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;margin:4px 0;color:var(--text);">'
+        +'<b>'+esc(b.name||'Customer')+'</b><span style="color:var(--muted);">'+(b.crew?' · Crew '+esc(b.crew):'')+' · $'+amtOf(b).toFixed(0)+'</span>'
+        +'<a href="/invoice" target="_blank" style="margin-left:auto;background:#1a3a1a;color:#fff;text-decoration:none;border-radius:8px;padding:5px 11px;font-size:12px;font-weight:700;">Charge / invoice →</a>'
+      +'</div>'; }).join('')
+    +'</div>';
 }
 
 /* ── Today's Jobs work list (right panel) ── */
