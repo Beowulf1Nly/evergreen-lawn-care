@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-06.5 */
+/* APP_VER:2026-07-06.6 */
 (function(){
-  var V='2026-07-06.5'; window.__APP_VER=V;
+  var V='2026-07-06.6'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1607,7 +1607,22 @@ window.addEventListener('focus', function(){ _fmResume(); });
 
 
 /* ═══════════ QUOTE CLOSER — a quote visit ends in an OUTCOME, not a payment ═══════════ */
-function _isQuoteJob(bk){ const t=(String(bk.frequency||'')+' '+String(bk.service||bk.serviceType||'')+' '+String(bk.price||'')+' '+String(bk.notes||'')+' '+String(bk.payMethod||'')).toLowerCase(); return t.indexOf('quote')>=0; }
+function _isQuoteJob(bk){
+  // STRICT quote detection. The old version scanned the whole notes blob for the
+  // word "quote" — so a real job whose notes said "Booked at quote visit" was
+  // treated as a quote forever. Only true quote markers count now:
+  const f=String(bk.frequency||'').toLowerCase();
+  const s=String(bk.service||bk.serviceType||'').toLowerCase();
+  const p=String(bk.price||'').toLowerCase();
+  const pm=String(bk.payMethod||'').toLowerCase();
+  const n=String(bk.notes||'').toLowerCase();
+  if(f.indexOf('quote')>=0) return true;          // frequency: "Quote Visit"
+  if(s.indexOf('quote')>=0) return true;          // service column says quote
+  if(p.indexOf('quote')>=0) return true;          // price: "Quote requested"
+  if(pm==='quote') return true;
+  if(n.indexOf('[quote request]')>=0) return true; // website marker only — NOT "booked at quote visit"
+  return false;
+}
 let _qjBk=null, _qjEditMode=false;
 let _qjNotesStore={}; try{ _qjNotesStore=JSON.parse(localStorage.getItem('evg_qj_notes')||'{}'); }catch(e){}
 function _qjNoteSave(){ try{ if(!_qjBk) return; _qjNotesStore[_stopKey(_qjBk)]=document.getElementById('qjNotes').value; localStorage.setItem('evg_qj_notes',JSON.stringify(_qjNotesStore)); }catch(e){} }
