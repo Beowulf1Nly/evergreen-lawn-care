@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-06.2 */
+/* APP_VER:2026-07-06.3 */
 (function(){
-  var V='2026-07-06.2'; window.__APP_VER=V;
+  var V='2026-07-06.3'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -969,7 +969,7 @@ function _fmRenderRouteSetup(){
 const FM_QUEUE_KEY='evg_fm_sync_queue_v2', FM_DONEKEYS_KEY='evg_fm_done_keys_v1';
 let _fmFlushing=false;
 function _fmQueueLoad(){ try{ return JSON.parse(localStorage.getItem(FM_QUEUE_KEY)||'[]'); }catch(e){ return []; } }
-function _fmQueueSave(q){ try{ localStorage.setItem(FM_QUEUE_KEY, JSON.stringify(q)); }catch(e){} }
+function _fmQueueSave(q){ try{ localStorage.setItem(FM_QUEUE_KEY, JSON.stringify(q)); }catch(e){ try{ showToast('⚠️ Phone storage full — stay online so photos upload right away'); }catch(_e){} } }
 function _fmDoneKeys(){ try{ return new Set(JSON.parse(localStorage.getItem(FM_DONEKEYS_KEY)||'[]')); }catch(e){ return new Set(); } }
 function _fmMarkKeyDone(k){ try{ const s=_fmDoneKeys(); s.add(k); localStorage.setItem(FM_DONEKEYS_KEY, JSON.stringify([...s].slice(-500))); }catch(e){} }
 function _fmEnqueue(item){
@@ -995,6 +995,13 @@ async function _fmFlushQueue(){
         if(item.method==='POST') res=await fetch(SCRIPT_URL,{ method:'POST', body:JSON.stringify(item.body) });
         else res=await fetch(SCRIPT_URL+'?'+new URLSearchParams(item.params).toString());
         if(!res.ok) throw new Error('HTTP '+res.status);
+        if(item.kind==='photo'){
+          // HTTP 200 isn't enough — the backend must confirm the file saved,
+          // otherwise the photo stays queued and keeps retrying (never dropped).
+          let ok=true;
+          try{ const j=JSON.parse(await res.text()); ok=!(j&&j.success===false); }catch(e){}
+          if(!ok) throw new Error('backend rejected photo');
+        }
         _fmMarkKeyDone(item.idemKey); q.shift(); _fmQueueSave(q);
       }catch(netErr){
         item.tries=(item.tries||0)+1;
@@ -1408,7 +1415,32 @@ function _fmcUpdateSubmit(){
   const last=_fmIsFinalOpenStop(); // last OPEN stop, not last by position (skipped stops stay open)
   btn.textContent=ok?(last?'✓ Complete & Finish Route':'✓ Complete & Go to Next House'):(!_fmcPayResolved()?'Take payment to finish':'Finish the checklist');
 }
-function fmPhotoSelected(input){ const file=input.files[0]; if(!file) return; const reader=new FileReader(); reader.onload=e=>{ _fmcPhotos.push({ b64:e.target.result.split(',')[1], fileName:file.name, mimeType:file.type, dataUrl:e.target.result }); _fmcRenderPhotos(); }; reader.readAsDataURL(file); input.value=''; }
+function fmPhotoSelected(input){
+  const file=input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const raw=e.target.result;
+    const fallback=()=>{ _fmcPhotos.push({ b64:raw.split(',')[1], fileName:file.name, mimeType:file.type, dataUrl:raw }); _fmcRenderPhotos(); };
+    const img=new Image();
+    img.onload=function(){
+      try{
+        // Downscale to max 1600px JPEG — a 10MB camera shot becomes ~300KB, so it
+        // uploads fast and never blows the offline queue's localStorage quota.
+        const MAX=1600; let w=img.width,h=img.height;
+        if(w>MAX||h>MAX){ const k=Math.min(MAX/w,MAX/h); w=Math.round(w*k); h=Math.round(h*k); }
+        const c=document.createElement('canvas'); c.width=w; c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        const dataUrl=c.toDataURL('image/jpeg',0.82);
+        if(!dataUrl||dataUrl.length<100) return fallback();
+        _fmcPhotos.push({ b64:dataUrl.split(',')[1], fileName:String(file.name||'photo').replace(/\.[^.]+$/,'')+'.jpg', mimeType:'image/jpeg', dataUrl:dataUrl });
+        _fmcRenderPhotos();
+      }catch(err){ fallback(); }
+    };
+    img.onerror=fallback;
+    img.src=raw;
+  };
+  reader.readAsDataURL(file); input.value='';
+}
 function fmRemovePhoto(i){ _fmcPhotos.splice(i,1); _fmcRenderPhotos(); }
 function _fmcRenderPhotos(){ const list=document.getElementById('fmcPhotoList'); if(!list) return; list.innerHTML=_fmcPhotos.map((p,i)=>'<div class="fm-photo-cell"><img src="'+p.dataUrl+'"><button class="fm-photo-x" onclick="fmRemovePhoto('+i+')">×</button></div>').join(''); const btn=document.getElementById('fmcPhotoBtn'); if(btn) btn.textContent=_fmcPhotos.length?'📷 Add another photo':'📷 Take / Add Photo'; }
 
