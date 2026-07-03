@@ -1452,15 +1452,34 @@ function _fmcRenderPay(){
   const wrap=document.getElementById('fmcPayControls'); const grand=_fmcGrand();
   const state=document.getElementById('fmcPayState');
   const see=_isMoneyRole();
+  const bk=_fmcStop&&_fmcStop.bk; const _l4=bk?String(bk.cardLast4||'').trim():''; const hasCard=!!_l4;
+  // ── On-the-spot method switch — crew can change how THIS job is paid, right now ──
+  const methods=[
+    {k:'cash',   lbl:'💵 Cash'},
+    {k:'autopay',lbl:'💳 Card'+(hasCard?(' ••'+_l4.slice(-4)):''), dis:!hasCard, tip:'No card on file — collect cash or send an invoice'},
+    {k:'invoice',lbl:'🧾 Invoice'}
+  ];
+  const bar='<div style="display:flex;gap:7px;margin-bottom:10px;">'+methods.map(function(m){ const on=_fmcPayType===m.k;
+    return '<button '+(m.dis?('disabled title="'+m.tip+'"'):('onclick="fmcSetMethod(\''+m.k+'\')"'))+' style="flex:1;padding:9px 4px;border-radius:10px;border:1.5px solid '+(on?'#22c55e':'rgba(255,255,255,.15)')+';background:'+(on?'rgba(34,197,94,.16)':'transparent')+';color:'+(m.dis?'#64748b':'#e9edec')+';font-weight:700;font-size:13px;'+(m.dis?'opacity:.5;':'cursor:pointer;')+'">'+m.lbl+'</button>';
+  }).join('')+'</div>';
+  let ctrl='';
   if(_fmcPayType==='autopay'){
-    wrap.innerHTML='<button class="fm-toggle-btn'+(_fmcChargeChosen?' cash-on':'')+'" onclick="fmToggleCharge()">'+(_fmcChargeChosen?('✓ Will charge'+(see?(' $'+grand.toFixed(0)):'')+' to card on complete — tap to undo'):('💳 Charge'+(see?(' $'+grand.toFixed(0)):'')+' to card on file'))+'</button>';
+    ctrl='<button class="fm-toggle-btn'+(_fmcChargeChosen?' cash-on':'')+'" onclick="fmToggleCharge()">'+(_fmcChargeChosen?('✓ Will charge'+(see?(' $'+grand.toFixed(0)):'')+' to card on complete — tap to undo'):('💳 Charge'+(see?(' $'+grand.toFixed(0)):'')+' to card on file'))+'</button>';
   } else if(_fmcPayType==='cash'){
-    wrap.innerHTML='<button class="fm-toggle-btn'+(_fmcCash?' cash-on':'')+'" onclick="fmToggleCash()">'+(_fmcCash?'✓ Collected $'+grand.toFixed(0)+' cash — tap to undo':'💵 Collect $'+grand.toFixed(0)+' cash')+'</button>';
+    ctrl='<button class="fm-toggle-btn'+(_fmcCash?' cash-on':'')+'" onclick="fmToggleCash()">'+(_fmcCash?'✓ Collected $'+grand.toFixed(0)+' cash — tap to undo':'💵 Collect $'+grand.toFixed(0)+' cash')+'</button>';
   } else {
-    wrap.innerHTML='<button class="fm-toggle-btn '+(_fmcInvoiceSent?'sent':'invoice')+'" onclick="fmToggleInvoice()">'+(_fmcInvoiceSent?('✓ Will invoice'+(see?(' $'+grand.toFixed(0)):'')+' on complete — tap to undo'):('🧾 Invoice'+(see?(' $'+grand.toFixed(0)):'')+' on complete →'))+'</button>';
+    ctrl='<button class="fm-toggle-btn '+(_fmcInvoiceSent?'sent':'invoice')+'" onclick="fmToggleInvoice()">'+(_fmcInvoiceSent?('✓ Will invoice'+(see?(' $'+grand.toFixed(0)):'')+' on complete — tap to undo'):('🧾 Invoice'+(see?(' $'+grand.toFixed(0)):'')+' on complete →'))+'</button>';
   }
+  wrap.innerHTML=bar+ctrl;
   if(state){ const ok=_fmcPayResolved(); state.textContent=ok?'✓ done':'required'; state.className=ok?'ok':'req'; }
   _fmcUpdateSubmit();
+}
+function fmcSetMethod(t){
+  if(_fmcPayType===t) return;
+  _fmcPayType=t;
+  _fmcChargeChosen=false; _fmcCash=false; _fmcInvoiceSent=false;
+  if(t==='cash'){ _fmcEndChk['Collected cash']=false; } else if('Collected cash' in _fmcEndChk){ delete _fmcEndChk['Collected cash']; }
+  _fmcRenderAmount(); _fmcRenderPay(); _fmcRenderEndChk();
 }
 function fmToggleCash(){ _fmcCash=!_fmcCash; if('Collected cash' in _fmcEndChk) _fmcEndChk['Collected cash']=_fmcCash; _fmcRenderPay(); _fmcRenderEndChk(); }
 // Payment is only CHOSEN here — the charge/invoice is executed exactly once on
