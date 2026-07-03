@@ -541,6 +541,7 @@
     <div class="disp-wrap">
       <div class="disp-controls">
         <div class="seg"><button id="dvMonth" onclick="setDispView('month')">Month</button><button id="dvWeek" class="on" onclick="setDispView('week')">Week</button><button id="dvDay" onclick="setDispView('day')">Day</button></div>
+        <div class="seg"><button onclick="autoAssign()" style="font-weight:800;">⚡ Auto-assign</button><button onclick="crOpen()">🤖 Crew rules</button></div>
         <div class="disp-nav">
           <button onclick="dispShift(-1)">◀</button>
           <span class="disp-title" id="dispTitle"></span>
@@ -1133,6 +1134,108 @@ function _openArchSheet(b,be){
     +'<button class="ghost" onclick="closeSheet(\'jobSheet\')">Close</button>';
   openSheet('jobSheet');
 }
+/* ═════════ CREW AUTO-ASSIGNMENT — zone → crew rules, per business ═════════
+   Rules live in each business's schedule config (same store as home base), so
+   the BACKEND can stamp crews onto brand-new bookings the second they come in,
+   and HQ's ⚡ Auto-assign sweeps anything that slipped through. */
+const ZONE_LABELS={ Z1:'Crystal River', Z2:'Inverness · Floral City · Hernando', Z3:'Lecanto · Beverly Hills · Homosassa', Z4:'Dunnellon · Citrus Springs', Z5:'Ocala · Marion County' };
+let _crewRulesCache={}, _crBiz=0;
+async function _crLoad(zi){
+  const z=_bizLoad()[zi]; if(!z) return {default:'',zones:{}};
+  try{
+    const d=await bizGet(z,{action:'get_schedule_config'});
+    const cfg=(d&&d.success&&d.config&&typeof d.config==='object')?d.config:{};
+    _crewRulesCache[zi]=(cfg.crewRules&&typeof cfg.crewRules==='object')?{default:cfg.crewRules.default||'',zones:cfg.crewRules.zones||{}}:{default:'',zones:{}};
+  }catch(e){ _crewRulesCache[zi]=_crewRulesCache[zi]||{default:'',zones:{}}; }
+  return _crewRulesCache[zi];
+}
+async function crOpen(){
+  if(!document.getElementById('crSheet')){
+    const o=document.createElement('div');
+    o.id='crSheet';
+    o.style.cssText='display:none;position:fixed;inset:0;z-index:4000;background:rgba(0,0,0,.6);align-items:center;justify-content:center;padding:18px;';
+    o.onclick=function(e){ if(e.target===o) o.style.display='none'; };
+    o.innerHTML='<div style="background:var(--card,#0f2740);border:1px solid rgba(255,255,255,.12);border-radius:18px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto;padding:20px;color:inherit;">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;"><b style="font-size:17px;">🤖 Crew rules — who gets which zone</b><button onclick="document.getElementById(\'crSheet\').style.display=\'none\'" style="background:rgba(255,255,255,.08);border:none;color:inherit;font-size:20px;border-radius:10px;padding:6px 12px;cursor:pointer;">×</button></div>'
+      +'<div style="font-size:12px;opacity:.7;margin-bottom:12px;">New bookings get their crew stamped automatically from these rules (after you redeploy the backends), and ⚡ Auto-assign uses them for anything already unassigned. Leave a zone blank to keep it manual.</div>'
+      +'<div id="crBizChips" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;"></div>'
+      +'<div id="crBody"></div>'
+      +'<button onclick="crSave()" style="width:100%;margin-top:14px;padding:13px;border:none;border-radius:12px;background:#16a34a;color:#fff;font-weight:800;font-size:15px;cursor:pointer;font-family:inherit;">💾 Save rules</button></div>';
+    document.body.appendChild(o);
+  }
+  document.getElementById('crSheet').style.display='flex';
+  await _crLoad(_crBiz);
+  crRender();
+}
+function crRender(){
+  const biz=_bizLoad();
+  document.getElementById('crBizChips').innerHTML=biz.map(function(z,i){
+    return '<button onclick="crSetBiz('+i+')" style="padding:8px 13px;border-radius:999px;border:1.5px solid '+(i===_crBiz?'#38bdf8':'rgba(255,255,255,.2)')+';background:'+(i===_crBiz?'rgba(56,189,248,.15)':'transparent')+';color:inherit;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">'+esc((z.e||'')+' '+(z.n||''))+'</button>';
+  }).join('');
+  const r=_crewRulesCache[_crBiz]||{default:'',zones:{}};
+  const row=function(zone){
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid rgba(255,255,255,.12);border-radius:12px;margin-bottom:8px;">'
+      +'<div style="flex:1;min-width:0;"><b style="font-size:14px;">'+zone+'</b><div style="font-size:11.5px;opacity:.65;">'+(ZONE_LABELS[zone]||'')+'</div></div>'
+      +'<span style="font-size:12px;opacity:.7;">Crew</span>'
+      +'<input id="cr-'+zone+'" maxlength="3" value="'+esc(String(r.zones[zone]||''))+'" placeholder="—" style="width:52px;padding:9px;border-radius:9px;border:1.5px solid rgba(255,255,255,.25);background:transparent;color:inherit;font-weight:800;text-align:center;font-size:15px;text-transform:uppercase;font-family:inherit;">'
+      +'</div>';
+  };
+  document.getElementById('crBody').innerHTML=Object.keys(ZONE_LABELS).map(row).join('')
+    +'<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px dashed rgba(255,255,255,.25);border-radius:12px;margin-top:4px;">'
+    +'<div style="flex:1;"><b style="font-size:14px;">Everything else</b><div style="font-size:11.5px;opacity:.65;">Default crew when the zip has no zone rule</div></div>'
+    +'<span style="font-size:12px;opacity:.7;">Crew</span>'
+    +'<input id="cr-default" maxlength="3" value="'+esc(String(r.default||''))+'" placeholder="—" style="width:52px;padding:9px;border-radius:9px;border:1.5px solid rgba(255,255,255,.25);background:transparent;color:inherit;font-weight:800;text-align:center;font-size:15px;text-transform:uppercase;font-family:inherit;">'
+    +'</div>';
+}
+async function crSetBiz(i){ _crBiz=i; await _crLoad(i); crRender(); }
+async function crSave(){
+  const zi=_crBiz, z=_bizLoad()[zi]; if(!z) return;
+  const rules={ default:String((document.getElementById('cr-default')||{}).value||'').toUpperCase().trim(), zones:{} };
+  Object.keys(ZONE_LABELS).forEach(function(zn){ const v=String((document.getElementById('cr-'+zn)||{}).value||'').toUpperCase().trim(); if(v) rules.zones[zn]=v; });
+  _crewRulesCache[zi]=rules;
+  // merge into the existing schedule config — never clobber home base etc.
+  let cfg={};
+  try{ const cur=await bizGet(z,{action:'get_schedule_config'}); if(cur&&cur.success&&cur.config&&typeof cur.config==='object') cfg=cur.config; }catch(e){}
+  cfg.crewRules=rules;
+  let d=null;
+  try{ d=await fetch(_bizUrl(z),{ method:'POST', body:JSON.stringify({ action:'set_schedule_config', adminToken:_bizTok(z), config:cfg }) }).then(function(r){return r.json();}); }catch(e){}
+  if(!(d&&d.success)){ try{ d=await bizGet(z,{action:'set_schedule_config',config:JSON.stringify(cfg)}); }catch(e){} }
+  toast(d&&d.success?'🤖 Rules saved for '+(z.n||'')+' — ⚡ Auto-assign uses them now':'⚠ '+((d&&d.error)||'could not save'));
+}
+async function autoAssign(){
+  const biz=_bizLoad();
+  for(let i=0;i<biz.length;i++){ if(!_crewRulesCache[i]) await _crLoad(i); }
+  const today=todayISO();
+  const targets=_dispJobs().filter(function(b){ return !isDone(b)&&!b.rowCancelled&&!b._archived&&!String(b.crew||'').trim()&&dateOf(b)>=today; });
+  if(!targets.length){ toast('Nothing unassigned from today forward 🎉'); return; }
+  const plan=[],skipped=[];
+  targets.forEach(function(b){
+    const zi=(b._srcBiz||0);
+    const r=_crewRulesCache[zi]||{default:'',zones:{}};
+    const zone=_zoneOf(b);
+    const crew=String((zone&&r.zones&&r.zones[zone])||r.default||'').toUpperCase().trim();
+    if(crew) plan.push({b:b,crew:crew}); else skipped.push(b);
+  });
+  if(!plan.length){ toast('No rules match — set up 🤖 Crew rules first'); crOpen(); return; }
+  const counts={};
+  plan.forEach(function(p){ const zi=p.b._srcBiz||0; const k=(((_bizLoad()[zi]||{}).e)||'')+' Crew '+p.crew; counts[k]=(counts[k]||0)+1; });
+  const summary=Object.keys(counts).map(function(k){ return '  '+counts[k]+' → '+k; }).join('\n');
+  if(!confirm('⚡ Auto-assign '+plan.length+' unassigned job'+(plan.length>1?'s':'')+' (today onward) by zone:\n\n'+summary+(skipped.length?('\n\n'+skipped.length+' stay unassigned — no rule for their zone'):'')+'\n\nGo?')) return;
+  toast('⚡ Assigning '+plan.length+'…');
+  let ok=0,fail=0;
+  for(const pl of plan){
+    const b=pl.b, be=_jobBE(b);
+    try{
+      const prm=new URLSearchParams({action:'set_crew', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), crew:pl.crew, adminToken:be.t});
+      const d=await(await fetch(be.u+'?'+prm)).json();
+      if(d&&d.success){ ok++; b.crew=pl.crew; _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{crew:pl.crew,ts:Date.now()}); }
+      else fail++;
+    }catch(e){ fail++; }
+  }
+  toast('⚡ '+ok+' assigned'+(fail?(' · '+fail+' failed — try again'):'')+' 👷');
+  render(); renderDispatch(); loadBizBookings(); refreshBookings();
+}
+
 async function doAssign(crew){
   const b=_jobCur; if(!b) return; const be=_jobBE(b); const prev=b.crew||''; b.crew=crew;
   _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{crew:crew,ts:Date.now()});
