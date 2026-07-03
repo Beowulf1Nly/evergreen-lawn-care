@@ -1837,10 +1837,6 @@
             <option value="B">🩷 Crew B</option>
             <option value="unassigned">⬜ Unassigned</option>
           </select>
-          <label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--text-muted);cursor:pointer;white-space:nowrap;">
-            <input type="checkbox" id="routeAutoSync" style="width:14px;height:14px;accent-color:#4285f4;cursor:pointer;">
-            Auto-sync cal
-          </label>
           <button id="routeCalSyncBtn" onclick="syncRouteToCalendar(false)" style="display:none;padding:7px 13px;background:#4285f4;color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;">📅 Sync Calendar</button>
           <button class="route-range-btn" id="routeClearSavedBtn" onclick="clearSavedRoute()" style="display:none;background:#fff1f2;border-color:#fca5a5;color:#dc2626;padding:6px 12px;font-size:12px;">🗑 Clear</button>
           <!-- DEV button: tucked away, minimal -->
@@ -9716,7 +9712,7 @@ async function buildRoute() {
 
     // Show calendar sync button (hidden until a route exists)
     const _calBtn = document.getElementById('routeCalSyncBtn');
-    if (_calBtn && !document.getElementById('routeAutoSync')?.checked) {
+    if (_calBtn) {
       _calBtn.style.display = '';
       _calBtn.disabled = false;
       _calBtn.textContent = '📅 Push to Calendar & HQ';
@@ -9746,12 +9742,8 @@ async function buildRoute() {
     // Store for manual sync button
     _lastCalendarUpdates = calendarUpdates;
 
-    // Auto-sync to Google Calendar if toggled on
-    const autoSync = document.getElementById('routeAutoSync')?.checked;
-    if (autoSync && calendarUpdates.length) {
-      await syncRouteToCalendar(true);
-    } else if (calendarUpdates.length) {
-      // Show the manual sync button
+    // Routes reach the crews ONLY when you click "📅 Push to Calendar & HQ" — never automatically.
+    if (calendarUpdates.length) {
       const calBtn = document.getElementById('routeCalSyncBtn');
       if (calBtn) calBtn.style.display = '';
     }
