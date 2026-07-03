@@ -1038,8 +1038,11 @@ async function _fmFlushQueue(){
         _fmMarkKeyDone(item.idemKey); q.shift(); _fmQueueSave(q);
       }catch(netErr){
         item.tries=(item.tries||0)+1;
-        // photos are irreplaceable — NEVER drop them; other items give up after 12 tries
-        if(item.tries>12&&item.kind!=='photo') q.shift();
+        // Never silently drop money or photos — a stuck invoice/charge/completion = lost revenue.
+        // After 12 tries: drop only non-financial items (notes/checklists); rotate money+photos to
+        // the back so one stuck item can't block the rest, and keep retrying them forever.
+        const _crit=(item.kind==='photo'||item.kind==='done'||item.kind==='invoice'||item.kind==='cash'||item.kind==='addons');
+        if(item.tries>12){ q.shift(); if(_crit) q.push(item); }
         _fmQueueSave(q); break;
       }
     }
