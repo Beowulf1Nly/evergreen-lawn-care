@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-07.2 */
+/* APP_VER:2026-07-07.4 */
 (function(){
-  var V='2026-07-07.2'; window.__APP_VER=V;
+  var V='2026-07-07.4'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1685,6 +1685,11 @@ function ncSubmit(){
   if(!isQuote&&!price){ showToast('Set a price — or pick Quote Visit'); return; }
   if(!confirm('Add '+name+'?\n'+freq+(price?(' · $'+price):'')+' · first visit '+date+'\n'+addr)) return;
   _fmEnqueue({ kind:'newcust', idemKey:'nc:'+_uuid(), method:'GET', params:{ action:'manual_schedule', name:name, email:email, phone:phone, address:addr, zip:zip, frequency:freq, price:price, serviceDate:date, notes:(notes?notes+' — ':'')+'Added on route by '+(adminName||'crew'), payMethod:pay||'card', adminToken:adminToken } });
+  if(!isQuote&&parseFloat(price)>0){
+    // crew sourced AND closed this one on the spot → 80% of the first job
+    const _ncNames=[adminName||'Crew'].concat((_helpers||[]).map(function(h){ return (typeof h==='string')?h:((h&&h.name)||''); })).filter(Boolean);
+    _fmEnqueue({ kind:'comm', idemKey:'cm:nc:'+email+'|'+date, method:'GET', params:{ action:'log_commission', key:'cm:nc:'+email+'|'+date+'|'+name, date:todayISOStr(), names:_ncNames.join(', '), jobName:name, email:email, jobDate:date, base:String(parseFloat(price)), pct:'80', type:'lead + close (80%)', adminToken } });
+  }
   _fmFlushQueue();
   if(date===todayISOStr()){
     const cur=(function(){ try{ const st=_fmStops(); return st[_fmViewIdx]?_stopKey(st[_fmViewIdx].bk):null; }catch(e){ return null; } })();
@@ -1717,6 +1722,21 @@ let _qjNotesStore={}; try{ _qjNotesStore=JSON.parse(localStorage.getItem('evg_qj
 function _qjNoteSave(){ try{ if(!_qjBk) return; _qjNotesStore[_stopKey(_qjBk)]=document.getElementById('qjNotes').value; localStorage.setItem('evg_qj_notes',JSON.stringify(_qjNotesStore)); }catch(e){} }
 function _qjNote(){ try{ return String((document.getElementById('qjNotes')||{}).value||'').trim(); }catch(e){ return ''; } }
 let _qjBookedStore={}; try{ _qjBookedStore=JSON.parse(localStorage.getItem('evg_qj_booked')||'{}'); }catch(e){}
+
+/* ── Commission: 40% for closing an office lead · 80% when the crew sourced it too ── */
+let _qjSourced=false;
+function qjSrcTgl(){ _qjSourced=!_qjSourced; qjRefresh(); }
+function _qjCommNames(){ return [adminName||'Crew'].concat((_helpers||[]).map(function(h){ return (typeof h==='string')?h:((h&&h.name)||''); })).filter(Boolean); }
+function _qjCommLine(firstPrice){
+  const pct=_qjSourced?80:40, names=_qjCommNames();
+  const amt=Math.round(firstPrice*pct)/100;
+  return '\n💰 Commission: '+pct+'% of $'+firstPrice+' = $'+amt.toFixed(2)+(names.length>1?(' — split '+names.length+' ways ($'+(Math.round(amt/names.length*100)/100).toFixed(2)+' each)'):'');
+}
+function _qjLogCommission(base,firstPrice,bk,date){
+  const pct=_qjSourced?80:40, names=_qjCommNames();
+  _fmEnqueue({ kind:'comm', idemKey:'cm:'+base, method:'GET', params:{ action:'log_commission', key:'cm:'+base, date:todayISOStr(), names:names.join(', '), jobName:bk.name||'', email:String(bk.email||'').toLowerCase(), jobDate:date, base:String(firstPrice), pct:String(pct), type:(_qjSourced?'lead + close (80%)':'quote close (40%)'), adminToken } });
+}
+
 function _qjBookedSave(){ try{ localStorage.setItem('evg_qj_booked',JSON.stringify(_qjBookedStore)); }catch(e){} }
 function fmQuoteCloser(bk){
   _qjBk=bk;
@@ -1754,6 +1774,7 @@ function fmQuoteCloser(bk){
   document.getElementById('qjDate').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   document.getElementById('qjPriceOverride').value='';
   const _nEl=document.getElementById('qjNotes'); if(_nEl) _nEl.value=_qjNotesStore[_stopKey(bk)]||'';
+  _qjSourced=/added on route/i.test(String(bk.notes||''));
   const _snap=_qjBookedStore[_stopKey(bk)];
   _qjEditMode=!!(_snap&&isDone(bk));
   if(_qjEditMode&&_snap.qj){ try{ _qj=JSON.parse(JSON.stringify(_snap.qj)); }catch(e){} }
@@ -1800,8 +1821,9 @@ async function qjOutcome(kind){
     }
     const date=document.getElementById('qjDate').value;
     if(!date){ showToast('Pick a start date'); return; }
-    if(!confirm('Book '+(bk.name||'customer')+':\n'+desc+'\n'+(ogNote?('1st cut $'+firstPrice+' (overgrown +$'+ogFee+')'+(_qj.freq!=='onetime'?(' · then $'+price+'/cut'):'')):('$'+price+(_qj.freq!=='onetime'?'/cut':'')))+'\nstarting '+date+'?')) return;
+    if(!confirm('Book '+(bk.name||'customer')+':\n'+desc+'\n'+(ogNote?('1st cut $'+firstPrice+' (overgrown +$'+ogFee+')'+(_qj.freq!=='onetime'?(' · then $'+price+'/cut'):'')):('$'+price+(_qj.freq!=='onetime'?'/cut':'')))+_qjCommLine(firstPrice)+'\nstarting '+date+'?')) return;
     _fmEnqueue({ kind:'quotebook', idemKey:'qb:'+base, method:'GET', params:{ action:'manual_schedule', name:bk.name||'', email:bk.email||'', phone:String(bk.phone||''), address:bk.address||'', zip:String(bk.zip||''), frequency:_qjFreqLabel(), price:String(promo?price:firstPrice), firstMowPromo:(promo?'true':''), firstMowPrice:(promo?String(promoPrice):''), serviceDate:date, notes:'Booked at quote visit — '+desc+ogNote+(ogNote&&_qj.freq!=='onetime'?(' · following cuts $'+price):'')+(_qjNote()?(' | 📝 '+_qjNote()):'')+' — by '+(adminName||'crew'), payMethod:'card', adminToken } });
+    _qjLogCommission(base,firstPrice,bk,date);
     try{ _qjBookedStore[base]={ date:date, email:String(bk.email||'').toLowerCase().trim(), name:bk.name||'', freq:_qjFreqLabel(), price:String(firstPrice), qj:JSON.parse(JSON.stringify(_qj)), override:String((document.getElementById('qjPriceOverride')||{}).value||'') }; _qjBookedSave(); }catch(e){}
     if(date===todayISOStr()){
       _fmAddLocalSameDay({ name:bk.name||'', email:String(bk.email||'').toLowerCase(), phone:String(bk.phone||''), address:bk.address||'', zip:String(bk.zip||''), frequency:_qjFreqLabel(), price:'$'+firstPrice, serviceDate:date, notes:'Booked at quote visit (same-day)', crew:bk.crew||'', jobTime:'', payMethod:'card' }, base);
@@ -1882,6 +1904,9 @@ function qjRenderBuilder(){
     +'<div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 7px;">Schedule</div>'
     +row(recurring,'🔁 Recurring service — repeats on a schedule','',"qjRecTgl()")
     +(recurring?('<div style="display:flex;gap:7px;margin-bottom:7px;">'+seg('weekly','Weekly')+seg('biweekly','Bi-Weekly')+'</div>'):'')
+    +'<div onclick="qjSrcTgl()" style="display:flex;align-items:center;gap:11px;padding:11px 13px;border:1.5px solid '+(_qjSourced?'#f59e0b':'#e2e8f0')+';border-radius:12px;background:'+(_qjSourced?'#fffbeb':'#fff')+';margin:10px 0 4px;cursor:pointer;">'
+    +'<span style="width:23px;height:23px;border-radius:7px;border:2px solid '+(_qjSourced?'#f59e0b':'#cbd5e1')+';background:'+(_qjSourced?'#f59e0b':'#fff')+';color:#fff;font-size:15px;line-height:20px;text-align:center;flex-shrink:0;font-weight:800;">'+(_qjSourced?'✓':'')+'</span>'
+    +'<span style="flex:1;font-size:14px;font-weight:700;">💰 We found this lead ourselves <span style="font-size:11px;color:#94a3b8;font-weight:800;">'+(_qjSourced?'80% commission':'40% — office lead')+'</span></span></div>'
     +'<div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 7px;">First cut</div>'
     +row(_qj.overgrown,'🌾 Overgrown — added to the first cut only',
       _qj.overgrown?('<span onclick="event.stopPropagation();" style="display:inline-flex;align-items:center;gap:4px;font-size:14px;font-weight:800;">+$<input id="qjOgFee" type="number" inputmode="decimal" value="'+_qj.ogFee+'" oninput="qjOgFeeInput(this)" onclick="event.stopPropagation();" style="width:64px;padding:7px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;font-weight:800;text-align:center;font-family:inherit;"></span>'):'',

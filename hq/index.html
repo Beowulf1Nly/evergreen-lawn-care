@@ -573,7 +573,7 @@
   <!-- ═══ OPS — PMCS & checklists ═══ -->
   <div id="pane-ops" class="hq-pane">
     <div class="dev-wrap">
-      <div class="dev-row" style="margin-bottom:10px;"><div class="disp-chips" id="opsBiz"></div><span class="grow"></span><button class="dev-btn" onclick="renderOps(true)">↻ Refresh</button></div>
+      <div class="dev-row" style="margin-bottom:10px;"><div class="disp-chips" id="opsBiz"></div><span class="grow"></span><button class="dev-btn" onclick="commOpen()">💰 Commissions</button><button class="dev-btn" onclick="renderOps(true)">↻ Refresh</button></div>
       <div class="dev-row" style="margin-bottom:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;">
         <span style="font-weight:800;font-size:12px;white-space:nowrap;">🏠 Home base</span>
         <input class="dev-inp" id="opsHomeBase" placeholder="Shop address — crews get routed here after their last yard" style="flex:1;font-size:16px;">
@@ -2369,6 +2369,37 @@ async function saveHomeBase(){
     try{ d=await bizGet(z,{action:'set_schedule_config',config:JSON.stringify(cfg)}); }catch(e){}
   }
   toast(d&&d.success?('🏠 Home base saved — '+(z.n||'')+' crews get routed there after their last yard'):'⚠ '+((d&&d.error)||'could not save'));
+}
+async function commOpen(){
+  if(!document.getElementById('commSheet')){
+    const o=document.createElement('div');
+    o.id='commSheet';
+    o.style.cssText='display:none;position:fixed;inset:0;z-index:4000;background:rgba(0,0,0,.6);align-items:center;justify-content:center;padding:18px;';
+    o.onclick=function(e){ if(e.target===o) o.style.display='none'; };
+    o.innerHTML='<div style="background:var(--card,#0f2740);border:1px solid rgba(255,255,255,.12);border-radius:18px;width:100%;max-width:640px;max-height:88vh;overflow-y:auto;padding:20px;">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;"><b style="font-size:17px;">💰 Commissions — '+esc(((_bizLoad()[_opsBiz]||{}).n)||'')+'</b><button onclick="document.getElementById(\'commSheet\').style.display=\'none\'" style="background:rgba(255,255,255,.08);border:none;color:inherit;font-size:20px;border-radius:10px;padding:6px 12px;cursor:pointer;">×</button></div>'
+      +'<div style="font-size:11.5px;opacity:.65;margin-bottom:10px;">Auto-logged when crews close quotes on /field — 40% office lead · 80% crew-sourced. Full history lives on the Commissions tab of that business\'s Google Sheet.</div>'
+      +'<div id="commBody"><div class="empty">⏳ Loading…</div></div></div>';
+    document.body.appendChild(o);
+  }
+  document.getElementById('commSheet').style.display='flex';
+  const z=_bizLoad()[_opsBiz]||_bizLoad()[0];
+  const body=document.getElementById('commBody');
+  body.innerHTML='<div class="empty">⏳ Loading…</div>';
+  try{
+    const d=await bizGet(z,{action:'get_commissions'});
+    const list=(d&&d.success&&d.commissions)||[];
+    if(!list.length){ body.innerHTML='<div class="empty">No commissions logged yet — they appear the moment a crew books a quote on /field.'+((d&&!d.success)?(' ('+(d.error||'backend not redeployed yet')+')'):'')+'</div>'; return; }
+    const total=list.reduce(function(s2,c){return s2+(c.amount||0);},0);
+    body.innerHTML='<div style="font-size:13px;font-weight:800;margin-bottom:10px;">Last '+list.length+' · <span style="color:#34d399;">$'+total.toFixed(2)+'</span> total</div>'
+      +list.map(function(c){
+        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid rgba(255,255,255,.1);border-radius:12px;margin-bottom:7px;">'
+          +'<div style="flex:1;min-width:0;"><b style="font-size:13.5px;">'+esc(c.customer||'?')+'</b> <span style="font-size:11px;opacity:.6;">'+esc(c.jobDate||'')+'</span>'
+          +'<div style="font-size:11.5px;opacity:.7;">'+esc(c.names||'')+' · '+esc(c.type||'')+'</div></div>'
+          +'<div style="text-align:right;"><b style="color:#34d399;font-size:15px;">$'+(c.amount||0).toFixed(2)+'</b>'
+          +'<div style="font-size:10.5px;opacity:.6;">'+esc(c.pct||'')+' of $'+(c.base||0)+(c.each&&c.names&&c.names.indexOf(',')>0?(' · $'+c.each.toFixed(2)+' each'):'')+'</div></div></div>';
+      }).join('');
+  }catch(e){ body.innerHTML='<div class="empty">⚠ '+esc(e.message||'load failed')+'</div>'; }
 }
 async function renderOps(force){
   _bizChips('opsBiz',_opsBiz,'setOpsBiz',true);
