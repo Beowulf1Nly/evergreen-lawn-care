@@ -950,7 +950,7 @@ function crewCard(c, isWorking){
   const col=crewColor(c.crew);
   const where=!isWorking?('🏁 Finished · '+done+' of '+total+' done')
     :(total?(done>=total?'✅ Route complete':('📍 At '+esc(current?current.name:'next stop')+' · '+done+' of '+total)):'📍 No stops today');
-  const detail=route.length?route.map(function(b){return jobMini(b);}).join(''):'<div class="empty" style="padding:14px;">No stops for this crew today.</div>';
+  const detail=route.length?(_hqPmcsChip()+route.map(function(b){return jobMini(b);}).join('')+_hqBaseChip()):'<div class="empty" style="padding:14px;">No stops for this crew today.</div>';
   return '<div class="crewcard'+(open?' exp':'')+'">'
     +'<div class="crewhead" onclick="toggle(\''+esc(c.email)+'\')">'
     +'<div class="avatar" style="background:'+col+'">'+esc(initials(c.name))+'</div>'
@@ -965,6 +965,8 @@ function crewCard(c, isWorking){
     +(open?('<div class="routelist open">'+detail+'</div>'):'')
     +'</div>';
 }
+function _hqPmcsChip(){ return '<div class="job" style="opacity:.9;"><span class="jdot" style="background:#f59e0b"></span><div class="jmain"><div class="jn">🧰 PMCS &amp; Load-up</div><div class="ja">First 30 min of the shift — at base, before job #1</div></div></div>'; }
+function _hqBaseChip(){ return '<div class="job" style="opacity:.9;"><span class="jdot" style="background:#38bdf8"></span><div class="jmain"><div class="jn">🏠 Return to base &amp; unload</div><div class="ja">~30 min after the last job — then clock out</div></div></div>'; }
 function jobMini(b){
   const done=isDone(b), pb=payBadge(b), bi=_bookings.indexOf(b);
   const dot=done?'#64748b':(String(b.crew||'').trim()?crewColor(b.crew):'#f87171');
@@ -1018,6 +1020,7 @@ function renderRunOrder(){
       +'<span class="ro-title">'+(k?('Crew '+esc(k)):'Unassigned')+'</span>'
       +'<span class="ro-meta">'+open+' open · $'+amt.toFixed(0)+'</span>'
       +'<span class="ro-sync '+(sync==='saving'?'saving':sync==='saved'?'saved':'')+'" id="roSync-'+esc(k)+'">'+(sync==='saving'?'● saving…':sync==='saved'?'✓ synced to phones':'')+'</span></div>';
+    h+='<div class="ro-stop" style="opacity:.7;"><span class="ro-grip" style="visibility:hidden;">⠿</span><span class="ro-num" style="background:#f59e0b;">🧰</span><div class="ro-main"><div class="ro-n">PMCS &amp; Load-up</div><div class="ro-a">30 min at base before job #1</div></div></div>';
     jobs.forEach(function(b,i){
       const done=isDone(b), bi=_bookings.indexOf(b);
       h+='<div class="ro-stop'+(done?' done':'')+'" data-crew="'+esc(k)+'" data-idx="'+i+'" '+(done?'':'draggable="true"')
@@ -1031,6 +1034,7 @@ function renderRunOrder(){
           +'<button onclick="roMove(\''+esc(k)+'\','+i+',1)" '+(i>=jobs.length-1||isDone(jobs[i+1]||{})?'disabled':'')+'>▼</button></div>'))
         +'</div>';
     });
+    h+='<div class="ro-stop" style="opacity:.7;"><span class="ro-grip" style="visibility:hidden;">⠿</span><span class="ro-num" style="background:#38bdf8;">🏠</span><div class="ro-main"><div class="ro-n">Return to base &amp; unload</div><div class="ro-a">~30 min after the last job — then clock out</div></div></div>';
     h+='</div>';
   });
   list.innerHTML=h;

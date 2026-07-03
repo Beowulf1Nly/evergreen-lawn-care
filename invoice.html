@@ -7844,7 +7844,7 @@ function _syncRouteOrderToDispatch(dateStr) {
 
   const processStops = (stops) => {
     if (!stops || !stops.length) return;
-    let cursor = new Date(y, mo - 1, d, startH || 8, startM || 0, 0, 0);
+    let cursor = new Date(y, mo - 1, d, startH || 8, startM || 0, 0, 0); cursor = new Date(cursor.getTime() + 30*60000); // 🧰 PMCS & load-up — crews get 30 min at base before job #1
     if (isNaN(cursor.getTime())) return; // safety guard
     stops.forEach(s => {
       const b = s.bk; // only use bk — don't fall back to rowIndex which could be stale
@@ -7965,7 +7965,7 @@ function buildCrewStopsHtml(dateStr, crew, orderedStops, startTimeStr, startVal)
   const [startH, startM] = startTimeStr.split(':').map(Number);
   const [y, mo, d] = dateStr.split('-').map(Number);
   const AVG_SPEED_MPH = 25;
-  let cursor = new Date(y, mo - 1, d, startH, startM, 0, 0);
+  let cursor = new Date(y, mo - 1, d, startH, startM, 0, 0); cursor = new Date(cursor.getTime() + 30*60000); // 🧰 PMCS & load-up — crews get 30 min at base before job #1
   let html = '';
 
   if (startVal) {
@@ -9622,7 +9622,7 @@ async function buildRoute() {
 
       // Calendar updates + dispatch time sync per crew
       for (const [crew, stops] of Object.entries(crewOrders)) {
-        let cursor = new Date(y, mo - 1, d, startH, startM, 0, 0);
+        let cursor = new Date(y, mo - 1, d, startH, startM, 0, 0); cursor = new Date(cursor.getTime() + 30*60000); // 🧰 PMCS & load-up — crews get 30 min at base before job #1
         for (const stop of stops) {
           const driveMin = routeDriveMin(stop);
           cursor = new Date(cursor.getTime() + driveMin * 60000);
@@ -9762,7 +9762,7 @@ function _buildCalendarUpdatesFromCurrentOrder() {
     for (const [crewKey, stops] of Object.entries(crews)) {
       if (!Array.isArray(stops)) continue;
       const crew = (crewKey === '_legacy' || crewKey === 'unassigned') ? '' : crewKey;
-      let cursor = new Date(y, mo - 1, d, startH || 8, startM || 0, 0, 0);
+      let cursor = new Date(y, mo - 1, d, startH || 8, startM || 0, 0, 0); cursor = new Date(cursor.getTime() + 30*60000); // 🧰 PMCS & load-up — crews get 30 min at base before job #1
       for (const stop of stops) {
         const bk = stop && stop.bk;
         if (!bk) continue;
