@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-07.4 */
+/* APP_VER:2026-07-07.5 */
 (function(){
-  var V='2026-07-07.4'; window.__APP_VER=V;
+  var V='2026-07-07.5'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -371,6 +371,10 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
 const SESSION_KEY = 'eg_staff_session';
 const STATE_KEY   = 'evg_field_state_v2';
+// State is PER USER: clock-in/out, route progress and skips belong to the person,
+// not the phone. A shared device (or logging in on a crew-mate's phone) used to
+// inherit the previous user's clocked-out state — "his clock-out affected me".
+function _stateKey(){ return STATE_KEY+'::'+String(adminEmail||'').toLowerCase().trim(); }
 const START_CHECKLIST = ['⛽ Mower & gas cans full','🚜 Mower, whacker & blower on the trailer','💧 Water, string & knife packed'];
 const END_CHECKLIST   = ['Walked the yard — nothing left behind','Closed all gates','Leaf blowed','Mower strapped down & all gear secured','Trailer closed & latched'];
 
@@ -633,12 +637,12 @@ async function verifyCode(){
   finally{ btn.disabled=false; btn.textContent='Sign In →'; }
 }
 function backToEmail(){ document.getElementById('loginStep2').style.display='none'; document.getElementById('loginStep1').style.display='block'; document.getElementById('codeInput').value=''; showLoginError(''); }
-function logout(){ try{ localStorage.removeItem(SESSION_KEY); localStorage.removeItem(STATE_KEY); }catch(e){} if(_fmPollInt) clearInterval(_fmPollInt); _stopGeo(); _releaseWake(); adminToken=''; _fmStarted=false; _clockInTime=null; _clockedOut=false; document.getElementById('fieldMode').classList.remove('show'); document.getElementById('loginScreen').style.display='flex'; }
+function logout(){ try{ localStorage.removeItem(SESSION_KEY); localStorage.removeItem(_stateKey()); }catch(e){} if(_fmPollInt) clearInterval(_fmPollInt); _stopGeo(); _releaseWake(); adminToken=''; _fmStarted=false; _clockInTime=null; _clockedOut=false; document.getElementById('fieldMode').classList.remove('show'); document.getElementById('loginScreen').style.display='flex'; }
 function showApp(){ document.getElementById('loginScreen').style.display='none'; document.getElementById('fieldMode').classList.add('show'); _startPoint=_loadStartPoint(); _crewSel=_loadCrewSel(); _startTimers(); _fmRender(); }
 
 /* ───────── State persistence (resume where left off) ───────── */
 function _persist(){
-  try{ localStorage.setItem(STATE_KEY, JSON.stringify({
+  try{ localStorage.setItem(_stateKey(), JSON.stringify({
     dayISO: todayISOStr(), started:_fmStarted, viewIdx:_fmViewIdx,
     clockInTime:_clockInTime?_clockInTime.toISOString():null, clockOutTime:_clockOutTime?_clockOutTime.toISOString():null, clockedOut:_clockedOut,
     cashTotal:_fmCashTotal, billedTotal:_fmBilledTotal, skipped:_fmSkipped, startChk:_startChkState, jobTimers:_jobTimers, helpers:_helpers, atBase:_fmAtBase
@@ -646,9 +650,9 @@ function _persist(){
 }
 function _restoreState(){
   try{
-    const raw=localStorage.getItem(STATE_KEY); if(!raw) return;
+    const raw=localStorage.getItem(_stateKey()); if(!raw) return;
     const s=JSON.parse(raw);
-    if(s.dayISO!==todayISOStr()){ localStorage.removeItem(STATE_KEY); return; }  // new day → fresh start
+    if(s.dayISO!==todayISOStr()){ localStorage.removeItem(_stateKey()); return; }  // new day → fresh start
     _fmStarted=!!s.started; _fmViewIdx=(s.viewIdx==null?null:s.viewIdx);
     _clockInTime=s.clockInTime?new Date(s.clockInTime):null; _clockOutTime=s.clockOutTime?new Date(s.clockOutTime):null; _clockedOut=!!s.clockedOut;
     _fmCashTotal=+s.cashTotal||0; _fmBilledTotal=+s.billedTotal||0; _fmSkipped=s.skipped||{}; _startChkState=Array.isArray(s.startChk)?s.startChk:[]; _jobTimers=s.jobTimers||{}; _helpers=Array.isArray(s.helpers)?s.helpers:[]; _fmAtBase=!!s.atBase;
@@ -1593,7 +1597,7 @@ function fmFinishRoute(){
   showToast('🏁 Logged out — great work!');
   // reset the day's session so a fresh start is clean
   _fmStarted=false; _fmViewIdx=null; _clockInTime=null; _clockOutTime=null; _clockedOut=false; _fmCashTotal=0; _fmBilledTotal=0; _startChkState=[]; _jobTimers={}; _helpers=[]; _fmAtBase=false; if(_fmBasePoll){ clearInterval(_fmBasePoll); _fmBasePoll=null; }
-  try{ localStorage.removeItem(STATE_KEY); }catch(e){}
+  try{ localStorage.removeItem(_stateKey()); }catch(e){}
   _fmShow('fmScreenStart'); _fmRenderStart();
 }
 
@@ -1867,8 +1871,10 @@ async function qjOutcome(kind){
 function _qjFinish(toastMsg,note){
   const bk=_qjBk, base=_stopKey(bk);
   if(_qjNote()) note=note+' | 📝 '+_qjNote();
-  _fmEnqueue({ kind:'quotedone', idemKey:'qd:'+base, method:'GET', params:{ action:'mark_done', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), amount:'0', markedBy:adminName||'Crew', adminToken } });
+  // Note goes FIRST so it resolves onto the still-open QUOTE row — marking done
+  // first (or a same-day booking shifting rows) could land it on the wrong job.
   _fmEnqueue({ kind:'quotenote', idemKey:'qn:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), note:note, markedBy:adminName||'Crew', adminToken } });
+  _fmEnqueue({ kind:'quotedone', idemKey:'qd:'+base, method:'GET', params:{ action:'mark_done', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), amount:'0', markedBy:adminName||'Crew', adminToken } });
   _fmFlushQueue();
   bk.done='✓ Done';
   qjClose(); showToast(toastMsg); _persist(); _fmRender();

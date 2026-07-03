@@ -769,9 +769,14 @@ function enterApp(){
     setTimeout(function(){ try{ map.invalidateSize(); }catch(e){} }, 300);
   }
   refresh(true);
-  if(_statusInt) clearInterval(_statusInt); _statusInt=setInterval(refreshStatus,15000);
-  if(_bookInt) clearInterval(_bookInt);   _bookInt=setInterval(refreshBookings,60000);
-  if(_routeInt) clearInterval(_routeInt); _routeInt=setInterval(refreshRouteOrder,30000);
+  // Throttled + in-flight-guarded polling. HQ used to fan out enough parallel
+  // Apps Script calls to trip Google's simultaneous-execution limit — requests
+  // came back as script.googleusercontent 404s and everything crawled.
+  const _inflight={};
+  function _guarded(name,fn){ return function(){ if(_inflight[name]) return; _inflight[name]=1; Promise.resolve().then(fn).catch(function(){}).finally(function(){ _inflight[name]=0; }); }; }
+  if(_statusInt) clearInterval(_statusInt); _statusInt=setInterval(_guarded('s',refreshStatus),30000);
+  if(_bookInt) clearInterval(_bookInt);   _bookInt=setInterval(_guarded('b',refreshBookings),90000);
+  if(_routeInt) clearInterval(_routeInt); _routeInt=setInterval(_guarded('r',refreshRouteOrder),60000);
   if(_tick) clearInterval(_tick); _tick=setInterval(updateClocks,1000);
   loadCrewPay();                                   // roster names for crew cards
   let t0tab='live'; try{ t0tab=(location.hash||'').replace('#','')||localStorage.getItem('hq_tab')||'live'; }catch(e){}
@@ -1569,7 +1574,7 @@ const _dispRoute={};   // iso → { times:{key:HH:MM}, order:{crew:[keys]}, load
 function _ensureDayRoute(iso){
   const rec0=_dispRoute[iso];
   const pushPending=Object.keys(_dayPushTimers||{}).some(function(k){ return k.indexOf('|'+iso)>=0&&_dayPushTimers[k]; });
-  if(rec0&&(rec0.loading||pushPending||Date.now()-(rec0.at||0)<20000)) return;   // fresh enough / busy
+  if(rec0&&(rec0.loading||pushPending||Date.now()-(rec0.at||0)<45000)) return;   // fresh enough / busy
   // Stale-while-revalidate: KEEP the previous order/times while the refetch runs.
   // Blanking them here made every render between expiry and fetch-completion fall
   // back to jobTime order — new appointments visibly jumped around every 20s.
@@ -2272,9 +2277,9 @@ function _devPollRender(){
   }).join('')+'<div class="dev-row"><button class="dev-btn go" onclick="refresh(true);toast(\'↻ Refreshing everything…\')">↻ Refresh all now</button></div>';
 }
 function devPollToggle(which){
-  if(which==='status'){ if(_statusInt){ clearInterval(_statusInt); _statusInt=null; } else _statusInt=setInterval(refreshStatus,15000); }
-  if(which==='book'){ if(_bookInt){ clearInterval(_bookInt); _bookInt=null; } else _bookInt=setInterval(refreshBookings,60000); }
-  if(which==='route'){ if(_routeInt){ clearInterval(_routeInt); _routeInt=null; } else _routeInt=setInterval(refreshRouteOrder,30000); }
+  if(which==='status'){ if(_statusInt){ clearInterval(_statusInt); _statusInt=null; } else _statusInt=setInterval(refreshStatus,30000); }
+  if(which==='book'){ if(_bookInt){ clearInterval(_bookInt); _bookInt=null; } else _bookInt=setInterval(refreshBookings,90000); }
+  if(which==='route'){ if(_routeInt){ clearInterval(_routeInt); _routeInt=null; } else _routeInt=setInterval(refreshRouteOrder,60000); }
   _devPollRender();
 }
 function _devNetRender(){
