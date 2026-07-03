@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-06.3 */
+/* APP_VER:2026-07-06.4 */
 (function(){
-  var V='2026-07-06.3'; window.__APP_VER=V;
+  var V='2026-07-06.4'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1277,11 +1277,12 @@ function _fmRenderJob(stops,idx){
     +(jobNotes&&jobNotes!==custNotes?'<div class="fm-note-box"><b>Job notes</b>'+esc(jobNotes)+'</div>':'');
   const phone=String(bk.phone||'').trim(), phoneDigits=phone.replace(/[^0-9+]/g,'');
   const phoneRow=phone?('<a class="fm-btn fm-btn-sm fm-btn-ghost" href="tel:'+esc(phoneDigits)+'">📞 Call</a><a class="fm-btn fm-btn-sm fm-btn-ghost" href="sms:'+esc(phoneDigits)+'">💬 Text</a>'):'';
+  window._fmCurBk=bk;
   document.getElementById('fmJobBody').innerHTML=
     '<div class="fm-card"><div class="fm-card-stopno">'+(idx+1)+'</div><div class="fm-card-name">'+esc(bk.name||'Customer')+'</div>'+
     '<div class="fm-card-addr">📍 '+esc(bk.address||'—')+(bk.zip?', '+esc(bk.zip):'')+'</div><div class="fm-pills">'+pills+'</div>'+noteHtml+
     '<div class="fm-card-actions"><button class="fm-btn fm-btn-lg fm-btn-nav" onclick="fmNavigate('+idx+')">🧭 Navigate Here</button>'+
-    '<div class="fm-secondary-row">'+phoneRow+(_fmIsBoss()?'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmRemainingMap()">🗺 Remaining</button>':'')+'</div></div></div>'+
+    '<div class="fm-secondary-row">'+phoneRow+(_isQuoteJob(bk)&&isDone(bk)&&_qjBookedStore[_stopKey(bk)]?'<button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#fdba74;color:#9a3412;" onclick="fmQuoteCloser(window._fmCurBk)">✏️ Edit booked plan</button>':'')+(_fmIsBoss()?'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmRemainingMap()">🗺 Remaining</button>':'')+'</div></div></div>'+
     (_fmIsBoss()
       ?'<div class="fm-jobnav"><button onclick="fmPrevStop()" '+(idx===0?'disabled':'')+'>‹ Prev</button><button onclick="fmNextStop()" '+(idx>=total-1?'disabled':'')+'>Next ›</button></div>'
       :'<div class="fm-jobnav"><button onclick="fmPrevStop()" '+(idx===0?'disabled':'')+'>‹ Prev</button></div>');
@@ -1579,7 +1580,12 @@ window.addEventListener('focus', function(){ _fmResume(); });
 
 /* ═══════════ QUOTE CLOSER — a quote visit ends in an OUTCOME, not a payment ═══════════ */
 function _isQuoteJob(bk){ const t=(String(bk.frequency||'')+' '+String(bk.service||bk.serviceType||'')+' '+String(bk.price||'')+' '+String(bk.notes||'')+' '+String(bk.payMethod||'')).toLowerCase(); return t.indexOf('quote')>=0; }
-let _qjBk=null;
+let _qjBk=null, _qjEditMode=false;
+let _qjNotesStore={}; try{ _qjNotesStore=JSON.parse(localStorage.getItem('evg_qj_notes')||'{}'); }catch(e){}
+function _qjNoteSave(){ try{ if(!_qjBk) return; _qjNotesStore[_stopKey(_qjBk)]=document.getElementById('qjNotes').value; localStorage.setItem('evg_qj_notes',JSON.stringify(_qjNotesStore)); }catch(e){} }
+function _qjNote(){ try{ return String((document.getElementById('qjNotes')||{}).value||'').trim(); }catch(e){ return ''; } }
+let _qjBookedStore={}; try{ _qjBookedStore=JSON.parse(localStorage.getItem('evg_qj_booked')||'{}'); }catch(e){}
+function _qjBookedSave(){ try{ localStorage.setItem('evg_qj_booked',JSON.stringify(_qjBookedStore)); }catch(e){} }
 function fmQuoteCloser(bk){
   _qjBk=bk;
   if(!document.getElementById('qjOverlay')){
@@ -1592,7 +1598,10 @@ function fmQuoteCloser(bk){
       +'<div><div style="font-size:18px;font-weight:800;">🧾 Close this quote</div><div id="qjName" style="font-size:12.5px;color:#64748b;margin-top:2px;"></div></div>'
       +'<button onclick="qjClose()" style="background:#f3f4f6;border:none;font-size:22px;color:#374151;cursor:pointer;line-height:1;padding:8px 14px;border-radius:12px;">×</button></div>'
       +'<div style="overflow-y:auto;flex:1;padding:14px 16px 6px;">'
+      +'<div id="qjEditBanner" style="display:none;margin:0 0 10px;padding:10px 13px;background:#fff7ed;border:1.5px solid #fdba74;border-radius:12px;font-size:12.5px;font-weight:700;color:#9a3412;">✏️ Editing the booked plan — saving overrides this customer\'s plan &amp; price only. Nothing else is touched.</div>'
       +'<div id="qjBuilder"></div>'
+      +'<div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 6px;">📝 Quote notes (internal)</div>'
+      +'<textarea id="qjNotes" oninput="_qjNoteSave()" placeholder="Gate code, dogs, overgrown spots, what they care about…" style="width:100%;box-sizing:border-box;min-height:60px;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:12px;font-family:inherit;font-size:14px;resize:vertical;"></textarea>'
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0 4px;padding:12px 14px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;">'
       +'<div><div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">Quoted price</div>'
       +'<div style="font-size:32px;font-weight:800;color:#0f172a;" id="qjPriceShow">$0</div></div>'
@@ -1604,7 +1613,7 @@ function fmQuoteCloser(bk){
       +'<button id="qjBookBtn" onclick="qjOutcome(\'book\')" style="flex:1.4;padding:14px 8px;border:none;border-radius:12px;background:#16a34a;color:#fff;font-family:inherit;font-size:14.5px;font-weight:800;cursor:pointer;">📅 Book it</button>'
       +'<input id="qjDate" type="date" style="flex:1;padding:12px 8px;border:1.5px solid #cbd5e1;border-radius:12px;font-family:inherit;font-size:13px;"></div>'
       +'<button id="qjEstBtn" onclick="qjOutcome(\'estimate\')" style="width:100%;padding:13px;border:none;border-radius:12px;background:#0284c7;color:#fff;font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;">✉️ Email estimate to customer</button>'
-      +'<button onclick="qjOutcome(\'no\')" style="width:100%;padding:12px;border:1.5px solid #fecaca;border-radius:12px;background:#fef2f2;color:#b91c1c;font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer;">🚫 Not interested</button>'
+      +'<button id="qjNoBtn" onclick="qjOutcome(\'no\')" style="width:100%;padding:12px;border:1.5px solid #fecaca;border-radius:12px;background:#fef2f2;color:#b91c1c;font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer;">🚫 Not interested</button>'
       +'</div></div>';
     document.body.appendChild(o);
   }
@@ -1612,6 +1621,16 @@ function fmQuoteCloser(bk){
   const d=new Date(); d.setDate(d.getDate()+1);
   document.getElementById('qjDate').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   document.getElementById('qjPriceOverride').value='';
+  const _nEl=document.getElementById('qjNotes'); if(_nEl) _nEl.value=_qjNotesStore[_stopKey(bk)]||'';
+  const _snap=_qjBookedStore[_stopKey(bk)];
+  _qjEditMode=!!(_snap&&isDone(bk));
+  if(_qjEditMode&&_snap.qj){ try{ _qj=JSON.parse(JSON.stringify(_snap.qj)); }catch(e){} }
+  if(_qjEditMode&&_snap.override){ document.getElementById('qjPriceOverride').value=_snap.override; }
+  const _eb=document.getElementById('qjEditBanner'); if(_eb) _eb.style.display=_qjEditMode?'block':'none';
+  const _bb=document.getElementById('qjBookBtn'); if(_bb) _bb.textContent=_qjEditMode?'💾 Save changes':'📅 Book it';
+  const _dt=document.getElementById('qjDate'); if(_dt) _dt.style.display=_qjEditMode?'none':'';
+  const _es=document.getElementById('qjEstBtn'); if(_es) _es.style.display=_qjEditMode?'none':'';
+  const _nb=document.getElementById('qjNoBtn'); if(_nb) _nb.style.display=_qjEditMode?'none':'';
   qjRefresh();
   document.getElementById('qjOverlay').style.display='flex';
 }
@@ -1636,13 +1655,27 @@ async function qjOutcome(kind){
   const ogNote=(og&&ogFee>0)?(' · first cut +$'+ogFee+' overgrown (1st cut $'+firstPrice+')'):'';
   if(kind==='book'){
     if(_qj.tier==='xl'){ showToast('1+ acre needs owner approval — submit the estimate instead'); return; }
+    if(_qjEditMode){
+      const snap=_qjBookedStore[base]; if(!snap){ showToast('Nothing to edit'); return; }
+      if(!confirm('Save changes to '+(bk.name||'customer')+'\u2019s booking?\n'+desc+'\n$'+firstPrice+(_qj.freq!=='onetime'?'/cut':'')+ogNote+'\n\nThis overrides their plan & price only.')) return;
+      _fmEnqueue({ kind:'quoteupd', idemKey:'qu:'+base+':'+_uuid(), method:'GET', params:{ action:'update_quote_booking', email:snap.email, serviceDate:snap.date, frequency:_qjFreqLabel(), price:String(firstPrice), noteAppend:'✏️ Plan updated at quote visit by '+(adminName||'crew')+' — '+desc+ogNote+(_qjNote()?(' | 📝 '+_qjNote()):''), address:bk.address||'', adminToken } });
+      _fmFlushQueue();
+      snap.freq=_qjFreqLabel(); snap.price=String(firstPrice); try{ snap.qj=JSON.parse(JSON.stringify(_qj)); snap.override=String((document.getElementById('qjPriceOverride')||{}).value||''); }catch(e){} _qjBookedSave();
+      qjClose(); showToast('💾 Booking updated — '+_qjFreqLabel()+' $'+firstPrice);
+      return;
+    }
     const date=document.getElementById('qjDate').value;
     if(!date){ showToast('Pick a start date'); return; }
     if(!confirm('Book '+(bk.name||'customer')+':\n'+desc+'\n'+(ogNote?('1st cut $'+firstPrice+' (overgrown +$'+ogFee+')'+(_qj.freq!=='onetime'?(' · then $'+price+'/cut'):'')):('$'+price+(_qj.freq!=='onetime'?'/cut':'')))+'\nstarting '+date+'?')) return;
-    _fmEnqueue({ kind:'quotebook', idemKey:'qb:'+base, method:'GET', params:{ action:'manual_schedule', name:bk.name||'', email:bk.email||'', phone:String(bk.phone||''), address:bk.address||'', zip:String(bk.zip||''), frequency:_qjFreqLabel(), price:String(firstPrice), serviceDate:date, notes:'Booked at quote visit — '+desc+ogNote+(ogNote&&_qj.freq!=='onetime'?(' · following cuts $'+price):'')+' — by '+(adminName||'crew'), payMethod:'card', adminToken } });
-    _qjFinish('✅ Booked! '+(ogNote?('1st cut $'+firstPrice):('$'+price))+' · starts '+date, 'Quote WON — booked '+_qjFreqLabel()+' $'+price+ogNote+' ('+desc+')');
+    _fmEnqueue({ kind:'quotebook', idemKey:'qb:'+base, method:'GET', params:{ action:'manual_schedule', name:bk.name||'', email:bk.email||'', phone:String(bk.phone||''), address:bk.address||'', zip:String(bk.zip||''), frequency:_qjFreqLabel(), price:String(firstPrice), serviceDate:date, notes:'Booked at quote visit — '+desc+ogNote+(ogNote&&_qj.freq!=='onetime'?(' · following cuts $'+price):'')+(_qjNote()?(' | 📝 '+_qjNote()):'')+' — by '+(adminName||'crew'), payMethod:'card', adminToken } });
+    try{ _qjBookedStore[base]={ date:date, email:String(bk.email||'').toLowerCase().trim(), name:bk.name||'', freq:_qjFreqLabel(), price:String(firstPrice), qj:JSON.parse(JSON.stringify(_qj)), override:String((document.getElementById('qjPriceOverride')||{}).value||'') }; _qjBookedSave(); }catch(e){}
+    _qjFinish('✅ Booked! '+(ogNote?('1st cut $'+firstPrice):('$'+price))+' · starts '+date+' — ‹ Prev lets you edit it', 'Quote WON — booked '+_qjFreqLabel()+' $'+price+ogNote+' ('+desc+')');
   } else if(kind==='estimate'){
-    if(!bk.email||String(bk.email).indexOf('@')<0){ showToast('No email on file — add one first'); return; }
+    let _em=prompt('Send the estimate to this email — fix it if it\u2019s wrong:', String(bk.email||'').trim());
+    if(_em===null) return;
+    _em=_em.trim().toLowerCase();
+    if(!_em||_em.indexOf('@')<1||_em.indexOf('.')<0){ showToast('Enter a valid email address'); return; }
+    bk.email=_em;
     const forApproval=_qj.tier==='xl';
     const items=[];
     if(ogNote){
@@ -1669,6 +1702,7 @@ async function qjOutcome(kind){
 }
 function _qjFinish(toastMsg,note){
   const bk=_qjBk, base=_stopKey(bk);
+  if(_qjNote()) note=note+' | 📝 '+_qjNote();
   _fmEnqueue({ kind:'quotedone', idemKey:'qd:'+base, method:'GET', params:{ action:'mark_done', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), amount:'0', markedBy:adminName||'Crew', adminToken } });
   _fmEnqueue({ kind:'quotenote', idemKey:'qn:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), note:note, markedBy:adminName||'Crew', adminToken } });
   _fmFlushQueue();
