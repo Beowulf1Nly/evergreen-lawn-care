@@ -665,7 +665,7 @@ async function loadData(refreshToast){
   try{
     const crewQ='';  // pull the whole day's saved order; we order our visible stops by it
     const [bRes,cRes,rRes]=await Promise.all([
-      fetch(SCRIPT_URL+'?action=bookings&'+authParam()).then(r=>r.json()).catch(()=>null),
+      fetch(SCRIPT_URL+'?action=bookings&includeCompleted=false&'+authParam()).then(r=>r.json()).catch(()=>null),
       fetch(SCRIPT_URL+'?action=customers_list&'+authParam()).then(r=>r.json()).catch(()=>null),
       fetch(SCRIPT_URL+'?action=get_route&date='+todayISOStr()+crewQ+'&'+authParam()).then(r=>r.json()).catch(()=>null)
     ]);
@@ -1129,7 +1129,7 @@ function _startTimers(){
   _fmSyncInt=setInterval(_fmFlushQueue,20000);
   // Live route sync: pull owner's reorder/cancel/move changes while on the clock
   if(_fmPollInt) clearInterval(_fmPollInt);
-  _fmPollInt=setInterval(function(){ if(_fmStarted && navigator.onLine!==false){ _fmHeartbeat(); if(!_anySheetOpen()) loadData(); } },20000);
+  _fmPollInt=setInterval(function(){ if(_fmStarted && navigator.onLine!==false){ _fmHeartbeat(); if(!_anySheetOpen()) loadData(); } },60000);
 }
 function _autoClockOut(){
   if(!_clockInTime||_clockedOut) return;
