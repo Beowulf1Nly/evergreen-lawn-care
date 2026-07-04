@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-06.26 */
-(function(){ var V='2026-07-06.26'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-06.27 */
+(function(){ var V='2026-07-06.27'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -2266,12 +2266,28 @@ function _syncCrewRoute(crew,iso){
     fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'put_route',date:iso,crew:crew,stops:JSON.stringify(stops),updatedBy:myName||'Owner',idemKey:'hqsync:'+iso+':'+crew+':'+Date.now(),adminToken:token})).catch(function(){});
   },700);
 }
+// Compact a crew's remaining jobs LEFT after one is removed: re-time them from (clock-in|7:30)+PMCS,
+// chaining with drive buffers, so the gap the moved job left closes. jobTime stays the source of truth.
+function _rechainCrewRoute(crew,iso){
+  crew=String(crew||'').toUpperCase().trim(); if(!crew||!iso) return;
+  const list=_crewDayJobs(crew,iso).slice().sort(function(a,b2){ const x=String(a.jobTime||'99:99'),y=String(b2.jobTime||'99:99'); return x<y?-1:x>y?1:0; });
+  const rec=_dispRoute[iso]||(_dispRoute[iso]={times:{},order:{},loading:false,at:Date.now()});
+  rec.order=rec.order||{}; rec.times=rec.times||{};
+  let st=_dayStartMin(crew,iso); const stops=[], jobs=[];
+  list.forEach(function(b,i){ if(i>0) st+=DRIVE_BUF; const dur=_jobMins(b); const t=_hhmm(st); b.jobTime=t; _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{jobTime:t,ts:Date.now()}); rec.times[_svKey(b)]=t; jobs.push(b); stops.push({order:i+1,email:String(b.email||'').toLowerCase().trim(),serviceDate:iso,name:b.name||'',address:b.address||'',zip:b.zip||'',crew:crew,jobTime:t}); st+=dur; });
+  rec.order[crew]=list.map(_svKey);
+  const tk='rechain|'+crew+'|'+iso; clearTimeout(_dayPushTimers[tk]);
+  _dayPushTimers[tk]=setTimeout(async function(){ _dayPushTimers[tk]=null;
+    try{ const d=await fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'put_route',date:iso,crew:crew,stops:JSON.stringify(stops),updatedBy:myName||'Owner',idemKey:'hqrechain:'+iso+':'+crew+':'+Date.now(),adminToken:token})).then(r=>r.json()); if(!(d&&d.success)) return; }catch(e){ return; }
+    for(let i=0;i<jobs.length;i++){ try{ await fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'set_job_time',rowIndex:_ri(jobs[i]),email:jobs[i].email||'',serviceDate:iso,jobTime:jobs[i].jobTime,adminToken:token})); }catch(e){} await new Promise(function(r){setTimeout(r,120);}); }
+  },700);
+}
 function _onCrewMoved(b,fromCrew,toCrew){
   if(!b||b._srcBiz) return;
   const iso=dateOf(b); if(!iso) return;
   fromCrew=String(fromCrew||'').toUpperCase().trim(); toCrew=String(toCrew||'').toUpperCase().trim();
   if(toCrew){ _placeJobOnRoute(b,toCrew,iso); _syncCrewRoute(toCrew,iso); }   // slot into the new crew's run + push to /field
-  if(fromCrew) _syncCrewRoute(fromCrew,iso);                                   // old crew loses it
+  if(fromCrew) _rechainCrewRoute(fromCrew,iso);                                // old crew compacts left to close the gap
 }
 function dayMove(c,iso,idx,dir){
   const rec=_dispRoute[iso]||(_dispRoute[iso]={times:{},order:{},loading:false,at:Date.now()});
