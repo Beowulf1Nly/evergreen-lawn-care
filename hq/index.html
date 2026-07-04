@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-06.19 */
-(function(){ var V='2026-07-06.19'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-06.20 */
+(function(){ var V='2026-07-06.20'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1106,8 +1106,9 @@ function _roApplyMove(toCrew,toIdx){
   dst.splice(Math.min(toIdx,maxIdx),0,b);
   if(toCrew!==fromCrew){
     const prev=b.crew; b.crew=toCrew;
+    _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{crew:toCrew,ts:Date.now()});   // survive a mid-write background refresh
     fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'set_crew', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), crew:toCrew, adminToken:token}))
-      .then(r=>r.json()).then(function(d){ if(!(d&&d.success)){ b.crew=prev; toast('⚠ Crew change didn\'t save'); render(); } }).catch(function(){});
+      .then(r=>r.json()).then(function(d){ if(!(d&&d.success)){ b.crew=prev; if(_pendingLocal[_svKey(b)]) _pendingLocal[_svKey(b)].crew=prev; toast('⚠ Crew change didn\'t save'); render(); } }).catch(function(){});
     toast('👷 '+(b.name||'Job')+' → '+(toCrew?('Crew '+toCrew):'Unassigned'));
   }
   _roCommit(toCrew!==fromCrew?[fromCrew,toCrew]:[toCrew]);
@@ -2109,8 +2110,9 @@ function _applyCrew(b,crewKey){
   const cur=String(b.crew||'').toUpperCase().trim();
   if(target===cur) return false;
   const prev=b.crew; b.crew=target;
+  _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{crew:target,ts:Date.now()});   // survive a mid-write background refresh
   fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'set_crew', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), crew:target, adminToken:token}))
-    .then(r=>r.json()).then(function(d){ if(!(d&&d.success)){ b.crew=prev; toast('⚠ Crew change didn\'t save'); render(); } }).catch(function(){});
+    .then(r=>r.json()).then(function(d){ if(!(d&&d.success)){ b.crew=prev; if(_pendingLocal[_svKey(b)]) _pendingLocal[_svKey(b)].crew=prev; toast('⚠ Crew change didn\'t save'); render(); } }).catch(function(){});
   return true;
 }
 function dispDropCell(ev,crewKey,iso){
