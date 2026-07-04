@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-06.17 */
-(function(){ var V='2026-07-06.17'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-06.18 */
+(function(){ var V='2026-07-06.18'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1652,8 +1652,11 @@ async function loadCompleted(){
 }
 function _dispJobs(){
   const live=(_bookings||[]).filter(function(b){ return !b.rowCancelled; });
-  const seen={}; live.forEach(function(b){ seen[_svKey(b)]=1; });
-  const arch=(_completed||[]).filter(function(b){ return dateOf(b) && !seen[_svKey(b)]; });
+  // dedup live↔archive on FULL identity (email|date|address) so two different completed jobs for the
+  // same customer on the same day BOTH show on /hq — only a true duplicate row collapses.
+  function _archKey(b){ return String(b.email||'').toLowerCase().trim()+'|'+dateOf(b)+'|'+String(b.address||'').toLowerCase().trim(); }
+  const seen={}; live.forEach(function(b){ seen[_archKey(b)]=1; });
+  const arch=(_completed||[]).filter(function(b){ return dateOf(b) && !seen[_archKey(b)]; });
   let out=live.concat(arch);
   Object.values(_bizExtra||{}).forEach(function(list){ out=out.concat(list); });
   return out;
