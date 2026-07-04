@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-06.11 */
-(function(){ var V='2026-07-06.11'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-06.12 */
+(function(){ var V='2026-07-06.12'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1994,8 +1994,9 @@ function _econParts(c,jobs,zi){
   // drive buffers reset each day — group by date so week/month math is honest
   const byD={};
   jobs.forEach(function(b){ const d=dateOf(b)||'?'; (byD[d]=byD[d]||[]).push(b); });
+  const _phase = /clean/i.test((_bizLoad()[zi]||{}).n||'') ? 30 : 60;   // per crew-day: PMCS/load-up + unload (lawn 30+30, cleaning 15+15)
   let estM=0;
-  Object.values(byD).forEach(function(list){ estM+=list.reduce(function(s2,b){return s2+_jobMins(b);},0)+Math.max(0,list.length-1)*DRIVE_BUF; });
+  Object.values(byD).forEach(function(list){ estM+=(list.length?_phase:0)+list.reduce(function(s2,b){return s2+_jobMins(b);},0)+Math.max(0,list.length-1)*DRIVE_BUF; });
   const cp=_crewPayFor(zi,c);
   const rate=_crewRate(c,zi);                                             // hourly portion
   const pctC=cp?(cp.pct||0):0;                                            // commission portion (% of revenue)
@@ -2027,7 +2028,7 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
   }
   return '<div class="st-econ">'+(labelHtml||'')
     +'💵 <b>$'+p.R.toFixed(0)+'</b> booked'
-    +' · 🧮 est '+span+' <b>'+estH+'h '+String(estMm).padStart(2,'0')+'m</b> <span style="color:var(--dim)">(jobs + drive'+(p.days>1?' · '+p.days+' days':'')+')</span>'
+    +' · 🧮 est '+span+' <b>'+estH+'h '+String(estMm).padStart(2,'0')+'m</b> <span style="color:var(--dim)">(jobs + drive + PMCS/load'+(p.days>1?' · '+p.days+' days':'')+')</span>'
     +' · 💰 est profit <b style="color:'+(ok?'#34d399':'#fbbf24')+'">$'+Math.round(p.estProfit)+'</b> <span class="dev-pill '+(ok?'g':'y')+'">'+p.pct+'% margin'+(ok?' ✓':' — under 50%')+'</span>'
     +' · 🎯 50% profit ($'+Math.round(p.R*0.5)+') '+(isFinite(p.tgtH)?('needs ≤ <b>'+p.tgtH.toFixed(1)+'h</b>'):(p.pctC<=50?'<span class="dev-pill g">locked in — commission crew keeps '+p.pctC+'%</span>':'<span class="dev-pill r">impossible — commission is '+p.pctC+'%</span>'))+' @ '
     +(function(){ const cp=_crewPayFor(zi,c);
