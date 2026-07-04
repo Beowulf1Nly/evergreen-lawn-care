@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-06.25 */
-(function(){ var V='2026-07-06.25'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-06.26 */
+(function(){ var V='2026-07-06.26'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1290,7 +1290,7 @@ async function doAssign(crew){
   toast(crew?('Assigning to Crew '+crew+'…'):'Clearing crew…');
   try{ const p=new URLSearchParams({action:'set_crew', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), crew:crew, adminToken:be.t});
     const d=await(await fetch(be.u+'?'+p)).json();
-    if(d.success){ toast(crew?('👷 Assigned to Crew '+crew):'Crew cleared'); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings(); closeSheet('jobSheet'); }
+    if(d.success){ toast(crew?('👷 Assigned to Crew '+crew):'Crew cleared'); _onCrewMoved(b,prev,crew); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings(); closeSheet('jobSheet'); }
     else { b.crew=prev; toast('Error: '+(d.error||'could not assign')); }
   }catch(e){ b.crew=prev; toast('Network error'); }
 }
@@ -2125,6 +2125,7 @@ function _applyCrew(b,crewKey){
   if(target===cur) return false;
   const prev=b.crew; b.crew=target;
   _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{crew:target,ts:Date.now()});   // survive a mid-write background refresh
+  _onCrewMoved(b,cur,target);
   fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'set_crew', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), crew:target, adminToken:token}))
     .then(r=>r.json()).then(function(d){ if(!(d&&d.success)){ b.crew=prev; if(_pendingLocal[_svKey(b)]) _pendingLocal[_svKey(b)].crew=prev; toast('⚠ Crew change didn\'t save'); render(); } }).catch(function(){});
   return true;
@@ -2235,6 +2236,43 @@ function _reflowCrewDay(c,iso){ return;   // disabled: /invoice is the single so
     for(let i=0;i<jobs.length;i++){ try{ await fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'set_job_time',rowIndex:_ri(jobs[i]),email:jobs[i].email||'',serviceDate:iso,jobTime:jobs[i].jobTime,adminToken:token})); }catch(e){} await new Promise(function(r){setTimeout(r,120);}); }
   },900);
 */ }
+// ── Slot a moved job into its NEW crew's run for that day ──────────────────────
+// jobTime is the single source of truth, so: (1) give the moved job a time after the destination
+// crew's last stop and persist it, then (2) re-sync BOTH crews' route records from their current
+// set-times so /field follows. Route record == jobTime, so nothing slides.
+function _crewDayJobs(crew,iso){
+  crew=String(crew||'').toUpperCase().trim();
+  return (_dispJobs()||[]).filter(function(x){ return dateOf(x)===iso && (String(x.crew||'').toUpperCase().trim())===crew && !_isArch(x) && !isDone(x) && !(x._srcBiz>0); });
+}
+function _hhmm(m){ m=Math.max(0,Math.min(1439,Math.round(m))); return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
+function _placeJobOnRoute(b,toCrew,iso){
+  toCrew=String(toCrew||'').toUpperCase().trim(); if(!toCrew||!iso) return;
+  let lastEnd=_dayStartMin(toCrew,iso), mates=0;
+  _crewDayJobs(toCrew,iso).forEach(function(x){ if(x===b) return; mates++; const t=String(x.jobTime||'').trim(); if(/^\d{1,2}:\d{2}$/.test(t)){ const p=t.split(':'); const en=(+p[0])*60+(+(p[1]||0))+_jobMins(x); if(en>lastEnd) lastEnd=en; } });
+  const t=_hhmm(mates?lastEnd+DRIVE_BUF:lastEnd);           // append after the crew's current last stop
+  b.jobTime=t;
+  _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{jobTime:t,ts:Date.now()});
+  fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'set_job_time',rowIndex:_ri(b),email:b.email||'',serviceDate:iso,jobTime:t,adminToken:token})).catch(function(){});
+}
+function _syncCrewRoute(crew,iso){
+  crew=String(crew||'').toUpperCase().trim(); if(!crew||!iso) return;
+  const list=_crewDayJobs(crew,iso).slice().sort(function(a,b2){ const x=String(a.jobTime||'99:99'),y=String(b2.jobTime||'99:99'); return x<y?-1:x>y?1:0; });
+  const rec=_dispRoute[iso]||(_dispRoute[iso]={times:{},order:{},loading:false,at:Date.now()});
+  rec.order=rec.order||{}; rec.times=rec.times||{};
+  rec.order[crew]=list.map(_svKey);
+  const stops=list.map(function(b,i){ return {order:i+1,email:String(b.email||'').toLowerCase().trim(),serviceDate:iso,name:b.name||'',address:b.address||'',zip:b.zip||'',crew:crew,jobTime:String(b.jobTime||'').trim()}; }).filter(function(st){return st.email;});
+  const tk='syncroute|'+crew+'|'+iso; clearTimeout(_dayPushTimers[tk]);
+  _dayPushTimers[tk]=setTimeout(function(){ _dayPushTimers[tk]=null;
+    fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'put_route',date:iso,crew:crew,stops:JSON.stringify(stops),updatedBy:myName||'Owner',idemKey:'hqsync:'+iso+':'+crew+':'+Date.now(),adminToken:token})).catch(function(){});
+  },700);
+}
+function _onCrewMoved(b,fromCrew,toCrew){
+  if(!b||b._srcBiz) return;
+  const iso=dateOf(b); if(!iso) return;
+  fromCrew=String(fromCrew||'').toUpperCase().trim(); toCrew=String(toCrew||'').toUpperCase().trim();
+  if(toCrew){ _placeJobOnRoute(b,toCrew,iso); _syncCrewRoute(toCrew,iso); }   // slot into the new crew's run + push to /field
+  if(fromCrew) _syncCrewRoute(fromCrew,iso);                                   // old crew loses it
+}
 function dayMove(c,iso,idx,dir){
   const rec=_dispRoute[iso]||(_dispRoute[iso]={times:{},order:{},loading:false,at:Date.now()});
   const g=_dayJobsInOrder(c,iso);
