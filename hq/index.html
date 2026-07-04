@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-06.23 */
-(function(){ var V='2026-07-06.23'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-06.24 */
+(function(){ var V='2026-07-06.24'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1640,11 +1640,13 @@ function _ensureDayRoute(iso){
   }).catch(function(){ if(_dispRoute[iso]) _dispRoute[iso].loading=false; });
 }
 function _dayTimeOf(b,iso){
+  // Bookings jobTime is the single source of truth — every push (invoice + HQ) keeps it in sync,
+  // so we trust it over the route record. This stops the day view from jumping to stale route times.
+  const t=String(b.jobTime||'').trim();
+  if(/^\d{1,2}:\d{2}$/.test(t)) return t;
   const rec=_dispRoute[iso];
   const k=_svKey(b);
-  if(rec&&rec.times[k]) return rec.times[k];                      // pushed from /invoice = authority
-  const t=String(b.jobTime||'').trim();
-  return /^\d{1,2}:\d{2}$/.test(t)?t:null;
+  if(rec&&rec.times[k]) return rec.times[k];                      // fallback only when a row has no set time
 }
 async function loadCompleted(){
   try{
