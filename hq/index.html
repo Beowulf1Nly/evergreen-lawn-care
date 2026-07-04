@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-06.10 */
-(function(){ var V='2026-07-06.10'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-06.11 */
+(function(){ var V='2026-07-06.11'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -2559,44 +2559,79 @@ async function renderStats(force){
     const r={z:z, st:(st&&st.success)?st:null, jobs:(cj&&cj.success&&Array.isArray(cj.jobs))?cj.jobs:[]};
     _statsCache[i]=r; return r;
   }));
-  // monthly revenue per biz (last 6 months, from archived completed jobs)
-  const months=[]; const now=new Date();
+  const now=new Date(); const months=[];
   for(let k=5;k>=0;k--){ const d=new Date(now.getFullYear(),now.getMonth()-k,1); months.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); }
+  function _n(v){ return +(String(v==null?0:v).replace(/[^0-9.-]/g,''))||0; }
+  function _wkRev(jobs){ const t=Date.now(),d7=t-7*864e5,d14=t-14*864e5; let tw=0,lw=0; (jobs||[]).forEach(function(j){ const d=new Date(String(dateOf(j)||'')+'T12:00:00').getTime(); if(isNaN(d))return; if(d>d7&&d<=t+864e5)tw+=amtOf(j); else if(d>d14&&d<=d7)lw+=amtOf(j); }); return {tw:tw,lw:lw}; }
+  function _delta(a,b){ if(!(b>0)) return ''; const p=Math.round((a-b)/b*100); return p>=0?' <span class="dev-pill g">▲'+p+'%</span>':' <span class="dev-pill r">▼'+Math.abs(p)+'%</span>'; }
+  function _kpi(val,label,accent){ return '<div><div style="font-size:25px;font-family:var(--mono);font-weight:800;line-height:1;'+(accent||'')+'">'+val+'</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:700;margin-top:5px;">'+label+'</div></div>'; }
+  function _k(v){ return v>=1000?('$'+(Math.round(v/100)/10)+'k'):('$'+Math.round(v)); }
+  let E={rev:0,paid:0,done:0,total:0,cust:0,newC:0,visits:0,twr:0,lwr:0,twv:0,lwv:0,twq:0,lwq:0,twb:0,lwb:0};
+  const crewBoard={}, srcBoard={};
+  results.forEach(function(r){ if(r.locked||!r.st) return; const b=r.st.bookings||{}, a=r.st.analytics||{};
+    const arch=r.jobs.reduce(function(s,j){return s+amtOf(j);},0);
+    E.paid+=_n(b.estimatedRev); E.rev+=Math.max(arch,_n(b.estimatedRev)); E.done+=_n(b.done); E.total+=_n(b.total); E.cust+=_n(b.customers);
+    const w=_wkRev(r.jobs), bw=b.weekOverWeek||{}, aw=a.weekOverWeek||{};
+    E.twr+=(w.tw||_n(bw.thisWeekRev)); E.lwr+=(w.lw||_n(bw.lastWeekRev));
+    E.newC+=_n(a.newVisitors); E.visits+=_n(a.totalVisits);
+    E.twv+=_n(aw.thisWeekVisits); E.lwv+=_n(aw.lastWeekVisits); E.twq+=_n(aw.thisWeekQuotes); E.lwq+=_n(aw.lastWeekQuotes);
+    E.twb+=_n(bw.thisWeekBookings); E.lwb+=_n(bw.lastWeekBookings);
+    Object.keys(b.adminStats||{}).forEach(function(nm){ crewBoard[nm]=(crewBoard[nm]||0)+_n(b.adminStats[nm]); });
+    Object.keys(a.sourceQuality||{}).forEach(function(sc){ const q=a.sourceQuality[sc]||{}; if(!srcBoard[sc])srcBoard[sc]={v:0,bk:0}; srcBoard[sc].v+=_n(q.visits); srcBoard[sc].bk+=_n(q.bookings); });
+  });
+  const compRate=E.total>0?Math.round(E.done/E.total*100):0;
+  const avgT=(E.done>0&&E.rev>0)?Math.round(E.rev/E.done):0;
+  const q2b=E.twq>0?Math.round(E.twb/E.twq*100):null;
   let h='';
-  // weekly revenue from REAL completed jobs (backend weekOverWeek counts bookings created, not money made)
-  function _wkRev(jobs){
-    const now=Date.now(), d7=now-7*864e5, d14=now-14*864e5;
-    let tw=0,lw=0;
-    (jobs||[]).forEach(function(j){ const d=new Date(String(dateOf(j)||'')+'T12:00:00').getTime(); if(isNaN(d)) return;
-      if(d>d7&&d<=now+864e5) tw+=amtOf(j); else if(d>d14&&d<=d7) lw+=amtOf(j); });
-    return {tw:tw,lw:lw};
-  }
-  // empire totals
-  let totRev=0,totDone=0,totCust=0,twr=0,lwr=0;
-  results.forEach(function(r){ if(r.locked||!r.st) return; const b=r.st.bookings||{};
-    totRev+=r.jobs.reduce(function(s,j){return s+amtOf(j);},0); totDone+=(+b.done||0); totCust+=(+b.customers||0);
-    const w=_wkRev(r.jobs); twr+=w.tw; lwr+=w.lw; });
-  const wowPct=lwr>0?Math.round((twr-lwr)/lwr*100):null;
-  h+='<div class="dev-card" style="grid-column:1/-1;"><div class="dev-h">👑 Empire totals — all businesses</div><div class="dev-b"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">'
-    +'<div><div class="kn" style="font-size:26px;font-family:var(--mono);font-weight:800;background:linear-gradient(180deg,#fff,#4ade80);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">'+_fmtMoney(totRev)+'</div><div class="kl" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-top:4px;">Collected (archived jobs)</div></div>'
-    +'<div><div style="font-size:26px;font-family:var(--mono);font-weight:800;">'+_fmtMoney(twr)+'</div><div class="kl" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-top:4px;">Rev this week '+(wowPct==null?'':(wowPct>=0?'<span style="color:#4ade80">▲'+wowPct+'%</span>':'<span style="color:#f87171">▼'+Math.abs(wowPct)+'%</span>'))+'</div></div>'
-    +'<div><div style="font-size:26px;font-family:var(--mono);font-weight:800;">'+totDone+'</div><div class="kl" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-top:4px;">Jobs completed</div></div>'
-    +'<div><div style="font-size:26px;font-family:var(--mono);font-weight:800;">'+totCust+'</div><div class="kl" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-top:4px;">Customers</div></div>'
-    +'</div></div></div>';
+  h+='<div class="dev-card" style="grid-column:1/-1;"><div class="dev-h">👑 Empire totals — all businesses</div><div class="dev-b">'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:16px;">'
+    +_kpi(_fmtMoney(E.rev),'Revenue (done work)','background:linear-gradient(180deg,#fff,#4ade80);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;')
+    +_kpi(_fmtMoney(E.twr)+_delta(E.twr,E.lwr),'Rev this week')
+    +_kpi(String(E.done),'Jobs completed')
+    +_kpi(compRate+'%','Completion rate')
+    +_kpi(String(E.cust),'Customers')
+    +_kpi('+'+E.newC,'New leads (30d)')
+    +_kpi(String(E.visits)+_delta(E.twv,E.lwv),'Website visits')
+    +_kpi(avgT?('$'+avgT):'—','Avg ticket')
+    +'</div>';
+  if(E.done>0&&E.paid<=0){ h+='<div style="margin-top:12px;padding:9px 12px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);border-radius:9px;font-size:12.5px;color:#fbbf24;">⚠ '+E.done+' jobs done but <b>$0 marked paid</b> — "Revenue (done work)" is the value of completed jobs; mark jobs paid (or enable autopay) so a "collected" figure tracks too.</div>'; }
+  h+='</div></div>';
+  h+='<div class="dev-card"><div class="dev-h">🔻 This week — visits → quotes → jobs</div><div class="dev-b">'
+    +'<div class="dev-row">👀 Site visits <b>'+E.twv+'</b>'+_delta(E.twv,E.lwv)+'</div>'
+    +'<div class="dev-row">📝 Quote opens <b>'+E.twq+'</b>'+_delta(E.twq,E.lwq)+'</div>'
+    +'<div class="dev-row">✅ New bookings <b>'+E.twb+'</b>'+_delta(E.twb,E.lwb)+(q2b!=null?' · <span class="dev-pill g">'+q2b+'% quote→book</span>':'')+'</div>'
+    +'</div></div>';
+  const crewSorted=Object.keys(crewBoard).sort(function(a,b){return crewBoard[b]-crewBoard[a];}).slice(0,6);
+  h+='<div class="dev-card"><div class="dev-h">🏆 Crew — jobs completed</div><div class="dev-b">'
+    +(crewSorted.length?crewSorted.map(function(nm){ const mx=crewBoard[crewSorted[0]]||1; return '<div class="dev-row" style="align-items:center;gap:9px;"><span style="flex:0 0 100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(nm)+'</span><span style="flex:1;height:9px;background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden;"><span style="display:block;height:100%;width:'+Math.round(crewBoard[nm]/mx*100)+'%;background:#22c55e;"></span></span><b style="flex:0 0 32px;text-align:right;font-family:var(--mono);">'+crewBoard[nm]+'</b></div>'; }).join(''):'<div class="dev-row" style="color:var(--dim);">No crew job data yet.</div>')
+    +'</div></div>';
+  const srcSorted=Object.keys(srcBoard).sort(function(a,b){return srcBoard[b].v-srcBoard[a].v;}).slice(0,6);
+  h+='<div class="dev-card"><div class="dev-h">📣 Where customers come from</div><div class="dev-b">'
+    +(srcSorted.length?srcSorted.map(function(sc){ const q=srcBoard[sc]; const cr=q.v>0?Math.round(q.bk/q.v*100):0; return '<div class="dev-row"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(sc||'direct')+'</span><span style="color:var(--muted);font-family:var(--mono);font-size:12px;">'+q.v+' visits · '+q.bk+' booked</span>'+(cr?' <span class="dev-pill g">'+cr+'%</span>':'')+'</div>'; }).join(''):'<div class="dev-row" style="color:var(--dim);">No source data yet.</div>')
+    +'</div></div>';
   results.forEach(function(r){
     const z=r.z;
-    if(r.locked){ h+='<div class="dev-card"><div class="dev-h" style="--bc:'+esc(z.c)+'">'+esc(z.e)+' '+esc(z.n)+'</div><div class="dev-b"><div class="dev-row" style="color:var(--dim);">🔒 Not connected — link it in ⚙ 🏢 Businesses to pull its numbers.</div></div></div>'; return; }
-    const b=(r.st&&r.st.bookings)||{}; const w0=_wkRev(r.jobs); const w={thisWeekRev:w0.tw,lastWeekRev:w0.lw};
+    if(r.locked){ h+='<div class="dev-card"><div class="dev-h" style="--bc:'+esc(z.c)+'">'+esc(z.e)+' '+esc(z.n)+'</div><div class="dev-b"><div class="dev-row" style="color:var(--dim);">🔒 Not connected — link it in ⚙ 🏢 Businesses.</div></div></div>'; return; }
+    const b=(r.st&&r.st.bookings)||{}, a=(r.st&&r.st.analytics)||{};
+    const w=_wkRev(r.jobs); const cr=_n(b.total)>0?Math.round(_n(b.done)/_n(b.total)*100):0;
+    const revB=Math.max(r.jobs.reduce(function(s,j){return s+amtOf(j);},0),_n(b.estimatedRev));
+    const at=(_n(b.done)>0&&revB>0)?Math.round(revB/_n(b.done)):0;
     const byMonth={}; months.forEach(function(m){ byMonth[m]=0; });
     r.jobs.forEach(function(j){ const m=String(dateOf(j)||'').slice(0,7); if(m in byMonth) byMonth[m]+=amtOf(j); });
     const max=Math.max.apply(null,months.map(function(m){return byMonth[m];}).concat([1]));
-    const pct=(+w.lastWeekRev>0)?Math.round(((+w.thisWeekRev)-(+w.lastWeekRev))/(+w.lastWeekRev)*100):null;
     h+='<div class="dev-card"><div class="dev-h"><span style="width:4px;height:16px;border-radius:3px;background:'+esc(z.c)+';box-shadow:0 0 10px '+esc(z.c)+';"></span>'+esc(z.e)+' '+esc(z.n)+'<span class="grow"></span><span class="ph-c">'+(r.st?'live':'error')+'</span></div><div class="dev-b">'
-      +'<div class="dev-row">This week <b>'+_fmtMoney(w.thisWeekRev||0)+'</b>'+(pct==null?'':(pct>=0?' <span class="dev-pill g">▲ '+pct+'%</span>':' <span class="dev-pill r">▼ '+Math.abs(pct)+'%</span>'))+' <span style="color:var(--dim)">vs '+_fmtMoney(w.lastWeekRev||0)+' last week</span></div>'
-      +'<div class="dev-row">Done <b>'+(b.done||0)+'</b> of <b>'+(b.total||0)+'</b> bookings · customers <b>'+(b.customers||0)+'</b> · pipeline <b>'+_fmtMoney(b.estimatedRev||0)+'</b></div>'
-      +'<div style="display:flex;align-items:flex-end;gap:7px;height:90px;margin-top:12px;">'
-      +months.map(function(m){ const v=byMonth[m]; const hh=Math.max(3,Math.round(v/max*76));
-        return '<div style="flex:1;text-align:center;"><div title="'+m+' — '+_fmtMoney(v)+'" style="height:'+hh+'px;border-radius:6px 6px 3px 3px;background:linear-gradient(180deg,'+esc(z.c)+','+esc(z.c)+'44);margin-bottom:4px;"></div><div style="font-size:8.5px;font-family:var(--mono);color:var(--dim);">'+m.slice(5)+'</div><div style="font-size:8.5px;font-family:var(--mono);color:var(--muted);">'+(v?('$'+Math.round(v/100)/10+'k').replace('$0.','$.'):'—')+'</div></div>'; }).join('')
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:11px 14px;margin-bottom:12px;">'
+      +_kpi(_fmtMoney(w.tw)+_delta(w.tw,w.lw),'This week')
+      +_kpi(_fmtMoney(revB),'Revenue (done)')
+      +_kpi(_n(b.done)+' / '+_n(b.total)+' · '+cr+'%','Jobs done')
+      +_kpi(String(_n(b.customers)),'Customers')
+      +_kpi(at?('$'+at):'—','Avg ticket')
+      +_kpi(String(_n(a.totalVisits)),'Site visits')
+      +'</div>'
+      +'<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin:2px 0 6px;">Revenue · last 6 months</div>'
+      +'<div style="display:flex;align-items:flex-end;gap:7px;height:80px;">'
+      +months.map(function(m){ const v=byMonth[m]; const hh=Math.max(3,Math.round(v/max*66));
+        return '<div style="flex:1;text-align:center;"><div title="'+m+' — '+_fmtMoney(v)+'" style="height:'+hh+'px;border-radius:6px 6px 3px 3px;background:linear-gradient(180deg,'+esc(z.c)+','+esc(z.c)+'44);margin-bottom:4px;"></div><div style="font-size:8.5px;font-family:var(--mono);color:var(--dim);">'+m.slice(5)+'</div><div style="font-size:8.5px;font-family:var(--mono);color:var(--muted);">'+(v?_k(v):'—')+'</div></div>'; }).join('')
       +'</div></div></div>';
   });
   grid.innerHTML=h;
