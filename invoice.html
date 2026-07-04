@@ -13,9 +13,9 @@
 <!-- Auto-updater: pulls the latest version in the background and reloads once when a new
      deploy is live, so phones never get stuck on an old cached build. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-07.4 */
+/* APP_VER:2026-07-07.5 */
 (function(){
-  var V = '2026-07-07.4';
+  var V = '2026-07-07.5';
   window.__APP_VER = V;
   var reloads = 0, lastCheck = 0;
   function check(){
@@ -7842,7 +7842,7 @@ function _syncRouteOrderToDispatch(dateStr) {
 
   const processStops = (stops) => {
     if (!stops || !stops.length) return;
-    let cursor = new Date(y, mo - 1, d, startH || 8, startM || 0, 0, 0); cursor = new Date(cursor.getTime() + 30*60000); // 🧰 PMCS & load-up — crews get 30 min at base before job #1
+    let cursor = new Date(y, mo - 1, d, startH || 8, startM || 0, 0, 0); cursor = new Date(cursor.getTime() + ((new Date(y, mo - 1, d).getDay()===1?30:10))*60000); // 🧰 PMCS & load-up: 30 min Mondays, 10 min Tue–Fri
     if (isNaN(cursor.getTime())) return; // safety guard
     stops.forEach(s => {
       const b = s.bk; // only use bk — don't fall back to rowIndex which could be stale
@@ -7963,7 +7963,7 @@ function buildCrewStopsHtml(dateStr, crew, orderedStops, startTimeStr, startVal)
   const [startH, startM] = startTimeStr.split(':').map(Number);
   const [y, mo, d] = dateStr.split('-').map(Number);
   const AVG_SPEED_MPH = 25;
-  const LOADUP_MIN = 30, UNLOAD_MIN = 30;   // 🧰 lawn phases — 30-min load-up + 30-min unload (edit these two numbers)
+  const LOADUP_MIN = ((new Date(dateStr+'T12:00')).getDay()===1?30:10), UNLOAD_MIN = 30;   // 🧰 lawn phases — load-up 30 min Mondays / 10 min Tue–Fri, unload 30 min
   const _todayISO = (function(){ const t=new Date(); return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); })();
   const _isToday = (dateStr === _todayISO);
   // ⏱ Start anchors to the crew's ACTUAL clock-in time today (not a hardcoded hour); otherwise the set start time.
@@ -9646,7 +9646,7 @@ async function buildRoute() {
 
       // Calendar updates + dispatch time sync per crew
       for (const [crew, stops] of Object.entries(crewOrders)) {
-        let cursor = new Date(y, mo - 1, d, startH, startM, 0, 0); cursor = new Date(cursor.getTime() + 30*60000); // 🧰 PMCS & load-up — crews get 30 min at base before job #1
+        let cursor = new Date(y, mo - 1, d, startH, startM, 0, 0); cursor = new Date(cursor.getTime() + ((new Date(y, mo - 1, d).getDay()===1?30:10))*60000); // 🧰 PMCS & load-up: 30 min Mondays, 10 min Tue–Fri
         for (const stop of stops) {
           const driveMin = routeDriveMin(stop);
           cursor = new Date(cursor.getTime() + driveMin * 60000);
@@ -9782,7 +9782,7 @@ function _buildCalendarUpdatesFromCurrentOrder() {
     for (const [crewKey, stops] of Object.entries(crews)) {
       if (!Array.isArray(stops)) continue;
       const crew = (crewKey === '_legacy' || crewKey === 'unassigned') ? '' : crewKey;
-      let cursor = new Date(y, mo - 1, d, startH || 8, startM || 0, 0, 0); cursor = new Date(cursor.getTime() + 30*60000); // 🧰 PMCS & load-up — crews get 30 min at base before job #1
+      let cursor = new Date(y, mo - 1, d, startH || 8, startM || 0, 0, 0); cursor = new Date(cursor.getTime() + ((new Date(y, mo - 1, d).getDay()===1?30:10))*60000); // 🧰 PMCS & load-up: 30 min Mondays, 10 min Tue–Fri
       for (const stop of stops) {
         const bk = stop && stop.bk;
         if (!bk) continue;
