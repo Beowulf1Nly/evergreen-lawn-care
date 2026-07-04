@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-06.14 */
-(function(){ var V='2026-07-06.14'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-06.15 */
+(function(){ var V='2026-07-06.15'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -2014,13 +2014,34 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
   if(c==='un'||!jobs.length) return '';
   const p=_econParts(c,jobs,zi);
   const estH=Math.floor(p.estM/60), estMm=p.estM%60;
-  // 🏁 projected shift finish (day view) = start (real clock-in today, else 7:30 assumed) + full est day
+  // 🏁 projected shift finish (day view). Anchors to real clock-in; once running, projects the REMAINING
+  // (not-done) stops from NOW so a behind crew's finish slides later, and flags jobs that fall past 7 PM.
   let finishHtml='';
   if(_dispView!=='week' && _dispView!=='month' && iso){
-    let _startMin=450;                                  // 7:30 before they clock in
-    if(iso===todayISO()){ const _sh=_crewShift(c); if(_sh&&_sh.clockIn) _startMin=_sh.clockIn.getHours()*60+_sh.clockIn.getMinutes(); }
-    const _fin=_startMin+p.estM; const _fh=Math.floor(_fin/60)%24, _fm=Math.round(_fin)%60;
-    finishHtml=' · 🏁 shift done ~<b>'+((_fh%12)||12)+':'+String(_fm).padStart(2,'0')+(_fh<12?' AM':' PM')+'</b>';
+    const _unload=/clean/i.test((_bizLoad()[zi]||{}).n||'')?15:30;
+    let _startMin=450, _finMin=null; const _atRisk=[]; let _allDone=false;
+    if(iso===todayISO()){
+      const _sh=_crewShift(c);
+      if(_sh&&_sh.clockIn){
+        _startMin=_sh.clockIn.getHours()*60+_sh.clockIn.getMinutes();
+        const _rem=jobs.filter(function(b){return !isDone(b);}).slice().sort(function(a,b){ const x=a.jobTime||'99:99',y=b.jobTime||'99:99'; return x<y?-1:x>y?1:0; });
+        _allDone=(jobs.length>0 && _rem.length===0);
+        if(_rem.length){
+          const _nowMin=(new Date()).getHours()*60+(new Date()).getMinutes();
+          let _cur=_nowMin;
+          _rem.forEach(function(b,i){ if(i>0)_cur+=DRIVE_BUF; const _st=_cur; _cur+=_jobMins(b); if(_st>=1110||_cur>1140) _atRisk.push(b); });   // starts after 6:30 or ends after 7 PM
+          _cur+=DRIVE_BUF+_unload;
+          _finMin=Math.max(_startMin+p.estM, _cur);   // never earlier than now+remaining
+        }
+      }
+    }
+    if(_finMin==null) _finMin=_startMin+p.estM;
+    if(_allDone){ finishHtml=' · 🏁 <span class="dev-pill g">shift complete ✓</span>'; }
+    else {
+      const _late=_finMin>1140, _fh=Math.floor(_finMin/60)%24, _fm=Math.round(_finMin)%60;
+      finishHtml=' · 🏁 shift done ~<b style="color:'+(_late?'#f87171':'inherit')+'">'+((_fh%12)||12)+':'+String(_fm).padStart(2,'0')+(_fh<12?' AM':' PM')+'</b>'
+        +(_atRisk.length?(' · <span class="dev-pill r">⚠ '+_atRisk.length+' at risk past 7 PM: '+_atRisk.map(function(b){return esc(String(b.name||'?').split(' ')[0]);}).join(', ')+'</span>'):'');
+    }
   }
   const ok=p.pct>=50;
   const span=(_dispView==='month')?'month':(_dispView==='week')?'week':'day';
