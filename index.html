@@ -25,7 +25,7 @@
 </script>
 
 <!-- ===== QUOTE-FIRST MODE TOGGLE =====================================
-  true  = no-card "book a visit / request quote" flow (lead + pay after)
+  true  = no-card "book a visit / request quote" flow (free on-site estimate)
   false = original instant-booking flow with Stripe card checkout
   To switch back instantly: set this to false and redeploy. -->
 <script>window.QUOTE_ONLY_MODE = true;</script>
@@ -120,7 +120,7 @@
         "itemOffered": {
           "@type": "Service",
           "name": "First Mow Introductory Offer",
-          "description": "First lawn service for new customers — as low as $19, charged after the mow is complete."
+          "description": "First lawn service for new customers — as low as $19."
         },
         "price": "19",
         "priceCurrency": "USD"
@@ -2034,12 +2034,12 @@
 
       <!-- Standard payment section (hidden for XL/quote flow) -->
       <div id="q-payment-section">
-        <!-- Not-charged-now notice -->
+        <!-- Free-estimate notice -->
         <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:13px 16px;margin-bottom:14px;display:flex;align-items:flex-start;gap:10px;">
           <div style="font-size:18px;line-height:1;flex-shrink:0;">🛡️</div>
           <div>
-            <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:3px;">Your card is NOT charged today</div>
-            <div style="font-size:12px;color:#374151;line-height:1.5;">We save your card securely with Stripe so we can bill you <strong>after your first mow</strong>. Nothing is charged until the job is done and you're happy.</div>
+            <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:3px;">Your estimate is 100% free</div>
+            <div style="font-size:12px;color:#374151;line-height:1.5;">We'll come out, take a look at your lawn, and give you an exact price — no obligation, no payment.</div>
           </div>
         </div>
 
@@ -2048,11 +2048,11 @@
         <div id="q-card-errors" style="color:#e53e3e;font-size:13px;min-height:18px;margin-bottom:14px;"></div>
         <button class="btn-pay" id="q-pay-btn" onclick="quotePaySubmit()">
           <div class="spinner"></div>
-          <span class="pay-text">🔒 Book Now — $19 Charged After First Mow</span>
+          <span class="pay-text">📅 Book My Free Estimate</span>
         </button>
         <div class="stripe-note" style="margin-top:12px;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-          Secured by Stripe · Card saved now, charged only after your first mow
+          Free on-site estimate · No card, no obligation
         </div>
         <div style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:8px;" id="q-following-line"></div>
       </div>
@@ -2062,8 +2062,8 @@
         <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:13px 16px;margin-bottom:16px;display:flex;align-items:flex-start;gap:10px;">
           <div style="font-size:18px;line-height:1;flex-shrink:0;">🗓️</div>
           <div>
-            <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:3px;">Book your visit — no card required</div>
-            <div style="font-size:12px;color:#374151;line-height:1.5;">Pick a date and we'll come take care of your lawn. We confirm your price first — you pay only after the job's done. No card, no obligation.</div>
+            <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:3px;">Book your free on-site estimate</div>
+            <div style="font-size:12px;color:#374151;line-height:1.5;">Pick a date and we'll come out for your free on-site estimate — we'll take a look and give you an exact price. No card, no obligation.</div>
           </div>
         </div>
         <button class="btn-pay" id="q-xl-book-btn" onclick="submitXLQuoteVisit()" style="background:var(--green-mid);">
@@ -2077,7 +2077,7 @@
     <div id="quoteSuccess" style="display:none;text-align:center;padding:16px 0;">
       <div class="success-icon">✅</div>
       <h3 style="font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:var(--green-deep);margin-bottom:10px;">You're all set!</h3>
-      <p style="font-size:15px;color:var(--text-muted);line-height:1.7;" id="q-success-msg">Mow booked for <strong id="q-success-date"></strong>. Your card is saved for automatic billing after each visit. See you soon! 🌿</p>
+      <p style="font-size:15px;color:var(--text-muted);line-height:1.7;" id="q-success-msg">You're on the schedule! We'll come out on <strong id="q-success-date"></strong> for your free estimate and get you a price — no obligation, no payment. 🌿</p>
       <button class="btn-primary" onclick="closeQuoteModal()" style="width:100%;margin-top:20px;border:none;cursor:pointer;">Close</button>
     </div>
 
@@ -2395,42 +2395,7 @@ function handleYardSize() {
   document.getElementById('quoteSection').style.display = isLarge ? 'block' : 'none';
 }
 
-async function handleQuoteRequest() {
-  const name = document.getElementById('customerName').value.trim();
-  const email = document.getElementById('customerEmail').value.trim();
-  const phone = document.getElementById('customerPhone').value.trim();
-  const address = document.getElementById('customerAddress').value.trim();
-
-  if (!name || !email || !address) {
-    alert('Please fill in your name, email, and address.');
-    return;
-  }
-  if (!validateZip()) {
-    alert('Please enter a valid zip code in our service area.');
-    return;
-  }
-
-  const btn = document.getElementById('quoteBtn');
-  btn.classList.add('loading');
-  btn.disabled = true;
-
-  try {
-    const quoteParams = new URLSearchParams({
-      action: 'quote', name, email, phone, address,
-      zip:      document.getElementById('customerZip').value.trim(),
-      yardSize: document.getElementById('yardSize').value,
-      notes:    document.getElementById('quoteNotes').value.trim() || '(none)',
-    });
-    await fetch(SHEETS_SCRIPT_URL + '?' + quoteParams.toString(), { method: 'GET', mode: 'no-cors' });
-
-    btn.classList.remove('loading');
-    btn.disabled = false;
-  } catch(e) {
-    btn.classList.remove('loading');
-    btn.disabled = false;
-    alert('Something went wrong. Please call us at (352) 462-0627.');
-  }
-}
+// [removed dead code: old unused quote-request handler]
 
 // [removed legacy dead code: pay-method toggle + old pay-after/Stripe booking handler — replaced by quote-first flow]
 
@@ -3645,10 +3610,10 @@ function renderPlanCards() {
   // ── Large/XL lots: replace plan cards with free quote visit info ──
   if (isXL) {
     const isPersonal = qState.personalQuoteRequested;
-    const cardTitle  = isPersonal ? 'Custom Estimate · Free In-Person Visit' : 'Book Your Lawn Service · Pay After';
+    const cardTitle  = isPersonal ? 'Custom Estimate · Free In-Person Visit' : 'Book Your Free On-Site Estimate';
     const cardDesc   = isPersonal
       ? "Not happy with the estimated size? We'll come out, measure your yard ourselves, and give you an exact price — completely free, no commitment required."
-      : "Pick a date and we'll come take care of your lawn. We confirm your exact price first, and you pay only after the job's done — no card, no commitment.";
+      : "Pick a date and we'll come out for a free on-site estimate — we'll take a look and give you an exact price. No card, no commitment.";
     document.getElementById('quotePlanCards').innerHTML = `
       <div style="background:var(--green-pale);border:1.5px solid rgba(45,106,45,0.2);border-radius:14px;padding:20px 18px;margin-bottom:4px;">
         <div style="font-size:22px;margin-bottom:10px;">🗺️</div>
@@ -3682,7 +3647,7 @@ function renderPlanCards() {
     const afterLabel   = noPrice ? 'Custom estimate' : (qState.isReturning ? 'regular rate' : '$' + p.afterPrice + '/mow after');
     const isSelected   = qState.selectedPlan === p.id;
     const planFirstText = showPromo
-      ? '<strong>First cut $' + promoPrice + '</strong> — billed after we mow'
+      ? '<strong>First cut $' + promoPrice + '</strong>'
       : (noPrice ? 'Custom estimate' : '$' + p.afterPrice + '/mow');
     const notePart = p.note && p.note.split('·')[1] ? p.note.split('·')[1].trim() : 'cancel anytime';
     const planAfterText = noPrice
@@ -3800,7 +3765,7 @@ async function submitXLQuoteVisit() {
   const msgEl     = document.getElementById('q-success-msg');
   const dateEl    = document.getElementById('q-success-date');
   if (dateEl) dateEl.textContent = new Date(qState.startDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
-  if (msgEl)  msgEl.innerHTML = 'You\'re booked for <strong>' + dateFmt + '</strong>! We\'ll text to confirm the details and your price, then come take care of your lawn. No payment until the job\'s done. 🌿';
+  if (msgEl)  msgEl.innerHTML = 'You\'re on the schedule for <strong>' + dateFmt + '</strong>! We\'ll come out for your free estimate and get you a price — no obligation, no payment. 🌿';
   if (successEl) successEl.style.display = 'block';
 }
 
@@ -3832,13 +3797,13 @@ function buildOrderSummary() {
   const showPromo  = !isRet && promoPrice !== null;
   const afterTxt   = !after ? 'Custom estimate' : '$' + after + '/mow';
   const todayAmt   = showPromo ? '$' + promoPrice : (after ? '$' + after : 'Custom');
-  const todayLbl   = showPromo ? 'Charged after first service' : 'Per mow';
+  const todayLbl   = showPromo ? 'First service' : 'Per mow';
 
   // Update pay button text to match
   const payText = document.querySelector('#q-pay-btn .pay-text');
   if (payText) {
     payText.textContent = showPromo
-      ? '🔒 Book Now — $' + promoPrice + ' Charged After First Mow'
+      ? '📅 Book My Free Estimate'
       : '🔒 Book Now — ' + (after ? '$' + after + ' per mow' : 'Request Custom Estimate');
   }
 
@@ -4331,7 +4296,7 @@ if (window.QUOTE_ONLY_MODE) document.addEventListener('DOMContentLoaded', functi
     var bar=document.getElementById('quoteStepsBar'); if(bar) bar.style.display='none';
     var msgEl=document.getElementById('q-success-msg'), dateEl=document.getElementById('q-success-date');
     if(dateEl) dateEl.textContent=new Date(date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
-    if(msgEl) msgEl.innerHTML="Your free estimate is booked for <strong>"+dateFmt+"</strong>! We'll reach out to confirm, then come take a look and give you your price. 100% free \u2014 no obligation. \ud83c\udf3f";
+    if(msgEl) msgEl.innerHTML="You're on the schedule! We'll come out <strong>"+dateFmt+"</strong> for your free estimate and get you a price \u2014 no obligation, no payment. \ud83c\udf3f";
     var suc=document.getElementById('quoteSuccess'); if(suc) suc.style.display='block';
   };
   var _open=window.openQuoteModal;
@@ -4365,6 +4330,8 @@ if (window.QUOTE_ONLY_MODE) document.addEventListener('DOMContentLoaded', functi
     #mobileCTAbarL a { flex:1; text-align:center; padding:13px 8px; border-radius:11px; font-weight:800; font-size:15px; text-decoration:none; }
     #mobileCTAbarL .ctaL-call { background:#fff; color:var(--green-deep, #1a3a1a); border:1.5px solid #16a34a; }
     #mobileCTAbarL .ctaL-quote { background:#16a34a; color:#fff; }
+    /* When the estimate modal is open, hide the sticky CTA bar so it can't overlap the form's submit button */
+    #quoteModalOverlay.open ~ #mobileCTAbarL { display:none !important; }
     body { padding-bottom:74px; }
   }
 </style>
