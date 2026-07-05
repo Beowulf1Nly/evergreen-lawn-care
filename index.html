@@ -4280,15 +4280,9 @@ if (window.QUOTE_ONLY_MODE) document.addEventListener('DOMContentLoaded', functi
     try{ qState.address=address; qState.zip=zip; qState.name=name; qState.email=email; qState.phone=phone; qState.startDate=date; }catch(e){}
     var btn=document.getElementById('lqSubmitBtn'); if(btn){ btn.disabled=true; btn.textContent='Scheduling\u2026'; }
     var dateFmt=new Date(date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-    try{ var params=new URLSearchParams({action:'xl_quote_visit',name:name,email:email,phone:phone,address:address,zip:zip,quoteDateRaw:date,quoteDate:dateFmt}); fetch(SHEETS_SCRIPT_URL+'?'+params.toString(),{method:'GET',mode:'no-cors'}).catch(function(){}); }catch(e){}
-    try{ if(typeof gtag_report_conversion==='function') gtag_report_conversion(); }catch(e){}
-    try{ _quoteCurrentStep=0; }catch(e){}
-    var s1=document.getElementById('quoteStep1'); if(s1) s1.style.display='none';
-    var bar=document.getElementById('quoteStepsBar'); if(bar) bar.style.display='none';
-    var msgEl=document.getElementById('q-success-msg'), dateEl=document.getElementById('q-success-date');
-    if(dateEl) dateEl.textContent=new Date(date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
-    if(msgEl) msgEl.innerHTML="You're on the schedule! We'll come out <strong>"+dateFmt+"</strong> for your free estimate and get you a price \u2014 no obligation, no payment. \ud83c\udf3f";
-    var suc=document.getElementById('quoteSuccess'); if(suc) suc.style.display='block';
+    try{ var params=new URLSearchParams({action:'xl_quote_visit',name:name,email:email,phone:phone,address:address,zip:zip,quoteDateRaw:date,quoteDate:dateFmt}); fetch(SHEETS_SCRIPT_URL+'?'+params.toString(),{method:'GET',mode:'no-cors',keepalive:true}).catch(function(){}); }catch(e){}
+    // Redirect to the thank-you page — it fires the Google Ads "Submit lead form" conversion on load (page-load conversion). keepalive above lets the lead request finish during navigation.
+    window.location.href='/success';
   };
   var _open=window.openQuoteModal;
   window.openQuoteModal=function(p){
