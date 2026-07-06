@@ -796,6 +796,7 @@ function enterApp(){
   if(_bookInt) clearInterval(_bookInt);   _bookInt=setInterval(_guarded('b',refreshBookings),90000);
   if(_routeInt) clearInterval(_routeInt); _routeInt=setInterval(_guarded('r',refreshRouteOrder),60000);
   if(_tick) clearInterval(_tick); _tick=setInterval(updateClocks,1000);
+  if(window._dispTick) clearInterval(window._dispTick); window._dispTick=setInterval(function(){ if(_activeTab==='dispatch'&&_dispView==='day'&&!_dispDrag){ try{ renderDispatch(); }catch(e){} } },20000);
   loadCrewPay();                                   // roster names for crew cards
   let t0tab='live'; try{ t0tab=(location.hash||'').replace('#','')||localStorage.getItem('hq_tab')||'live'; }catch(e){}
   setTab(['live','dispatch','ops','stats','outreach','sites','dev'].indexOf(t0tab)>=0?t0tab:'live');
@@ -858,7 +859,7 @@ function _fixTimes(list){
 async function refreshBookings(){
   try{
     const bk=await fetch(SCRIPT_URL+'?action=bookings&includeCompleted=false&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null);
-    if(bk&&bk.success&&Array.isArray(bk.bookings)){ _bookings=_applyPending(_fixTimes(bk.bookings)); try{ localStorage.setItem('hq_cache_bookings', JSON.stringify(_bookings)); }catch(e){} render(); }
+    if(bk&&bk.success&&Array.isArray(bk.bookings)){ _bookings=_applyPending(_fixTimes(bk.bookings)); try{ localStorage.setItem('hq_cache_bookings', JSON.stringify(_bookings)); }catch(e){} render(); if(_activeTab==='dispatch'){ try{ loadCompleted(); }catch(e){} } }
   }catch(e){}
 }
 async function refresh(force){ await Promise.all([refreshRouteOrder(), refreshStatus(), (force||!_bookings.length)?refreshBookings():Promise.resolve()]); }
@@ -2050,13 +2051,11 @@ function _crewShift(c){
   return { clockIn:ci, clockOut:(hasMember&&!anyActive&&out&&ci&&out>ci)?out:null, active:anyActive };
 }
 function _crewWorkedHrs(c){
-  let best=0;
-  (_crews||[]).forEach(function(x){
-    if(String(x.active)==='0') return;                                   // only while working
-    const set=String(x.crew||'').toUpperCase().split(/[^A-Z0-9]+/);
-    if(set.indexOf(c)>=0&&x.clockIn){ const h=(Date.now()-new Date(x.clockIn).getTime())/3600000; if(h>0&&h<24&&h>best) best=h; }
-  });
-  return best;
+  const sh=(typeof _crewShift==='function')?_crewShift(c):null;
+  if(!sh||!sh.clockIn) return 0;
+  const end=sh.active?Date.now():(sh.clockOut?sh.clockOut.getTime():Date.now());   // freeze at clock-out
+  const h=(end-sh.clockIn.getTime())/3600000;
+  return (h>0&&h<24)?h:0;
 }
 function _econParts(c,jobs,zi){
   const R=jobs.reduce(function(s2,b){return s2+amtOf(b);},0);
@@ -2119,7 +2118,9 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
       }
     }
     if(_finMin==null) _finMin=_startMin+p.estM;
+    var _shF=(typeof _crewShift==='function')?_crewShift(c):null;
     if(_allDone){ finishHtml=' · 🏁 <span class="dev-pill g">shift complete ✓</span>'; }
+    else if(_shF&&!_shF.active&&_shF.clockOut){ finishHtml=' · 🏁 <span class="dev-pill">clocked out '+_t12(_shF.clockOut.getHours()*60+_shF.clockOut.getMinutes())+'</span>'+((_rem&&_rem.length)?(' · <span class="dev-pill r">'+_rem.length+' left unfinished</span>'):''); }
     else {
       const _late=_finMin>1140, _fh=Math.floor(_finMin/60)%24, _fm=Math.round(_finMin)%60;
       finishHtml=' · 🏁 shift done ~<b style="color:'+(_late?'#f87171':'inherit')+'">'+((_fh%12)||12)+':'+String(_fm).padStart(2,'0')+(_fh<12?' AM':' PM')+'</b>'
@@ -2130,8 +2131,11 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
   const span=(_dispView==='month')?'month':(_dispView==='week')?'week':'day';
   let live='';
   if(iso&&iso===todayISO()&&zi===0){                                  // GPS heartbeats are main-backend only
+    const _shL=(typeof _crewShift==='function')?_crewShift(c):null;
     const w=_crewWorkedHrs(c);
-    if(w>0){
+    if(_shL&&!_shL.active&&_shL.clockOut&&w>0){
+      live=' · ⏱ worked <b>'+w.toFixed(1)+'h</b> <span class="dev-pill">✅ clocked out '+_t12(_shL.clockOut.getHours()*60+_shL.clockOut.getMinutes())+'</span>';
+    } else if(w>0){
       if(isFinite(p.tgtH)){ const diff=p.tgtH-w;
         live=' · ⏱ on clock <b>'+w.toFixed(1)+'h</b> '+(diff>=0
           ?'<span class="dev-pill g">🟢 under target · '+diff.toFixed(1)+'h left</span>'
