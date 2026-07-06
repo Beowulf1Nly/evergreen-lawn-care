@@ -3085,19 +3085,8 @@ async function lookupLotSize(address, zip) {
   }
 
   // ── Step 3: Apps Script fallback ─────────────────────────────────────
-  try {
-    const url  = SHEETS_SCRIPT_URL + '?action=lookup_lot_size&address='
-      + encodeURIComponent(address + (zip ? ', FL ' + zip : ''));
-    const res  = await fetch(url);
-    const data = await res.json();
-    if (data.success && typeof data.tierIdx === 'number') {
-      qState.lotTierIdx      = data.tierIdx;
-      qState.detectedAcreage = data.acreage || null;
-      qState.lotAutoDetected = true;
-      qState.lotEstimated    = !!data.estimated;
-      return;
-    }
-  } catch(eScript) {}
+  // Step 3 removed — the Apps Script 'lookup_lot_size' action has no backend handler, so this
+  // awaited request always failed and only added latency; cadastral (above) + ZIP (below) cover it.
 
   // ── Step 4: ZIP fallback ─────────────────────────────────────────────
   // Tier indices: 0=small(<¼ac) 1=medium(¼-½) 2=threequarter(½-¾) 3=one(¾-1) 4=xl(>1/free quote)
