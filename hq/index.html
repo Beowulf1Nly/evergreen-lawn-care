@@ -1921,6 +1921,23 @@ function _jobMins(b){
   const custom=parseInt(String(b.mowMinutes||b.customMowMins||'')); if(custom>0) return custom;
   const n=String(b.notes||'').toLowerCase(), freq=String(b.frequency||'').toLowerCase(), svc=String(b.service||b.serviceType||'').toLowerCase();
   if(freq.includes('quote')||svc.includes('quote')) return 15;
+  // ── Cleaning job? Use the ~$50/hr tier model from beds/baths/rooms, BEFORE any lawn lot/sqft math.
+  //    (A cleaning home's "2,000 sq ft" must NOT be read as a tiny lawn area, and the tier can live in the notes.) ──
+  var _isLawnJob=/mow|lawn|blow|edg|mulch|hedge|leaf/.test(svc)||/lot[:\s]+[\d.]+\s*ac|yard[:\s]/.test(n);
+  var _isCleanJob=!_isLawnJob&&(/clean/.test(svc)||/deep\s*clean|move\s*(in|out)|standard\s*clean|detail\s*clean|best\s*clean/.test(n)||(/\d+\s*(?:bd|bed)\b/.test(n)&&/\d+\s*(?:ba|bath)\b/.test(n)));
+  if(_isCleanJob){
+    const _d=n.match(/duration[:\s]+(\d+)\s*(min|hr|hour)?/i);
+    if(_d) return Math.round(parseFloat(_d[1])*(/hr|hour/.test(_d[0])?60:1));
+    let cbeds=2; const cbm=n.match(/(\d+)\s*(?:bd|bed)/i); if(cbm) cbeds=parseInt(cbm[1]); else if(/studio/i.test(n)) cbeds=0;
+    let cbaths=1; const cbtm=n.match(/(\d+)\s*(?:ba|bath)/i); if(cbtm) cbaths=parseInt(cbtm[1]);
+    let crooms=0; const crm=n.match(/\+\s*(\d+)\s*room|(\d+)\s*(?:extra|bonus|add-?on)\s*room/i); if(crm) crooms=parseInt(crm[1]||crm[2]||'0');
+    var _ct=(svc+' '+freq+' '+n).replace(/\[deep-every[^\]]*\]/ig,'').replace(/first[^.;,|]*deep\s*clean[^.;,|]*/ig,'').replace(/deep\s*clean\s*every[^.;,|]*/ig,'');
+    let ctier=/move/.test(_ct)?'move':(/deep|best/.test(_ct)?'deep':(/better|detail/.test(_ct)?'better':'standard'));
+    const CR={standard:{base:54,bed:30,bath:18,room:30},better:{base:70,bed:40,bath:24,room:40},deep:{base:86,bed:50,bath:32,room:50},move:{base:107,bed:60,bath:36,room:60}}[ctier];
+    let cmins=CR.base+cbeds*CR.bed+cbaths*CR.bath+crooms*CR.room;
+    if(/3,?000\s*\+|3k\+/i.test(n)) cmins+=60; else if(/2,?000\s*[–-]\s*3,?000|2[–-]3k/i.test(n)) cmins+=30;
+    return Math.max(45, Math.min(600, Math.round(cmins/5)*5));
+  }
   const lot=n.match(/lot[:\s]+([\d.]+)\s*ac/i);
   if(lot&&parseFloat(lot[1])>0) return Math.max(15,Math.round(13+parseFloat(lot[1])*47));           // 42" ZTR calibration
   const sq=n.match(/(\d[\d,]*)\s*sq\.?\s*ft/i);
