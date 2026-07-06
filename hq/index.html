@@ -201,6 +201,9 @@
   .crewpick{ display:flex; gap:8px; flex-wrap:wrap; }
   .crewpick button{ flex:1; min-width:62px; padding:12px; border:1.5px solid var(--line2); border-radius:12px; background:rgba(255,255,255,.03); font-family:inherit; font-weight:800; font-size:15px; cursor:pointer; color:var(--text); transition:.15s; }
   .crewpick button.on{ border-color:var(--green); background:rgba(16,185,129,.16); color:#a7f3c8; box-shadow:0 0 14px rgba(16,185,129,.2); }
+  .rv-send{ display:flex; gap:18px; margin:2px 0 10px; }
+  .rv-send label{ display:flex; align-items:center; gap:7px; font-size:14.5px; cursor:pointer; }
+  .rv-send input{ width:17px; height:17px; accent-color:var(--green); }
   .primary{ width:100%; padding:15px; border:none; border-radius:14px; background:linear-gradient(135deg,#10b981,#059669); color:#fff; font-size:16px; font-weight:700; font-family:inherit; cursor:pointer; margin-top:8px; box-shadow:0 2px 8px rgba(0,0,0,.3); }
   .primary.red{ background:linear-gradient(135deg,#ef4444,#991b1b); color:#fff; box-shadow:0 10px 28px rgba(239,68,68,.25); }
   .primary:disabled{ opacity:.55; }
@@ -1164,6 +1167,7 @@ function openJobSheetFor(b){
     +'<a class="act" href="https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent((b.address||'')+(b.zip?', '+b.zip:'')+', FL')+'" target="_blank"><span class="em">🧭</span> Navigate here</a>'
     +(b.phone?('<a class="act" href="tel:'+esc(String(b.phone).replace(/[^0-9+]/g,''))+'"><span class="em">📞</span> Call '+esc((b.name||'').split(" ")[0])+'</a>'):'')
     +'<button class="act danger" onclick="openCancel()"><span class="em">🗑</span> Cancel this job</button>'
+    +((done && myRole==='owner')?('<div class="lbl">Ask for a review</div><div class="rv-send">'+(b.phone?'<label><input type="checkbox" id="rvText" checked> 💬 Text</label>':'<label style="opacity:.45"><input type="checkbox" id="rvText" disabled> 💬 Text</label>')+(b.email?'<label><input type="checkbox" id="rvEmail" checked> ✉️ Email</label>':'<label style="opacity:.45"><input type="checkbox" id="rvEmail" disabled> ✉️ Email</label>')+'</div><button class="act" onclick="sendReview()"><span class="em">⭐</span> Send review request</button>'):'')
     +'<button class="ghost" onclick="closeSheet(\'jobSheet\')">Close</button>';
   const cur=String(b.crew||'').toUpperCase().trim();
   document.getElementById('jobCrewPick').innerHTML=['A','B','C','—'].map(function(cw){ const val=cw==='—'?'':cw; const on=(val===cur); return '<button class="'+(on?'on':'')+'" onclick="doAssign(\''+val+'\')">'+(cw==='—'?'Unassign':('Crew '+cw))+'</button>'; }).join('');
@@ -1301,6 +1305,25 @@ async function doMarkDone(){
     if(d.success){ b.done='✓ Done'; _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{done:'✓ Done',ts:Date.now()}); toast('✅ Marked done'); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings(); closeSheet('jobSheet'); }
     else toast('Error: '+(d.error||'could not mark done'));
   }catch(e){ toast('Network error'); }
+}
+async function sendReview(){
+  const b=_jobCur; if(!b) return; const be=_jobBE(b);
+  const wantText=!!(document.getElementById('rvText')&&document.getElementById('rvText').checked);
+  const wantEmail=!!(document.getElementById('rvEmail')&&document.getElementById('rvEmail').checked);
+  if(!wantText&&!wantEmail){ toast('Tick Text and/or Email first'); return; }
+  const REVIEW_URL="https://g.page/r/CSvgbIGh-qbvEAE/review";
+  const first=(String(b.name||"").split(" ")[0])||"there";
+  if(wantText){
+    const ph=String(b.phone||"").replace(/[^0-9+]/g,"");
+    if(ph){ const msg="Hi "+first+"! Thanks for choosing us — we'd really appreciate a quick review 🙏 "+REVIEW_URL;
+      const a=document.createElement("a"); a.href="sms:"+ph+"?&body="+encodeURIComponent(msg); document.body.appendChild(a); a.click(); a.remove(); toast("💬 Opening Messages…"); }
+    else toast("⚠ No phone on file");
+  }
+  if(wantEmail){
+    try{ const d=await fetch(be.u+"?"+new URLSearchParams({action:"send_review_request", rowIndex:_ri(b), adminToken:be.t})).then(function(r){return r.json();});
+      if(d&&d.success) toast("✉️ Review email sent"); else toast("⚠ "+((d&&d.error)||"email failed")); }
+    catch(e){ toast("⚠ Network error"); }
+  }
 }
 function openNotesEdit(){
   const b=_jobCur; if(!b) return;
