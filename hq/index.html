@@ -1923,8 +1923,10 @@ function _jobMins(b){
   if(freq.includes('quote')||svc.includes('quote')) return 15;
   // ── Cleaning job? Use the ~$50/hr tier model from beds/baths/rooms, BEFORE any lawn lot/sqft math.
   //    (A cleaning home's "2,000 sq ft" must NOT be read as a tiny lawn area, and the tier can live in the notes.) ──
-  var _isLawnJob=/mow|lawn|blow|edg|mulch|hedge|leaf/.test(svc)||/lot[:\s]+[\d.]+\s*ac|yard[:\s]/.test(n);
-  var _isCleanJob=!_isLawnJob&&(/clean/.test(svc)||/deep\s*clean|move\s*(in|out)|standard\s*clean|detail\s*clean|best\s*clean/.test(n)||(/\d+\s*(?:bd|bed)\b/.test(n)&&/\d+\s*(?:ba|bath)\b/.test(n)));
+  // Detect cleaning by SERVICE first ("House Cleaning"/"Standard Clean"/"Regular Maid Service"…) so a
+  // cleaning customer who is ALSO a lawn customer (their notes carry "Lot: 0.29ac") is NOT read as a lawn job.
+  var _svcLawn=/mow|lawn|blow|edg|mulch|hedge|leaf|aerat|fertil/.test(svc);
+  var _isCleanJob=(/clean|maid/.test(svc))||(!_svcLawn&&(/deep\s*clean|move\s*(in|out)|standard\s*clean|detail\s*clean|best\s*clean|maid/.test(n)||(/\d+\s*(?:bd|bed)\b/.test(n)&&/\d+\s*(?:ba|bath)\b/.test(n))));
   if(_isCleanJob){
     const _d=n.match(/duration[:\s]+(\d+)\s*(min|hr|hour)?/i);
     if(_d) return Math.round(parseFloat(_d[1])*(/hr|hour/.test(_d[0])?60:1));
