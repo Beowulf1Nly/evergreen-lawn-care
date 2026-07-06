@@ -1863,13 +1863,23 @@ function renderDispatch(){
         if(iso===todayIso){
           const _nowM=(new Date()).getHours()*60+(new Date()).getMinutes();
           evs.sort(function(a,b2){ return a.st-b2.st||a.en-b2.en; });
-          let _c2=-1;
+          // Completed stops lay out back-to-back from load-up — clean history, no phantom overlaps;
+          // the end of the last one is where the crew actually is right now.
+          let _liveCur=_pmcsEn, _anyPlaced=false;
+          evs.forEach(function(ev){
+            if(!isDone(ev.b)) return;
+            const _d=ev.en-ev.st, _st=_liveCur+(_anyPlaced?DRIVE_BUF:0);
+            ev.st=_st; ev.en=_st+_d; _liveCur=ev.en; _anyPlaced=true;
+          });
+          // Current stop is IN PROGRESS: starts where the crew got to, end stretches through 'now'
+          // when running long (no fake gap). Everything after cascades forward, never before 'now'.
+          let _firstOpen=true;
           evs.forEach(function(ev){
             if(isDone(ev.b)) return;
-            const _d=ev.en-ev.st; let _sv=ev.st;
-            if(_sv<_nowM) _sv=_nowM;
-            if(_sv<_c2)  _sv=_c2;
-            ev.st=_sv; ev.en=_sv+_d; _c2=ev.en+DRIVE_BUF;
+            const _d=ev.en-ev.st, _st=_liveCur+(_anyPlaced?DRIVE_BUF:0);
+            if(_firstOpen){ ev.st=_st; ev.en=Math.max(_st+_d,_nowM); _firstOpen=false; }
+            else { const _s2=Math.max(_st,_nowM); ev.st=_s2; ev.en=_s2+_d; }
+            _liveCur=ev.en; _anyPlaced=true;
           });
         }
         const laneEnds=[];
