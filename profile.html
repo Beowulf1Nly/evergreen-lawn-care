@@ -1696,6 +1696,7 @@ function bookingCardHTML(b, isUpcoming) {
   const chipText  = isPaid ? '✅ Paid' : (isInvoiced ? '📄 Invoiced' : (isDone ? '✓ Done' : 'Pending'));
 
   const isFreeMow      = b.frequency === 'Free Mow';
+  const isQuoteVisit   = /quote/i.test(String(b.frequency||'')) || /quote/i.test(String(b.price||''));
   const isExtraMow     = b.frequency === 'Extra Mow';
   const isSubscription = ['Weekly Plan', 'Bi-Weekly Plan', 'Custom Plan'].includes(b.frequency);
   const priceTag = isFreeMow
@@ -1718,7 +1719,7 @@ function bookingCardHTML(b, isUpcoming) {
 
   // Pay Now for past jobs that are done but not yet paid
   let payNowBtn = '';
-  if (!isUpcoming && isDone && !isPaid && !isFreeMow) {
+  if (!isUpcoming && isDone && !isPaid && !isFreeMow && !isQuoteVisit) {
     const invRaw   = String(b.invoiced || '');
     const invUrl   = invRaw.match(/https:\/\/[^\s'"<>]+/)?.[0] || '';
     const invId    = invRaw.match(/(in_[A-Za-z0-9]+)/)?.[1]    || '';

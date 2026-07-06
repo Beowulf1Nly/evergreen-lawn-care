@@ -1928,7 +1928,15 @@ function _jobMins(b){
   if(svc&&!svc.includes('mow')&&!svc.includes('lawn')&&!svc.includes('blow')){
     const d=n.match(/duration[:\s]+(\d+)\s*(min|hr|hour)?/i);
     if(d) return Math.round(parseFloat(d[1])*(/hr|hour/.test(d[0])?60:1));
-    return 60;
+    let cbeds=2; const cbm=n.match(/(\d+)\s*(?:bd|bed)/i); if(cbm) cbeds=parseInt(cbm[1]); else if(/studio/i.test(n)) cbeds=0;
+    let cbaths=1; const cbtm=n.match(/(\d+)\s*(?:ba|bath)/i); if(cbtm) cbaths=parseInt(cbtm[1]);
+    let crooms=0; const crm=n.match(/\+\s*(\d+)\s*room|(\d+)\s*(?:extra|bonus|add-?on)\s*room/i); if(crm) crooms=parseInt(crm[1]||crm[2]||'0');
+    let ctier='standard';
+    if(/move/.test(svc+' '+freq)) ctier='move'; else if(/deep|best/.test(svc+' '+freq)) ctier='deep'; else if(/better|detail/.test(svc+' '+freq)) ctier='better';
+    const CR={standard:{base:54,bed:30,bath:18,room:30},better:{base:70,bed:40,bath:24,room:40},deep:{base:86,bed:50,bath:32,room:50},move:{base:107,bed:60,bath:36,room:60}}[ctier];
+    let cmins=CR.base+cbeds*CR.bed+cbaths*CR.bath+crooms*CR.room;
+    if(/3,?000\s*\+|3k\+/i.test(n)) cmins+=60; else if(/2,?000\s*[\u2013-]\s*3,?000|2[\u2013-]3k/i.test(n)) cmins+=30;
+    return Math.max(45, Math.min(360, Math.round(cmins/5)*5));
   }
   if(/yard[:\s]+(2xl|xxl)|xxl\s*lot/.test(n)) return 100;
   if(/yard[:\s]+(xl|extra[\s-]*large)|xl\s*(yard|lot)/.test(n)) return 80;
