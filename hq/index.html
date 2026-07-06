@@ -2703,7 +2703,7 @@ async function renderStats(force){
   const now=new Date(); const months=[];
   for(let k=5;k>=0;k--){ const d=new Date(now.getFullYear(),now.getMonth()-k,1); months.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); }
   function _n(v){ return +(String(v==null?0:v).replace(/[^0-9.-]/g,''))||0; }
-  function _wkRev(jobs){ const t=Date.now(),d7=t-7*864e5,d14=t-14*864e5; let tw=0,lw=0; (jobs||[]).forEach(function(j){ const d=new Date(String(dateOf(j)||'')+'T12:00:00').getTime(); if(isNaN(d))return; if(d>d7&&d<=t+864e5)tw+=amtOf(j); else if(d>d14&&d<=d7)lw+=amtOf(j); }); return {tw:tw,lw:lw}; }
+  function _wkRev(jobs){ const now=new Date(); const ws=new Date(now.getFullYear(),now.getMonth(),now.getDate()-now.getDay()); const wsT=ws.getTime(),lastT=wsT-7*864e5,endT=wsT+7*864e5; let tw=0,lw=0; (jobs||[]).forEach(function(j){ const d=new Date(String(dateOf(j)||'')+'T12:00:00').getTime(); if(isNaN(d))return; if(d>=wsT&&d<endT)tw+=amtOf(j); else if(d>=lastT&&d<wsT)lw+=amtOf(j); }); return {tw:tw,lw:lw}; }
   function _delta(a,b){ if(!(b>0)) return ''; const p=Math.round((a-b)/b*100); return p>=0?' <span class="dev-pill g">▲'+p+'%</span>':' <span class="dev-pill r">▼'+Math.abs(p)+'%</span>'; }
   function _kpi(val,label,accent){ return '<div><div style="font-size:25px;font-family:var(--mono);font-weight:800;line-height:1;'+(accent||'')+'">'+val+'</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:700;margin-top:5px;">'+label+'</div></div>'; }
   function _k(v){ return v>=1000?('$'+(Math.round(v/100)/10)+'k'):('$'+Math.round(v)); }
@@ -2717,7 +2717,7 @@ async function renderStats(force){
     E.newC+=_n(a.newVisitors); E.visits+=_n(a.totalVisits);
     E.twv+=_n(aw.thisWeekVisits); E.lwv+=_n(aw.lastWeekVisits); E.twq+=_n(aw.thisWeekQuotes); E.lwq+=_n(aw.lastWeekQuotes);
     E.twb+=_n(bw.thisWeekBookings); E.lwb+=_n(bw.lastWeekBookings);
-    Object.keys(b.adminStats||{}).forEach(function(nm){ crewBoard[nm]=(crewBoard[nm]||0)+_n(b.adminStats[nm]); });
+    Object.keys(b.adminStats||{}).forEach(function(nm){ var cnt=_n(b.adminStats[nm]); String(nm).split(',').forEach(function(one){ var p=one.trim(); if(!p) return; crewBoard[p]=(crewBoard[p]||0)+cnt; }); });
     Object.keys(a.sourceQuality||{}).forEach(function(sc){ const q=a.sourceQuality[sc]||{}; if(!srcBoard[sc])srcBoard[sc]={v:0,bk:0}; srcBoard[sc].v+=_n(q.visits); srcBoard[sc].bk+=_n(q.bookings); });
   });
   const compRate=E.total>0?Math.round(E.done/E.total*100):0;
