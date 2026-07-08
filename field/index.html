@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.7 */
+/* APP_VER:2026-07-08.8 */
 (function(){
-  var V='2026-07-08.7'; window.__APP_VER=V;
+  var V='2026-07-08.8'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1149,6 +1149,9 @@ async function _fmRerouteExec(auto){
     const openKeys=_fmApplyLocks(ordered.concat(failed).filter(function(s){ return s&&s.bk; }).map(function(s){ return _stopKey(s.bk); }));
     const resolvedKeys=_fmStops().filter(_fmResolved).map(function(s){ return _stopKey(s.bk); });
     _routeLock=resolvedKeys.concat(openKeys);
+    // Any same-day pin whose stop the optimizer just placed is obsolete — the
+    // route lock owns its position now (pin only survives as a failure fallback).
+    try{ let _iaDrop=false; Object.keys(_fmInsertAfter||{}).forEach(function(k){ if(_routeLock.indexOf(k)>=0){ delete _fmInsertAfter[k]; _iaDrop=true; } }); if(_iaDrop) _fmInsAfterSave(); }catch(e){}
     _fmViewIdx=null; _persist(); _fmRender();
     showToast(auto?'🛰 Route optimized from where you are':'✅ Re-routed from where you are — '+openKeys.length+' stops re-ordered');
   } finally { _rerouting=false; }
@@ -1411,6 +1414,11 @@ function _fmAddLocalSameDay(nb,anchorKey){
     const nk=_stopKey(nb);
     if(anchorKey&&anchorKey!==nk){ _fmInsertAfter[nk]=anchorKey; _fmInsAfterSave(); }
     _persist(); _fmRender();
+    // 🛰 Mid-route: silent GPS re-route so everything after your CURRENT stop —
+    // including the job just sold — lands in optimal drive order. You stay on the
+    // job you're at (it's the closest open stop to where you're standing). If GPS
+    // or network fails, the insert-after pin keeps it right behind this stop.
+    if(_fmStarted) setTimeout(function(){ try{ _fmAutoRoute(); }catch(e){} },400);
     // the queued booking hits the backend in seconds — refresh swaps the temp for the real row
     setTimeout(function(){ try{ loadData(true); }catch(e){} },6000);
   }catch(e){}
