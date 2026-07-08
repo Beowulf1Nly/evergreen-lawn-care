@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.14 */
+/* APP_VER:2026-07-08.15 */
 (function(){
-  var V='2026-07-08.14'; window.__APP_VER=V;
+  var V='2026-07-08.15'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1740,6 +1740,23 @@ function fmBeginRoute(){
 }
 
 /* ───────── Job card ───────── */
+// 🏃 Pace vs the size-based plan: where SHOULD the crew be by now (load-up +
+// expected minutes for every resolved stop + drive) vs the real clock. Also
+// projects the finish from the remaining stops. Crews see it on every job screen.
+function _fmLoadMins(){ return (new Date().getDay()===1?30:10); }
+function _fmPace(stops){
+  try{
+    if(!_clockInTime||_clockedOut) return null;
+    stops=stops||_fmStops(); if(!stops.length) return null;
+    const res=stops.filter(_fmResolved);
+    const expMin=_fmLoadMins()+res.reduce(function(s,x){ return s+mowMinutes(x.bk); },0)+res.length*12;
+    const actMin=(Date.now()-_clockInTime.getTime())/60000;
+    const behind=Math.round(actMin-expMin);
+    const open=stops.filter(function(x){ return !_fmResolved(x); });
+    const remain=open.reduce(function(s,x){ return s+mowMinutes(x.bk); },0)+open.length*12+(_fmLoadMins()>=15?15:30);
+    return { behind:behind, fin:new Date(Date.now()+remain*60000) };
+  }catch(e){ return null; }
+}
 function _fmRenderJob(stops,idx){
   _fmShow('fmScreenJob');
   const total=stops.length, doneCount=stops.filter(s=>isDone(s.bk)).length, skippedCount=stops.filter(s=>!isDone(s.bk)&&_fmIsSkipped(s.bk)).length;
@@ -1747,7 +1764,18 @@ function _fmRenderJob(stops,idx){
   const bk=stop.bk;
   document.getElementById('fmStopPos').textContent=idx+1;
   document.getElementById('fmStopTotal').textContent=total;
-  document.getElementById('fmDoneCount').textContent=doneCount+' done'+(skippedCount?' · '+skippedCount+' skipped':'');
+  (function(){
+    const el=document.getElementById('fmDoneCount'); if(!el) return;
+    const base=doneCount+' done'+(skippedCount?' · '+skippedCount+' skipped':'');
+    const p=_fmPace(stops);
+    if(!p){ el.textContent=base; return; }
+    const fin=p.fin.getHours(), fm2=String(p.fin.getMinutes()).padStart(2,'0');
+    const finStr=((fin%12)||12)+':'+fm2+(fin<12?'a':'p');
+    const chip=p.behind<=10?'<span style="color:#4ade80;font-weight:800;">🟢 on track</span>'
+             :p.behind<=25?'<span style="color:#fbbf24;font-weight:800;">🟡 '+p.behind+'m behind</span>'
+             :'<span style="color:#f87171;font-weight:800;">🔴 '+p.behind+'m behind</span>';
+    el.innerHTML=base+' · '+chip+' <span style="opacity:.65;">~'+finStr+' finish</span>';
+  })();
   document.getElementById('fmProgressFill').style.width=Math.round(((doneCount+skippedCount)/total)*100)+'%';
   _fmUpdateTotalsChip();
   const amt=_fmAmt(bk), pt=_payType(bk), done=isDone(bk), skipped=_fmIsSkipped(bk), mow=mowMinutes(bk);

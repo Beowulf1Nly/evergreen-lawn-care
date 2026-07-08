@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-08.11 */
-(function(){ var V='2026-07-08.11'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-08.12 */
+(function(){ var V='2026-07-08.12'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1945,8 +1945,10 @@ function renderDispatch(){
             const _d=ev.en-ev.st, _st=_liveCur+(_anyPlaced?DRIVE_BUF:0);
             if(_firstOpen){
               const _k3=_svKey(ev.b);
-              if(_curT[_k3]==null) _curT[_k3]=Math.max(_pmcsEn,Math.min(_st,_nowM));   // this stop is now ON DECK — clock its start once
-              ev.st=Math.min(_curT[_k3],_nowM); ev.en=Math.max(ev.st+_d,_nowM); _firstOpen=false;
+              // ON DECK: starts a drive-buffer after the last yard ended — the crew is
+              // DRIVING, not teleporting (Cheryl→Fillmore used to butt together).
+              if(_curT[_k3]==null) _curT[_k3]=Math.max(_pmcsEn,Math.min(_st,_nowM+DRIVE_BUF));
+              ev.st=_curT[_k3]; ev.en=Math.max(ev.st+_d,_nowM); _firstOpen=false;
               try{ localStorage.setItem('hq_dc2_'+iso,JSON.stringify(_curT)); }catch(e){}
             }
             else { const _s2=Math.max(_st,_nowM); ev.st=_s2; ev.en=_s2+_d; }
