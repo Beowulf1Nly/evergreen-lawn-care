@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.3 */
+/* APP_VER:2026-07-08.4 */
 (function(){
-  var V='2026-07-08.3'; window.__APP_VER=V;
+  var V='2026-07-08.4'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1051,6 +1051,25 @@ function fmLockStop(){
   }
   _persist(); _fmViewIdx=null; _fmRender();
 }
+
+/* ── ✏️ Owner note editor — edits save EVERYWHERE (Customers sheet + Bookings row) ── */
+function fmEditNotes(){
+  if(!_fmIsBoss()) return;
+  const st=_fmStops()[_fmViewIdx]; if(!st) return; const bk=st.bk;
+  const em=String(bk.email||'').toLowerCase().trim();
+  const cust=em?(allCustomers||[]).find(function(c){ return String(c.Email||'').toLowerCase().trim()===em; }):null;
+  const cn=prompt('📌 CUSTOMER note — sticks on their profile, shows on every future job:', (cust&&String(cust.Notes||''))||'');
+  if(cn!==null&&em){
+    _fmEnqueue({ kind:'custnote', idemKey:'cn:'+em+':'+_uuid(), method:'GET', params:{ action:'set_customer_note', email:em, notes:cn.trim(), by:adminName||'Owner', adminToken } });
+    if(cust){ cust.Notes=cn.trim(); try{ localStorage.setItem('evg_field_customers', JSON.stringify(allCustomers)); }catch(e){} }
+  }
+  const jn=prompt('🗒 JOB note — the Notes column on this booking row:', String(bk.notes||''));
+  if(jn!==null&&bk._rowIndex>0){
+    _fmEnqueue({ kind:'jobnote', idemKey:'jn:'+_stopKey(bk)+':'+_uuid(), method:'GET', params:{ action:'owner_update_booking', rowIndex:bk._rowIndex, notes:jn.trim(), adminToken } });
+    bk.notes=jn.trim();
+  } else if(jn!==null){ showToast('⚠ Job note needs a synced row — refresh first'); }
+  _fmFlushQueue(); _fmRender(); showToast('💾 Notes saved — syncing everywhere');
+}
 // Auto-route at clock-in: silent GPS re-route — this is now THE routing model.
 function _fmAutoRoute(){ try{ _fmRerouteExec(true); }catch(e){} }
 // 📍 Re-route from here: crew went off-plan (gas, lunch, emergency) — re-optimize
@@ -1647,7 +1666,7 @@ function _fmRenderJob(stops,idx){
     '<div class="fm-card" style="'+(done?'opacity:.5;filter:grayscale(.6);':'')+'"><div class="fm-card-stopno">'+(idx+1)+'</div><div class="fm-card-name">'+esc(bk.name||'Customer')+'</div>'+
     '<div class="fm-card-addr">📍 '+esc(bk.address||'—')+(bk.zip?', '+esc(bk.zip):'')+'</div><div class="fm-pills">'+pills+'</div>'+noteHtml+
     '<div class="fm-card-actions">'+_navBtn+
-    '<div class="fm-secondary-row">'+phoneRow+(_isQuoteJob(bk)&&isDone(bk)&&_qjBookedStore[_stopKey(bk)]?'<button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#fdba74;color:#9a3412;" onclick="fmQuoteCloser(window._fmCurBk)">✏️ Edit booked plan</button>':'')+(_fmIsBoss()?'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmRemainingMap()">🗺 Remaining</button>':'')+'</div></div></div>'+
+    '<div class="fm-secondary-row">'+phoneRow+(_isQuoteJob(bk)&&isDone(bk)&&_qjBookedStore[_stopKey(bk)]?'<button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#fdba74;color:#9a3412;" onclick="fmQuoteCloser(window._fmCurBk)">✏️ Edit booked plan</button>':'')+(_fmIsBoss()?'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmEditNotes()">✏️ Notes</button><button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmRemainingMap()">🗺 Remaining</button>':'')+'</div></div></div>'+
     '<div class="fm-jobnav"><button onclick="fmPrevStop()" '+(idx===0?'disabled':'')+'>‹ Prev</button>'
     +'<button onclick="fmRerouteFromHere()" title="Re-optimize remaining stops from where you are now">📍 Re-route</button>'
     +(_fmIsBoss()?'<button onclick="fmLockStop()" title="Pin this stop to an exact position — the optimizer routes around it">'+((_stopLocks&&_stopLocks[_stopKey(bk)])?('🔒 #'+_stopLocks[_stopKey(bk)]):'🔓 Lock')+'</button>':'')
