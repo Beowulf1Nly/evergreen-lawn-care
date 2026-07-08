@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.15 */
+/* APP_VER:2026-07-08.16 */
 (function(){
-  var V='2026-07-08.15'; window.__APP_VER=V;
+  var V='2026-07-08.16'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1771,10 +1771,15 @@ function _fmRenderJob(stops,idx){
     if(!p){ el.textContent=base; return; }
     const fin=p.fin.getHours(), fm2=String(p.fin.getMinutes()).padStart(2,'0');
     const finStr=((fin%12)||12)+':'+fm2+(fin<12?'a':'p');
-    const chip=p.behind<=10?'<span style="color:#4ade80;font-weight:800;">🟢 on track</span>'
-             :p.behind<=25?'<span style="color:#fbbf24;font-weight:800;">🟡 '+p.behind+'m behind</span>'
-             :'<span style="color:#f87171;font-weight:800;">🔴 '+p.behind+'m behind</span>';
-    el.innerHTML=base+' · '+chip+' <span style="opacity:.65;">~'+finStr+' finish</span>';
+    // Anchor to the DAY, not the clock-in: a noon start with 8h of yards left is
+    // WAY behind even if you've been quick since clocking in.
+    const t19=new Date(); t19.setHours(19,0,0,0);
+    const late=Math.round((p.fin.getTime()-t19.getTime())/60000);
+    const slip=p.behind>10?' <span style="opacity:.7;">· '+p.behind+'m slower than plan</span>':'';
+    const chip=late<=0?'<span style="color:#4ade80;font-weight:800;">🟢 on track · ~'+finStr+' finish</span>'
+             :late<=60?'<span style="color:#fbbf24;font-weight:800;">🟡 finishing ~'+finStr+' — '+late+'m past 7p</span>'
+             :'<span style="color:#f87171;font-weight:800;">🔴 finishing ~'+finStr+' — '+(late>=120?(Math.round(late/6)/10+'h'):late+'m')+' past 7p</span>';
+    el.innerHTML=base+' · '+chip+slip;
   })();
   document.getElementById('fmProgressFill').style.width=Math.round(((doneCount+skippedCount)/total)*100)+'%';
   _fmUpdateTotalsChip();
