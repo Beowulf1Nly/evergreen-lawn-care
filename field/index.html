@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.11 */
+/* APP_VER:2026-07-08.12 */
 (function(){
-  var V='2026-07-08.11'; window.__APP_VER=V;
+  var V='2026-07-08.12'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -658,7 +658,7 @@ function mowMinutes(bk){ const c=parseInt(String(bk.mowMinutes||bk.customMowMins
 function parseServices(str){ return String(str||'').split(';').map(s=>s.trim()).filter(Boolean).map(s=>{ const m=s.match(/^(.*?):\s*\$?([\d.]+)\s*$/); return m?{name:m[1].trim(),price:parseFloat(m[2])||0}:null; }).filter(s=>s&&s.name&&s.price>0); }
 function customerServicesFor(email){ const em=String(email||'').toLowerCase().trim(); if(!em) return []; const c=(allCustomers||[]).find(x=>String(x.Email||'').toLowerCase().trim()===em); return parseServices(c?(c.Services||''):''); }
 function _fmMapsUrl(bk){ return 'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent((bk.address||'')+(bk.zip?', '+bk.zip:'')+', FL'); }
-let _toastT=null; function showToast(msg){ const t=document.getElementById('toast'); if(!t) return; t.textContent=msg; t.classList.add('show'); clearTimeout(_toastT); _toastT=setTimeout(()=>t.classList.remove('show'),3200); }
+let _toastT=null; function showToast(msg,ms){ const t=document.getElementById('toast'); if(!t) return; t.textContent=msg; t.classList.add('show'); clearTimeout(_toastT); _toastT=setTimeout(()=>t.classList.remove('show'),ms||3200); }
 function authParam(){ return 'adminToken='+encodeURIComponent(adminToken); }
 // Money visibility: owners/managers always; employees only for cash jobs (they collect it).
 function _isMoneyRole(){ const r=String(adminRole||'').toLowerCase(); return r==='owner'||r==='manager'; }
@@ -732,6 +732,11 @@ async function _loadDataInner(refreshToast){
   // Same-day jobs added from the truck are only local until the backend ingests the
   // queued booking — hold on to them across refreshes so they can't vanish mid-route.
   const _localTemps=(allBookings||[]).filter(function(b){ return b&&b._localTemp&&dateOf(b)===todayISOStr(); });
+  // Snapshot today's OPEN stops — if the fresh pull no longer has one, the yard was
+  // rescheduled/cancelled and the crew must be TOLD, loudly. A crew mowed a
+  // rescheduled yard because the removal was silent.
+  const _prevOpen={};
+  (allBookings||[]).forEach(function(b){ if(!b||b.rowCancelled||b._localTemp) return; if(dateOf(b)!==todayISOStr()) return; if(isDone(b)||_fmSkipped[_stopKey(b)]) return; _prevOpen[_stopKey(b)]=String(b.name||'this yard'); });
   try{
     const crewQ='';  // pull the whole day's saved order; we order our visible stops by it
     const [bRes,cRes,rRes]=await Promise.all([
@@ -769,6 +774,22 @@ async function _loadDataInner(refreshToast){
       _localTemps.forEach(function(t){ if(!have.has(_stopKey(t))){ allBookings.push(t); readded=true; } });
       if(readded){ try{ localStorage.setItem('evg_field_bookings', JSON.stringify(allBookings)); }catch(e){} }
     }
+    try{
+      if(Object.keys(_prevOpen).length&&bRes&&bRes.success){
+        const _nowK={}; (allBookings||[]).forEach(function(b){ if(b&&!b.rowCancelled&&dateOf(b)===todayISOStr()) _nowK[_stopKey(b)]=1; });
+        const _gone=Object.keys(_prevOpen).filter(function(k){ return !_nowK[k]; });
+        if(_gone.length){
+          const _nms=_gone.map(function(k){ return _prevOpen[k]; }).join(', ');
+          try{ if(navigator.vibrate) navigator.vibrate([250,100,250,100,500]); }catch(e){}
+          showToast('🚨 ROUTE CHANGED — '+_nms+' '+(_gone.length>1?'were':'was')+' pulled off today (rescheduled or cancelled). Do NOT service '+(_gone.length>1?'them':'it')+'.', 12000);
+        } else if(_fmStarted){
+          // office ADDED a yard mid-route? say so too — silent additions get missed
+          const _prevAll={}; Object.keys(_prevOpen).forEach(function(k){ _prevAll[k]=1; });
+          const _fresh=(allBookings||[]).filter(function(b){ return b&&!b.rowCancelled&&!b._localTemp&&dateOf(b)===todayISOStr()&&!isDone(b)&&!_prevAll[_stopKey(b)]&&!_fmSkipped[_stopKey(b)]; });
+          if(_fresh.length&&Object.keys(_prevOpen).length){ showToast('🆕 Added to today\'s route: '+_fresh.map(function(b){ return b.name||'new yard'; }).join(', '), 9000); }
+        }
+      }
+    }catch(e){}
     if(!allBookings.length) _hydrateFromCache();
     if(_savedOrderKeys&&_savedOrderKeys.length){ _optOrderKeys=null; }   // (a) canonical route from backend wins; drop any stale self-optimized order
     else { _optOrderKeys=_loadOptOrderCache();                           // (b) no canonical route → self-optimize (show cached order instantly, refine in background)
@@ -778,7 +799,7 @@ async function _loadDataInner(refreshToast){
     if(refreshToast) showToast('↻ Jobs updated');
   }catch(e){ _hydrateFromCache(); }
   _fmApplyNotePins();   // re-assert any note edit the sheet hasn't confirmed yet
-  _fmRender();
+  if(!_anySheetOpen()) _fmRender();   // data is fresh either way; never repaint under an open sheet
 }
 /* ── 📌 Note pins — the ~30s poll replaces allBookings wholesale, so a refresh
    that landed before a queued note write reached the sheet used to clobber the
@@ -1357,6 +1378,8 @@ function _renderSyncStatus(){
   const m=_lastSync.msg||'';
   const secs=Math.max(0,Math.round((Date.now()-_lastSync.ts)/1000));
   const ago=secs<60?(secs+'s ago'):(Math.floor(secs/60)+'m ago');
+  const _dataAge=Math.round((Date.now()-_lastLoadTs)/60000);
+  if(_lastLoadTs&&_dataAge>=4){ el.textContent='⚠️ Schedule last updated '+_dataAge+'m ago — changes from the office may be missing'; el.style.color='#fbbf24'; return; }
   if(_lastSync.ok){ el.textContent='📡 Live tracking on · synced '+ago; el.style.color='#86efac'; }
   else if(m==='sending'){ el.textContent='📡 sending…'; el.style.color='#9ed8b1'; }
   else if(/missing required|unknown|not a function|no function|unexpected response/i.test(m)){ el.textContent='⚠ Live tracking OFF — redeploy the backend (Apps Script)'; el.style.color='#fca5a5'; }
@@ -1376,7 +1399,7 @@ function _startTimers(){
     if(document.hidden || navigator.onLine===false || !adminToken) return;
     _fmPollTick++;
     if(_fmStarted && _fmPollTick%2===0) _fmHeartbeat();
-    if(_anySheetOpen()) return;                    // never yank data mid-interaction
+    if(_anySheetOpen()){ if(_fmPollTick%3===0) loadData(); return; }   // data still refreshes mid-interaction; only the re-render waits (removal alerts must land)
     if(_fmPollTick%3===0){ loadData(); return; }   // full refresh (~30s)
     _fmCheckRouteUpdate();                          // light route-order check (~10s)
   },10000);
@@ -1793,7 +1816,18 @@ function _fmUpdateTotalsChip(){ const el=document.getElementById('fmTotalsChip')
 // Reliable external-link open for installed PWAs — window.open can be blocked or open a
 // dead blank tab in standalone mode; a transient anchor click hands off to the Maps app.
 function _fmOpenUrl(url){ try{ const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; document.body.appendChild(a); a.click(); a.remove(); }catch(e){ try{ window.open(url,'_blank'); }catch(_e){ location.href=url; } } }
-function fmNavigate(idx){ const s=_fmStops(), bk=s[idx]&&s[idx].bk; if(!bk) return; _fmOpenUrl(_fmMapsUrl(bk)); }
+async function fmNavigate(idx){
+  const s=_fmStops(), bk=s[idx]&&s[idx].bk; if(!bk) return;
+  // Before the crew drives anywhere: if the schedule data is older than 90s and
+  // we're online, re-pull and make sure this yard is still on today's board.
+  if(navigator.onLine!==false && Date.now()-_lastLoadTs>90000){
+    showToast('🔄 Double-checking today\'s schedule…');
+    try{ await loadData(); }catch(e){}
+    const still=_fmStops().some(function(x){ return _stopKey(x.bk)===_stopKey(bk); });
+    if(!still){ try{ if(navigator.vibrate) navigator.vibrate([250,100,250,100,500]); }catch(e){} showToast('🚫 '+(bk.name||'This yard')+' is no longer on today\'s route — rescheduled or cancelled. Do NOT service it.', 12000); return; }
+  }
+  _fmOpenUrl(_fmMapsUrl(bk));
+}
 function fmRemainingMap(){ const left=_fmStops().filter(s=>!_fmResolved(s)).map(s=>s.bk); if(!left.length){ showToast('No stops left.'); return; } const addrs=left.map(bk=>encodeURIComponent((bk.address||'')+(bk.zip?', '+bk.zip:'')+', FL')); let url='https://www.google.com/maps/dir/?api=1&travelmode=driving&destination='+addrs[addrs.length-1]; const mids=addrs.slice(0,-1).slice(0,9); if(mids.length) url+='&waypoints='+mids.join('|'); _fmOpenUrl(url); }
 function fmPrevStop(){ const s=_fmStops(); if(_fmViewIdx>0){ _fmViewIdx--; _persist(); _fmRenderJob(s,_fmViewIdx); } }
 function fmNextStop(){ const s=_fmStops(); if(_fmViewIdx<s.length-1){ _fmViewIdx++; _persist(); _fmRenderJob(s,_fmViewIdx); } }
