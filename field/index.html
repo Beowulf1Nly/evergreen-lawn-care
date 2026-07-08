@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.16 */
+/* APP_VER:2026-07-08.17 */
 (function(){
-  var V='2026-07-08.16'; window.__APP_VER=V;
+  var V='2026-07-08.17'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -261,6 +261,7 @@
     <div class="fm-progress-wrap">
       <div class="fm-progress-meta"><span>Stop <b id="fmStopPos">1</b> of <span id="fmStopTotal">1</span></span><span id="fmDoneCount">0 done</span></div>
       <div class="fm-progress-bar"><div class="fm-progress-fill" id="fmProgressFill" style="width:0%"></div></div>
+      <div id="fmYardPace" style="font-size:12.5px;font-weight:700;margin-top:6px;"></div>
       <div id="fmPlanLine" style="font-size:12.5px;font-weight:700;color:#9ed8b1;margin-top:6px;display:none;"></div>
       <div class="fm-totals-chip" id="fmTotalsChip"></div>
       <div class="fm-totals-chip" id="fmSyncStatus" style="margin-top:2px;font-size:12px;"></div>
@@ -1388,7 +1389,7 @@ function _renderSyncStatus(){
 }
 function _startTimers(){
   if(_fmTimerInt) clearInterval(_fmTimerInt);
-  _fmTimerInt=setInterval(()=>{ _renderSyncStatus(); if(!_clockInTime||_clockedOut) return; const v=_fmTimerStr(); const a=document.getElementById('fmJobTimerVal'); if(a)a.textContent=v; document.querySelectorAll('.fmTimerVal').forEach(e=>e.textContent=v); },1000);
+  _fmTimerInt=setInterval(()=>{ _renderSyncStatus(); try{ _fmYardPaceTick(); }catch(e){} if(!_clockInTime||_clockedOut) return; const v=_fmTimerStr(); const a=document.getElementById('fmJobTimerVal'); if(a)a.textContent=v; document.querySelectorAll('.fmTimerVal').forEach(e=>e.textContent=v); },1000);
   if(_fmSyncInt) clearInterval(_fmSyncInt);
   _fmSyncInt=setInterval(_fmFlushQueue,20000);
   // Live route sync — every 10s: light get_route check (near-instant HQ reorder pickup);
@@ -1744,6 +1745,23 @@ function fmBeginRoute(){
 // expected minutes for every resolved stop + drive) vs the real clock. Also
 // projects the finish from the remaining stops. Crews see it on every job screen.
 function _fmLoadMins(){ return (new Date().getDay()===1?30:10); }
+let _fmYardNudged={};
+// ⏱ Live per-yard pace: elapsed on THIS yard vs its expected minutes. Crews get
+// nudged at 1× (heads-up) and 1.5× (loud) — same threshold that alerts the office.
+function _fmYardPaceTick(){
+  const el=document.getElementById('fmYardPace'); if(!el) return;
+  const scr=document.getElementById('fmScreenJob');
+  if(!scr||!scr.classList.contains('active')){ el.textContent=''; return; }
+  const stops=_fmStops(); const st=(_fmViewIdx!=null)&&stops[_fmViewIdx]; if(!st){ el.textContent=''; return; }
+  const bk=st.bk; if(isDone(bk)||_fmIsSkipped(bk)){ el.textContent=''; return; }
+  const k=_stopKey(bk); const t0=_jobTimers[k]; if(!t0){ el.textContent=''; return; }
+  const mins=(Date.now()-new Date(t0).getTime())/60000, exp=mowMinutes(bk), m=Math.floor(mins);
+  if(mins<=exp) el.innerHTML='<span style="color:#4ade80;">⏱ '+m+'m on this yard · ~'+exp+'m expected — good pace</span>';
+  else if(mins<=exp*1.5) el.innerHTML='<span style="color:#fbbf24;">⏱ '+m+'m — past the ~'+exp+'m estimate, tighten up</span>';
+  else el.innerHTML='<span style="color:#f87171;font-weight:800;">🔴 '+m+'m — way over ~'+exp+'m. Wrap it up; the office can see this.</span>';
+  if(mins>exp&&!_fmYardNudged[k]){ _fmYardNudged[k]=1; try{ if(navigator.vibrate) navigator.vibrate(200); }catch(e){} showToast('⏱ Past the ~'+exp+'m estimate on this yard'); }
+  if(mins>exp*1.5&&_fmYardNudged[k]!==2){ _fmYardNudged[k]=2; try{ if(navigator.vibrate) navigator.vibrate([200,80,200]); }catch(e){} showToast('🔴 Way over on this yard — wrap it up', 6000); }
+}
 function _fmPace(stops){
   try{
     if(!_clockInTime||_clockedOut) return null;
