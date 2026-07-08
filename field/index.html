@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.5 */
+/* APP_VER:2026-07-08.6 */
 (function(){
-  var V='2026-07-08.5'; window.__APP_VER=V;
+  var V='2026-07-08.6'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -776,9 +776,33 @@ async function _loadDataInner(refreshToast){
       if(navigator.onLine!==false && !_fmStarted){ _fmComputeOptimizedOrder().then(function(res){ if(res&&res.changed&&!_fmStarted) _fmRender(); }).catch(function(){}); } }
     if(refreshToast) showToast('↻ Jobs updated');
   }catch(e){ _hydrateFromCache(); }
+  _fmApplyNotePins();   // re-assert any note edit the sheet hasn't confirmed yet
   _fmRender();
 }
-function _hydrateFromCache(){ try{ const b=localStorage.getItem('evg_field_bookings'); if(b) allBookings=JSON.parse(b); const c=localStorage.getItem('evg_field_customers'); if(c) allCustomers=JSON.parse(c); if(!(_savedOrderKeys&&_savedOrderKeys.length)) _optOrderKeys=_loadOptOrderCache(); }catch(e){} }
+/* ── 📌 Note pins — the ~30s poll replaces allBookings wholesale, so a refresh
+   that landed before a queued note write reached the sheet used to clobber the
+   edit (job notes “reverting”). Pin the edited value locally and re-apply it
+   after every data merge until the server copy matches (or 10 min passes). ── */
+let _fmNotePins={}; try{ _fmNotePins=JSON.parse(localStorage.getItem('evg_fm_notepins')||'{}'); }catch(e){}
+function _fmPinNote(type,key,val){ _fmNotePins[type+'|'+key]={v:val,ts:Date.now()}; try{ localStorage.setItem('evg_fm_notepins',JSON.stringify(_fmNotePins)); }catch(e){} }
+function _fmApplyNotePins(){
+  let changed=false; const now=Date.now();
+  Object.keys(_fmNotePins).forEach(function(pk){
+    const p=_fmNotePins[pk]||{}; const i=pk.indexOf('|'); const type=pk.slice(0,i), key=pk.slice(i+1);
+    if(now-(p.ts||0)>600000){ delete _fmNotePins[pk]; changed=true; return; }   // stale pin — let server truth win
+    if(type==='job'){
+      const bk=(allBookings||[]).find(function(b){ return _stopKey(b)===key; }); if(!bk) return;
+      if(String(bk.notes||'').trim()===p.v){ delete _fmNotePins[pk]; changed=true; }   // server caught up — release the pin
+      else bk.notes=p.v;
+    } else if(type==='cust'){
+      const c=(allCustomers||[]).find(function(x){ return String(x.Email||'').toLowerCase().trim()===key; }); if(!c) return;
+      if(String(c.Notes||'').trim()===p.v){ delete _fmNotePins[pk]; changed=true; }
+      else c.Notes=p.v;
+    }
+  });
+  if(changed){ try{ localStorage.setItem('evg_fm_notepins',JSON.stringify(_fmNotePins)); }catch(e){} }
+}
+function _hydrateFromCache(){ try{ const b=localStorage.getItem('evg_field_bookings'); if(b) allBookings=JSON.parse(b); const c=localStorage.getItem('evg_field_customers'); if(c) allCustomers=JSON.parse(c); if(!(_savedOrderKeys&&_savedOrderKeys.length)) _optOrderKeys=_loadOptOrderCache(); _fmApplyNotePins(); }catch(e){} }
 // Build an ordered list of stop keys (email|serviceDate) from a get_route response, if present.
 function _extractRouteKeys(rRes){
   try{
@@ -1066,11 +1090,13 @@ function fmEditNotes(){
   if(cn!==null&&em){
     _fmEnqueue({ kind:'custnote', idemKey:'cn:'+em+':'+_uuid(), method:'GET', params:{ action:'set_customer_note', email:em, notes:cn.trim(), by:adminName||'Owner', adminToken } });
     if(cust){ cust.Notes=cn.trim(); try{ localStorage.setItem('evg_field_customers', JSON.stringify(allCustomers)); }catch(e){} }
+    _fmPinNote('cust',em,cn.trim());
   }
   const jn=prompt('🗒 JOB note — the Notes column on this booking row:', String(bk.notes||''));
   if(jn!==null&&bk._rowIndex>0){
     _fmEnqueue({ kind:'jobnote', idemKey:'jn:'+_stopKey(bk)+':'+_uuid(), method:'GET', params:{ action:'owner_update_booking', rowIndex:bk._rowIndex, notes:jn.trim(), adminToken } });
-    bk.notes=jn.trim();
+    bk.notes=jn.trim(); _fmPinNote('job',_stopKey(bk),jn.trim());
+    try{ localStorage.setItem('evg_field_bookings', JSON.stringify(allBookings)); }catch(e){}
   } else if(jn!==null){ showToast('⚠ Job note needs a synced row — refresh first'); }
   _fmFlushQueue(); _fmRender(); showToast('💾 Notes saved — syncing everywhere');
 }
