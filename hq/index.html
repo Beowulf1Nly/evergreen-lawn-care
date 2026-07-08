@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-08.6 */
-(function(){ var V='2026-07-08.6'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-08.7 */
+(function(){ var V='2026-07-08.7'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1893,7 +1893,8 @@ function renderDispatch(){
         evs.sort(function(a,b2){ return a.st-b2.st||a.en-b2.en; });
         evs.forEach(function(ev){ let L=0; while(L<laneEnds.length&&laneEnds[L]>ev.st+1) L++; ev.lane=L; laneEnds[L]=ev.en; });
         const lanes=Math.max(1,laneEnds.length);
-        const tlH=12+lanes*42;
+        const _aux=(c!=='un');                                   // Unassigned isn't a crew — no PMCS/load or base ghosts
+        const tlH=12+(lanes+(_aux?1:0))*42;
         let now='';
         if(iso===todayIso){ const n=new Date(); const mins=n.getHours()*60+n.getMinutes(); if(mins>=420&&mins<=1140) now='<div class="st-nowline" style="left:'+(((mins-420)/720)*100)+'%"></div>'; }
         if(_shift&&_ciMin!=null&&_ciMin>=420&&_ciMin<=1140){ now+='<div class="st-clockline in" style="left:'+(((_ciMin-420)/720)*100)+'%"><span>▸ in '+_t12(_ciMin)+'</span></div>'; }
@@ -1903,9 +1904,9 @@ function renderDispatch(){
         const baseSt=Math.min(1105,lastEn+(evs.length?DRIVE_BUF:0)), baseEn=Math.min(1140,baseSt+(_isCleanTL?15:30));
         h+='<div class="st-grid day">'+lab
           +'<div><div class="st-tl" style="height:'+tlH+'px;">'
-          +now+_stAuxBlock(_isCleanTL?'🧰 Load-up':'🧰 PMCS & Load-up',_pmcsSt,_pmcsEn,7)
-          +evs.map(function(ev){ return _stBlockEv(ev.b,ev.st,ev.en,7+ev.lane*42,ev.proj); }).join('')
-          +_stAuxBlock('🏠 Base & unload',baseSt,baseEn,7)+'</div>'
+          +(_aux?_stAuxBlock(_isCleanTL?'🧰 Load-up':'🧰 PMCS & Load-up',_pmcsSt,_pmcsEn,7):'')
+          +evs.map(function(ev){ return _stBlockEv(ev.b,ev.st,ev.en,7+(ev.lane+(_aux?1:0))*42,ev.proj); }).join('')
+          +(_aux?_stAuxBlock('🏠 Base & unload',baseSt,baseEn,7):'')+'</div>'
           +(hasProj?'<div style="font-size:10.5px;color:var(--dim);padding:3px 2px 0;">┅ dashed = projected · push times from /invoice, or reorder below</div>':'')
           +_dayOrderPanel(c,iso,cell)
           +_econStrip(c,cell,iso,null,zi)
@@ -2058,6 +2059,8 @@ function _crewShift(c){
     if(set.indexOf(c)<0) return;
     const inD=x.clockIn?new Date(x.clockIn):null;
     if(!inD||isNaN(inD)||_iso(inD)!==_today) return;   // must have clocked in TODAY
+    const _inM=inD.getHours()*60+inD.getMinutes();
+    if(_inM<240||_inM>1260) return;                    // 1 AM phone tests aren't shifts — they clamped the whole board to the 7a edge
     hasMember=true;
     if(!ci||inD<ci) ci=inD;
     if(String(x.active)==='0'){ const t=x.clockOut||x.lastSeen; if(t){ const d=new Date(t); if(!isNaN(d)&&d>inD&&(!out||d>out)) out=d; } }
@@ -2073,6 +2076,8 @@ function _crewWorkedHrs(c){
   return (h>0&&h<24)?h:0;
 }
 function _econParts(c,jobs,zi){
+  const qN=jobs.filter(function(b){ return _hqIsQuote(b); }).length;
+  jobs=jobs.filter(function(b){ return !_hqIsQuote(b); });   // quotes are visits, not billable work — they were dragging margins to -491%
   const R=jobs.reduce(function(s2,b){return s2+amtOf(b);},0);
   // drive buffers reset each day — group by date so week/month math is honest
   const byD={};
@@ -2104,7 +2109,7 @@ function _econParts(c,jobs,zi){
   let tgtH;                                                               // hours where TOTAL labor = 50% of revenue
   if(rate>0) tgtH=R>0?Math.max(0,(R*(0.5-pctC/100))/rate):0;
   else tgtH=(pctC<=50)?Infinity:0;                                        // commission-only crew: margin is fixed by the %
-  return { R:R, estM:estM, rate:rate, pctC:pctC, tgtH:tgtH, estProfit:estProfit, pct:pct, days:Object.keys(byD).length };
+  return { R:R, estM:estM, rate:rate, pctC:pctC, tgtH:tgtH, estProfit:estProfit, pct:pct, days:Object.keys(byD).length, qN:qN };
 }
 function _econStrip(c,jobs,iso,labelHtml,zi){
   zi=zi||0;
@@ -2173,11 +2178,12 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
       act='<div class="st-econ" style="border-left:3px solid #34d399;">✅ <b>ACTUAL</b> · 💵 <b>$'+Rd.toFixed(0)+'</b> made · <b>'+doneJobs.length+'/'+jobs.length+'</b> done'+mid+'</div>';
     }
   }
+  const qNote=p.qN?' · 📋 <b>'+p.qN+'</b> quote visit'+(p.qN!==1?'s':'')+' <span style="color:var(--dim)">(not in $)</span>':'';
   return act+'<div class="st-econ">'+(labelHtml||'')
-    +'💵 <b>$'+p.R.toFixed(0)+'</b> booked'
+    +'💵 <b>$'+p.R.toFixed(0)+'</b> booked'+qNote
     +' · 🧮 est '+span+' <b>'+estH+'h '+String(estMm).padStart(2,'0')+'m</b> <span style="color:var(--dim)">(clock-in → clock-out'+(p.days>1?' · '+p.days+' days':'')+')</span>'+finishHtml
-    +' · 💰 est profit <b style="color:'+(ok?'#34d399':'#fbbf24')+'">$'+Math.round(p.estProfit)+'</b> <span class="dev-pill '+(ok?'g':'y')+'">'+p.pct+'% margin'+(ok?' ✓':' — under 50%')+'</span>'
-    +' · 🎯 50% profit ($'+Math.round(p.R*0.5)+') '+(isFinite(p.tgtH)?('needs ≤ <b>'+p.tgtH.toFixed(1)+'h</b>'):(p.pctC<=50?'<span class="dev-pill g">locked in — commission crew keeps '+p.pctC+'%</span>':'<span class="dev-pill r">impossible — commission is '+p.pctC+'%</span>'))+' @ '
+    +(p.R>0?' · 💰 est profit <b style="color:'+(ok?'#34d399':'#fbbf24')+'">$'+Math.round(p.estProfit)+'</b> <span class="dev-pill '+(ok?'g':'y')+'">'+p.pct+'% margin'+(ok?' ✓':' — under 50%')+'</span>':' · 💰 <span style="color:var(--dim)">nothing billable booked — margin n/a</span>')
+    +(p.R>0?' · 🎯 50% profit ($'+Math.round(p.R*0.5)+') '+(isFinite(p.tgtH)?('needs ≤ <b>'+p.tgtH.toFixed(1)+'h</b>'):(p.pctC<=50?'<span class="dev-pill g">locked in — commission crew keeps '+p.pctC+'%</span>':'<span class="dev-pill r">impossible — commission is '+p.pctC+'%</span>')):'')+' @ '
     +(function(){ const cp=_crewPayFor(zi,c);
       return cp
       ?('<b>'+(p.rate>0?'$'+p.rate+'/hr':'')+(p.rate>0&&p.pctC>0?' + ':'')+(p.pctC>0?p.pctC+'%/job':'')+'</b> <span class="dev-pill" style="background:rgba(56,189,248,.13);color:#7dd3fc;cursor:help;" title="'+esc(cp.who.join(' + '))+' — edit the Crew Pay tab in that business\'s Google Sheet">👥 '+cp.who.length+' on crew</span>')

@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.9 */
+/* APP_VER:2026-07-08.10 */
 (function(){
-  var V='2026-07-08.9'; window.__APP_VER=V;
+  var V='2026-07-08.10'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1096,7 +1096,7 @@ function fmEditNotes(){
   }
   const jn=prompt('🗒 JOB note — the Notes column on this booking row:', String(bk.notes||''));
   if(jn!==null&&bk._rowIndex>0){
-    _fmEnqueue({ kind:'jobnote', idemKey:'jn:'+_stopKey(bk)+':'+_uuid(), method:'GET', params:{ action:'owner_update_booking', rowIndex:bk._rowIndex, notes:jn.trim(), adminToken } });
+    _fmEnqueue({ kind:'jobnote', idemKey:'jn:'+_stopKey(bk)+':'+_uuid(), method:'GET', params:{ action:'owner_update_booking', rowIndex:bk._rowIndex, matchEmail:String(bk.email||'').toLowerCase().trim(), matchDate:dateOf(bk), notes:jn.trim(), adminToken } });
     bk.notes=jn.trim(); _fmPinNote('job',_stopKey(bk),jn.trim());
     try{ localStorage.setItem('evg_field_bookings', JSON.stringify(allBookings)); }catch(e){}
   } else if(jn!==null){ showToast('⚠ Job note needs a synced row — refresh first'); }
