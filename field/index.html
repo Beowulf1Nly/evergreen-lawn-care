@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.12 */
+/* APP_VER:2026-07-08.13 */
 (function(){
-  var V='2026-07-08.12'; window.__APP_VER=V;
+  var V='2026-07-08.13'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -2010,7 +2010,7 @@ async function fmSubmitComplete(){
   })();
   const _jk=_stopKey(bk); const _jStart=_jobTimers[_jk]; const _jEnd=new Date().toISOString();
   const _jMin=_jStart?Math.max(0,Math.round((Date.now()-new Date(_jStart).getTime())/60000)):null;
-  extra.push({ kind:'endchk', idemKey:'endck:'+base, method:'GET', params:{ action:'log_checklist', type:'job_complete', date:svcDate, rowIndex, by:adminName||'Crew', items:JSON.stringify({checklist:Object.keys(_fmcEndChk), jobMinutes:_jMin, startedAt:_jStart||null, completedAt:_jEnd}), adminToken } });
+  extra.push({ kind:'endchk', idemKey:'endck:'+base, method:'GET', params:{ action:'log_checklist', type:'job_complete', date:svcDate, rowIndex, email, by:adminName||'Crew', items:JSON.stringify({checklist:Object.keys(_fmcEndChk), jobMinutes:_jMin, startedAt:_jStart||null, completedAt:_jEnd}), adminToken } });
   delete _jobTimers[_jk];
   _fmcPhotos.forEach((p,i)=>extra.push({ kind:'photo', idemKey:'photo:'+base+':'+_uuid(), method:'POST', body:{ action:'upload_job_photo', base64Data:p.b64, fileName:p.fileName, mimeType:p.mimeType, rowIndex, email, serviceDate:svcDate, jobLabel:(bk.name||'')+' - '+svcDate+(_fmcPhotos.length>1?' ('+(i+1)+')':''), markedBy:adminName||'Crew', adminToken } }));
 
