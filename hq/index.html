@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-06.27 */
-(function(){ var V='2026-07-06.27'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-08.1 */
+(function(){ var V='2026-07-08.1'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1840,7 +1840,7 @@ function renderDispatch(){
         // Google-Calendar-style: real start + real expected length; overlaps stack into lanes.
         // Jobs WITHOUT a set time get PROJECTED onto the lane in run order (dashed),
         // starting 8:00 or after the last placed job, with drive buffer between stops.
-        const evs=timed.map(function(b){ const t=_dayTimeOf(b,iso).split(':'); const st2=(+t[0])*60+(+t[1]||0); return {b:b,st:st2,en:st2+_jobMins(b),proj:false}; }).sort(function(a,b2){ return a.st-b2.st||a.en-b2.en; });
+        const evs=timed.map(function(b){ const t=_dayTimeOf(b,iso).split(':'); const st2=(+t[0])*60+(+t[1]||0); return {b:b,st:st2,en:st2+_hqMins(b,zi,c),proj:false}; }).sort(function(a,b2){ return a.st-b2.st||a.en-b2.en; });
         // Anchor the day to the crew's ACTUAL clock-in today (PMCS/load-up + jobs shift with it); else 8:00.
         const _shift=(iso===todayIso && zi===0)?_crewShift(c):null;   // clock data is lawn-only; other biz use the 7:30 assumption
         const _ciMin=(_shift&&_shift.clockIn)?(_shift.clockIn.getHours()*60+_shift.clockIn.getMinutes()):null;
@@ -1848,8 +1848,11 @@ function renderDispatch(){
         const _amDur=_isCleanTL?15:((new Date(iso+'T12:00')).getDay()===1?30:10);   // morning PMCS+load: Mon 30 / Tue–Fri 10 (lawn); cleaning 15 (load only)
         const _pmcsSt=(_ciMin!=null)?_ciMin:450, _pmcsEn=_pmcsSt+_amDur;   // 450 = 7:30 assumed clock-in until the crew actually clocks in
         let cursor=_pmcsEn;                                               // first job starts after PMCS/load-up
+        // "if you started RIGHT NOW": on today's board the cursor never sits in the
+        // past — un-started jobs slide forward live as the clock moves.
+        if(iso===todayIso){ const _nw=new Date(); cursor=Math.max(cursor,_nw.getHours()*60+_nw.getMinutes()); }
         untimed.forEach(function(b,ui){
-          const dur=_jobMins(b);
+          const dur=_hqMins(b,zi,c);
           let st2=cursor+((evs.length||ui)?DRIVE_BUF:0);
           // weave around locked-time blocks: if the slot collides, slide past the conflict
           for(let guard=0; guard<20; guard++){
@@ -2019,6 +2022,15 @@ function _crewRosterNames(zi,c){
   const cp=_crewPayFor(zi,c); if(!cp||!cp.who||!cp.who.length) return '';
   return cp.who.map(function(w){ return String(w).split(' (')[0]; }).join(' & ');
 }
+// Crew size changes how long a job takes. Durations are calibrated for a 2-person
+// crew: a 1-man crew runs ~40% longer, 3+ a touch faster. Size comes from that
+// business's Crew Pay roster (the source of truth HQ already reads).
+function _crewSizeFactor(zi,c){
+  const cp=_crewPayFor(zi,c);
+  const n=(cp&&cp.who&&cp.who.length)?cp.who.length:2;
+  return n<=1?1.4:(n>=3?0.85:1);
+}
+function _hqMins(b,zi,c){ return Math.max(10,Math.round(_jobMins(b)*_crewSizeFactor(zi,c))); }
 function _crewRate(c,zi){
   zi=zi||0;
   const cp=_crewPayFor(zi,c);
@@ -2070,7 +2082,7 @@ function _econParts(c,jobs,zi){
   let estM=0;   // clock-in → clock-out: morning phase + drive out + on-route span + drive back + unload
   Object.keys(byD).forEach(function(d){
     const list=byD[d]; if(!list.length) return;
-    const durs=list.reduce(function(s2,b){return s2+_jobMins(b);},0);
+    const durs=Math.round(list.reduce(function(s2,b){return s2+_jobMins(b);},0)*_crewSizeFactor(zi,c));   // scaled to real crew size
     // If the day is fully scheduled, use the REAL first-start→last-end span (actual drive time between
     // stops is baked into those times) so route optimization actually moves the number. Otherwise fall
     // back to a flat 12-min-per-stop buffer estimate.
@@ -2111,7 +2123,7 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
         if(_rem.length){
           const _nowMin=(new Date()).getHours()*60+(new Date()).getMinutes();
           let _cur=_nowMin;
-          _rem.forEach(function(b,i){ if(i>0)_cur+=DRIVE_BUF; const _st=_cur; _cur+=_jobMins(b); if(_st>=1110||_cur>1140) _atRisk.push(b); });   // starts after 6:30 or ends after 7 PM
+          _rem.forEach(function(b,i){ if(i>0)_cur+=DRIVE_BUF; const _st=_cur; _cur+=_hqMins(b,zi,c); if(_st>=1110||_cur>1140) _atRisk.push(b); });   // starts after 6:30 or ends after 7 PM
           _cur+=DRIVE_BUF+_unload;
           _finMin=Math.max(_startMin+p.estM, _cur);   // never earlier than now+remaining
         }
@@ -2143,7 +2155,22 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
       else live=' · ⏱ on clock <b>'+w.toFixed(1)+'h</b>';
     }
   }
-  return '<div class="st-econ">'+(labelHtml||'')
+  // ── ACTUALS first — what the day really came out to (done jobs + the real clock) ──
+  let act='';
+  if(iso){
+    const doneJobs=jobs.filter(function(b){ return isDone(b); });
+    if(doneJobs.length){
+      const Rd=doneJobs.reduce(function(s2,b){ return s2+amtOf(b); },0);
+      const w=(iso===todayISO()&&zi===0)?_crewWorkedHrs(c):0;   // live clock (heartbeats are main-backend only)
+      let mid='';
+      if(w>0){
+        const cost=w*p.rate+Rd*(p.pctC/100), prof=Rd-cost, mp=Rd>0?Math.round(prof/Rd*100):0;
+        mid=' · ⏱ <b>'+w.toFixed(1)+'h</b> on the clock so far · 💰 <b style="color:'+(mp>=50?'#34d399':'#fbbf24')+'">$'+Math.round(prof)+'</b> actual profit <span class="dev-pill '+(mp>=50?'g':'y')+'">'+mp+'% actual margin</span>';
+      }
+      act='<div class="st-econ" style="border-left:3px solid #34d399;">✅ <b>ACTUAL</b> · 💵 <b>$'+Rd.toFixed(0)+'</b> made · <b>'+doneJobs.length+'/'+jobs.length+'</b> done'+mid+'</div>';
+    }
+  }
+  return act+'<div class="st-econ">'+(labelHtml||'')
     +'💵 <b>$'+p.R.toFixed(0)+'</b> booked'
     +' · 🧮 est '+span+' <b>'+estH+'h '+String(estMm).padStart(2,'0')+'m</b> <span style="color:var(--dim)">(clock-in → clock-out'+(p.days>1?' · '+p.days+' days':'')+')</span>'+finishHtml
     +' · 💰 est profit <b style="color:'+(ok?'#34d399':'#fbbf24')+'">$'+Math.round(p.estProfit)+'</b> <span class="dev-pill '+(ok?'g':'y')+'">'+p.pct+'% margin'+(ok?' ✓':' — under 50%')+'</span>'
@@ -2696,16 +2723,31 @@ async function renderOps(force){
   const grid=document.getElementById('opsGrid'); if(!grid) return;
   const z=_bizLoad()[_opsBiz]||_bizLoad()[0];
   grid.innerHTML='<div class="empty">⏳ Pulling PMCS + checklists for '+esc(z.n)+'…</div>';
-  const [cfgR,stR,flR,logR]=await Promise.all([
+  const [cfgR,stR,flR,logR,ckR]=await Promise.all([
     bizGet(z,{action:'get_pmcs_config'}), bizGet(z,{action:'get_pmcs_status'}),
-    bizGet(z,{action:'get_pmcs_faults'}), bizGet(z,{action:'get_field_log',limit:200})
+    bizGet(z,{action:'get_pmcs_faults'}), bizGet(z,{action:'get_field_log',limit:200}),
+    bizGet(z,{action:'get_checklist_config'})
   ]);
   let equip=[];
   try{ const c=cfgR&&cfgR.config?JSON.parse(cfgR.config):[]; if(Array.isArray(c)) equip=c; }catch(e){}
+  let chkCfg={};
+  try{ if(ckR&&ckR.success&&ckR.config){ chkCfg=(typeof ckR.config==='string')?(ckR.config?JSON.parse(ckR.config):{}):(ckR.config||{}); } }catch(e){}
+  window._opsEquip=equip; window._opsChkCfg=chkCfg; window._opsChkSupported=!!(ckR&&ckR.success);
   const status=(stR&&stR.status)||{};
   const faults=(flR&&Array.isArray(flR.faults))?flR.faults:[];
   const log=(logR&&logR.success&&Array.isArray(logR.log))?logR.log:null;
   let h='';
+  // ── EDIT: PMCS + crew checklists (what the field app shows) ──
+  h+='<div class="dev-card" style="grid-column:1/-1;"><div class="dev-h">✏️ Edit what the crews see<span class="grow"></span></div><div class="dev-b">'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+    +'<button class="dev-btn" onclick="ckEditPmcs()">🔧 PMCS checklists</button>'
+    +'<button class="dev-btn" onclick="ckEditList(\'loadout\')">🧰 Load-out list</button>'
+    +'<button class="dev-btn" onclick="ckEditList(\'jobdone\')">✅ Job-complete list</button>'
+    +'<button class="dev-btn" onclick="ckEditList(\'endofday\')">🌙 End-of-day list</button>'
+    +'</div>'
+    +(window._opsChkSupported?'':'<div style="margin-top:8px;font-size:12px;color:#fde68a;">Checklist editing needs the new <b>checklist_config</b> handlers — they\'re already written into this business\'s apps-script.txt; paste &amp; redeploy that backend to enable saving.</div>')
+    +'<div style="margin-top:8px;font-size:12px;color:var(--dim);">Saves to this business\'s backend — every crew phone picks the new lists up on its next open / refresh.</div>'
+    +'</div></div>';
   // ── PMCS equipment board ──
   h+='<div class="dev-card" style="grid-column:1/-1;"><div class="dev-h">🔧 PMCS — equipment readiness<span class="grow"></span><span class="ph-c">'+equip.length+' equipment</span></div><div class="dev-b">';
   if(!equip.length){ h+='<div class="dev-row" style="color:var(--dim);">No PMCS config set for this business yet — crews set it up in Field Mode, or copy one over via the API console (get_pmcs_config → set_pmcs_config).</div>'; }
@@ -2750,18 +2792,182 @@ async function renderOps(force){
   grid.innerHTML=h;
 }
 
+/* ── OPS editors: PMCS + crew checklists, saved per business ─────────────────
+   Simple lists (loadout / jobdone / endofday) → set_checklist_config (JSON in
+   Script Properties). PMCS machines → set_pmcs_config (same one Field Mode uses). */
+const _CK_TITLES={ loadout:'🧰 Load-out — before rolling out', jobdone:'✅ Job-complete — before leaving each stop', endofday:'🌙 End-of-day — back at the shop' };
+const _CK_DEFAULTS={
+  lawn:{
+    loadout:['🚜 Mower loaded & strapped · ramp up & latched','🔧 Trimmer, edger & blower on board','⛽ Gas cans full (mix + regular) · spare line & blades','🧰 Hand tools, bags/tarp, eye & ear pro','💧 Water/cooler · phone charged'],
+    endofday:['🍃 Blew everything off: mower deck, edger, trimmer, blower','⛽ Ready for tomorrow: fueled up + blades & line good','📦 Unloaded & secured · trash emptied · no leaks on trailer','🔒 Trailer, truck & shop locked up'],
+    jobdone:['Walked the yard — nothing left behind','Closed all gates','Leaf blowed','Mower strapped down & all gear secured','Trailer closed & latched']
+  },
+  cleaning:{
+    loadout:['🧹 Vacuum (charged/bagged) · mop & bucket','🧴 Sprays: all-purpose, glass, bathroom, degreaser','🧽 Microfiber cloths & scrub pads (plenty)','🧤 Gloves, trash bags & liners, paper towels','🪜 Step stool · duster · caddy restocked'],
+    endofday:['🧴 Caddy restocked for tomorrow (sprays, cloths, bags)','🧺 Dirty cloths & mop heads in the wash','🧹 Vacuum emptied · equipment wiped down','🔒 Van unloaded & locked up'],
+    jobdone:['Final walkthrough — every room checked','Trash out & liners replaced','Lights off · doors locked (or key returned)','All supplies & equipment packed up','Photos taken of finished rooms']
+  }
+};
+const _CK_PMCS_DEFAULT=[{ key:'truck', name:'Work Truck', icon:'🛻', items:[
+  { id:'t_walk',  label:'Walk-around: tires, lights, nothing leaking', cad:'daily', crit:true },
+  { id:'t_fluid', label:'Oil & coolant on the marks',                  cad:'daily', crit:false },
+  { id:'t_brake', label:'Brakes firm · seatbelts click',               cad:'daily', crit:true }
+]}];
+function _ckBizKind(z){ return /clean/i.test((z&&z.n)||'')?'cleaning':'lawn'; }
+let _ckList=null, _ckPmcs=null;
+function _ckOverlayInject(){
+  if(document.getElementById('ckEdOverlay')) return;
+  const o=document.createElement('div');
+  o.id='ckEdOverlay';
+  o.style.cssText='display:none;position:fixed;inset:0;z-index:950;background:rgba(0,0,0,.7);align-items:center;justify-content:center;padding:16px;';
+  o.onclick=function(e){ if(e.target===o) ckEdClose(); };
+  o.innerHTML='<div style="background:var(--panel,#0b1220);border:1px solid var(--line,#26324a);border-radius:16px;width:100%;max-width:760px;max-height:88vh;display:flex;flex-direction:column;">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line,#26324a);">'
+    +'<div id="ckEdTitle" style="font-weight:800;font-size:15px;">Edit</div>'
+    +'<button class="dev-btn" onclick="ckEdClose()">✕</button></div>'
+    +'<div id="ckEdBody" style="overflow-y:auto;padding:14px 16px;flex:1;"></div>'
+    +'<div style="padding:12px 16px;border-top:1px solid var(--line,#26324a);display:flex;gap:8px;justify-content:flex-end;">'
+    +'<button class="dev-btn" onclick="ckEdClose()">Cancel</button>'
+    +'<button class="dev-btn go" onclick="ckEdSave()">💾 Save for all crews</button></div></div>';
+  document.body.appendChild(o);
+}
+function ckEdClose(){ const o=document.getElementById('ckEdOverlay'); if(o) o.style.display='none'; _ckList=null; _ckPmcs=null; }
+function ckEditList(key){
+  const z=_bizLoad()[_opsBiz]||_bizLoad()[0];
+  const cfg=window._opsChkCfg||{};
+  let items=Array.isArray(cfg[key])?cfg[key].slice():[];
+  if(!items.length) items=((_CK_DEFAULTS[_ckBizKind(z)]||{})[key]||[]).slice();
+  items=items.map(function(x){ return (typeof x==='string')?x:((x&&x.label)||''); });
+  _ckList={ z:z, key:key, items:items }; _ckPmcs=null;
+  _ckOverlayInject();
+  document.getElementById('ckEdTitle').textContent=(_CK_TITLES[key]||key)+' · '+(z.n||'');
+  _ckRenderList();
+  document.getElementById('ckEdOverlay').style.display='flex';
+}
+function _ckRenderList(){
+  const b=document.getElementById('ckEdBody'); if(!b||!_ckList) return;
+  b.innerHTML=_ckList.items.map(function(it,i){
+    return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">'
+      +'<input class="dev-inp" style="flex:1;min-width:0;" value="'+esc(it).replace(/"/g,'&quot;')+'" oninput="_ckList.items['+i+']=this.value">'
+      +'<button class="dev-btn" onclick="_ckList.items.splice('+i+',1);_ckRenderList()">✕</button></div>';
+  }).join('')
+  +'<button class="dev-btn" style="width:100%;margin-top:4px;" onclick="_ckList.items.push(\'\');_ckRenderList()">＋ Add item</button>'
+  +'<div style="margin-top:10px;font-size:12px;color:var(--dim);">Crews get this on their next app open / refresh. Empty rows are dropped.</div>';
+}
+function ckEditPmcs(){
+  const z=_bizLoad()[_opsBiz]||_bizLoad()[0];
+  let list=[]; try{ list=JSON.parse(JSON.stringify(window._opsEquip||[])); }catch(e){}
+  if(!list.length) list=JSON.parse(JSON.stringify(_CK_PMCS_DEFAULT));
+  _ckPmcs={ z:z, list:list, sel:list[0]&&list[0].key }; _ckList=null;
+  _ckOverlayInject();
+  document.getElementById('ckEdTitle').textContent='🔧 PMCS checklists · '+(z.n||'');
+  _ckRenderPmcs();
+  document.getElementById('ckEdOverlay').style.display='flex';
+}
+function _ckRenderPmcs(){
+  const b=document.getElementById('ckEdBody'); if(!b||!_ckPmcs) return;
+  const eq=_ckPmcs.list.find(function(x){ return x.key===_ckPmcs.sel; })||_ckPmcs.list[0];
+  let h='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">'
+    +_ckPmcs.list.map(function(m){ return '<button class="dev-btn'+(eq&&m.key===eq.key?' go':'')+'" onclick="_ckPmcs.sel=\''+esc(m.key)+'\';_ckRenderPmcs()">'+esc((m.icon||'')+' '+(m.name||m.key))+'</button>'; }).join('')
+    +'<button class="dev-btn" onclick="ckPmcsAddMachine()">＋ Machine</button></div>';
+  if(!eq){ b.innerHTML=h; return; }
+  const mi=_ckPmcs.list.indexOf(eq);
+  h+='<div style="display:flex;gap:8px;margin-bottom:10px;">'
+    +'<input class="dev-inp" style="width:64px;text-align:center;" value="'+esc(eq.icon||'')+'" oninput="_ckPmcs.list['+mi+'].icon=this.value" title="icon">'
+    +'<input class="dev-inp" style="flex:1;min-width:0;" value="'+esc(eq.name||'')+'" oninput="_ckPmcs.list['+mi+'].name=this.value" placeholder="Machine name">'
+    +'<button class="dev-btn" onclick="ckPmcsDelMachine('+mi+')">🗑</button></div>';
+  eq.items=eq.items||[];
+  h+=eq.items.map(function(it,i){
+    return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:7px;">'
+      +'<input class="dev-inp" style="flex:1;min-width:0;" value="'+esc(it.label||'').replace(/"/g,'&quot;')+'" oninput="_ckPmcs.list['+mi+'].items['+i+'].label=this.value">'
+      +'<select class="dev-inp" style="width:96px;flex:0 0 auto;" onchange="_ckPmcs.list['+mi+'].items['+i+'].cad=this.value">'
+      +['daily','weekly','monthly'].map(function(c){ return '<option'+(it.cad===c?' selected':'')+'>'+c+'</option>'; }).join('')+'</select>'
+      +'<label title="Failing this = NO-GO (don\'t operate)" style="display:flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap;color:'+(it.crit?'#f87171':'var(--dim)')+';cursor:pointer;"><input type="checkbox" '+(it.crit?'checked':'')+' onchange="_ckPmcs.list['+mi+'].items['+i+'].crit=this.checked;_ckRenderPmcs()" style="accent-color:#f87171;">NO-GO</label>'
+      +'<button class="dev-btn" onclick="_ckPmcs.list['+mi+'].items.splice('+i+',1);_ckRenderPmcs()">✕</button></div>';
+  }).join('');
+  h+='<button class="dev-btn" style="width:100%;margin-top:4px;" onclick="ckPmcsAddItem('+mi+')">＋ Add check item</button>'
+    +'<div style="margin-top:10px;font-size:12px;color:var(--dim);">Daily items gate route start in Field Mode; weekly land Mondays, monthly every 4th Monday.</div>';
+  b.innerHTML=h;
+}
+function ckPmcsAddItem(mi){ const eq=_ckPmcs&&_ckPmcs.list[mi]; if(!eq) return; (eq.items=eq.items||[]).push({ id:(String(eq.key||'x')[0])+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), label:'', cad:'daily', crit:false }); _ckRenderPmcs(); }
+function ckPmcsAddMachine(){ if(!_ckPmcs) return; const name=prompt('Machine name (e.g. Blower):'); if(!name||!name.trim()) return; const key=(name.toLowerCase().replace(/[^a-z0-9]+/g,'').slice(0,12))||('m'+Date.now().toString(36)); _ckPmcs.list.push({ key:key, name:name.trim(), icon:'🔧', items:[] }); _ckPmcs.sel=key; _ckRenderPmcs(); }
+function ckPmcsDelMachine(mi){ if(!_ckPmcs||!confirm('Remove this machine and all its checks?')) return; _ckPmcs.list.splice(mi,1); _ckPmcs.sel=_ckPmcs.list[0]&&_ckPmcs.list[0].key; _ckRenderPmcs(); }
+async function ckEdSave(){
+  if(_ckPmcs) return ckPmcsSave();
+  if(!_ckList) return;
+  const items=_ckList.items.map(function(s){ return String(s||'').trim(); }).filter(Boolean);
+  if(!items.length){ toast('Add at least one item first'); return; }
+  const cfg=window._opsChkCfg||{}; cfg[_ckList.key]=items; window._opsChkCfg=cfg;
+  const d=await bizGet(_ckList.z,{ action:'set_checklist_config', config:JSON.stringify(cfg) });
+  toast(d&&d.success?'✅ Saved — crews get it on next refresh':'⚠ '+((d&&d.error)||'Save failed — paste & redeploy the new backend first'));
+  if(d&&d.success) ckEdClose();
+}
+async function ckPmcsSave(){
+  const list=(_ckPmcs&&_ckPmcs.list||[]).map(function(m){ return { key:m.key, name:String(m.name||'').trim(), icon:m.icon||'🔧', items:(m.items||[]).filter(function(it){ return String(it.label||'').trim(); }) }; }).filter(function(m){ return m.name&&m.items.length; });
+  if(!list.length){ toast('Each machine needs a name and at least one check item'); return; }
+  const z=_ckPmcs.z;
+  let d=null;
+  try{ d=await fetch(_bizUrl(z),{ method:'POST', body:JSON.stringify({ action:'set_pmcs_config', adminToken:_bizTok(z), config:JSON.stringify(list), by:'HQ' }) }).then(function(r){ return r.json(); }); }catch(e){}
+  if(!(d&&d.success)){ try{ d=await bizGet(z,{ action:'set_pmcs_config', config:JSON.stringify(list), by:'HQ' }); }catch(e){} }
+  toast(d&&d.success?'✅ PMCS saved — crews get it on next open':'⚠ '+((d&&d.error)||'Save failed'));
+  if(d&&d.success){ window._opsEquip=list; ckEdClose(); renderOps(true); }
+}
+
+
 /* ═══════════════════ STATS — the whole empire ═══════════════════ */
 let _statsCache={};
 function _fmtMoney(n){ return '$'+(+n||0).toLocaleString('en-US',{maximumFractionDigits:0}); }
+/* ── Projected recurring income (same math as /invoice's Rev Projection) ──────
+   Counts EVERY active plan regardless of payment status — a customer whose plan
+   is live but hasn't paid yet still projects forward. One entry per customer;
+   promo/following-price customers project at their real recurring price. */
+function _hqActivePlans(books){
+  const seen={}, out=[];
+  (books||[]).forEach(function(bk){
+    if(bk.rowCancelled) return;
+    const f=String(bk.frequency||'').toLowerCase();
+    if(!f||f.indexOf('one')>=0||f.indexOf('free')>=0||f.indexOf('quote')>=0) return;
+    const k=String(bk.email||'').toLowerCase().trim()||(String(bk.name||'')+String(bk.address||''));
+    if(!k||seen[k]) return; seen[k]=1; out.push(bk);
+  });
+  return out;
+}
+function _hqPlanInterval(f){
+  const custom=(f.match(/every\s+(\d+)\s*week/)||[])[1];
+  if(custom) return (+custom)*7;
+  if(f.indexOf('bi')>=0&&f.indexOf('week')>=0) return 14;
+  if(f.indexOf('week')>=0) return 7;
+  if(f.indexOf('month')>=0) return 30;
+  return 14;
+}
+function _hqPlanPrice(bk){
+  const p0=parseFloat(String(bk.price||'').replace(/[^0-9.]/g,''))||0;
+  const fp=parseFloat(String(bk.followingPrice||'').replace(/[^0-9.]/g,''))||0;
+  if(fp>0) return fp;                                        // promo first visit → project the real recurring price
+  const m=String(bk.notes||'').match(/Following[:\s]+\$?([\d.]+)/i);
+  if(m&&parseFloat(m[1])>0) return parseFloat(m[1]);
+  return p0;
+}
+function _hqProjRev(books,days){
+  let projDays=days;
+  if(days==null){ const now=new Date(); projDays=new Date(now.getFullYear(),now.getMonth()+1,0).getDate()-now.getDate()+1; }
+  let tot=0;
+  _hqActivePlans(books).forEach(function(bk){ tot+=_hqPlanPrice(bk)*(projDays/_hqPlanInterval(String(bk.frequency||'').toLowerCase())); });
+  return tot;
+}
+function _hqProjLine(books,label){
+  const n=_hqActivePlans(books).length;
+  return '<div class="dev-row">📈 '+(label||'Projected')+' — month left <b>'+_fmtMoney(_hqProjRev(books,null))+'</b> · 7d <b>'+_fmtMoney(_hqProjRev(books,7))+'</b> · 30d <b>'+_fmtMoney(_hqProjRev(books,30))+'</b> · 365d <b>'+_fmtMoney(_hqProjRev(books,365))+'</b> <span style="color:var(--dim)">('+n+' active plan'+(n!==1?'s':'')+', paid or not)</span></div>';
+}
 async function renderStats(force){
   const grid=document.getElementById('statsGrid'); if(!grid) return;
   const biz=_bizLoad();
   if(!Object.keys(_statsCache).length||force) grid.innerHTML='<div class="empty">⏳ Pulling numbers from every business…</div>';
   const results=await Promise.all(biz.map(async function(z,i){
     if(!_bizConnected(z)) return {z:z,locked:true};
-    if(_statsCache[i]&&!force) return _statsCache[i];
-    const [st,cj]=await Promise.all([ bizGet(z,{action:'get_stats'}), bizGet(z,{action:'completed_jobs',limit:2000}) ]);
-    const r={z:z, st:(st&&st.success)?st:null, jobs:(cj&&cj.success&&Array.isArray(cj.jobs))?cj.jobs:[]};
+    if(_statsCache[i]&&!force&&_statsCache[i].books) return _statsCache[i];
+    const [st,cj,bkr]=await Promise.all([ bizGet(z,{action:'get_stats'}), bizGet(z,{action:'completed_jobs',limit:2000}), bizGet(z,{action:'bookings',includeCompleted:'false'}) ]);
+    const r={z:z, st:(st&&st.success)?st:null, jobs:(cj&&cj.success&&Array.isArray(cj.jobs))?cj.jobs:[], books:(bkr&&bkr.success&&Array.isArray(bkr.bookings))?bkr.bookings:[]};
     _statsCache[i]=r; return r;
   }));
   const now=new Date(); const months=[];
@@ -2800,6 +3006,7 @@ async function renderStats(force){
     +_kpi(avgT?('$'+avgT):'—','Avg ticket')
     +'</div>';
   if(E.done>0&&E.paid<=0){ h+='<div style="margin-top:12px;padding:9px 12px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);border-radius:9px;font-size:12.5px;color:#fbbf24;">⚠ '+E.done+' jobs done but <b>$0 marked paid</b> — "Revenue (done work)" is the value of completed jobs; mark jobs paid (or enable autopay) so a "collected" figure tracks too.</div>'; }
+  h+=(function(){ const all=[].concat.apply([],results.map(function(r){ return r.books||[]; })); return all.length?('<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px;">'+_hqProjLine(all,'Projected recurring — all businesses')+'</div>'):''; })();
   h+='</div></div>';
   h+='<div class="dev-card"><div class="dev-h">🔻 This week — visits → quotes → jobs</div><div class="dev-b">'
     +'<div class="dev-row">👀 Site visits <b>'+E.twv+'</b>'+_delta(E.twv,E.lwv)+'</div>'
@@ -2833,6 +3040,7 @@ async function renderStats(force){
       +_kpi(at?('$'+at):'—','Avg ticket')
       +_kpi(String(_n(a.totalVisits)),'Site visits')
       +'</div>'
+      +_hqProjLine(r.books||[],'Projected')
       +'<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin:2px 0 6px;">Revenue · last 6 months</div>'
       +'<div style="display:flex;align-items:flex-end;gap:7px;height:80px;">'
       +months.map(function(m){ const v=byMonth[m]; const hh=Math.max(3,Math.round(v/max*66));

@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-07.5 */
+/* APP_VER:2026-07-07.9 */
 (function(){
-  var V='2026-07-07.5'; window.__APP_VER=V;
+  var V='2026-07-07.9'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -44,6 +44,7 @@
 <meta name="robots" content="noindex,nofollow"/>
 <link rel="manifest" href="manifest.webmanifest"/>
 <meta name="theme-color" content="#0f2417"/>
+<meta name="color-scheme" content="light"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
@@ -51,7 +52,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
 <link rel="icon" href="icon-192.png"/>
 <style>
-  :root{ --green-deep:#0f2417; --green:#15803d; --border:#e2e8f0; --text-muted:#64748b; --red:#dc2626; --text:#14361f; --green-mid:#15803d; --green-pale:#f0fdf4; --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
+  :root{ color-scheme:light; --green-deep:#0f2417; --green:#15803d; --border:#e2e8f0; --text-muted:#64748b; --red:#dc2626; --text:#14361f; --green-mid:#15803d; --green-pale:#f0fdf4; --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
   *{ box-sizing:border-box; }
   html,body{ margin:0; padding:0; height:100%; }
   /* position:fixed body = iOS can never scroll the page behind the app. That
@@ -60,7 +61,8 @@
     font-family:var(--font); background:#0f2417; color:#14361f; -webkit-font-smoothing:antialiased; overscroll-behavior:none; -webkit-tap-highlight-color:transparent; }
   #netBanner{ position:fixed; left:0; right:0; top:0; z-index:4000; display:none; text-align:center; font-size:13px; font-weight:700; padding:max(6px,env(safe-area-inset-top)) 10px 6px; background:#b45309; color:#fff; pointer-events:none; }
   #netBanner.show{ display:block; }
-  #loginScreen{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:linear-gradient(170deg,#0f2417,#14361f 55%,#0c2a18); padding:24px; }
+  /* visibility:hidden until boot decides login vs app — kills the login-screen flash on open */
+  #loginScreen{ position:fixed; inset:0; display:flex; visibility:hidden; align-items:center; justify-content:center; background:linear-gradient(170deg,#0f2417,#14361f 55%,#0c2a18); padding:24px; }
   .login-card{ background:#fff; border-radius:22px; padding:30px 24px; width:100%; max-width:380px; box-shadow:0 20px 60px rgba(0,0,0,.35); }
   .login-card h1{ font-size:28px; margin:0 0 6px; color:var(--green-deep); }
   .login-card p{ font-size:14px; color:var(--text-muted); margin:0 0 16px; line-height:1.5; }
@@ -138,6 +140,9 @@
   .fm-toggle-btn.cash-on{ background:#fef3c7; border-color:#b45309; color:#92400e; }
   .fm-toggle-btn.sent{ background:#dcfce7; border-color:#16a34a; color:#15803d; }
   .fm-toggle-btn.invoice{ background:#1565c0; color:#fff; border-color:#1565c0; }
+  /* payment action buttons — ALWAYS filled, never white-on-white (incl. iOS dark mode) */
+  .fm-toggle-btn.pay{ background:#0f172a; color:#fff; border-color:#0f172a; -webkit-appearance:none; appearance:none; }
+  .fm-toggle-btn.pay.on{ background:#15803d; color:#fff; border-color:#15803d; }
   .fm-mini-link{ background:none; border:none; color:#64748b; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; margin-top:14px; text-decoration:underline; width:100%; text-align:center; }
   .fm-err{ color:#dc2626; font-size:14px; margin-bottom:10px; display:none; font-weight:600; }
   .fm-addon-row{ display:flex; flex-direction:column; gap:8px; }
@@ -318,8 +323,11 @@
       <button class="fm-toggle-btn" id="fmcPhotoBtn" onclick="document.getElementById('fmcPhotoInput').click()" style="background:#7c3aed;color:#fff;border-color:#7c3aed;">📷 Take / Add Photo</button>
     </div>
     <div class="fm-block">
-      <div class="fm-block-label"><span>Notes for owner</span><span style="color:#94a3b8;">optional</span></div>
-      <textarea class="fm-textarea" id="fmcOwnerNote" placeholder="Anything Hunter should know about this yard…"></textarea>
+      <div class="fm-block-label"><span>Notes</span><span style="color:#94a3b8;">optional</span></div>
+      <div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">🗒 This visit only — one-time note to the office</div>
+      <textarea class="fm-textarea" id="fmcOwnerNote" placeholder="Just about today (e.g. 'mower threw a belt, ran late')…"></textarea>
+      <div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 5px;">📌 Customer note — sticks on their profile until changed</div>
+      <textarea class="fm-textarea" id="fmcCustNote" placeholder="Gate code, dogs, sprinkler heads to avoid…"></textarea>
     </div>
     <div class="fm-block">
       <div class="fm-block-label"><span>Before you leave</span><span id="fmcCheckState" class="req">required</span></div>
@@ -376,7 +384,33 @@ const STATE_KEY   = 'evg_field_state_v2';
 // inherit the previous user's clocked-out state — "his clock-out affected me".
 function _stateKey(){ return STATE_KEY+'::'+String(adminEmail||'').toLowerCase().trim(); }
 const START_CHECKLIST = ['⛽ Mower & gas cans full','🚜 Mower, whacker & blower on the trailer','💧 Water, string & knife packed'];
-const END_CHECKLIST   = ['Walked the yard — nothing left behind','Closed all gates','Leaf blowed','Mower strapped down & all gear secured','Trailer closed & latched'];
+let END_CHECKLIST   = ['Walked the yard — nothing left behind','Closed all gates','Leaf blowed','Mower strapped down & all gear secured','Trailer closed & latched'];
+
+/* ── HQ-editable checklists: the owner edits load-out / end-of-day / job-complete
+   lists on /hq → saved to the backend (checklist_config) → every crew phone pulls
+   them here. Built-ins above/below are the fallback when nothing is configured. ── */
+const _CHK_CFG_KEY='evg_checklist_cfg_v1';
+function _applyChecklistCfg(cfg){
+  try{
+    if(!cfg||typeof cfg!=='object') return;
+    const norm=function(a,pfx){ return a.map(function(s,i){ return (typeof s==='string')?{ id:pfx+'_'+i, label:s }:s; }); };
+    if(Array.isArray(cfg.jobdone)&&cfg.jobdone.length) END_CHECKLIST=cfg.jobdone.map(String);
+    if(typeof LOADOUT_ITEMS!=='undefined'&&Array.isArray(cfg.loadout)&&cfg.loadout.length) LOADOUT_ITEMS=norm(cfg.loadout,'lo');
+    if(typeof ENDOFDAY_ITEMS!=='undefined'&&Array.isArray(cfg.endofday)&&cfg.endofday.length) ENDOFDAY_ITEMS=norm(cfg.endofday,'ed');
+  }catch(e){}
+}
+async function loadChecklistCfg(){
+  try{ const c=JSON.parse(localStorage.getItem(_CHK_CFG_KEY)||'null'); if(c) _applyChecklistCfg(c); }catch(e){}
+  if(navigator.onLine===false||!adminToken) return;
+  try{
+    const d=await fetch(SCRIPT_URL+'?action=get_checklist_config&'+authParam()).then(function(r){ return r.json(); });
+    if(d&&d.success&&d.config){
+      const cfg=(typeof d.config==='string')?JSON.parse(d.config):d.config;
+      _applyChecklistCfg(cfg);
+      try{ localStorage.setItem(_CHK_CFG_KEY, JSON.stringify(cfg)); }catch(e){}
+    }
+  }catch(e){}
+}
 
 let adminToken='', adminName='', adminEmail='', adminRole='employee', adminCrews='';
 let allBookings=[], allCustomers=[], _savedOrderKeys=null, _optOrderKeys=null;
@@ -385,10 +419,13 @@ let _clockInTime=null, _clockOutTime=null, _clockedOut=false, _fmTimerInt=null, 
 let _fmStarted=false, _fmViewIdx=null, _fmCashTotal=0, _fmBilledTotal=0, _fmSkipped={}, _startChkState=[], _jobTimers={}, _helpers=[]; let _lastSync={ok:null,ts:0,msg:''};
 let _fmAtBase=false, _homeBase='', _homeBaseGeo=null, _fmBasePoll=null;
 let _savedTimes={};   // key → planned HH:MM from the owner's push
+let _routeLock=null;  // FROZEN stop order while a route is running (see route-lock block)
+let _savedSig='';     // signature of the last HQ route we applied — dedupes re-lock/toasts
+let _doneSeq=[];      // stop keys in the ORDER they were finished/skipped — done stops display in this order
 function _fmIsBoss(){ const r=String(adminRole||'').toLowerCase().trim(); return r==='owner'||r==='manager'; }
 let _fmBooted=false;   // false until the crew taps Start/Continue → land on the Start screen on every fresh app open (never auto-drop into a job)
 // complete-sheet state
-let _fmcStop=null, _fmcRowIdx=-1, _fmcPayType='invoice', _fmcCash=false, _fmcInvoiceSent=false, _fmcChargeChosen=false, _fmcBase=0, _fmcAddons=[], _fmcPhotos=[], _fmcEndChk={};
+let _fmcStop=null, _fmcRowIdx=-1, _fmcPayType='invoice', _fmcCash=false, _fmcInvoiceSent=false, _fmcChargeChosen=false, _fmcBase=0, _fmcAddons=[], _fmcPhotos=[], _fmcEndChk={}, _fmcCustNote0='';
 
 /* ╔══════════════════════════════════════════════════════════════════════════╗
    ║  EVERGREEN SHARED ROUTE CORE — rc1                                          ║
@@ -593,8 +630,12 @@ function _payType(bk){
   // Customer turned on autopay in the portal (card on file) — charge it on complete,
   // even if the booking was originally created as pay-after / invoice. The backend
   // attaches portalAutopay + cardLast4 to every booking from the Customers sheet.
-  if(bk.portalAutopay===true && String(bk.cardLast4||'').trim()) return 'autopay';
-  if((s.includes('auto')||s.includes('stripe')) && !s.includes('not paid') && !s.includes('pending')) return 'autopay';
+  // HARD GATE: 'autopay' requires an actual card on file (cardLast4 from the
+  // Customers sheet). A payMethod that merely says "auto"/"stripe" is NOT enough —
+  // that's how a no-card customer got a charge button. No card → invoice.
+  const _card=String(bk.cardLast4||'').trim();
+  if(bk.portalAutopay===true && _card) return 'autopay';
+  if((s.includes('auto')||s.includes('stripe')) && !s.includes('not paid') && !s.includes('pending') && _card) return 'autopay';
   return 'invoice';
 }
 function mowMinutes(bk){ const c=parseInt(String(bk.mowMinutes||bk.customMowMins||'')); if(c>0) return c; const n=String(bk.notes||'').toLowerCase(); if(_isQuoteJob(bk)) return 15; const m=n.match(/lot[:\s]+([\d.]+)\s*ac/i); if(m){ const a=parseFloat(m[1]); if(a>0) return Math.min(120,Math.max(25,Math.round(20+a*45))); } return 40; }
@@ -637,15 +678,16 @@ async function verifyCode(){
   finally{ btn.disabled=false; btn.textContent='Sign In →'; }
 }
 function backToEmail(){ document.getElementById('loginStep2').style.display='none'; document.getElementById('loginStep1').style.display='block'; document.getElementById('codeInput').value=''; showLoginError(''); }
-function logout(){ try{ localStorage.removeItem(SESSION_KEY); localStorage.removeItem(_stateKey()); }catch(e){} if(_fmPollInt) clearInterval(_fmPollInt); _stopGeo(); _releaseWake(); adminToken=''; _fmStarted=false; _clockInTime=null; _clockedOut=false; document.getElementById('fieldMode').classList.remove('show'); document.getElementById('loginScreen').style.display='flex'; }
-function showApp(){ document.getElementById('loginScreen').style.display='none'; document.getElementById('fieldMode').classList.add('show'); _startPoint=_loadStartPoint(); _crewSel=_loadCrewSel(); _startTimers(); _fmRender(); }
+function logout(){ try{ localStorage.removeItem(SESSION_KEY); }catch(e){} /* day state (clock-in, progress) is kept per-user — logging back in the same day resumes it */ if(_fmPollInt) clearInterval(_fmPollInt); _stopGeo(); _releaseWake(); adminToken=''; _fmStarted=false; _clockInTime=null; _clockedOut=false; document.getElementById('fieldMode').classList.remove('show'); const _ls=document.getElementById('loginScreen'); _ls.style.display='flex'; _ls.style.visibility='visible'; }
+function showApp(){ document.getElementById('loginScreen').style.display='none'; document.getElementById('fieldMode').classList.add('show'); _restoreState(); /* fresh login same day → resume clock/progress */ _startPoint=_loadStartPoint(); _crewSel=_loadCrewSel(); _startTimers(); _fmRender(); }
 
 /* ───────── State persistence (resume where left off) ───────── */
 function _persist(){
   try{ localStorage.setItem(_stateKey(), JSON.stringify({
     dayISO: todayISOStr(), started:_fmStarted, viewIdx:_fmViewIdx,
     clockInTime:_clockInTime?_clockInTime.toISOString():null, clockOutTime:_clockOutTime?_clockOutTime.toISOString():null, clockedOut:_clockedOut,
-    cashTotal:_fmCashTotal, billedTotal:_fmBilledTotal, skipped:_fmSkipped, startChk:_startChkState, jobTimers:_jobTimers, helpers:_helpers, atBase:_fmAtBase
+    cashTotal:_fmCashTotal, billedTotal:_fmBilledTotal, skipped:_fmSkipped, startChk:_startChkState, jobTimers:_jobTimers, helpers:_helpers, atBase:_fmAtBase,
+    routeLock:_routeLock, savedSig:_savedSig, doneSeq:_doneSeq
   })); }catch(e){}
 }
 function _restoreState(){
@@ -656,17 +698,30 @@ function _restoreState(){
     _fmStarted=!!s.started; _fmViewIdx=(s.viewIdx==null?null:s.viewIdx);
     _clockInTime=s.clockInTime?new Date(s.clockInTime):null; _clockOutTime=s.clockOutTime?new Date(s.clockOutTime):null; _clockedOut=!!s.clockedOut;
     _fmCashTotal=+s.cashTotal||0; _fmBilledTotal=+s.billedTotal||0; _fmSkipped=s.skipped||{}; _startChkState=Array.isArray(s.startChk)?s.startChk:[]; _jobTimers=s.jobTimers||{}; _helpers=Array.isArray(s.helpers)?s.helpers:[]; _fmAtBase=!!s.atBase;
+    _routeLock=(Array.isArray(s.routeLock)&&s.routeLock.length)?s.routeLock:null; _savedSig=(typeof s.savedSig==='string')?s.savedSig:''; _doneSeq=Array.isArray(s.doneSeq)?s.doneSeq:[];
   }catch(e){}
 }
 
 /* ───────── Data load ───────── */
+let _ldBusy=false, _lastLoadTs=0, _custFetchedAt=0, _chkCfgKicked=false;
 async function loadData(refreshToast){
+  if(_ldBusy) return;               // one load at a time — overlapping loads caused flicker
+  _ldBusy=true;
+  try{ await _loadDataInner(refreshToast); } finally { _ldBusy=false; _lastLoadTs=Date.now(); }
+}
+async function _loadDataInner(refreshToast){
   if(navigator.onLine===false){ _hydrateFromCache(); if(refreshToast) showToast('📴 Offline — showing saved jobs'); _fmRender(); return; }
+  if(!_chkCfgKicked){ _chkCfgKicked=true; try{ loadChecklistCfg(); }catch(e){} }   // HQ-edited checklists (non-blocking)
+  // Same-day jobs added from the truck are only local until the backend ingests the
+  // queued booking — hold on to them across refreshes so they can't vanish mid-route.
+  const _localTemps=(allBookings||[]).filter(function(b){ return b&&b._localTemp&&dateOf(b)===todayISOStr(); });
   try{
     const crewQ='';  // pull the whole day's saved order; we order our visible stops by it
     const [bRes,cRes,rRes]=await Promise.all([
       fetch(SCRIPT_URL+'?action=bookings&includeCompleted=false&'+authParam()).then(r=>r.json()).catch(()=>null),
-      fetch(SCRIPT_URL+'?action=customers_list&'+authParam()).then(r=>r.json()).catch(()=>null),
+      (refreshToast || Date.now()-_custFetchedAt>300000 || !(allCustomers&&allCustomers.length))
+        ? fetch(SCRIPT_URL+'?action=customers_list&'+authParam()).then(r=>r.json()).catch(()=>null)
+        : Promise.resolve(null),   // customers change rarely — refetch every 5 min, not every poll
       fetch(SCRIPT_URL+'?action=get_route&date='+todayISOStr()+crewQ+'&'+authParam()).then(r=>r.json()).catch(()=>null)
     ]);
     if(bRes&&bRes.success&&Array.isArray(bRes.bookings)){ allBookings=bRes.bookings; try{ localStorage.setItem('evg_field_bookings', JSON.stringify(allBookings)); }catch(e){} }
@@ -680,8 +735,8 @@ async function loadData(refreshToast){
       if(prevRole&&adminRole!==prevRole) showToast('👤 Role updated: '+adminRole.replace(/_/g,' ')+' — view adjusted');
       saveSession(adminToken,adminName,adminEmail,adminRole, adminRole==='owner'?30:7);
     }
-    if(cRes&&cRes.success&&Array.isArray(cRes.customers)){ allCustomers=cRes.customers; try{ localStorage.setItem('evg_field_customers', JSON.stringify(allCustomers)); }catch(e){} }
-    _savedOrderKeys=_extractRouteKeys(rRes);
+    if(cRes&&cRes.success&&Array.isArray(cRes.customers)){ allCustomers=cRes.customers; _custFetchedAt=Date.now(); try{ localStorage.setItem('evg_field_customers', JSON.stringify(allCustomers)); }catch(e){} }
+    if(rRes&&rRes.success===true) _fmTakeSavedOrder(_extractRouteKeys(rRes));   // ignore transient fetch failures — never wipe a good route
     // home base (owner-set, shared via schedule config) — cached for offline
     fetch(SCRIPT_URL+'?action=get_schedule_config&'+authParam()).then(r=>r.json()).then(function(d){
       if(d&&d.success&&d.config&&typeof d.config.homeBase==='string'){
@@ -690,10 +745,19 @@ async function loadData(refreshToast){
       }
     }).catch(function(){ try{ _homeBase=localStorage.getItem('evg_homebase')||''; }catch(e){} });
     try{ if(!_homeBase) _homeBase=localStorage.getItem('evg_homebase')||''; }catch(e){}
+    // Re-attach local same-day additions the server doesn't know about yet
+    if(_localTemps.length){
+      const have=new Set((allBookings||[]).map(_stopKey));
+      let readded=false;
+      _localTemps.forEach(function(t){ if(!have.has(_stopKey(t))){ allBookings.push(t); readded=true; } });
+      if(readded){ try{ localStorage.setItem('evg_field_bookings', JSON.stringify(allBookings)); }catch(e){} }
+    }
     if(!allBookings.length) _hydrateFromCache();
     if(_savedOrderKeys&&_savedOrderKeys.length){ _optOrderKeys=null; }   // (a) canonical route from backend wins; drop any stale self-optimized order
     else { _optOrderKeys=_loadOptOrderCache();                           // (b) no canonical route → self-optimize (show cached order instantly, refine in background)
-      if(navigator.onLine!==false){ _fmComputeOptimizedOrder().then(function(res){ if(res&&res.changed&&!_fmStarted) _fmRender(); }).catch(function(){}); } }
+      // NEVER self-optimize mid-route — geocode/OSRM variance between runs was
+      // reshuffling the day under the crew. Pre-route only; mid-route = route lock.
+      if(navigator.onLine!==false && !_fmStarted){ _fmComputeOptimizedOrder().then(function(res){ if(res&&res.changed&&!_fmStarted) _fmRender(); }).catch(function(){}); } }
     if(refreshToast) showToast('↻ Jobs updated');
   }catch(e){ _hydrateFromCache(); }
   _fmRender();
@@ -914,6 +978,82 @@ async function _reoptimizeNow(){
   else showToast('✅ Route optimized from your start point');
 }
 
+/* ── ROUTE LOCK — the stop order is FROZEN the moment a route starts. ──────────
+   Exactly three things may change a route in progress:
+     1. an explicit HQ push (applied to the NOT-yet-done stops only),
+     2. the crew tapping 📍 Re-route (re-optimizes remaining stops from GPS),
+     3. a same-day addition slotting in after its anchor stop.
+   Background self-optimization (geocoder/OSRM variance) can never reshuffle it. */
+function _fmRelockFromSaved(){
+  const pos=function(k){ const i=(_savedOrderKeys||[]).indexOf(k); return i<0?9999:i; };
+  const resolved=[], open=[];
+  _fmStops().forEach(function(s){ (_fmResolved(s)?resolved:open).push(_stopKey(s.bk)); });
+  open.sort(function(a,b){ return pos(a)-pos(b); });
+  const newLock=resolved.concat(open);
+  const changed=newLock.join('~')!==(_routeLock||[]).join('~');
+  _routeLock=newLock; _persist();
+  return changed;
+}
+// Single entry point for HQ route data. Dedupes by signature so identical polls
+// are no-ops; a real change re-locks (mid-route) and announces itself once.
+function _fmTakeSavedOrder(keys){
+  const sig=(keys||[]).join('~');
+  if(sig===_savedSig){ if(keys&&keys.length) _savedOrderKeys=keys; return; }
+  const hadPrev=_savedSig!=='';
+  _savedOrderKeys=keys; _savedSig=sig;
+  if(keys&&keys.length) _optOrderKeys=null;
+  let visible=true;
+  if(_fmStarted&&_routeLock&&_routeLock.length) visible=_fmRelockFromSaved();
+  else _persist();
+  if(visible&&_fmBooted&&(hadPrev||_fmStarted)){ showToast('🔀 Route updated from HQ'); _fmRender(); }
+}
+// Record the moment a stop is finished/skipped — done stops display in THIS order,
+// so the day reads exactly as it was driven.
+function _fmMarkSeq(bk){ try{ const k=_stopKey(bk); if(_doneSeq.indexOf(k)<0) _doneSeq.push(k); }catch(e){} }
+// 📍 Re-route from here: crew went off-plan (gas, lunch, emergency) — re-optimize
+// ONLY the remaining stops from their current GPS position and re-lock.
+let _rerouting=false;
+async function fmRerouteFromHere(){
+  if(_rerouting) return;
+  if(navigator.onLine===false){ showToast('📴 Offline — can\'t re-optimize right now'); return; }
+  const open=_fmOpenStops().map(function(s){ return s.bk; });
+  if(open.length<2){ showToast(open.length===1?'Only 1 stop left — nothing to re-order':'No open stops'); return; }
+  _rerouting=true;
+  try{
+    showToast('📍 Getting your location…');
+    try{ _startGeo(); }catch(e){}
+    const pos=await new Promise(function(res){
+      if(!navigator.geolocation) return res(null);
+      navigator.geolocation.getCurrentPosition(
+        function(p){ res({ lat:p.coords.latitude, lon:p.coords.longitude }); },
+        function(){ res((_lastPos&&_lastPos.lat!=null)?_lastPos:null); },
+        { enableHighAccuracy:true, timeout:10000, maximumAge:30000 });
+    });
+    if(!pos){ showToast('📍 No GPS fix — step outside and try again'); return; }
+    showToast('🧭 Re-optimizing your remaining stops…');
+    const cache=_geoCacheLoad(); let dirty=false; const geo=[];
+    for(const bk of open){
+      const city=ZIP_CITY[bk.zip]||'';
+      const fullAddr=(bk.address||'')+(bk.zip?', '+bk.zip:'')+(city?', '+city:'')+', FL';
+      let coord=cache[fullAddr];
+      if(coord===undefined){ coord=await _geocodeAddr(fullAddr); if(coord){ cache[fullAddr]=coord; dirty=true; } }
+      if(!coord){ const cc=CITY_LATLON[ZIP_CITY[bk.zip]]; if(cc) coord=cc; }
+      geo.push({ bk:bk, lat:coord?coord.lat:undefined, lon:coord?coord.lon:undefined, failed:!coord });
+    }
+    if(dirty) _geoCacheSave(cache);
+    const valid=geo.filter(function(s){ return !s.failed&&s.lat!=null; });
+    const failed=geo.filter(function(s){ return s.failed||s.lat==null; });
+    if(valid.length<2){ showToast('Couldn\'t locate enough addresses — keeping current order'); return; }
+    let ordered=rcOptimizeGeographic(valid,{ lat:pos.lat, lon:pos.lon });
+    try{ ordered=await rcRefineWithRoads(ordered,{ lat:pos.lat, lon:pos.lon }); }catch(e){}
+    const openKeys=ordered.concat(failed).filter(function(s){ return s&&s.bk; }).map(function(s){ return _stopKey(s.bk); });
+    const resolvedKeys=_fmStops().filter(_fmResolved).map(function(s){ return _stopKey(s.bk); });
+    _routeLock=resolvedKeys.concat(openKeys);
+    _fmViewIdx=null; _persist(); _fmRender();
+    showToast('✅ Re-routed from where you are — '+openKeys.length+' stops re-ordered');
+  } finally { _rerouting=false; }
+}
+
 // Employee taps 📍 — use device GPS as the route origin (works offline; geocoding of stops may not).
 function fmUseMyLocation(){
   if(!navigator.geolocation){ showToast('Location not supported on this device'); return; }
@@ -1127,9 +1267,28 @@ function _startTimers(){
   _fmTimerInt=setInterval(()=>{ _renderSyncStatus(); if(!_clockInTime||_clockedOut) return; const v=_fmTimerStr(); const a=document.getElementById('fmJobTimerVal'); if(a)a.textContent=v; document.querySelectorAll('.fmTimerVal').forEach(e=>e.textContent=v); },1000);
   if(_fmSyncInt) clearInterval(_fmSyncInt);
   _fmSyncInt=setInterval(_fmFlushQueue,20000);
-  // Live route sync: pull owner's reorder/cancel/move changes while on the clock
+  // Live route sync — every 10s: light get_route check (near-instant HQ reorder pickup);
+  // every 30s: full data refresh. Heartbeat every 20s while on the clock. Runs on the
+  // Start screen too, so pushed changes land before the crew even starts.
   if(_fmPollInt) clearInterval(_fmPollInt);
-  _fmPollInt=setInterval(function(){ if(_fmStarted && navigator.onLine!==false){ _fmHeartbeat(); if(!_anySheetOpen()) loadData(); } },60000);
+  _fmPollTick=0;
+  _fmPollInt=setInterval(function(){
+    if(document.hidden || navigator.onLine===false || !adminToken) return;
+    _fmPollTick++;
+    if(_fmStarted && _fmPollTick%2===0) _fmHeartbeat();
+    if(_anySheetOpen()) return;                    // never yank data mid-interaction
+    if(_fmPollTick%3===0){ loadData(); return; }   // full refresh (~30s)
+    _fmCheckRouteUpdate();                          // light route-order check (~10s)
+  },10000);
+}
+let _fmPollTick=0, _routeCheckBusy=false;
+async function _fmCheckRouteUpdate(){
+  if(_routeCheckBusy) return; _routeCheckBusy=true;
+  try{
+    const r=await fetch(SCRIPT_URL+'?action=get_route&date='+todayISOStr()+'&'+authParam()).then(function(x){ return x.json(); });
+    if(r&&r.success===true) _fmTakeSavedOrder(_extractRouteKeys(r));   // dedupe + mid-route re-lock handled inside
+  }catch(e){}
+  _routeCheckBusy=false;
 }
 function _autoClockOut(){
   if(!_clockInTime||_clockedOut) return;
@@ -1151,6 +1310,7 @@ function _fmAddLocalSameDay(nb,anchorKey){
   try{
     nb._localTemp=true;
     (allBookings=allBookings||[]).push(nb);
+    try{ localStorage.setItem('evg_field_bookings', JSON.stringify(allBookings)); }catch(e){}  // survive an offline reload
     const nk=_stopKey(nb);
     if(anchorKey&&anchorKey!==nk){ _fmInsertAfter[nk]=anchorKey; _fmInsAfterSave(); }
     _persist(); _fmRender();
@@ -1162,7 +1322,8 @@ function _fmAddLocalSameDay(nb,anchorKey){
 function _fmTodayRawJobs(){ const ds=todayISOStr(); return (allBookings||[]).filter(b=>!b.rowCancelled&&dateOf(b)===ds&&_crewMatch(b)); } // completed jobs stay so progress counts them as done
 function _fmStops(){
   const jobs=_fmTodayRawJobs().map(bk=>({bk}));
-  const order=(_savedOrderKeys&&_savedOrderKeys.length)?_savedOrderKeys           // owner's pushed route is LAW
+  const order=(_fmStarted&&_routeLock&&_routeLock.length)?_routeLock              // mid-route: FROZEN order — nothing reshuffles a route in progress
+             :(_savedOrderKeys&&_savedOrderKeys.length)?_savedOrderKeys           // owner's pushed route is LAW
              :(_startPoint&&_optOrderKeys&&_optOrderKeys.length)?_optOrderKeys   // no pushed route → start-point optimization
              :(_optOrderKeys&&_optOrderKeys.length)?_optOrderKeys:null;
   if(order){
@@ -1186,6 +1347,14 @@ function _fmStops(){
       });
     }
   }catch(e){}
+  // While a route is running, FINISHED stops float to the front in the order they
+  // were completed (the day reads exactly as driven); remaining stops keep route order.
+  if(_fmStarted&&_doneSeq.length){
+    const seqPos=function(k){ const i=_doneSeq.indexOf(k); return i<0?9999:i; };
+    const doneArr=jobs.filter(_fmResolved), openArr=jobs.filter(function(s){ return !_fmResolved(s); });
+    doneArr.sort(function(a,b){ return seqPos(_stopKey(a.bk))-seqPos(_stopKey(b.bk)); });
+    return doneArr.concat(openArr);
+  }
   return jobs;
 }
 function _fmIsSkipped(bk){ return !!_fmSkipped[_stopKey(bk)]; }
@@ -1238,8 +1407,10 @@ async function fmStartTapped(){
   let pmcsOK=true;
   try{ if(typeof pmcsGateForClockIn==='function') pmcsOK=await pmcsGateForClockIn(); }catch(e){}
   if(pmcsOK===false) return;
-  // 3) 'Got everything?' load-out checklist (replaces the old gear list).
-  try{ if(typeof loadoutGate==='function') await loadoutGate(); }catch(e){}
+  // 3) 'Got everything?' load-out checklist (replaces the old gear list). Cancel aborts the start.
+  let loOK=true;
+  try{ if(typeof loadoutGate==='function') loOK=await loadoutGate(); }catch(e){}
+  if(loOK===false) return;
   // 4) Clock in + roll.
   fmBeginRoute();
 }
@@ -1254,7 +1425,13 @@ function _hName(h){ return (typeof h==='string')?h:((h&&h.name)||''); }
 function _renderHelpers(){ const w=document.getElementById('fmHelperList'); if(!w) return; w.innerHTML=_helpers.map((h,i)=>'<button class="fm-check on" onclick="fmRemoveHelper('+i+')"><span class="box">✓</span><span>'+esc(_hName(h))+'  ✕</span></button>').join(''); }
 function fmAddHelper(){ const n=prompt('Helper name (someone riding along today):'); if(n&&n.trim()&&!_fmHelperHas(n.trim())){ _helpers.push({name:n.trim(),hourlyRate:0}); _persist(); _renderHelpers(); if(typeof _fmRenderCrewPicker==='function') _fmRenderCrewPicker(); } }
 function fmRemoveHelper(i){ _helpers.splice(i,1); _persist(); _renderHelpers(); if(typeof _fmRenderCrewPicker==='function') _fmRenderCrewPicker(); }
-function _anySheetOpen(){ const c=document.getElementById('fmCompleteSheet'), k=document.getElementById('fmSkipSheet'); return (c&&c.style.display==='flex')||(k&&k.style.display==='flex'); }
+function _anySheetOpen(){
+  // ANY open overlay pauses background refresh — a poll mid-quote/mid-checkout used
+  // to swap the data out from under the crew's thumbs.
+  const flexIds=['fmCompleteSheet','fmSkipSheet','fmCrewPicker','qcOverlay','ncOverlay','qjOverlay'];
+  for(let i=0;i<flexIds.length;i++){ const el=document.getElementById(flexIds[i]); if(el&&el.style.display==='flex') return true; }
+  return !!document.querySelector('.pmcs-overlay.open');
+}
 /* ───────── Crew / helper picker (prefilled from the staff roster) ───────── */
 let _crewListAll=[], _crewPickerResolve=null, _crewPickerView=[];
 const _CREW_CACHE_KEY='evg_field_crewlist_v1';
@@ -1298,8 +1475,9 @@ function fmCrewAddManual(){ const n=prompt('Helper name:'); if(n&&n.trim()&&!_fm
 function fmCrewConfirm(){ const ov=document.getElementById('fmCrewPicker'); if(ov) ov.style.display='none'; const r=_crewPickerResolve; _crewPickerResolve=null; if(r) r(true); }
 function fmCrewCancel(){ const ov=document.getElementById('fmCrewPicker'); if(ov) ov.style.display='none'; const r=_crewPickerResolve; _crewPickerResolve=null; if(r) r(false); }
 function fmEmergencyEnd(){
-  _fmAtBase=true;   // emergency: don't force the drive-to-base leg
   if(!confirm('End your route now? You\'ll be clocked out and your hours logged. Any stops left stay open for follow-up.')) return;
+  _fmAtBase=true;   // emergency: don't force the drive-to-base leg
+  if(_fmBasePoll){ clearInterval(_fmBasePoll); _fmBasePoll=null; }
   _autoClockOut();
   showToast('🚨 Route ended — clocked out');
   _fmStarted=false; _fmViewIdx=null; _persist(); _stopGeo(); _releaseWake();
@@ -1308,6 +1486,8 @@ function fmEmergencyEnd(){
 function fmBeginRoute(){
   // PMCS + load-out already ran and logged their own checklists; just clock in and roll.
   if(!_clockInTime || _clockedOut){ _clockInTime=new Date(); _clockedOut=false; _clockOutTime=null; }
+  // Freeze today's order — this is THE route until HQ pushes or the crew re-routes.
+  if(!_routeLock||!_routeLock.length){ try{ _routeLock=_fmStops().map(function(s){ return _stopKey(s.bk); }); }catch(e){ _routeLock=null; } }
   _fmStarted=true; _fmViewIdx=null; _fmBooted=true; _persist(); _fmRender();
 }
 
@@ -1353,9 +1533,10 @@ function _fmRenderJob(stops,idx){
     '<div class="fm-card-addr">📍 '+esc(bk.address||'—')+(bk.zip?', '+esc(bk.zip):'')+'</div><div class="fm-pills">'+pills+'</div>'+noteHtml+
     '<div class="fm-card-actions">'+_navBtn+
     '<div class="fm-secondary-row">'+phoneRow+(_isQuoteJob(bk)&&isDone(bk)&&_qjBookedStore[_stopKey(bk)]?'<button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#fdba74;color:#9a3412;" onclick="fmQuoteCloser(window._fmCurBk)">✏️ Edit booked plan</button>':'')+(_fmIsBoss()?'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmRemainingMap()">🗺 Remaining</button>':'')+'</div></div></div>'+
-    (_fmIsBoss()
-      ?'<div class="fm-jobnav"><button onclick="fmPrevStop()" '+(idx===0?'disabled':'')+'>‹ Prev</button><button onclick="fmNextStop()" '+(idx>=total-1?'disabled':'')+'>Next ›</button></div>'
-      :'<div class="fm-jobnav"><button onclick="fmPrevStop()" '+(idx===0?'disabled':'')+'>‹ Prev</button></div>');
+    '<div class="fm-jobnav"><button onclick="fmPrevStop()" '+(idx===0?'disabled':'')+'>‹ Prev</button>'
+    +'<button onclick="fmRerouteFromHere()" title="Re-optimize remaining stops from where you are now">📍 Re-route</button>'
+    +(_fmIsBoss()?'<button onclick="fmNextStop()" '+(idx>=total-1?'disabled':'')+'>Next ›</button>':'')
+    +'</div>';
   // plan line: done-by time from the owner's push + on-track status
   (function(){
     const el=document.getElementById('fmPlanLine'); if(!el) return;
@@ -1379,7 +1560,7 @@ function _fmRenderJob(stops,idx){
     }
     el.innerHTML=line; el.style.display='';
   })();
-  const hop=document.getElementById('fmSkipHopBtn'); if(hop) hop.style.display=_fmIsBoss()?'':'none';
+  const hop=document.getElementById('fmSkipHopBtn'); if(hop) hop.style.display='';   // everyone gets it — emergencies happen
   const doneBtn=document.getElementById('fmDoneBtn'); if(doneBtn){ doneBtn.style.display=(done||skipped)?'none':''; if(_isQuoteJob(bk)){ doneBtn.textContent='📝 Build Estimate →'; doneBtn.style.background='#2563eb'; } else { doneBtn.textContent=_fmIsFinalOpenStop()?'✓ Done — Finish Route':'✓ Done — Next Stop'; doneBtn.style.background=''; } }
   _fmSyncTimerSlots(); _fmHeartbeat();
 }
@@ -1406,8 +1587,8 @@ function fmRecordSkip(reason){
   const bk=stop.bk, rowIndex=bk._rowIndex||((allBookings||[]).indexOf(bk)+2), svcDate=dateOf(bk);
   const today=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
   const note=(String(bk.employeeNotes||'').trim()?bk.employeeNotes+' | ':'')+"⚠️ Couldn't service ("+reason+') — '+today+' by '+(adminName||'crew');
-  _fmEnqueue({ kind:'skip', idemKey:'skip:'+rowIndex+':'+svcDate+':'+_uuid(), method:'GET', params:{ action:'set_employee_note', rowIndex, note, adminToken } });
-  _fmFlushQueue(); bk.employeeNotes=note; _fmSkipped[_stopKey(bk)]=reason; _persist();
+  _fmEnqueue({ kind:'skip', idemKey:'skip:'+rowIndex+':'+svcDate+':'+_uuid(), method:'GET', params:{ action:'set_employee_note', rowIndex, email:bk.email||'', serviceDate:svcDate, note, adminToken } });
+  _fmFlushQueue(); bk.employeeNotes=note; _fmSkipped[_stopKey(bk)]=reason; _fmMarkSeq(bk); _persist();
   fmCloseSkip(); showToast('⤼ Skipped: '+reason); _fmViewIdx=null; _fmRender();
 }
 
@@ -1426,6 +1607,16 @@ function fmOpenComplete(){
   document.getElementById('fmcTitle').textContent='Finish '+(bk.name||'job');
   document.getElementById('fmcErr').style.display='none';
   document.getElementById('fmcOwnerNote').value='';
+  // sticky customer note — prefilled from the Customers sheet; editing it updates their profile
+  (function(){
+    const cn=document.getElementById('fmcCustNote'); if(!cn) return;
+    const em0=String(bk.email||'').toLowerCase().trim();
+    const cust0=em0?(allCustomers||[]).find(c=>String(c.Email||'').toLowerCase().trim()===em0):null;
+    _fmcCustNote0=(cust0&&String(cust0.Notes||'').trim())||'';
+    cn.value=_fmcCustNote0;
+    cn.disabled=!em0;
+    cn.placeholder=em0?'Gate code, dogs, sprinkler heads to avoid…':'(needs a customer email on file)';
+  })();
   _fmcRenderAddons(); _fmcRenderPhotos(); _fmcRenderAmount(); _fmcRenderPay(); _fmcRenderEndChk();
   document.getElementById('fmCompleteSheet').style.display='flex';
 }
@@ -1467,11 +1658,11 @@ function _fmcRenderPay(){
   }).join('')+'</div>';
   let ctrl='';
   if(_fmcPayType==='autopay'){
-    ctrl='<button class="fm-toggle-btn'+(_fmcChargeChosen?' cash-on':'')+'" onclick="fmToggleCharge()">'+(_fmcChargeChosen?('✓ Will charge'+(see?(' $'+grand.toFixed(0)):'')+' to card on complete — tap to undo'):('💳 Charge'+(see?(' $'+grand.toFixed(0)):'')+' to card on file'))+'</button>';
+    ctrl='<button class="fm-toggle-btn pay'+(_fmcChargeChosen?' on':'')+'" onclick="fmToggleCharge()">'+(_fmcChargeChosen?('✓ Will charge'+(see?(' $'+grand.toFixed(0)):'')+' to card on complete — tap to undo'):('💳 Charge'+(see?(' $'+grand.toFixed(0)):'')+' to card on file'))+'</button>';
   } else if(_fmcPayType==='cash'){
-    ctrl='<button class="fm-toggle-btn'+(_fmcCash?' cash-on':'')+'" onclick="fmToggleCash()">'+(_fmcCash?'✓ Collected $'+grand.toFixed(0)+' cash — tap to undo':'💵 Collect $'+grand.toFixed(0)+' cash')+'</button>';
+    ctrl='<button class="fm-toggle-btn pay'+(_fmcCash?' on':'')+'" onclick="fmToggleCash()">'+(_fmcCash?'✓ Collected $'+grand.toFixed(0)+' cash — tap to undo':'💵 Collect $'+grand.toFixed(0)+' cash')+'</button>';
   } else {
-    ctrl='<button class="fm-toggle-btn '+(_fmcInvoiceSent?'sent':'invoice')+'" onclick="fmToggleInvoice()">'+(_fmcInvoiceSent?('✓ Will invoice'+(see?(' $'+grand.toFixed(0)):'')+' on complete — tap to undo'):('🧾 Invoice'+(see?(' $'+grand.toFixed(0)):'')+' on complete →'))+'</button>';
+    ctrl='<button class="fm-toggle-btn pay'+(_fmcInvoiceSent?' on':'')+'" onclick="fmToggleInvoice()">'+(_fmcInvoiceSent?('✓ Will invoice'+(see?(' $'+grand.toFixed(0)):'')+' on complete — tap to undo'):('🧾 Invoice'+(see?(' $'+grand.toFixed(0)):'')+' on complete →'))+'</button>';
   }
   wrap.innerHTML=bar+ctrl;
   if(state){ const ok=_fmcPayResolved(); state.textContent=ok?'✓ done':'required'; state.className=ok?'ok':'req'; }
@@ -1549,7 +1740,15 @@ async function fmSubmitComplete(){
   if(selAddons.length && _fmcPayType!=='autopay'){ const tag=selAddons.map(a=>a.name+'='+a.price).join(','); extra.push({ kind:'addons', idemKey:'addons:'+base+':'+tag, method:'GET', params:{ action:'apply_job_addons', rowIndex, email, serviceDate:svcDate, addons:JSON.stringify(selAddons), adminToken } }); } // autopay applies extras inside field_complete so the charge includes them
   if(_fmcPayType==='cash') extra.push({ kind:'cash', idemKey:'cash:'+base, method:'GET', params:{ action:'mark_cash_paid', rowIndex, email, serviceDate:svcDate, adminToken, markedBy:adminName||'Crew' } });
   if(_fmcPayType==='invoice' && _fmcInvoiceSent) extra.push({ kind:'invoice', idemKey:'invoice:'+base, method:'GET', params:{ action:'send_invoice', rowIndex, email, serviceDate:svcDate, amount:grand.toFixed(2), adminToken } });
-  if(ownerNote){ const noteLine='📝 '+ownerNote+' — '+(adminName||'crew'); extra.push({ kind:'note', idemKey:'note:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex, note:(String(bk.employeeNotes||'').trim()?bk.employeeNotes+' | ':'')+noteLine, adminToken } }); }
+  if(ownerNote){ const noteLine='📝 '+ownerNote+' — '+(adminName||'crew'); extra.push({ kind:'note', idemKey:'note:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex, email, serviceDate:svcDate, note:(String(bk.employeeNotes||'').trim()?bk.employeeNotes+' | ':'')+noteLine, adminToken } }); }
+  // Sticky customer note — only sent when actually changed; REPLACES the profile note.
+  (function(){
+    const cn=document.getElementById('fmcCustNote'); if(!cn||cn.disabled) return;
+    const newNote=String(cn.value||'').trim();
+    if(newNote===_fmcCustNote0) return;
+    extra.push({ kind:'custnote', idemKey:'cn:'+base+':'+_uuid(), method:'GET', params:{ action:'set_customer_note', email, notes:newNote, by:adminName||'Crew', adminToken } });
+    try{ const em2=String(email||'').toLowerCase().trim(); const c2=(allCustomers||[]).find(x=>String(x.Email||'').toLowerCase().trim()===em2); if(c2){ c2.Notes=newNote; localStorage.setItem('evg_field_customers', JSON.stringify(allCustomers)); } }catch(e){}
+  })();
   const _jk=_stopKey(bk); const _jStart=_jobTimers[_jk]; const _jEnd=new Date().toISOString();
   const _jMin=_jStart?Math.max(0,Math.round((Date.now()-new Date(_jStart).getTime())/60000)):null;
   extra.push({ kind:'endchk', idemKey:'endck:'+base, method:'GET', params:{ action:'log_checklist', type:'job_complete', date:svcDate, rowIndex, by:adminName||'Crew', items:JSON.stringify({checklist:Object.keys(_fmcEndChk), jobMinutes:_jMin, startedAt:_jStart||null, completedAt:_jEnd}), adminToken } });
@@ -1557,6 +1756,7 @@ async function fmSubmitComplete(){
   _fmcPhotos.forEach((p,i)=>extra.push({ kind:'photo', idemKey:'photo:'+base+':'+_uuid(), method:'POST', body:{ action:'upload_job_photo', base64Data:p.b64, fileName:p.fileName, mimeType:p.mimeType, rowIndex, email, serviceDate:svcDate, jobLabel:(bk.name||'')+' - '+svcDate+(_fmcPhotos.length>1?' ('+(i+1)+')':''), markedBy:adminName||'Crew', adminToken } }));
 
   const finish=(offline)=>{
+    _fmMarkSeq(bk);   // completion order — done list shows the day as driven
     const lbl=new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
     if(_fmcRowIdx>=0){ allBookings[_fmcRowIdx].done='✓ Done — '+lbl; allBookings[_fmcRowIdx].markedBy=adminName; if(selAddons.length) allBookings[_fmcRowIdx].price='$'+grand.toFixed(0); } else bk.done='✓ Done — '+lbl;
     if(_fmcPayType==='cash') _fmCashTotal+=grand;
@@ -1572,7 +1772,12 @@ async function fmSubmitComplete(){
       if(!res.ok) throw new Error('HTTP '+res.status);
       let data=null; try{ data=await res.json(); }catch(_p){}
       if(data&&data.success===false){ errEl.textContent='❌ '+(data.error||'Mark done failed'); errEl.style.display='block'; submitBtn.disabled=false; _fmcUpdateSubmit(); return; }
-      _fmMarkKeyDone(doneItem.idemKey); extra.forEach(_fmEnqueue); _fmFlushQueue(); finish(false); return;
+      // field_complete reports success even when the CHARGE fails (owner is emailed) —
+      // tell the crew too, so they can collect another way while still at the door.
+      const _chargeWarn=(data && doneAction==='field_complete' && data.charged===false);
+      _fmMarkKeyDone(doneItem.idemKey); extra.forEach(_fmEnqueue); _fmFlushQueue(); finish(false);
+      if(_chargeWarn) setTimeout(function(){ showToast('⚠️ Card charge FAILED — office was emailed. Collect cash or invoice if you can.'); },1500);
+      return;
     }catch(netErr){ /* offline fallback */ }
   }
   _fmEnqueue(doneItem); extra.forEach(_fmEnqueue); _fmFlushQueue(); finish(true);
@@ -1621,7 +1826,7 @@ function fmFinishRoute(){
   _autoClockOut(); _fmFlushQueue();
   showToast('🏁 Logged out — great work!');
   // reset the day's session so a fresh start is clean
-  _fmStarted=false; _fmViewIdx=null; _clockInTime=null; _clockOutTime=null; _clockedOut=false; _fmCashTotal=0; _fmBilledTotal=0; _startChkState=[]; _jobTimers={}; _helpers=[]; _fmAtBase=false; if(_fmBasePoll){ clearInterval(_fmBasePoll); _fmBasePoll=null; }
+  _fmStarted=false; _fmViewIdx=null; _clockInTime=null; _clockOutTime=null; _clockedOut=false; _fmCashTotal=0; _fmBilledTotal=0; _startChkState=[]; _jobTimers={}; _helpers=[]; _fmAtBase=false; _routeLock=null; _savedSig=''; _doneSeq=[]; if(_fmBasePoll){ clearInterval(_fmBasePoll); _fmBasePoll=null; }
   try{ localStorage.removeItem(_stateKey()); }catch(e){}
   _fmShow('fmScreenStart'); _fmRenderStart();
 }
@@ -1631,12 +1836,15 @@ window.addEventListener('online', ()=>{ _fmUpdateSyncBadge(); _fmFlushQueue(); }
 window.addEventListener('offline', _fmUpdateSyncBadge);
 // When the app is reopened/foregrounded, force a fresh update right away.
 // iOS fires this through several events depending on cold/warm resume, so cover them all.
+let _fmLastResume=0;
 function _fmResume(){
+  // visibilitychange + pageshow + focus often fire together — run at most once per 5s.
+  const _now=Date.now(); if(_now-_fmLastResume<5000) return; _fmLastResume=_now;
   // Always pull the freshest jobs when the app is brought forward — even on the Start
   // screen — so a reschedule / added / removed job shows without a manual refresh. This
   // was the "showing jobs that aren't there / missing jobs" bug: a warm foreground on the
   // start screen never re-fetched, so the app sat on stale cached bookings.
-  if(navigator.onLine!==false && !_anySheetOpen()) loadData();
+  if(navigator.onLine!==false && !_anySheetOpen() && Date.now()-_lastLoadTs>5000) loadData();
   if(!_fmStarted) return;
   _startTimers();                       // re-arm the ~20s heartbeat loop in case iOS suspended it
   _requestWake(); _startGeo();
@@ -1901,7 +2109,7 @@ function _qjFinish(toastMsg,note){
   _fmEnqueue({ kind:'quotenote', idemKey:'qn:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), note:note, markedBy:adminName||'Crew', adminToken } });
   _fmEnqueue({ kind:'quotedone', idemKey:'qd:'+base, method:'GET', params:{ action:'mark_done', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), amount:'0', markedBy:adminName||'Crew', adminToken } });
   _fmFlushQueue();
-  bk.done='✓ Done';
+  bk.done='✓ Done'; _fmMarkSeq(bk);
   qjClose(); showToast(toastMsg); _persist(); _fmRender();
 }
 
@@ -1920,6 +2128,8 @@ function qjOgTgl(){ _qj.overgrown=!_qj.overgrown; if(_qj.overgrown) _qj.promo=fa
 function qjPromoTgl(){ _qj.promo=!_qj.promo; if(_qj.promo){ _qj.overgrown=false; _qj.promoPrice=(_qj.tier==='half')?19:29; } qjRefresh(); }
 function qjPromoInput(el){ const v=parseFloat(el.value); _qj.promoPrice=(v>0?v:0); }
 function qjOgFeeInput(el){ const v=parseFloat(el.value); _qj.ogFee=(v>0?v:0); }
+// re-render on blur (not per-keystroke — that would steal focus mid-typing)
+function qjFeeDone(){ qjRefresh(); }
 function _qjCalcPrice(){ return QJ_PRICING[_qj.tier]; }
 function _qjFreqLabel(){ return _qj.freq==='weekly'?'Weekly Plan':_qj.freq==='biweekly'?'Bi-Weekly Plan':'One-time'; }
 function _qjDesc(){ const t=QJ_TIERS.find(x=>x.key===_qj.tier); return (t?t.label:'yard')+' — '+_qjFreqLabel()+' mowing'; }
@@ -1940,10 +2150,10 @@ function qjRenderBuilder(){
     +'<span style="flex:1;font-size:14px;font-weight:700;">💰 We found this lead ourselves <span style="font-size:11px;color:#94a3b8;font-weight:800;">'+(_qjSourced?'80% commission':'40% — office lead')+'</span></span></div>'
     +'<div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 7px;">First cut</div>'
     +row(_qj.overgrown,'🌾 Overgrown — added to the first cut only',
-      _qj.overgrown?('<span onclick="event.stopPropagation();" style="display:inline-flex;align-items:center;gap:4px;font-size:14px;font-weight:800;">+$<input id="qjOgFee" type="number" inputmode="decimal" value="'+_qj.ogFee+'" oninput="qjOgFeeInput(this)" onclick="event.stopPropagation();" style="width:64px;padding:7px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;font-weight:800;text-align:center;font-family:inherit;"></span>'):'',
+      _qj.overgrown?('<span onclick="event.stopPropagation();" style="display:inline-flex;align-items:center;gap:4px;font-size:14px;font-weight:800;">+$<input id="qjOgFee" type="number" inputmode="decimal" value="'+_qj.ogFee+'" oninput="qjOgFeeInput(this)" onchange="qjFeeDone()" onclick="event.stopPropagation();" style="width:64px;padding:7px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;font-weight:800;text-align:center;font-family:inherit;"></span>'):'',
       "qjOgTgl()")
     +(_qj.tier!=='xl'?row(_qj.promo,'🏷 First-mow deal — cheap first cut, then plan price',
-      _qj.promo?('<span onclick="event.stopPropagation();" style="display:inline-flex;align-items:center;gap:4px;font-size:14px;font-weight:800;">$<input id="qjPromoFee" type="number" inputmode="decimal" value="'+_qj.promoPrice+'" oninput="qjPromoInput(this)" onclick="event.stopPropagation();" style="width:64px;padding:7px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;font-weight:800;text-align:center;font-family:inherit;"></span>'):'',
+      _qj.promo?('<span onclick="event.stopPropagation();" style="display:inline-flex;align-items:center;gap:4px;font-size:14px;font-weight:800;">$<input id="qjPromoFee" type="number" inputmode="decimal" value="'+_qj.promoPrice+'" oninput="qjPromoInput(this)" onchange="qjFeeDone()" onclick="event.stopPropagation();" style="width:64px;padding:7px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;font-weight:800;text-align:center;font-family:inherit;"></span>'):'',
       "qjPromoTgl()"):'')
     +(_qj.tier==='xl'?'<div style="font-size:12.5px;color:#b45309;font-weight:700;margin-top:6px;">🔒 1+ acre — set the price in the adjust box. The estimate goes to the owner for approval before it emails the customer.</div>':'')
     +(recurring&&_qj.tier!=='xl'?'<div style="font-size:11.5px;color:#64748b;margin-top:8px;">💡 First-mow promo: $19 (up to ½ ac) · $29 (larger) — mention it!</div>':'');
@@ -1966,7 +2176,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
   if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').then(function(reg){ try{ reg.update(); }catch(e){} }).catch(()=>{}); }
   const saved=loadSavedSession();
   if(saved){ adminToken=saved.token; adminName=saved.name; adminEmail=saved.email; adminRole=saved.role||'employee'; adminCrews=saved.crews||''; _hydrateFromCache(); _restoreState(); showApp(); loadData(); }
-  else { document.getElementById('loginScreen').style.display='flex'; }
+  else { const ls=document.getElementById('loginScreen'); ls.style.display='flex'; ls.style.visibility='visible'; }
   _fmUpdateSyncBadge();
 });
 
@@ -2798,7 +3008,7 @@ function _pmcsSend(params){
 // route builds. Fast memory aid so nothing's left at the shop. Logged to the
 // FieldLog sheet (type=loadout) via the same offline-safe queue.
 // ═══════════════════════════════════════════════════════════════════════════
-const LOADOUT_ITEMS = [
+let LOADOUT_ITEMS = [
   { id:'lo_mower',  label:'🚜 Mower loaded & strapped · ramp up & latched' },
   { id:'lo_tools',  label:'🔧 Trimmer, edger & blower on board' },
   { id:'lo_gas',    label:'⛽ Gas cans full (mix + regular) · spare line & blades' },
@@ -2816,7 +3026,7 @@ function _loadoutInjectOverlay(){
   o.innerHTML = `
     <div class="pmcs-panel">
       <div class="pmcs-head">
-        <div class="pmcs-head-row"><div class="pmcs-head-title">🧰 Got everything?</div></div>
+        <div class="pmcs-head-row"><div class="pmcs-head-title">🧰 Got everything?</div><button class="pmcs-head-close" onclick="loadoutCancel()">×</button></div>
         <div class="pmcs-head-sub">Quick load-out check before you roll. Tap each thing that's loaded.</div>
       </div>
       <div class="pmcs-body" id="loadoutBody"></div>
@@ -2873,7 +3083,12 @@ function loadoutConfirm(){
   const ov = document.getElementById('loadoutOverlay');
   if (ov) ov.classList.remove('open');
   if (typeof showToast === 'function') showToast('🧰 Load-out logged — rolling out');
-  if (typeof _loadoutResolve === 'function'){ const r = _loadoutResolve; _loadoutResolve = null; r(); }
+  if (typeof _loadoutResolve === 'function'){ const r = _loadoutResolve; _loadoutResolve = null; r(true); }
+}
+function loadoutCancel(){
+  const ov = document.getElementById('loadoutOverlay');
+  if (ov) ov.classList.remove('open');
+  if (typeof _loadoutResolve === 'function'){ const r = _loadoutResolve; _loadoutResolve = null; r(false); }
 }
 
 
@@ -2882,7 +3097,7 @@ function loadoutConfirm(){
    Clean-up checklist + truck mileage. Logged via the same offline-safe queue
    (log_checklist type=end_of_day) so the office sees daily mileage + shutdown.
    ═══════════════════════════════════════════════════════════════════════════ */
-const ENDOFDAY_ITEMS = [
+let ENDOFDAY_ITEMS = [
   { id:'ed_clean',  label:'🍃 Blew everything off: mower deck, edger, trimmer, blower' },
   { id:'ed_ready',  label:'⛽ Ready for tomorrow: fueled up + blades & line good' },
   { id:'ed_stow',   label:'📦 Unloaded & secured · trash emptied · no leaks on trailer' },
@@ -2896,7 +3111,7 @@ function _eodInject(){
   o.innerHTML = `
     <div class="pmcs-panel">
       <div class="pmcs-head">
-        <div class="pmcs-head-row"><div class="pmcs-head-title">🔧 End-of-Day PMCS</div></div>
+        <div class="pmcs-head-row"><div class="pmcs-head-title">🔧 End-of-Day PMCS</div><button class="pmcs-head-close" onclick="eodCancel()">×</button></div>
         <div class="pmcs-head-sub">Back at the shop — clean up, log the truck mileage, then clock out.</div>
       </div>
       <div class="pmcs-body" id="eodBody"></div>
@@ -2942,6 +3157,11 @@ function eodConfirm(){
   _eodOdo=''; _eodTrip='';
   if(typeof showToast==='function') showToast('🔧 Drop-off logged — clocking out');
   if(typeof _eodResolve==='function'){ const r=_eodResolve; _eodResolve=null; r(true); }
+}
+function eodCancel(){
+  // Crew backed out — close the sheet and STAY clocked in (fmEndOfDay handles false).
+  const ov=document.getElementById('eodOverlay'); if(ov) ov.classList.remove('open');
+  if(typeof _eodResolve==='function'){ const r=_eodResolve; _eodResolve=null; r(false); }
 }
 
 </script>
