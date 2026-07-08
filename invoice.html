@@ -13,9 +13,9 @@
 <!-- Auto-updater: pulls the latest version in the background and reloads once when a new
      deploy is live, so phones never get stuck on an old cached build. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-07.5 */
+/* APP_VER:2026-07-08.1 */
 (function(){
-  var V = '2026-07-07.5';
+  var V = '2026-07-08.1';
   window.__APP_VER = V;
   var reloads = 0, lastCheck = 0;
   function check(){
@@ -6121,9 +6121,13 @@ function buildRevProjection(bookings, periodIdx) {
     return { firstPrice: storedPrice, regularPrice: storedPrice, isPromo: false };
   }
 
+  // One row per CUSTOMER (newest booking wins). Every ACTIVE recurring plan counts —
+  // paid or not — so a live-but-unpaid plan still projects forward.
+  const _seenCust = {}; const _subs = [];
+  activeSubs.slice().reverse().forEach(bk => { const k = (String(bk.email||'').toLowerCase().trim()) || (String(bk.name||'')+String(bk.address||'')); if (!k || _seenCust[k]) return; _seenCust[k] = 1; _subs.push(bk); });
   let totalRev = 0;
   let weeklyCount = 0, biweeklyCount = 0, customCount = 0;
-  const rows = activeSubs.map(bk => {
+  const rows = _subs.map(bk => {
     const freq     = String(bk.frequency || '').toLowerCase();
     const isWeekly = freq.includes('weekly') && !freq.includes('bi');
     const isBiWeekly = freq.includes('bi') && freq.includes('weekly');
@@ -6174,9 +6178,9 @@ function buildRevProjection(bookings, periodIdx) {
       </div>
     </div>
     <div style="border:1.5px solid var(--border);border-radius:10px;overflow:hidden;">
-      <button onclick="(function(btn){var tbl=document.getElementById('${revTableId}');var shown=tbl.style.display!=='none';tbl.style.display=shown?'none':'block';btn.textContent=shown?'▶ Show ${rows.length} customers':'▼ Hide customers';})(this)"
+      <button onclick="(function(btn){var tbl=document.getElementById('${revTableId}');var shown=tbl.style.display!=='none';tbl.style.display=shown?'none':'block';btn.textContent=shown?'▶ Show ${rows.length} active recurring plans':'▼ Hide plans';})(this)"
         style="width:100%;padding:11px 16px;background:#f8faf8;border:none;text-align:left;font-family:inherit;font-size:13px;font-weight:600;color:var(--green-deep);cursor:pointer;">
-        ▶ Show ${rows.length} customers
+        ▶ Show ${rows.length} active recurring plans
       </button>
       <div id="${revTableId}" style="display:none;overflow-x:auto;">
         <table style="width:100%;border-collapse:collapse;font-size:13px;">

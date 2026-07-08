@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-08.1 */
-(function(){ var V='2026-07-08.1'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-08.2 */
+(function(){ var V='2026-07-08.2'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -2948,6 +2948,62 @@ function _hqPlanPrice(bk){
   if(m&&parseFloat(m[1])>0) return parseFloat(m[1]);
   return p0;
 }
+
+/* ── 💰 MONEY BOARD — collected vs owed + every active recurring customer ───── */
+function _hqPaidJob(j){
+  const s=(String(j.payMethod||'')+' '+String(j.calendarEvent||'')).toLowerCase();
+  if(s.indexOf('not paid')>=0||s.indexOf('unpaid')>=0||s.indexOf('pending')>=0) return false;
+  return s.indexOf('✅')>=0||s.indexOf('autopay')>=0||s.indexOf('auto-pay')>=0||s.indexOf('cash')>=0||s.indexOf('paid')>=0;
+}
+function _hqMoneyBoard(results){
+  const k=function(v,l,acc){ return '<div><div style="font-size:25px;font-family:var(--mono);font-weight:800;line-height:1;'+(acc||'')+'">'+v+'</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:700;margin-top:5px;">'+l+'</div></div>'; };
+  let rowsB=[], owes=[], custAll=[];
+  const T={coll:0,owed:0,owedN:0,plans:0,mrr:0};
+  results.forEach(function(r){
+    if(r.locked||!r.st) return;
+    const z=r.z;
+    let coll=0,owed=0,owedN=0;
+    (r.jobs||[]).forEach(function(j){ const a=amtOf(j); if(!a) return; if(_hqPaidJob(j)) coll+=a; else { owed+=a; owedN++; owes.push({n:j.name||'?',a:a,d:String(dateOf(j)||''),z:z}); } });
+    const plans=_hqActivePlans(r.books||[]);
+    let mrr=0;
+    plans.forEach(function(bk){ const mv=_hqPlanPrice(bk)*(30/_hqPlanInterval(String(bk.frequency||'').toLowerCase())); mrr+=mv; custAll.push({n:bk.name||'?',plan:bk.frequency||'',p:_hqPlanPrice(bk),m:mv,z:z}); });
+    rowsB.push({z:z,coll:coll,owed:owed,owedN:owedN,plans:plans.length,mrr:mrr});
+    T.coll+=coll; T.owed+=owed; T.owedN+=owedN; T.plans+=plans.length; T.mrr+=mrr;
+  });
+  if(!rowsB.length) return '';
+  owes.sort(function(a,b){ return b.a-a.a; });
+  custAll.sort(function(a,b){ return b.m-a.m; });
+  const bar=function(v,color){ const w=Math.max(2,Math.round(v/Math.max(1,T.coll+T.owed)*100)); return '<div style="height:10px;border-radius:6px;width:'+w+'%;background:'+color+';box-shadow:0 0 12px '+color+'66;"></div>'; };
+  let h='<div class="dev-card" style="grid-column:1/-1;"><div class="dev-h">💰 Money — collected vs owed<span class="grow"></span><span class="ph-c">'+_fmtMoney(T.coll)+' in · '+_fmtMoney(T.owed)+' out</span></div><div class="dev-b">';
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:14px;">'
+    +k(_fmtMoney(T.coll),'Collected (archived jobs)','background:linear-gradient(180deg,#fff,#4ade80);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;')
+    +k(_fmtMoney(T.owed),'Owed to you'+(T.owedN?(' · '+T.owedN+' jobs'):''),T.owed>0?'color:#f87171;':'')
+    +k(String(T.plans),'Active recurring plans')
+    +k(_fmtMoney(T.mrr)+'<span style="font-size:13px;color:var(--muted);">/mo</span>','Recurring run-rate')
+    +'</div>';
+  rowsB.forEach(function(rb){
+    h+='<div style="display:flex;align-items:center;gap:12px;padding:9px 12px;border:1px solid var(--line);border-radius:11px;margin-bottom:7px;">'
+      +'<span style="width:4px;height:28px;border-radius:3px;background:'+esc(rb.z.c||'#22c55e')+';box-shadow:0 0 10px '+esc(rb.z.c||'#22c55e')+';"></span>'
+      +'<b style="min-width:120px;font-size:13px;">'+esc((rb.z.e||'')+' '+(rb.z.n||''))+'</b>'
+      +'<div style="flex:1;display:flex;flex-direction:column;gap:4px;min-width:80px;">'+bar(rb.coll,'#4ade80')+bar(rb.owed,'#f87171')+'</div>'
+      +'<div style="text-align:right;font-size:12px;line-height:1.5;white-space:nowrap;"><span style="color:#4ade80;font-weight:800;">'+_fmtMoney(rb.coll)+'</span> in<br><span style="color:'+(rb.owed>0?'#f87171':'var(--dim)')+';font-weight:800;">'+_fmtMoney(rb.owed)+'</span> owed</div>'
+      +'<div style="text-align:right;font-size:12px;line-height:1.5;white-space:nowrap;color:var(--dim);"><b>'+rb.plans+'</b> plans<br><b style="color:#4ade80;">'+_fmtMoney(rb.mrr)+'</b>/mo</div>'
+      +'</div>';
+  });
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-top:12px;">';
+  h+='<div><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#f87171;margin-bottom:6px;">🧾 Who owes money — '+owes.length+' unpaid job'+(owes.length!==1?'s':'')+' · '+_fmtMoney(T.owed)+'</div>'
+    +(owes.length?('<div style="max-height:280px;overflow:auto;"><table class="dev-tbl"><tr><th>customer</th><th>biz</th><th>date</th><th style="text-align:right;">owes</th></tr>'
+      +owes.slice(0,100).map(function(o){ return '<tr><td>'+esc(o.n)+'</td><td>'+esc(o.z.e||'')+'</td><td>'+esc(o.d)+'</td><td style="text-align:right;color:#f87171;font-weight:800;">'+_fmtMoney(o.a)+'</td></tr>'; }).join('')+'</table></div>')
+      :'<div class="dev-row" style="color:#4ade80;">Everyone\'s paid up 🟢</div>')
+    +'</div>';
+  h+='<div><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px;">👥 Active recurring customers — '+custAll.length+' · '+_fmtMoney(T.mrr)+'/mo</div>'
+    +'<input class="dev-inp" placeholder="🔎 Search customers…" oninput="(function(v){document.querySelectorAll(\'#mnyCust tr[data-n]\').forEach(function(tr){tr.style.display=tr.dataset.n.indexOf(v)>=0?\'\':\'none\';});})(this.value.toLowerCase())" style="width:100%;margin-bottom:6px;box-sizing:border-box;">'
+    +'<div style="max-height:280px;overflow:auto;"><table class="dev-tbl" id="mnyCust"><tr><th>customer</th><th>biz</th><th>plan</th><th style="text-align:right;">$/visit</th><th style="text-align:right;">$/mo</th></tr>'
+    +custAll.map(function(cx){ return '<tr data-n="'+esc(String(cx.n).toLowerCase())+'"><td>'+esc(cx.n)+'</td><td>'+esc(cx.z.e||'')+'</td><td>'+esc(cx.plan)+'</td><td style="text-align:right;">'+_fmtMoney(cx.p)+'</td><td style="text-align:right;font-weight:800;color:#4ade80;">'+_fmtMoney(cx.m)+'</td></tr>'; }).join('')
+    +'</table></div></div>';
+  h+='</div></div></div>';
+  return h;
+}
 function _hqProjRev(books,days){
   let projDays=days;
   if(days==null){ const now=new Date(); projDays=new Date(now.getFullYear(),now.getMonth()+1,0).getDate()-now.getDate()+1; }
@@ -2957,7 +3013,7 @@ function _hqProjRev(books,days){
 }
 function _hqProjLine(books,label){
   const n=_hqActivePlans(books).length;
-  return '<div class="dev-row">📈 '+(label||'Projected')+' — month left <b>'+_fmtMoney(_hqProjRev(books,null))+'</b> · 7d <b>'+_fmtMoney(_hqProjRev(books,7))+'</b> · 30d <b>'+_fmtMoney(_hqProjRev(books,30))+'</b> · 365d <b>'+_fmtMoney(_hqProjRev(books,365))+'</b> <span style="color:var(--dim)">('+n+' active plan'+(n!==1?'s':'')+', paid or not)</span></div>';
+  return '<div class="dev-row">📈 '+(label||'Projected')+' — month left <b>'+_fmtMoney(_hqProjRev(books,null))+'</b> · 7d <b>'+_fmtMoney(_hqProjRev(books,7))+'</b> · 30d <b>'+_fmtMoney(_hqProjRev(books,30))+'</b> · 365d <b>'+_fmtMoney(_hqProjRev(books,365))+'</b> <span style="color:var(--dim)">('+n+' active recurring plan'+(n!==1?'s':'')+', paid or not)</span></div>';
 }
 async function renderStats(force){
   const grid=document.getElementById('statsGrid'); if(!grid) return;
@@ -3047,6 +3103,7 @@ async function renderStats(force){
         return '<div style="flex:1;text-align:center;"><div title="'+m+' — '+_fmtMoney(v)+'" style="height:'+hh+'px;border-radius:6px 6px 3px 3px;background:linear-gradient(180deg,'+esc(z.c)+','+esc(z.c)+'44);margin-bottom:4px;"></div><div style="font-size:8.5px;font-family:var(--mono);color:var(--dim);">'+m.slice(5)+'</div><div style="font-size:8.5px;font-family:var(--mono);color:var(--muted);">'+(v?_k(v):'—')+'</div></div>'; }).join('')
       +'</div></div></div>';
   });
+  h+=_hqMoneyBoard(results);
   grid.innerHTML=h;
 }
 
