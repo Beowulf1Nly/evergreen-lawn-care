@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.17 */
+/* APP_VER:2026-07-08.18 */
 (function(){
-  var V='2026-07-08.17'; window.__APP_VER=V;
+  var V='2026-07-08.18'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1758,9 +1758,8 @@ function _fmYardPaceTick(){
   const mins=(Date.now()-new Date(t0).getTime())/60000, exp=mowMinutes(bk), m=Math.floor(mins);
   if(mins<=exp) el.innerHTML='<span style="color:#4ade80;">⏱ '+m+'m on this yard · ~'+exp+'m expected — good pace</span>';
   else if(mins<=exp*1.5) el.innerHTML='<span style="color:#fbbf24;">⏱ '+m+'m — past the ~'+exp+'m estimate, tighten up</span>';
-  else el.innerHTML='<span style="color:#f87171;font-weight:800;">🔴 '+m+'m — way over ~'+exp+'m. Wrap it up; the office can see this.</span>';
-  if(mins>exp&&!_fmYardNudged[k]){ _fmYardNudged[k]=1; try{ if(navigator.vibrate) navigator.vibrate(200); }catch(e){} showToast('⏱ Past the ~'+exp+'m estimate on this yard'); }
-  if(mins>exp*1.5&&_fmYardNudged[k]!==2){ _fmYardNudged[k]=2; try{ if(navigator.vibrate) navigator.vibrate([200,80,200]); }catch(e){} showToast('🔴 Way over on this yard — wrap it up', 6000); }
+  else el.innerHTML='<span style="color:#f87171;font-weight:800;">🔴 '+m+'m — way over the ~'+exp+'m estimate</span>';
+  // Display-only by owner's call — no buzzing, no toasts. The bar says it all.
 }
 function _fmPace(stops){
   try{

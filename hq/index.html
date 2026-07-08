@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-08.14 */
-(function(){ var V='2026-07-08.14'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-08.15 */
+(function(){ var V='2026-07-08.15'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1170,6 +1170,7 @@ function openJobSheetFor(b){
   const cNotes=String(b.notes||'').replace(/\blot:\s*[\d.]+ac\b/gi,'').replace(/\s*\|\s*$/,'').trim();
   document.getElementById('jobSheetBody').innerHTML='<h3>'+_jobIcon(b)+' '+esc(b.name||'Customer')+'</h3>'
     +'<div class="sub">📍 '+esc(b.address||'')+(b.zip?', '+esc(b.zip):'')+(_zoneOf(b)?' · '+_zoneOf(b):'')+' · '+esc(dateOf(b)||'no date')+(b.crew?(' · Crew '+esc(b.crew)):' · unassigned')+(b.price?(' · '+esc(b.price)):'')+(b._srcBiz?(' · '+esc(be.e2+' '+be.n)):'')+'</div>'
+    +(function(){ const ls=_lastSvcInfo(b); if(!ls) return '<div class="sub" style="color:var(--dim);">↩ No completed visit on record before this date</div>'; return '<div class="sub" style="color:'+(ls.off?'#f87171':'#4ade80')+';font-weight:700;">↩ Last serviced '+ls.d+' — '+ls.gap+' days before this visit'+(ls.off?(' ⚠ plan is every '+ls.expct+'d — check this date'):(ls.expct?' ✓ matches the plan':''))+'</div>'; })()
     +(cNotes?'<div class="rs-note">📝 '+esc(cNotes)+'</div>':'')
     +(eNotes?'<div class="rs-note crew">👷 '+esc(eNotes)+'</div>':'')
     +(photos.length?'<div class="rs-photos">'+photos.map(function(u){return '<a href="'+esc(u)+'" target="_blank"><img class="rs-thumb" src="'+esc(_driveThumb(u))+'" onerror="this.replaceWith(document.createTextNode(String.fromCodePoint(0x1F4F7)))"></a>';}).join('')+'</div>':'')
@@ -1688,7 +1689,7 @@ function _dayTimeOf(b,iso){
 async function loadCompleted(){
   try{
     const d=await fetch(SCRIPT_URL+'?action=completed_jobs&limit=1500&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null);
-    if(d&&d.success&&Array.isArray(d.jobs)){ _completed=_fixTimes(d.jobs); _rebuildLearnedMins(); if(_activeTab==='dispatch') renderDispatch(); }
+    if(d&&d.success&&Array.isArray(d.jobs)){ _completed=_fixTimes(d.jobs); _rebuildLearnedMins(); _rebuildLastSvc(); if(_activeTab==='dispatch') renderDispatch(); }
   }catch(e){}
 }
 function _dispJobs(){
@@ -2001,7 +2002,9 @@ function _dispPill(b){
   const zone=_zoneOf(b);
   const click='onclick="openJobRef('+_jr(b)+')"'+(arch?' title="Archived — tap for notes & photos"':'');
   return '<div class="disp-pill'+(done?' done':'')+(arch?' arch':'')+'" style="--pc:'+_dispPC(b)+'" '+click
-    +'>'+(done?'✓ ':'')+_jobIcon(b)+' '+esc(b.name||'?')+' <span class="pp">'+(zone?zone+' · ':'')+(b.jobTime?esc(b.jobTime)+' · ':'')+esc(String(b.price||''))+'</span></div>';
+    +'>'+(done?'✓ ':'')+_jobIcon(b)+' '+esc(b.name||'?')+' <span class="pp">'+(zone?zone+' · ':'')+(b.jobTime?esc(b.jobTime)+' · ':'')+esc(String(b.price||''))
+    +(function(){ const ls=_lastSvcInfo(b); return ls?(' · <span style="color:'+(ls.off?'#f87171':'inherit')+';font-weight:'+(ls.off?'800':'inherit')+';">↩ '+ls.nice+' ('+ls.gap+'d'+(ls.off?' ⚠ plan says '+ls.expct+'d':'')+')</span>'):''; })()
+    +'</span></div>';
 }
 /* ── expected job duration — same model /invoice's route optimizer uses ── */
 /* 📏 Crew-timed actuals — INFO ONLY (owner's call, 2026-07-08): the size model +
@@ -2120,6 +2123,30 @@ function _crewSizeFactor(zi,c){
   const cp=_crewPayFor(zi,c);
   const n=(cp&&cp.who&&cp.who.length)?cp.who.length:2;
   return n<=1?1.4:(n>=3?0.85:1);
+}
+/* ↩ Last serviced — most recent COMPLETED visit before this job's date, plus a
+   gap check against the plan (a bi-weekly row sitting 7d after the last visit
+   glows red — catches exactly the +7 scheduling bug). */
+let _lastSvcMap={};
+function _rebuildLastSvc(){
+  _lastSvcMap={};
+  (_completed||[]).forEach(function(j){
+    const em=String(j.email||'').toLowerCase().trim(); const d=String(dateOf(j)||'');
+    if(!em||!d) return; (_lastSvcMap[em]=_lastSvcMap[em]||[]).push(d);
+  });
+  Object.keys(_lastSvcMap).forEach(function(em){ _lastSvcMap[em].sort().reverse(); });
+}
+function _lastSvcInfo(b){
+  const em=String(b&&b.email||'').toLowerCase().trim(); if(!em||!_lastSvcMap[em]) return null;
+  const d0=String(dateOf(b)||''); if(!d0) return null;
+  const prev=_lastSvcMap[em].find(function(d){ return d<d0; }); if(!prev) return null;
+  const gap=Math.round((new Date(d0+'T12:00:00')-new Date(prev+'T12:00:00'))/864e5);
+  const f=String(b.frequency||'').toLowerCase();
+  const recurring=f&&f.indexOf('one')<0&&f.indexOf('quote')<0&&(f.indexOf('week')>=0||f.indexOf('month')>=0);
+  const expct=recurring?_hqPlanInterval(f):0;
+  const off=!!(expct&&Math.abs(gap-expct)>2);
+  const dt=new Date(prev+'T12:00:00');
+  return { d:prev, nice:(dt.getMonth()+1)+'/'+dt.getDate(), gap:gap, expct:expct, off:off };
 }
 let _yardMinsPin={}; try{ _yardMinsPin=JSON.parse(localStorage.getItem('hq_yardmins')||'{}'); }catch(e){}
 function _yardPinFor(b){ return parseInt(_yardMinsPin[String(b&&b.email||'').toLowerCase().trim()])||0; }
@@ -2299,7 +2326,8 @@ function _stBlockEv(b,stMin,enMin,top,proj){
   const width=Math.max(2,Math.min(100-left,((enMin-stMin)/Math.max(1,_tlB-_tlA))*100));
   const dur=(enMin-stMin);
   const tRange=(proj?'~':'')+_t12(stMin)+'–'+_t12(enMin)+' · '+dur+'m';
-  const tip=esc(b.name||'')+' · '+(proj?'projected ':'')+_t12(stMin)+'–'+_t12(enMin)+' ('+dur+' min expected)'+(b.price?' · '+esc(String(b.price)):'')+(proj?' — no set time; drag to lock one in':'');
+  const _lsT=_lastSvcInfo(b);
+  const tip=esc(b.name||'')+' · '+(proj?'projected ':'')+_t12(stMin)+'–'+_t12(enMin)+' ('+dur+' min expected)'+(b.price?' · '+esc(String(b.price)):'')+(_lsT?(' · last serviced '+_lsT.d+' ('+_lsT.gap+'d ago'+(_lsT.off?' — ⚠ plan says '+_lsT.expct+'d':'')+')'):'')+(proj?' — no set time; drag to lock one in':'');
   return '<div class="st-block'+(done?' done':'')+(arch?' arch':'')+(proj?' proj':'')+'" style="--pc:'+_dispPC(b)+';left:'+left+'%;width:'+width+'%;top:'+top+'px;" '
     +'onclick="openJobRef('+_jr(b)+')" title="'+tip+(arch?' — tap for notes & photos':'')+'"'
     +'>'+(done?'✓ ':'')+_jobIcon(b)+' '+esc(b.name||'?')+'<span class="bt2">'+(zone?zone+' · ':'')+tRange+(b.price?' · '+esc(String(b.price)):'')+'</span></div>';
@@ -2390,7 +2418,7 @@ function _dayOrderPanel(c,iso,cell,zi){
       const row='<div class="ro-stop" style="cursor:default;background:var(--panel2);border:1px solid var(--line);margin-bottom:4px;">'
         +'<span class="ro-num" style="background:'+_dispPC(b)+'">'+(i+1)+'</span>'
         +'<div class="ro-main"><div class="ro-n">'+_jobIcon(b)+' '+esc(b.name||'?')+'</div>'
-        +'<div class="ro-a">'+(_zoneOf(b)?_zoneOf(b)+' · ':'')+'~'+_t12(st)+'–'+_t12(st+dur)+' · '+(function(){
+        +'<div class="ro-a">'+(function(){ const ls=_lastSvcInfo(b); return ls?('<span style="color:'+(ls.off?'#f87171':'var(--dim)')+';font-weight:'+(ls.off?'800':'inherit')+';">↩ last '+ls.nice+' · '+ls.gap+'d gap'+(ls.off?' ⚠ plan says '+ls.expct+'d':'')+'</span> · '):''; })()+(_zoneOf(b)?_zoneOf(b)+' · ':'')+'~'+_t12(st)+'–'+_t12(st+dur)+' · '+(function(){
         const _ln=_learnedFor(b);
         const _off=(_ln>0&&Math.abs(dur-_ln)/_ln>0.4);
         const _src=_off?('size estimate '+dur+'m, but crews actually average ~'+_ln+'m here — tap to correct'):(_ln>0?('crews average ~'+_ln+'m here'):'size-based estimate — tap to set your own');
