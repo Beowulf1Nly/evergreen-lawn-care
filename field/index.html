@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.8 */
+/* APP_VER:2026-07-08.9 */
 (function(){
-  var V='2026-07-08.8'; window.__APP_VER=V;
+  var V='2026-07-08.9'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -438,6 +438,7 @@ let _savedSig='';     // signature of the last HQ route we applied — dedupes r
 let _doneSeq=[];      // stop keys in the ORDER they were finished/skipped — done stops display in this order
 let _stopLocks={};    // key → forced position among OPEN stops (1 = must be next)
 function _fmIsBoss(){ const r=String(adminRole||'').toLowerCase().trim(); return r==='owner'||r==='manager'; }
+function _fmIsOwner(){ return String(adminRole||'').toLowerCase().trim()==='owner'; }
 let _fmBooted=false;   // false until the crew taps Start/Continue → land on the Start screen on every fresh app open (never auto-drop into a job)
 // complete-sheet state
 let _fmcStop=null, _fmcRowIdx=-1, _fmcPayType='invoice', _fmcCash=false, _fmcInvoiceSent=false, _fmcChargeChosen=false, _fmcBase=0, _fmcAddons=[], _fmcPhotos=[], _fmcEndChk={}, _fmcCustNote0='';
@@ -1066,6 +1067,7 @@ function _fmApplyLocks(openKeys){
   }catch(e){ return openKeys; }
 }
 function fmLockStop(){
+  if(!_fmIsOwner()) return;
   const st=_fmStops()[_fmViewIdx]; if(!st) return; const k=_stopKey(st.bk);
   const v=prompt('🔒 Lock "'+(st.bk.name||'this stop')+'" at position # (1 = MUST be done first).\nLeave blank to unlock.', _stopLocks[k]||'');
   if(v===null) return;
@@ -1527,7 +1529,7 @@ function _fmRenderSched(){
       +(qts[d]?chip('📋 '+qts[d]+' quote'+(qts[d]!==1?'s':'')+' possible','rgba(253,186,116,.16)','#fdba74'):'')
       +(!list.length&&!exp[d]&&!qts[d]?chip('—','rgba(255,255,255,.08)','rgba(255,255,255,.4)'):'')
       +'</div>'
-      +(list.length?'<div style="color:rgba(255,255,255,.6);font-size:12.5px;">⏱ ~'+Math.floor(mins/60)+'h '+String(mins%60).padStart(2,'0')+'m with drive · 📍 '+Object.keys(areas).join(' · ')+'</div>':(exp[d]?'<div style="color:rgba(255,255,255,.45);font-size:12.5px;">recurring plans due back around this day</div>':''))
+      +(list.length?'<div style="color:rgba(255,255,255,.6);font-size:12.5px;">'+(_fmIsOwner()?('⏱ ~'+Math.floor(mins/60)+'h '+String(mins%60).padStart(2,'0')+'m with drive · '):'')+'📍 '+Object.keys(areas).join(' · ')+'</div>':(exp[d]?'<div style="color:rgba(255,255,255,.45);font-size:12.5px;">recurring plans due back around this day</div>':''))
       +'</div></div>';
   };
   const tabBtn=function(id,lab){
@@ -1557,7 +1559,7 @@ function _fmRenderSched(){
         +(qu?chip('📋 '+qu+' quote'+(qu!==1?'s':'')+' possible','rgba(253,186,116,.16)','#fdba74'):'')
         +(!bkd&&!ex&&!qu?chip('—','rgba(255,255,255,.08)','rgba(255,255,255,.4)'):'')
         +'</div>'
-        +(bkd?'<div style="color:rgba(255,255,255,.55);font-size:12.5px;margin-top:7px;">⏱ ~'+Math.floor(mins/60)+'h '+String(mins%60).padStart(2,'0')+'m booked work with drive</div>':'')
+        +((bkd&&_fmIsOwner())?'<div style="color:rgba(255,255,255,.55);font-size:12.5px;margin-top:7px;">⏱ ~'+Math.floor(mins/60)+'h '+String(mins%60).padStart(2,'0')+'m booked work with drive</div>':'')
         +'</div>'
         +(open?'<div style="margin:2px 0 10px 10px;">'+ds.map(dayCard).join('')+'</div>':'');
     }).join('');
@@ -1585,6 +1587,10 @@ function _fmDriveLeftMin(){
 /* ───────── Render router ───────── */
 function _fmRender(){
   if(!document.getElementById('fieldMode').classList.contains('show')) return;
+  // Viewing My Schedule? Refresh it IN PLACE — the 10s/30s background polls used
+  // to re-route to the start/job screens and yank the user out mid-scroll.
+  const _schedEl=document.getElementById('fmScreenSched');
+  if(_schedEl&&_schedEl.classList.contains('active')){ try{ _fmRenderSched(); }catch(e){} return; }
   const stops=_fmStops();
   if(!_fmBooted||!_fmStarted||!stops.length){ _fmRenderStart(stops); return; }
   const total=stops.length, resolved=stops.filter(_fmResolved).length;
@@ -1755,7 +1761,7 @@ function _fmRenderJob(stops,idx){
     '<div class="fm-secondary-row">'+phoneRow+(_isQuoteJob(bk)&&isDone(bk)&&_qjBookedStore[_stopKey(bk)]?'<button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#fdba74;color:#9a3412;" onclick="fmQuoteCloser(window._fmCurBk)">✏️ Edit booked plan</button>':'')+(_fmIsBoss()?'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmEditNotes()">✏️ Notes</button><button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmRemainingMap()">🗺 Remaining</button>':'')+'</div></div></div>'+
     '<div class="fm-jobnav"><button onclick="fmPrevStop()" '+(idx===0?'disabled':'')+'>‹ Prev</button>'
     +'<button onclick="fmRerouteFromHere()" title="Re-optimize remaining stops from where you are now">📍 Re-route</button>'
-    +(_fmIsBoss()?'<button onclick="fmLockStop()" title="Pin this stop to an exact position — the optimizer routes around it">'+((_stopLocks&&_stopLocks[_stopKey(bk)])?('🔒 #'+_stopLocks[_stopKey(bk)]):'🔓 Lock')+'</button>':'')
+    +(_fmIsOwner()?'<button onclick="fmLockStop()" title="Pin this stop to an exact position — the optimizer routes around it">'+((_stopLocks&&_stopLocks[_stopKey(bk)])?('🔒 #'+_stopLocks[_stopKey(bk)]):'🔓 Lock')+'</button>':'')
     +(_fmIsBoss()?'<button onclick="fmNextStop()" '+(idx>=total-1?'disabled':'')+'>Next ›</button>':'')
     +'</div>';
   // plan line: done-by time from the owner's push + on-track status
