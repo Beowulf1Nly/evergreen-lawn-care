@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.4 */
+/* APP_VER:2026-07-08.5 */
 (function(){
-  var V='2026-07-08.4'; window.__APP_VER=V;
+  var V='2026-07-08.5'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -31,6 +31,9 @@
         if(tgt===V) return;                                   // already current
         var done=''; try{ done=localStorage.getItem('evg_field_updated_to')||''; }catch(e){}
         if(done===tgt) return;                                // already reloaded once for this version — stop
+        // NEVER yank the app out from under a crew mid-route — if a route is
+        // running, hold the update until the day is finished (route lock owns the day).
+        try{ if(window.__FM_BUSY){ return; } }catch(e){}
         try{ localStorage.setItem('evg_field_updated_to', tgt); }catch(e){}
         location.replace('index.html?_='+Date.now());         // one clean reload to the new build
       }).catch(function(){});
@@ -695,6 +698,7 @@ function showApp(){ document.getElementById('loginScreen').style.display='none';
 
 /* ───────── State persistence (resume where left off) ───────── */
 function _persist(){
+  try{ window.__FM_BUSY=!!_fmStarted; }catch(e){}
   try{ localStorage.setItem(_stateKey(), JSON.stringify({
     dayISO: todayISOStr(), started:_fmStarted, viewIdx:_fmViewIdx,
     clockInTime:_clockInTime?_clockInTime.toISOString():null, clockOutTime:_clockOutTime?_clockOutTime.toISOString():null, clockedOut:_clockedOut,
