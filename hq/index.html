@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-08.7 */
-(function(){ var V='2026-07-08.7'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-08.8 */
+(function(){ var V='2026-07-08.8'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -906,7 +906,17 @@ function render(){
     if(c.lat==null||c.lon==null) return;
     const col=crewColor(c.crew);
     const mk=L.circleMarker([c.lat,c.lon],{radius:11,color:'#fff',weight:2,fillColor:col,fillOpacity:.95}).addTo(map);
-    mk.bindPopup('<b>'+esc(c.name)+'</b>'+(c.crew?' · Crew '+esc(c.crew):'')+'<br>'+(c.stopName?('📍 '+esc(c.stopName)):'—'));
+    // The pin used to echo the crew's LAST heartbeat stop forever — a rescheduled
+    // job kept showing as "they're there". Flag stops that left today's board, and
+    // show ping age so a stale position can't masquerade as live.
+    const _age=(c.staleMin!=null&&c.staleMin>3)?(' <span style="color:#94a3b8;font-size:11px;">'+(c.staleMin<60?(c.staleMin+'m'):(Math.round(c.staleMin/60)+'h'))+' ago</span>'):'';
+    let _stopHtml='—';
+    if(c.stopName){
+      const _sn=String(c.stopName||'').toLowerCase().trim();
+      const _onBoard=todays.some(function(b){ return !b.rowCancelled&&String(b.name||'').toLowerCase().trim()===_sn; });
+      _stopHtml=_onBoard?('📍 '+esc(c.stopName)):('🕐 last reported: '+esc(c.stopName)+' <span style="color:#94a3b8;font-size:11px;">(no longer on today\'s board — likely rescheduled)</span>');
+    }
+    mk.bindPopup('<b>'+esc(c.name)+'</b>'+(c.crew?' · Crew '+esc(c.crew):'')+_age+'<br>'+_stopHtml);
     markers[c.email]=mk; pts.push([c.lat,c.lon]);
   });
   if(pts.length && !_routeLayers.length){ try{ map.fitBounds(pts,{padding:[50,50],maxZoom:13}); }catch(e){} }
@@ -1799,7 +1809,26 @@ function renderDispatch(){
   if(_dispView==='week'){
     h+='<div class="st-dowhead"><div></div>'+days.map(function(d){ const iso=_iso(d); return '<div class="'+(iso===todayIso?'today':'')+'" style="cursor:pointer;" onclick="dispGotoDay(\''+iso+'\')">'+DOW[d.getDay()]+' '+(d.getMonth()+1)+'/'+d.getDate()+'</div>'; }).join('')+'</div>';
   } else {
-    h+='<div class="st-hourshead"><div></div><div class="st-hours">'+(function(){ let x=''; for(let hh=7;hh<=19;hh++){ x+='<span style="left:'+(((hh-7)/12)*100)+'%">'+(hh%12||12)+(hh<12?'a':'p')+'</span>'; } return x; })()+'</div></div>';
+    // size the day window to the actual day: earliest start/clock-in → latest end/now
+    (function(){
+      let lo=420, hi=1140;
+      jobs.forEach(function(b){
+        const t=String(_dayTimeOf(b,rangeStart)||b.jobTime||'').trim();
+        if(/^\d{1,2}:\d{2}$/.test(t)){ const pp=t.split(':'); const st=(+pp[0])*60+(+pp[1]); lo=Math.min(lo,st-20); hi=Math.max(hi,st+_jobMins(b)+30); }
+      });
+      if(rangeStart===todayIso){
+        const nm=(new Date()).getHours()*60+(new Date()).getMinutes();
+        if(nm>=300&&nm<=1380) { lo=Math.min(lo,nm-15); hi=Math.max(hi,nm+30); }
+        (_crews||[]).forEach(function(x){
+          const d2=x.clockIn?new Date(x.clockIn):null;
+          if(d2&&!isNaN(d2)){ const m2=d2.getHours()*60+d2.getMinutes(); if(m2>=240&&m2<=1260) lo=Math.min(lo,m2-15); }
+        });
+      }
+      _tlA=Math.max(300,Math.floor(lo/60)*60);            // never before 5a
+      _tlB=Math.min(1380,Math.ceil(hi/60)*60);            // never after 11p
+      if(_tlB-_tlA<600){ _tlB=Math.min(1380,_tlA+600); }  // keep at least a 10h scale
+    })();
+    h+='<div class="st-hourshead"><div></div><div class="st-hours">'+(function(){ let x=''; const h0=Math.ceil(_tlA/60), h1=Math.floor(_tlB/60); const step=(h1-h0)>14?2:1; for(let hh=h0;hh<=h1;hh+=step){ x+='<span style="left:'+_tlX(hh*60).toFixed(2)+'%">'+(hh%12||12)+(hh<12?'a':(hh===12?'p':'p'))+'</span>'; } return x; })()+'</div></div>';
   }
   // sections
   biz.forEach(function(z,zi){
@@ -1870,14 +1899,30 @@ function renderDispatch(){
         if(iso===todayIso){
           const _nowM=(new Date()).getHours()*60+(new Date()).getMinutes();
           evs.sort(function(a,b2){ return a.st-b2.st||a.en-b2.en; });
-          // Completed stops lay out back-to-back from load-up — clean history, no phantom overlaps;
-          // the end of the last one is where the crew actually is right now.
+          // Completed stops are PINNED where they actually happened. The old cascade
+          // re-laid them from estimates on every render, so finished jobs wandered
+          // around the board. Now: the render that catches a stop flipping done pins
+          // it ending at 'now' (that IS when it finished); stops first seen already
+          // done get one cascade layout, then never move again.
+          let _pins={}, _seenOpen={};
+          try{ _pins=JSON.parse(localStorage.getItem('hq_dpins_'+iso)||'{}'); }catch(e){}
+          try{ _seenOpen=JSON.parse(localStorage.getItem('hq_dseen_'+iso)||'{}'); }catch(e){}
           let _liveCur=_pmcsEn, _anyPlaced=false;
           evs.forEach(function(ev){
             if(!isDone(ev.b)) return;
-            const _d=ev.en-ev.st, _st=_liveCur+(_anyPlaced?DRIVE_BUF:0);
-            ev.st=_st; ev.en=_st+_d; _liveCur=ev.en; _anyPlaced=true;
+            const _k=_svKey(ev.b), _d=ev.en-ev.st;
+            if(_pins[_k]){ ev.st=_pins[_k].s; ev.en=_pins[_k].e; }
+            else if(_seenOpen[_k]){ ev.en=Math.max(_pmcsEn+_d,_nowM); ev.st=ev.en-_d; _pins[_k]={s:ev.st,e:ev.en}; }
+            else { const _st=_liveCur+(_anyPlaced?DRIVE_BUF:0); ev.st=_st; ev.en=_st+_d; _pins[_k]={s:ev.st,e:ev.en}; }
+            _liveCur=Math.max(_liveCur,ev.en); _anyPlaced=true;
           });
+          evs.forEach(function(ev){ if(!isDone(ev.b)) _seenOpen[_svKey(ev.b)]=1; });
+          try{
+            localStorage.setItem('hq_dpins_'+iso,JSON.stringify(_pins));
+            localStorage.setItem('hq_dseen_'+iso,JSON.stringify(_seenOpen));
+            // yesterday's pins are dead weight — purge every other day's keys
+            for(let _li=localStorage.length-1;_li>=0;_li--){ const _lk=localStorage.key(_li); if(_lk&&(/^hq_dpins_|^hq_dseen_/.test(_lk))&&_lk.indexOf(iso)<0) localStorage.removeItem(_lk); }
+          }catch(e){}
           // Current stop is IN PROGRESS: starts where the crew got to, end stretches through 'now'
           // when running long (no fake gap). Everything after cascades forward, never before 'now'.
           let _firstOpen=true;
@@ -1896,13 +1941,16 @@ function renderDispatch(){
         const _aux=(c!=='un');                                   // Unassigned isn't a crew — no PMCS/load or base ghosts
         const tlH=12+(lanes+(_aux?1:0))*42;
         let now='';
-        if(iso===todayIso){ const n=new Date(); const mins=n.getHours()*60+n.getMinutes(); if(mins>=420&&mins<=1140) now='<div class="st-nowline" style="left:'+(((mins-420)/720)*100)+'%"></div>'; }
-        if(_shift&&_ciMin!=null&&_ciMin>=420&&_ciMin<=1140){ now+='<div class="st-clockline in" style="left:'+(((_ciMin-420)/720)*100)+'%"><span>▸ in '+_t12(_ciMin)+'</span></div>'; }
-        if(_shift&&_shift.clockOut){ const _coM=_shift.clockOut.getHours()*60+_shift.clockOut.getMinutes(); if(_coM>=420&&_coM<=1140) now+='<div class="st-clockline out" style="left:'+(((_coM-420)/720)*100)+'%"><span>out '+_t12(_coM)+' ◂</span></div>'; }
+        if(iso===todayIso){ const n=new Date(); const mins=n.getHours()*60+n.getMinutes(); if(mins>=_tlA&&mins<=_tlB) now='<div class="st-nowline" style="left:'+_tlX(mins).toFixed(2)+'%"></div>'; }
+        if(_shift&&_ciMin!=null&&_ciMin>=_tlA&&_ciMin<=_tlB){ now+='<div class="st-clockline in" style="left:'+_tlX(_ciMin).toFixed(2)+'%"><span>▸ in '+_t12(_ciMin)+'</span></div>'; }
+        if(_shift&&_shift.clockOut){ const _coM=_shift.clockOut.getHours()*60+_shift.clockOut.getMinutes(); if(_coM>=_tlA&&_coM<=_tlB) now+='<div class="st-clockline out" style="left:'+_tlX(_coM).toFixed(2)+'%"><span>out '+_t12(_coM)+' ◂</span></div>'; }
         const hasProj=evs.some(function(ev){return ev.proj;});
         const lastEn=evs.length?Math.max.apply(null,evs.map(function(e){return e.en;})):_pmcsEn;
         const baseSt=Math.min(1105,lastEn+(evs.length?DRIVE_BUF:0)), baseEn=Math.min(1140,baseSt+(_isCleanTL?15:30));
-        h+='<div class="st-grid day">'+lab
+        window._dayEvsCache=window._dayEvsCache||{};
+        window._dayEvsCache[zi+'|'+c]={ evs:evs.slice(), pmcsSt:_pmcsSt, pmcsEn:_pmcsEn, baseSt:baseSt, baseEn:baseEn, isClean:_isCleanTL, iso:iso, crew:c, zn:(z.e||'')+' '+(z.n||''), col:col };
+        const labDay=lab.replace('class="st-rowlab"','class="st-rowlab" onclick="openCrewDay('+zi+',\''+c+'\')" style="cursor:pointer;" title="Tap to open this crew\'s day full-screen"');
+        h+='<div class="st-grid day">'+labDay
           +'<div><div class="st-tl" style="height:'+tlH+'px;">'
           +(_aux?_stAuxBlock(_isCleanTL?'🧰 Load-up':'🧰 PMCS & Load-up',_pmcsSt,_pmcsEn,7):'')
           +evs.map(function(ev){ return _stBlockEv(ev.b,ev.st,ev.en,7+(ev.lane+(_aux?1:0))*42,ev.proj); }).join('')
@@ -2191,15 +2239,19 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
     +live+'</div>';
 }
 
+/* Dynamic day window — the board was hardcoded 7a–7p, so 6:25a load-ups and
+   10 PM finishes (and the red now-line in the evening) were clipped off the edge. */
+let _tlA=420,_tlB=1140;
+function _tlX(min){ return ((min-_tlA)/Math.max(1,_tlB-_tlA))*100; }
 function _stAuxBlock(label,stMin,enMin,top){
-  const left=Math.max(0,Math.min(98,((stMin-420)/720)*100));
-  const width=Math.max(2,Math.min(100-left,((enMin-stMin)/720)*100));
+  const left=Math.max(0,Math.min(98,_tlX(stMin)));
+  const width=Math.max(2,Math.min(100-left,((enMin-stMin)/Math.max(1,_tlB-_tlA))*100));
   return '<div class="st-block" style="left:'+left+'%;width:'+width+'%;top:'+top+'px;opacity:.55;background:rgba(245,158,11,.14);border:1.5px dashed rgba(245,158,11,.6);color:#fbbf24;pointer-events:none;" title="'+esc(label)+' · '+_t12(stMin)+'–'+_t12(enMin)+'">'+esc(label)+'<span class="bt2">'+_t12(stMin)+'–'+_t12(enMin)+'</span></div>';
 }
 function _stBlockEv(b,stMin,enMin,top,proj){
   const arch=_isArch(b), done=isDone(b)||arch, zone=_zoneOf(b);
-  const left=Math.max(0,Math.min(98,((stMin-420)/720)*100));
-  const width=Math.max(2,Math.min(100-left,((enMin-stMin)/720)*100));
+  const left=Math.max(0,Math.min(98,_tlX(stMin)));
+  const width=Math.max(2,Math.min(100-left,((enMin-stMin)/Math.max(1,_tlB-_tlA))*100));
   const dur=(enMin-stMin);
   const tRange=(proj?'~':'')+_t12(stMin)+'–'+_t12(enMin)+' · '+dur+'m';
   const tip=esc(b.name||'')+' · '+(proj?'projected ':'')+_t12(stMin)+'–'+_t12(enMin)+' ('+dur+' min expected)'+(b.price?' · '+esc(String(b.price)):'')+(proj?' — no set time; drag to lock one in':'');
@@ -2293,7 +2345,7 @@ function _dayOrderPanel(c,iso,cell){
       const row='<div class="ro-stop" style="cursor:default;background:var(--panel2);border:1px solid var(--line);margin-bottom:4px;">'
         +'<span class="ro-num" style="background:'+_dispPC(b)+'">'+(i+1)+'</span>'
         +'<div class="ro-main"><div class="ro-n">'+_jobIcon(b)+' '+esc(b.name||'?')+'</div>'
-        +'<div class="ro-a">'+(_zoneOf(b)?_zoneOf(b)+' · ':'')+'~'+_t12(st)+'–'+_t12(st+dur)+' · '+dur+'m'+(b.price?' · '+esc(String(b.price)):'')+'</div></div>'
+        +'<div class="ro-a">'+(_zoneOf(b)?_zoneOf(b)+' · ':'')+'~'+_t12(st)+'–'+_t12(st+dur)+' · <button onclick="event.stopPropagation();setJobMins('+_jr(b)+')" title="Adjust how long this yard takes — feeds dispatch, projections and the crew app" style="background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.35);color:#7dd3fc;border-radius:7px;padding:1px 7px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">⏱ '+dur+'m ✎</button>'+(b.price?' · '+esc(String(b.price)):'')+'</div></div>'
         +'<div class="ro-arrows">'
         +'<button onclick="dayMove(\''+c+'\',\''+iso+'\','+i+',-1)" '+(i===0?'disabled':'')+'>▲</button>'
         +'<button onclick="dayMove(\''+c+'\',\''+iso+'\','+i+',1)" '+(i===jobs.length-1?'disabled':'')+'>▼</button></div></div>';
@@ -2304,6 +2356,65 @@ function _dayOrderPanel(c,iso,cell){
   }
   return h+'</div>';
 }
+// ⏱ Owner-adjustable per-yard minutes — writes the booking's Mow Minutes column,
+// which every estimator (_jobMins here, mowMinutes on /field) checks FIRST.
+async function setJobMins(ref){
+  const b=_jobRefs[ref]; if(!b) return;
+  const cur=_jobMins(b);
+  const v=prompt('⏱ How many minutes does "'+(b.name||'?')+'" take?\n\nCurrent estimate: '+cur+' min. Sets the yard\'s expected time everywhere — dispatch, shift projections, and the crew app.', String(parseInt(b.mowMinutes)||cur));
+  if(v==null) return;
+  const n=parseInt(v,10);
+  if(!(n>0&&n<=600)){ toast('Minutes must be 1–600'); return; }
+  b.mowMinutes=n; renderDispatch(); toast('⏱ '+(b.name||'yard')+' → '+n+' min');
+  const be=_jobBE(b);
+  try{
+    const d=await fetch(be.u+'?'+new URLSearchParams({ action:'owner_update_booking', rowIndex:_ri(b), matchEmail:String(b.email||'').toLowerCase().trim(), matchDate:dateOf(b), mowMinutes:n, adminToken:be.t })).then(function(r){ return r.json(); });
+    if(!d||!d.success) toast('⚠ Time not saved to the sheet: '+((d&&d.error)||'network')+' — needs the backend redeploy');
+  }catch(e){ toast('⚠ Time not saved — offline?'); }
+}
+/* ── 📱 CREW DAY VIEW — vertical Google-Calendar-style timeline for ONE crew.
+   The horizontal board is unreadable on a phone; tap a crew's name to get this. ── */
+function openCrewDay(zi,c){
+  const rec=(window._dayEvsCache||{})[zi+'|'+c]; if(!rec) return;
+  const A=_tlA,B=_tlB,k=1.6;                        // px per minute
+  const H=(B-A)*k;
+  const hr=function(m){ return ((Math.floor(m/60)%12)||12)+':'+String(m%60).padStart(2,'0')+(m<720?'a':'p'); };
+  let g='';
+  for(let hh=Math.ceil(A/60);hh<=Math.floor(B/60);hh++){
+    const y=(hh*60-A)*k;
+    g+='<div style="position:absolute;left:0;right:0;top:'+y.toFixed(0)+'px;border-top:1px solid rgba(255,255,255,.07);"></div>'
+      +'<div style="position:absolute;left:4px;top:'+(y+2).toFixed(0)+'px;font-size:10px;font-family:var(--mono);color:var(--dim);">'+((hh%12)||12)+(hh<12?'a':'p')+'</div>';
+  }
+  const blk=function(label,st,en,style){
+    return '<div style="position:absolute;left:52px;right:10px;top:'+((st-A)*k).toFixed(0)+'px;height:'+Math.max(20,(en-st)*k-3).toFixed(0)+'px;border-radius:10px;padding:5px 10px;box-sizing:border-box;overflow:hidden;font-size:12px;'+style+'">'+label+'</div>';
+  };
+  let bl=blk('🧰 '+(rec.isClean?'Load-up':'PMCS & Load-up')+' · '+hr(rec.pmcsSt)+'–'+hr(rec.pmcsEn),rec.pmcsSt,rec.pmcsEn,'background:rgba(245,158,11,.12);border:1.5px dashed rgba(245,158,11,.5);color:#fbbf24;');
+  rec.evs.slice().sort(function(a,b2){return a.st-b2.st;}).forEach(function(ev){
+    const done=isDone(ev.b)||_isArch(ev.b);
+    const st2='background:'+(done?'rgba(148,163,184,.13)':'rgba(34,197,94,.13)')+';border:1.5px '+(ev.proj?'dashed':'solid')+' '+(done?'rgba(148,163,184,.45)':_dispPC(ev.b))+';color:'+(done?'#94a3b8':'#e2e8f0')+';cursor:pointer;';
+    bl+='<div onclick="openJobRef('+_jr(ev.b)+')" style="position:absolute;left:52px;right:10px;top:'+((ev.st-A)*k).toFixed(0)+'px;height:'+Math.max(24,(ev.en-ev.st)*k-3).toFixed(0)+'px;border-radius:10px;padding:5px 10px;box-sizing:border-box;overflow:hidden;font-size:12.5px;'+st2+'">'
+      +'<b>'+(done?'✓ ':'')+esc(ev.b.name||'?')+'</b> <span style="opacity:.75;font-size:11px;">'+(ev.proj?'~':'')+hr(ev.st)+'–'+hr(ev.en)+' · '+(ev.en-ev.st)+'m'+(ev.b.price?' · '+esc(String(ev.b.price)):'')+'</span>'
+      +(_zoneOf(ev.b)?'<span style="display:block;font-size:10px;opacity:.6;">'+_zoneOf(ev.b)+(ev.b.address?' · '+esc(ev.b.address):'')+'</span>':'')
+      +'</div>';
+  });
+  bl+=blk('🏠 Base & unload · '+hr(rec.baseSt)+'–'+hr(rec.baseEn),rec.baseSt,rec.baseEn,'background:rgba(245,158,11,.12);border:1.5px dashed rgba(245,158,11,.5);color:#fbbf24;');
+  if(rec.iso===todayISO()){
+    const nm=(new Date()).getHours()*60+(new Date()).getMinutes();
+    if(nm>=A&&nm<=B) bl+='<div style="position:absolute;left:0;right:0;top:'+((nm-A)*k).toFixed(0)+'px;border-top:2px solid #f87171;z-index:5;"></div><div style="position:absolute;left:2px;top:'+((nm-A)*k-14).toFixed(0)+'px;font-size:9.5px;font-weight:800;color:#f87171;">now</div>';
+  }
+  const dt=new Date(rec.iso+'T12:00:00');
+  let ov=document.getElementById('crewDayOv');
+  if(!ov){ ov=document.createElement('div'); ov.id='crewDayOv'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;z-index:9000;background:var(--bg,#0b1220);display:flex;flex-direction:column;';
+  ov.innerHTML='<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);">'
+    +'<span class="cdot" style="background:'+rec.col+';color:'+rec.col+'"></span>'
+    +'<div style="min-width:0;"><b>'+(rec.crew==='un'?'Unassigned':'Crew '+esc(rec.crew))+'</b> <span style="color:var(--dim);font-size:12px;">'+esc(rec.zn)+'</span>'
+    +'<div style="font-size:11.5px;color:var(--muted);">'+dt.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})+' · '+rec.evs.length+' stop'+(rec.evs.length!==1?'s':'')+'</div></div>'
+    +'<span style="flex:1;"></span><button class="dev-btn" onclick="closeCrewDay()">✕ Close</button></div>'
+    +'<div style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch;"><div style="position:relative;height:'+H.toFixed(0)+'px;margin:8px 6px;">'+g+bl+'</div></div>';
+  document.body.style.overflow='hidden';
+}
+function closeCrewDay(){ const ov=document.getElementById('crewDayOv'); if(ov) ov.remove(); document.body.style.overflow=''; }
 function _amDurFor(iso){ const dt=new Date(String(iso)+'T12:00'); return (isNaN(dt)?10:(dt.getDay()===1?30:10)); }   // lawn morning PMCS+load: Mon 30 / else 10
 function _crewNorm(x){ x=String(x||'').toUpperCase().trim(); return x||'un'; }
 function _dayStartMin(c,iso){ let base=450; if(iso===todayISO()){ const sh=_crewShift(c==='un'?'':c); if(sh&&sh.clockIn) base=sh.clockIn.getHours()*60+sh.clockIn.getMinutes(); } return base+_amDurFor(iso); }
@@ -3128,15 +3239,31 @@ async function renderStats(force){
   const now=new Date(); const months=[];
   for(let k=5;k>=0;k--){ const d=new Date(now.getFullYear(),now.getMonth()-k,1); months.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); }
   function _n(v){ return +(String(v==null?0:v).replace(/[^0-9.-]/g,''))||0; }
-  function _wkRev(jobs){ const now=new Date(); const ws=new Date(now.getFullYear(),now.getMonth(),now.getDate()-now.getDay()); const wsT=ws.getTime(),lastT=wsT-7*864e5,endT=wsT+7*864e5; let tw=0,lw=0; (jobs||[]).forEach(function(j){ const d=new Date(String(dateOf(j)||'')+'T12:00:00').getTime(); if(isNaN(d))return; if(d>=wsT&&d<endT)tw+=amtOf(j); else if(d>=lastT&&d<wsT)lw+=amtOf(j); }); return {tw:tw,lw:lw}; }
+  function _wkRev(jobs){ const now=new Date(); const ws=new Date(now.getFullYear(),now.getMonth(),now.getDate()-now.getDay()); const wsT=ws.getTime(),lastT=wsT-7*864e5,endT=wsT+7*864e5; let tw=0,lw=0; const seen={}; (jobs||[]).forEach(function(j){ if(j.rowCancelled||_hqIsQuote(j)) return; const d=new Date(String(dateOf(j)||'')+'T12:00:00').getTime(); if(isNaN(d))return; const k=String(j.email||j.name||'').toLowerCase().trim()+'|'+dateOf(j)+'|'+amtOf(j); if(seen[k])return; seen[k]=1; if(d>=wsT&&d<endT)tw+=amtOf(j); else if(d>=lastT&&d<wsT)lw+=amtOf(j); }); return {tw:tw,lw:lw}; }
   function _delta(a,b){ if(!(b>0)) return ''; const p=Math.round((a-b)/b*100); return p>=0?' <span class="dev-pill g">▲'+p+'%</span>':' <span class="dev-pill r">▼'+Math.abs(p)+'%</span>'; }
   function _kpi(val,label,accent){ return '<div><div style="font-size:25px;font-family:var(--mono);font-weight:800;line-height:1;'+(accent||'')+'">'+val+'</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:700;margin-top:5px;">'+label+'</div></div>'; }
   function _k(v){ return v>=1000?('$'+(Math.round(v/100)/10)+'k'):('$'+Math.round(v)); }
-  let E={rev:0,paid:0,done:0,doneNQ:0,total:0,cust:0,newC:0,visits:0,twr:0,lwr:0,twv:0,lwv:0,twq:0,lwq:0,twb:0,lwb:0};
+  let E={rev:0,paid:0,done:0,doneNQ:0,total:0,cust:0,newC:0,visits:0,twr:0,lwr:0,twv:0,lwv:0,twq:0,lwq:0,twb:0,lwb:0,nq:0,ncl:0,nqL:0,nclL:0};
   const _tixAll=[];
   const crewBoard={}, srcBoard={};
   results.forEach(function(r){ if(r.locked||!r.st) return; const b=r.st.bookings||{}, a=r.st.analytics||{};
     const arch=r.jobs.reduce(function(s,j){return s+amtOf(j);},0);
+    // Quote funnel — THIS WEEK (Sun–Sat): fresh quote rows in, conversions out.
+    (function(){
+      const _nw=new Date(); const _ws=new Date(_nw.getFullYear(),_nw.getMonth(),_nw.getDate()-_nw.getDay());
+      const _wsT=_ws.getTime(), _endT=_wsT+7*864e5, _lastT=_wsT-7*864e5;
+      const _stamp=function(j){ let v=String(j.timestamp||dateOf(j)||''); if(/^\d{4}-\d{2}-\d{2}$/.test(v)) v+='T12:00:00'; const t=new Date(v); return isNaN(t)?NaN:t.getTime(); };
+      const _sn={};
+      (r.books||[]).concat(r.jobs||[]).forEach(function(j){
+        if(j.rowCancelled) return;
+        const t=_stamp(j); if(isNaN(t)) return;
+        const k=String(j.email||j.name||'').toLowerCase().trim()+'|'+dateOf(j)+'|'+(_hqIsQuote(j)?'q':'b'); if(_sn[k]) return; _sn[k]=1;
+        const inTW=(t>=_wsT&&t<_endT), inLW=(t>=_lastT&&t<_wsT);
+        if(!inTW&&!inLW) return;
+        if(_hqIsQuote(j)){ if(inTW)E.nq++; else E.nqL++; }
+        else if(/booked at quote/i.test(String(j.notes||''))){ if(inTW)E.ncl++; else E.nclL++; }
+      });
+    })();
     // Real completed jobs only — quotes are visits, not tickets.
     r.jobs.concat((r.books||[]).filter(function(j){ return isDone(j); })).forEach(function(j){ if(j.rowCancelled||_hqIsQuote(j)) return; E.doneNQ++; const a0=amtOf(j); if(a0>0) _tixAll.push(a0); });
     E.paid+=_n(b.estimatedRev); E.rev+=Math.max(arch,_n(b.estimatedRev)); E.done+=_n(b.done); E.total+=_n(b.total); E.cust+=_n(b.customers);
@@ -3168,10 +3295,11 @@ async function renderStats(force){
   h+=(function(){ const all=[].concat.apply([],results.map(function(r){ return r.books||[]; })); return all.length?('<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px;">'+_hqProjLine(all,'Projected recurring — all businesses')+'</div>'):''; })();
   h+='</div></div>';
   h+=_hqRevCard(results);
-  h+='<div class="dev-card"><div class="dev-h">🔻 This week — visits → quotes → jobs</div><div class="dev-b">'
+  h+='<div class="dev-card"><div class="dev-h">🔻 This week — visits → quotes → closed</div><div class="dev-b">'
     +'<div class="dev-row">👀 Site visits <b>'+E.twv+'</b>'+_delta(E.twv,E.lwv)+'</div>'
-    +'<div class="dev-row">📝 Quote opens <b>'+E.twq+'</b>'+_delta(E.twq,E.lwq)+'</div>'
-    +'<div class="dev-row">✅ New bookings <b>'+E.twb+'</b>'+_delta(E.twb,E.lwb)+(q2b!=null?' · <span class="dev-pill g">'+q2b+'% quote→book</span>':'')+'</div>'
+    +'<div class="dev-row">📋 New quotes <b>'+E.nq+'</b>'+_delta(E.nq,E.nqL)+'</div>'
+    +'<div class="dev-row">🤝 Closed &amp; locked in <b>'+E.ncl+'</b>'+_delta(E.ncl,E.nclL)+(E.nq>0?' · <span class="dev-pill '+(Math.round(E.ncl/E.nq*100)>=40?'g':'y')+'">'+Math.round(E.ncl/E.nq*100)+'% close rate</span>':'')+'</div>'
+    +'<div class="dev-row" style="color:var(--dim);font-size:11.5px;">quotes = quote rows created this week · closed = "booked at quote visit" rows this week</div>'
     +'</div></div>';
   const crewSorted=Object.keys(crewBoard).sort(function(a,b){return crewBoard[b]-crewBoard[a];}).slice(0,6);
   h+='<div class="dev-card"><div class="dev-h">🏆 Crew — jobs completed</div><div class="dev-b">'

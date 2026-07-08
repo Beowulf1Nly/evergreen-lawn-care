@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.10 */
+/* APP_VER:2026-07-08.11 */
 (function(){
-  var V='2026-07-08.10'; window.__APP_VER=V;
+  var V='2026-07-08.11'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1270,13 +1270,10 @@ async function _fmFlushQueue(){
         if(item.method==='POST') res=await fetch(SCRIPT_URL,{ method:'POST', body:JSON.stringify(item.body) });
         else res=await fetch(SCRIPT_URL+'?'+new URLSearchParams(item.params).toString());
         if(!res.ok) throw new Error('HTTP '+res.status);
-        if(item.kind==='photo'){
-          // HTTP 200 isn't enough — the backend must confirm the file saved,
-          // otherwise the photo stays queued and keeps retrying (never dropped).
-          let ok=true;
-          try{ const j=JSON.parse(await res.text()); ok=!(j&&j.success===false); }catch(e){}
-          if(!ok) throw new Error('backend rejected photo');
-        }
+        // HTTP 200 isn't enough — the backend saying {success:false} used to get
+        // swallowed here, which is how an invoice could silently never send.
+        // Every item now has its body checked; failures retry + get surfaced.
+        try{ const j=JSON.parse(await res.text()); if(j&&j.success===false) { item.lastErr=String(j.error||'rejected'); throw new Error('backend: '+item.lastErr); } }catch(pe){ if(String(pe.message||'').indexOf('backend:')===0) throw pe; }
         _fmMarkKeyDone(item.idemKey); q.shift(); _fmQueueSave(q);
       }catch(netErr){
         item.tries=(item.tries||0)+1;
@@ -1284,6 +1281,7 @@ async function _fmFlushQueue(){
         // After 12 tries: drop only non-financial items (notes/checklists); rotate money+photos to
         // the back so one stuck item can't block the rest, and keep retrying them forever.
         const _crit=(item.kind==='photo'||item.kind==='done'||item.kind==='invoice'||item.kind==='cash'||item.kind==='addons');
+        if(_crit&&item.lastErr&&item.tries===3){ try{ showToast('⚠️ '+item.kind.toUpperCase()+' not going through: '+item.lastErr+' — it will keep retrying'); }catch(e){} }
         if(item.tries>12){ q.shift(); if(_crit) q.push(item); }
         _fmQueueSave(q); break;
       }
