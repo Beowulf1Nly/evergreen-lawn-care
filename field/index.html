@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.6 */
+/* APP_VER:2026-07-08.7 */
 (function(){
-  var V='2026-07-08.6'; window.__APP_VER=V;
+  var V='2026-07-08.7'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1461,14 +1461,20 @@ function _fmIsFinalOpenStop(){ return _fmOpenStops().length<=1; }
 function _fmShow(screen){ document.querySelectorAll('#fieldMode .fm-screen').forEach(s=>s.classList.remove('active')); const el=document.getElementById(screen); if(el) el.classList.add('active'); }
 function fmBackToStart(){ _fmShow('fmScreenStart'); _fmRenderStart(); }
 /* ── EMPLOYEE HUB: My Schedule tab — counts/time/areas only, zero customer PII ── */
+let _fmSchedTab='weekly', _fmSchedWkSel=null;
 function fmOpenSched(){ _fmShow('fmScreenSched'); _fmRenderSched(); }
+function fmSchedTab(t){ _fmSchedTab=t; _fmSchedWkSel=null; _fmRenderSched(); }
+function fmSchedWk(w){ _fmSchedWkSel=(_fmSchedWkSel===w?null:w); _fmRenderSched(); }
 function _fmRenderSched(){
   const body=document.getElementById('fmSchedBody'); if(!body) return;
+  const today=todayISOStr();
+  const _iso=function(dt){ return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); };
+  const capD=new Date(today+'T12:00:00'); capD.setDate(capD.getDate()+30); const capISO=_iso(capD);   // hard cap: 30 days out
   const days={};
   (allBookings||[]).forEach(function(b){
     if(b.rowCancelled||isDone(b)) return;
     if(!_crewMatch(b)) return;
-    const d=dateOf(b); if(!d||d<todayISOStr()) return;
+    const d=dateOf(b); if(!d||d<today||d>capISO) return;
     (days[d]=days[d]||[]).push(b);
   });
   // EXPECTED stops: a recurring plan's next visit is already a sheet row (guaranteed);
@@ -1481,33 +1487,75 @@ function _fmRenderSched(){
     const iv=m?(+m[1]*7):((f.indexOf('bi')>=0&&f.indexOf('week')>=0)?14:((f.indexOf('week')>=0&&f.indexOf('bi')<0)?7:0));
     if(!iv) return;
     const base=dateOf(b); if(!base) return;
-    for(let k2=1;k2<=3;k2++){
+    for(let k2=1;k2<=5;k2++){
       const dd=new Date(base+'T12:00:00'); dd.setDate(dd.getDate()+iv*k2);
-      const key=dd.getFullYear()+'-'+String(dd.getMonth()+1).padStart(2,'0')+'-'+String(dd.getDate()).padStart(2,'0');
-      if(key>todayISOStr()) exp[key]=(exp[key]||0)+1;
+      const key=_iso(dd);
+      if(key>today&&key<=capISO) exp[key]=(exp[key]||0)+1;
     }
   });
-  const allDays={}; Object.keys(days).forEach(function(d){ allDays[d]=1; }); Object.keys(exp).forEach(function(d){ allDays[d]=1; });
-  const keys=Object.keys(allDays).sort().filter(function(d){ return d>=todayISOStr(); }).slice(0,21);
-  if(!keys.length){ body.innerHTML='<div style="text-align:center;color:rgba(255,255,255,.55);padding:44px 20px;">Nothing on the schedule ahead yet.</div>'; return; }
-  body.innerHTML=keys.map(function(d){
+  // QUOTES — business-wide, deliberately NOT crew-filtered: a quote can land on anyone.
+  const qts={};
+  (allBookings||[]).forEach(function(b){
+    if(b.rowCancelled||isDone(b)) return;
+    if(!_isQuoteJob(b)) return;
+    const d=dateOf(b); if(!d||d<today||d>capISO) return;
+    qts[d]=(qts[d]||0)+1;
+  });
+  const allDays={}; Object.keys(days).forEach(function(d){ allDays[d]=1; }); Object.keys(exp).forEach(function(d){ allDays[d]=1; }); Object.keys(qts).forEach(function(d){ allDays[d]=1; });
+  const keys=Object.keys(allDays).sort().filter(function(d){ return d>=today&&d<=capISO; });
+  const chip=function(txt,bg,col){ return '<span style="font-size:11.5px;font-weight:800;padding:4px 10px;border-radius:999px;background:'+bg+';color:'+col+';white-space:nowrap;">'+txt+'</span>'; };
+  const dayCard=function(d){
     const list=days[d]||[];
     const mins=list.reduce(function(s,b){ return s+mowMinutes(b); },0)+Math.max(0,list.length-1)*12;
     const areas={}; list.forEach(function(b){ areas[ZIP_CITY[b.zip]||b.zip||'—']=1; });
     const dt=new Date(d+'T12:00:00');
-    const isToday=d===todayISOStr();
-    const chip=function(txt,bg,col){ return '<span style="font-size:11.5px;font-weight:800;padding:4px 10px;border-radius:999px;background:'+bg+';color:'+col+';white-space:nowrap;">'+txt+'</span>'; };
+    const isToday=d===today;
     return '<div style="display:flex;gap:13px;align-items:stretch;background:rgba(255,255,255,'+(isToday?'.10':'.05')+');border:1px solid rgba(255,255,255,'+(isToday?'.35':'.10')+');border-left:4px solid '+(isToday?'#4ade80':(list.length?'rgba(74,222,128,.45)':'rgba(255,255,255,.18)'))+';border-radius:14px;padding:12px 14px;margin-bottom:9px;">'
       +'<div style="text-align:center;min-width:46px;align-self:center;"><div style="font-size:11px;font-weight:800;color:rgba(255,255,255,.55);text-transform:uppercase;">'+dt.toLocaleDateString('en-US',{weekday:'short'})+'</div><div style="font-size:22px;font-weight:800;line-height:1.1;">'+dt.getDate()+'</div><div style="font-size:10px;color:rgba(255,255,255,.45);">'+dt.toLocaleDateString('en-US',{month:'short'})+'</div></div>'
       +'<div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:6px;">'
       +'<div style="display:flex;gap:6px;flex-wrap:wrap;">'
       +(list.length?chip('✅ '+list.length+' booked','rgba(74,222,128,.16)','#4ade80'):'')
       +(exp[d]?chip('🔮 '+exp[d]+' expected','rgba(125,211,252,.14)','#7dd3fc'):'')
-      +(!list.length&&!exp[d]?chip('—','rgba(255,255,255,.08)','rgba(255,255,255,.4)'):'')
+      +(qts[d]?chip('📋 '+qts[d]+' quote'+(qts[d]!==1?'s':'')+' possible','rgba(253,186,116,.16)','#fdba74'):'')
+      +(!list.length&&!exp[d]&&!qts[d]?chip('—','rgba(255,255,255,.08)','rgba(255,255,255,.4)'):'')
       +'</div>'
       +(list.length?'<div style="color:rgba(255,255,255,.6);font-size:12.5px;">⏱ ~'+Math.floor(mins/60)+'h '+String(mins%60).padStart(2,'0')+'m with drive · 📍 '+Object.keys(areas).join(' · ')+'</div>':(exp[d]?'<div style="color:rgba(255,255,255,.45);font-size:12.5px;">recurring plans due back around this day</div>':''))
       +'</div></div>';
-  }).join('');
+  };
+  const tabBtn=function(id,lab){
+    const on=_fmSchedTab===id;
+    return '<button onclick="fmSchedTab(\''+id+'\')" style="flex:1;padding:9px 0;border-radius:11px;border:1px solid rgba(255,255,255,'+(on?'.4':'.14')+');background:'+(on?'rgba(74,222,128,.18)':'rgba(255,255,255,.05)')+';color:'+(on?'#4ade80':'rgba(255,255,255,.6)')+';font-weight:800;font-size:13.5px;cursor:pointer;">'+lab+'</button>';
+  };
+  const tabs='<div style="display:flex;gap:8px;margin-bottom:13px;">'+tabBtn('weekly','📆 Weekly')+tabBtn('monthly','🗓 Monthly')+'</div>';
+  if(!keys.length){ body.innerHTML=tabs+'<div style="text-align:center;color:rgba(255,255,255,.55);padding:44px 20px;">Nothing on the schedule ahead yet.</div>'; return; }
+  if(_fmSchedTab==='monthly'){
+    // Per-week rollups (Sun–Sat) — tap a week to drop into its day cards.
+    const wk={};
+    keys.forEach(function(d){ const dt=new Date(d+'T12:00:00'); const ws=new Date(dt); ws.setDate(ws.getDate()-ws.getDay()); const k=_iso(ws); (wk[k]=wk[k]||[]).push(d); });
+    body.innerHTML=tabs+Object.keys(wk).sort().map(function(w){
+      const ds=wk[w];
+      const bkd=ds.reduce(function(s,d){ return s+(days[d]||[]).length; },0);
+      const ex=ds.reduce(function(s,d){ return s+(exp[d]||0); },0);
+      const qu=ds.reduce(function(s,d){ return s+(qts[d]||0); },0);
+      const mins=ds.reduce(function(s,d){ const l=days[d]||[]; return s+l.reduce(function(x,b){ return x+mowMinutes(b); },0)+Math.max(0,l.length-1)*12; },0);
+      const w0=new Date(w+'T12:00:00'); const w1=new Date(w0); w1.setDate(w1.getDate()+6);
+      const open=_fmSchedWkSel===w;
+      const lbl=w0.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' – '+w1.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+      return '<div onclick="fmSchedWk(\''+w+'\')" style="cursor:pointer;background:rgba(255,255,255,'+(open?'.10':'.05')+');border:1px solid rgba(255,255,255,'+(open?'.35':'.12')+');border-radius:14px;padding:13px 15px;margin-bottom:9px;">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><div style="font-weight:800;font-size:14.5px;">'+lbl+'</div><div style="color:rgba(255,255,255,.5);font-size:13px;">'+(open?'▾':'▸')+'</div></div>'
+        +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">'
+        +(bkd?chip('✅ '+bkd+' booked','rgba(74,222,128,.16)','#4ade80'):'')
+        +(ex?chip('🔮 '+ex+' expected','rgba(125,211,252,.14)','#7dd3fc'):'')
+        +(qu?chip('📋 '+qu+' quote'+(qu!==1?'s':'')+' possible','rgba(253,186,116,.16)','#fdba74'):'')
+        +(!bkd&&!ex&&!qu?chip('—','rgba(255,255,255,.08)','rgba(255,255,255,.4)'):'')
+        +'</div>'
+        +(bkd?'<div style="color:rgba(255,255,255,.55);font-size:12.5px;margin-top:7px;">⏱ ~'+Math.floor(mins/60)+'h '+String(mins%60).padStart(2,'0')+'m booked work with drive</div>':'')
+        +'</div>'
+        +(open?'<div style="margin:2px 0 10px 10px;">'+ds.map(dayCard).join('')+'</div>':'');
+    }).join('');
+    return;
+  }
+  body.innerHTML=tabs+keys.map(dayCard).join('');
 }
 /* ── Remaining drive-time estimate: haversine chain over cached geocodes from your
      last GPS fix through every open stop — ×1.3 road factor @ 28 mph + 2 min/stop.
