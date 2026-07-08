@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-08.5 */
-(function(){ var V='2026-07-08.5'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-08.6 */
+(function(){ var V='2026-07-08.6'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -745,7 +745,10 @@ function showErr(m){ const e=document.getElementById('err'); e.textContent=m||''
 function todayISO(){ const t=new Date(); return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); }
 function dateOf(b){ const raw=b.serviceDate||b.serviceDateRaw||''; if(!raw) return ''; const s=String(raw).trim(); if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; const d=new Date(s); if(isNaN(d)) return s; return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function isDone(b){ if(b.rowCompleted) return true; const d=String(b.done||''); return d.includes('Done')||d.startsWith('✓'); }
-function amtOf(b){ return parseFloat(String(b.price||'0').replace(/[^0-9.]/g,''))||0; }
+function amtOf(b){ let v=b.price; if(v==null||String(v).trim()===''||!parseFloat(String(v).replace(/[^0-9.]/g,''))) v=(b.amount!=null&&String(b.amount).trim()!=='')?b.amount:(b.total!=null?b.total:v); return parseFloat(String(v==null?'0':v).replace(/[^0-9.]/g,''))||0; }
+// STRICT quote detection — mirrors /field's _isQuoteJob: only true quote markers,
+// never the word "quote" buried in notes ("Booked at quote visit" is a real job).
+function _hqIsQuote(b){ const f=String(b.frequency||'').toLowerCase(), sv=String(b.service||b.serviceType||'').toLowerCase(), pr=String(b.price||'').toLowerCase(), pm=String(b.payMethod||'').toLowerCase(), nt=String(b.notes||'').toLowerCase(); return f.indexOf('quote')>=0||sv.indexOf('quote')>=0||pr.indexOf('quote')>=0||pm==='quote'||nt.indexOf('[quote request]')>=0; }
 function durStr(fromIso){ if(!fromIso) return '—'; const ms=Date.now()-new Date(fromIso).getTime(); if(isNaN(ms)||ms<0) return '—'; const m=Math.floor(ms/60000); return Math.floor(m/60)+'h '+(m%60)+'m'; }
 function _ri(b){ const r=parseInt(b&&b._rowIndex,10); if(r&&r>=2) return r; const i=_bookings.indexOf(b); return i>=0?i+2:0; }
 function initials(n){ const p=String(n||'').trim().split(/\s+/); return ((p[0]||'')[0]||'?').toUpperCase()+((p[1]||'')[0]||'').toUpperCase(); }
@@ -2979,10 +2982,10 @@ function _hqRevCard(results){
       let ki=0; for(let i=0;i<order.length;i++){ if(d>=order[i]) ki=i; else break; }
       vals[ki]+=a2;
     });
-    return { c:(r.z&&r.z.c)||'#22c55e', vals:vals };
+    return { c:(r.z&&r.z.c)||'#22c55e', e:(r.z&&r.z.e)||'', n:(r.z&&r.z.n)||'', vals:vals };
   });
   const max=Math.max.apply(null,series.reduce(function(acc,sr){ return acc.concat(sr.vals); },[1]));
-  const W=1000,H=230,L=48,Rm=14,T=16,B=30, n=order.length;
+  const W=1000,H=238,L=48,Rm=14,T=16, n=order.length, B=(n>14?52:30);
   const X=function(i){ return n<2?(W/2):(L+i*(W-L-Rm)/(n-1)); };
   const Y=function(v){ return T+(1-(v/max))*(H-T-B); };
   const smooth=function(vals){
@@ -3004,13 +3007,23 @@ function _hqRevCard(results){
   for(let g=0;g<=3;g++){ const gv=max*g/3, gy=Y(gv);
     grid+='<line x1="'+L+'" y1="'+gy.toFixed(1)+'" x2="'+(W-Rm)+'" y2="'+gy.toFixed(1)+'" stroke="rgba(255,255,255,.07)"/>'
       +'<text x="'+(L-8)+'" y="'+(gy+3.5).toFixed(1)+'" text-anchor="end" font-size="10" fill="rgba(255,255,255,.38)" font-family="ui-monospace,monospace">'+(gv>=1000?('$'+(Math.round(gv/100)/10)+'k'):('$'+Math.round(gv)))+'</text>'; }
-  const lblEvery=Math.max(1,Math.ceil(n/10));
+  // Every bucket gets an x-label — rotated 45° when they'd collide. Monthly
+  // buckets read as month names, daily/weekly as MM-DD.
+  const _mN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const _xlbl=function(k){ return bw>=30?(_mN[+k.slice(5,7)-1]+" '"+k.slice(2,4)):k.slice(5); };
+  const rot=n>14;
   let xl='';
-  for(let i=0;i<n;i+=lblEvery){ xl+='<text x="'+X(i).toFixed(1)+'" y="'+(H-10)+'" text-anchor="middle" font-size="9.5" fill="rgba(255,255,255,.38)" font-family="ui-monospace,monospace">'+order[i].slice(5)+'</text>'; }
+  for(let i=0;i<n;i++){ const xx=X(i).toFixed(1);
+    xl+=rot
+      ?'<text x="'+xx+'" y="'+(H-6)+'" text-anchor="end" transform="rotate(-45 '+xx+' '+(H-6)+')" font-size="8.5" fill="rgba(255,255,255,.42)" font-family="ui-monospace,monospace">'+_xlbl(order[i])+'</text>'
+      :'<text x="'+xx+'" y="'+(H-10)+'" text-anchor="middle" font-size="9.5" fill="rgba(255,255,255,.42)" font-family="ui-monospace,monospace">'+_xlbl(order[i])+'</text>'; }
   let hov='';
   order.forEach(function(k,i){ const t=series.reduce(function(sm,sr){ return sm+sr.vals[i]; },0);
-    hov+='<g><rect x="'+(X(i)-((W-L-Rm)/Math.max(1,n-1))/2).toFixed(1)+'" y="'+T+'" width="'+((W-L-Rm)/Math.max(1,n-1)).toFixed(1)+'" height="'+(H-T-B)+'" fill="transparent"><title>'+k+' — '+_fmtMoney(t)+'</title></rect></g>'; });
-  const svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block;margin-top:8px;"><defs>'+defs+'</defs>'+grid+paint+hov+xl+'</svg>';
+    const det=series.map(function(sr){ return esc(((sr.e||'')+' '+(sr.n||'')).trim())+': '+_fmtMoney(sr.vals[i]); }).join('&#10;');
+    const span=bw>1?(' – '+new Date(new Date(k+'T12:00:00').getTime()+(bw-1)*864e5).toISOString().slice(0,10)):'';
+    hov+='<g class="hv"><line x1="'+X(i).toFixed(1)+'" y1="'+T+'" x2="'+X(i).toFixed(1)+'" y2="'+(H-B)+'" stroke="rgba(255,255,255,.4)" stroke-dasharray="3 3"/>'
+      +'<rect x="'+(X(i)-((W-L-Rm)/Math.max(1,n-1))/2).toFixed(1)+'" y="'+T+'" width="'+((W-L-Rm)/Math.max(1,n-1)).toFixed(1)+'" height="'+(H-T-B)+'" fill="transparent"><title>'+k+span+' — '+_fmtMoney(t)+' total&#10;'+det+'</title></rect></g>'; });
+  const svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block;margin-top:8px;"><style>g.hv line{opacity:0}g.hv:hover line{opacity:.5}</style><defs>'+defs+'</defs>'+grid+paint+hov+xl+'</svg>';
   const btn=function(p2,l2){ return '<button class="dev-btn'+(_revPeriod===p2?' go':'')+'" onclick="setRevPeriod(\''+p2+'\')">'+l2+'</button>'; };
   const legend=results.filter(function(r){ return !r.locked&&r.st; }).map(function(r){ return '<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px;font-size:11px;color:var(--muted);"><span style="width:9px;height:9px;border-radius:3px;background:'+esc((r.z&&r.z.c)||'#22c55e')+';box-shadow:0 0 8px '+esc((r.z&&r.z.c)||'#22c55e')+';"></span>'+esc(((r.z&&r.z.e)||'')+' '+((r.z&&r.z.n)||''))+'</span>'; }).join('');
   return '<div class="dev-card" id="revChartCard" style="grid-column:1/-1;"><div class="dev-h">📈 Revenue<span class="grow"></span><span style="display:flex;gap:6px;">'+btn('7d','7d')+btn('30d','30d')+btn('90d','90d')+btn('1yr','1 yr')+btn('all','All')+'</span></div><div class="dev-b">'
@@ -3085,7 +3098,15 @@ function _hqProjRev(books,days){
 }
 function _hqProjLine(books,label){
   const n=_hqActivePlans(books).length;
-  return '<div class="dev-row">📈 '+(label||'Projected')+' — month left <b>'+_fmtMoney(_hqProjRev(books,null))+'</b> · 7d <b>'+_fmtMoney(_hqProjRev(books,7))+'</b> · 30d <b>'+_fmtMoney(_hqProjRev(books,30))+'</b> · 365d <b>'+_fmtMoney(_hqProjRev(books,365))+'</b> <span style="color:var(--dim)">('+n+' active recurring plan'+(n!==1?'s':'')+')</span></div>';
+  const box=function(v,l){ return '<div style="flex:1;min-width:92px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:10px;padding:8px 10px;"><div style="font-size:16px;font-family:var(--mono);font-weight:800;color:#4ade80;">'+v+'</div><div style="font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-top:3px;">'+l+'</div></div>'; };
+  return '<div style="margin:10px 0 8px;">'
+    +'<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:7px;"><span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);">📈 '+(label||'Projected recurring')+'</span><span style="font-size:11px;color:var(--dim);">'+n+' active plan'+(n!==1?'s':'')+'</span></div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+    +box(_fmtMoney(_hqProjRev(books,null)),'Rest of month')
+    +box(_fmtMoney(_hqProjRev(books,7)),'Next 7 days')
+    +box(_fmtMoney(_hqProjRev(books,30)),'Next 30 days')
+    +box(_fmtMoney(_hqProjRev(books,365)),'Next 12 months')
+    +'</div></div>';
 }
 async function renderStats(force){
   const grid=document.getElementById('statsGrid'); if(!grid) return;
@@ -3105,10 +3126,13 @@ async function renderStats(force){
   function _delta(a,b){ if(!(b>0)) return ''; const p=Math.round((a-b)/b*100); return p>=0?' <span class="dev-pill g">▲'+p+'%</span>':' <span class="dev-pill r">▼'+Math.abs(p)+'%</span>'; }
   function _kpi(val,label,accent){ return '<div><div style="font-size:25px;font-family:var(--mono);font-weight:800;line-height:1;'+(accent||'')+'">'+val+'</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:700;margin-top:5px;">'+label+'</div></div>'; }
   function _k(v){ return v>=1000?('$'+(Math.round(v/100)/10)+'k'):('$'+Math.round(v)); }
-  let E={rev:0,paid:0,done:0,total:0,cust:0,newC:0,visits:0,twr:0,lwr:0,twv:0,lwv:0,twq:0,lwq:0,twb:0,lwb:0};
+  let E={rev:0,paid:0,done:0,doneNQ:0,total:0,cust:0,newC:0,visits:0,twr:0,lwr:0,twv:0,lwv:0,twq:0,lwq:0,twb:0,lwb:0};
+  const _tixAll=[];
   const crewBoard={}, srcBoard={};
   results.forEach(function(r){ if(r.locked||!r.st) return; const b=r.st.bookings||{}, a=r.st.analytics||{};
     const arch=r.jobs.reduce(function(s,j){return s+amtOf(j);},0);
+    // Real completed jobs only — quotes are visits, not tickets.
+    r.jobs.concat((r.books||[]).filter(function(j){ return isDone(j); })).forEach(function(j){ if(j.rowCancelled||_hqIsQuote(j)) return; E.doneNQ++; const a0=amtOf(j); if(a0>0) _tixAll.push(a0); });
     E.paid+=_n(b.estimatedRev); E.rev+=Math.max(arch,_n(b.estimatedRev)); E.done+=_n(b.done); E.total+=_n(b.total); E.cust+=_n(b.customers);
     const w=_wkRev(r.jobs.concat((r.books||[]).filter(function(j){ return isDone(j); }))), bw=b.weekOverWeek||{}, aw=a.weekOverWeek||{};
     E.twr+=(w.tw||_n(bw.thisWeekRev)); E.lwr+=(w.lw||_n(bw.lastWeekRev));
@@ -3119,7 +3143,7 @@ async function renderStats(force){
     Object.keys(a.sourceQuality||{}).forEach(function(sc){ const q=a.sourceQuality[sc]||{}; if(!srcBoard[sc])srcBoard[sc]={v:0,bk:0}; srcBoard[sc].v+=_n(q.visits); srcBoard[sc].bk+=_n(q.bookings); });
   });
   const compRate=E.total>0?Math.round(E.done/E.total*100):0;
-  const avgT=(E.done>0&&E.rev>0)?Math.round(E.rev/E.done):0;
+  const avgT=_tixAll.length?Math.round(_tixAll.reduce(function(sm,a){return sm+a;},0)/_tixAll.length):((E.done>0&&E.rev>0)?Math.round(E.rev/E.done):0);
   const q2b=E.twq>0?Math.round(E.twb/E.twq*100):null;
   window._statsResults=results;
   let h='';
@@ -3127,7 +3151,7 @@ async function renderStats(force){
     +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:16px;">'
     +_kpi(_fmtMoney(E.rev),'Revenue (done work)','background:linear-gradient(180deg,#fff,#4ade80);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;')
     +_kpi(_fmtMoney(E.twr)+_delta(E.twr,E.lwr),'Rev this week (Sun–Sat)')
-    +_kpi(String(E.done),'Jobs completed')
+    +_kpi(String(E.doneNQ||E.done),'Jobs completed')
     +_kpi(compRate+'%','Completion rate')
     +_kpi(String(E.cust),'Customers')
     +_kpi('+'+E.newC,'New leads (30d)')
@@ -3155,21 +3179,28 @@ async function renderStats(force){
     const z=r.z;
     if(r.locked){ h+='<div class="dev-card"><div class="dev-h" style="--bc:'+esc(z.c)+'">'+esc(z.e)+' '+esc(z.n)+'</div><div class="dev-b"><div class="dev-row" style="color:var(--dim);">🔒 Not connected — link it in ⚙ 🏢 Businesses.</div></div></div>'; return; }
     const b=(r.st&&r.st.bookings)||{}, a=(r.st&&r.st.analytics)||{};
-    const w=_wkRev(r.jobs.concat((r.books||[]).filter(function(j){ return isDone(j); }))); const cr=_n(b.total)>0?Math.round(_n(b.done)/_n(b.total)*100):0;
+    const w=_wkRev(r.jobs.concat((r.books||[]).filter(function(j){ return isDone(j); })));
+    const doneLive=(r.books||[]).filter(function(j){ return isDone(j)&&!j.rowCancelled&&!_hqIsQuote(j); });
+    const doneAll=r.jobs.filter(function(j){ return !j.rowCancelled&&!_hqIsQuote(j); }).concat(doneLive);
+    const doneN=doneAll.length;
     const revB=Math.max(r.jobs.reduce(function(s,j){return s+amtOf(j);},0),_n(b.estimatedRev));
-    const at=(_n(b.done)>0&&revB>0)?Math.round(revB/_n(b.done)):0;
+    // Avg ticket = mean of real completed tickets (non-quote, non-$0). The old
+    // revenue÷done math let $0 quote rows drag cleaning to $35.
+    const _tix=doneAll.map(amtOf).filter(function(a){ return a>0; });
+    const at=_tix.length?Math.round(_tix.reduce(function(sm,a){return sm+a;},0)/_tix.length):((_n(b.done)>0&&revB>0)?Math.round(revB/_n(b.done)):0);
     const byMonth={}; months.forEach(function(m){ byMonth[m]=0; });
-    r.jobs.forEach(function(j){ const m=String(dateOf(j)||'').slice(0,7); if(m in byMonth) byMonth[m]+=amtOf(j); });
+    r.jobs.concat(doneLive).forEach(function(j){ const m=String(dateOf(j)||'').slice(0,7); if(m in byMonth) byMonth[m]+=amtOf(j); });
     const max=Math.max.apply(null,months.map(function(m){return byMonth[m];}).concat([1]));
     h+='<div class="dev-card"><div class="dev-h"><span style="width:4px;height:16px;border-radius:3px;background:'+esc(z.c)+';box-shadow:0 0 10px '+esc(z.c)+';"></span>'+esc(z.e)+' '+esc(z.n)+'<span class="grow"></span><span class="ph-c">'+(r.st?'live':'error')+'</span></div><div class="dev-b">'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:11px 14px;margin-bottom:12px;">'
       +_kpi(_fmtMoney(w.tw)+_delta(w.tw,w.lw),'This week (Sun–Sat)')
       +_kpi(_fmtMoney(revB),'Revenue (done)')
-      +_kpi(_n(b.done)+' / '+_n(b.total)+' · '+cr+'%','Jobs done')
+      +_kpi(String(doneN||_n(b.done)),'Jobs completed')
       +_kpi(String(_n(b.customers)),'Customers')
       +_kpi(at?('$'+at):'—','Avg ticket')
       +_kpi(String(_n(a.totalVisits)),'Site visits')
       +'</div>'
+      +((!r.jobs.length&&_n(b.done)>0)?'<div style="margin:2px 0 10px;padding:8px 11px;background:rgba(251,191,36,.09);border:1px solid rgba(251,191,36,.3);border-radius:9px;font-size:12px;color:#fbbf24;">⚠ Couldn\'t read this business\'s completed-jobs archive — the chart, collected and avg-ticket figures fall back to rough stats. Usually the HQ token\'s account isn\'t owner/manager there.</div>':'')
       +_hqProjLine(r.books||[],'Projected')
       +'<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin:2px 0 6px;">Revenue · last 6 months</div>'
       +'<div style="display:flex;align-items:flex-end;gap:7px;height:80px;">'
