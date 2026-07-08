@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-08.16 */
-(function(){ var V='2026-07-08.16'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-08.17 */
+(function(){ var V='2026-07-08.17'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1170,7 +1170,7 @@ function openJobSheetFor(b){
   const cNotes=String(b.notes||'').replace(/\blot:\s*[\d.]+ac\b/gi,'').replace(/\s*\|\s*$/,'').trim();
   document.getElementById('jobSheetBody').innerHTML='<h3>'+_jobIcon(b)+' '+esc(b.name||'Customer')+'</h3>'
     +'<div class="sub">📍 '+esc(b.address||'')+(b.zip?', '+esc(b.zip):'')+(_zoneOf(b)?' · '+_zoneOf(b):'')+' · '+esc(dateOf(b)||'no date')+(b.crew?(' · Crew '+esc(b.crew)):' · unassigned')+(b.price?(' · '+esc(b.price)):'')+(b._srcBiz?(' · '+esc(be.e2+' '+be.n)):'')+'</div>'
-    +(function(){ const ls=_lastSvcInfo(b); if(!ls) return (b._srcBiz>0?'':'<div class="sub" style="color:var(--dim);">↩ No completed visit on record before this date</div>'); return '<div class="sub" style="color:'+(ls.off?'#f87171':'#4ade80')+';font-weight:700;">↩ Last serviced '+ls.d+' — '+ls.gap+' days before this visit'+(ls.off?(' ⚠ plan is every '+ls.expct+'d — check this date'):(ls.expct?' ✓ matches the plan':''))+'</div>'; })()
+    +(function(){ const ls=_lastSvcInfo(b); if(!ls) return (b._srcBiz>0?'':'<div class="sub" style="color:var(--dim);">↩ No completed visit on record before this date</div>'); return '<div class="sub" style="color:'+(ls.off?'#f87171':'#4ade80')+';font-weight:700;cursor:pointer;" onclick="showSvcHistory(\''+esc(String(b.email||'').toLowerCase())+'\',\''+esc(String(b.name||'').replace(/'/g,''))+'\')" title="Tap to see every record this date is based on">↩ Last serviced '+ls.d+' — '+ls.gap+' days before this visit'+(ls.off?(' ⚠ plan is every '+ls.expct+'d — check this date'):(ls.expct?' ✓ matches the plan':''))+' <span style="opacity:.6;">▸ history</span></div>'; })()
     +(cNotes?'<div class="rs-note">📝 '+esc(cNotes)+'</div>':'')
     +(eNotes?'<div class="rs-note crew">👷 '+esc(eNotes)+'</div>':'')
     +(photos.length?'<div class="rs-photos">'+photos.map(function(u){return '<a href="'+esc(u)+'" target="_blank"><img class="rs-thumb" src="'+esc(_driveThumb(u))+'" onerror="this.replaceWith(document.createTextNode(String.fromCodePoint(0x1F4F7)))"></a>';}).join('')+'</div>':'')
@@ -2151,6 +2151,20 @@ function _lastSvcInfo(b){
   const off=!!(expct&&Math.abs(gap-expct)>2);
   const dt=new Date(prev+'T12:00:00');
   return { d:prev, nice:(dt.getMonth()+1)+'/'+dt.getDate(), gap:gap, expct:expct, off:off };
+}
+// 🗓 Tap "Last serviced" → see the raw records it came from, so a phantom
+// done-row (e.g. a +7-bug visit marked done instead of cancelled) is findable
+// in seconds instead of spelunking the sheet.
+function showSvcHistory(em,nm){
+  em=String(em||'').toLowerCase().trim(); if(!em) return;
+  const rows=[];
+  (_completed||[]).forEach(function(j){ if(String(j.email||'').toLowerCase().trim()===em){ rows.push({d:String(dateOf(j)||'?'),src:'archive',done:true,price:String(j.price||''),by:String(j.markedBy||'')}); } });
+  (_bookings||[]).forEach(function(j){ if(String(j.email||'').toLowerCase().trim()===em&&!j.rowCancelled){ rows.push({d:String(dateOf(j)||'?'),src:'bookings',done:isDone(j),price:String(j.price||''),by:String(j.markedBy||'')}); } });
+  rows.sort(function(a,b){ return a.d<b.d?1:-1; });
+  if(!rows.length){ toast('No records found for '+em); return; }
+  alert('🗓 '+(nm||em)+' — every record on file (newest first):\n\n'
+    +rows.slice(0,10).map(function(r){ return r.d+'  '+(r.done?'✓ done':'• upcoming')+'  ['+r.src+']'+(r.price?'  '+r.price:'')+(r.by?'  by '+r.by:''); }).join('\n')
+    +'\n\nA ✓ done row on a date you did NOT service = phantom (usually the old +7 bug, marked done instead of cancelled). Cancel that row in the sheet or via its job card and the Last-serviced date corrects itself.');
 }
 let _yardMinsPin={}; try{ _yardMinsPin=JSON.parse(localStorage.getItem('hq_yardmins')||'{}'); }catch(e){}
 function _yardPinFor(b){ return parseInt(_yardMinsPin[String(b&&b.email||'').toLowerCase().trim()])||0; }
