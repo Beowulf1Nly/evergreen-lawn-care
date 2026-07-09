@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.26 */
+/* APP_VER:2026-07-08.27 */
 (function(){
-  var V='2026-07-08.26'; window.__APP_VER=V;
+  var V='2026-07-08.27'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -233,9 +233,7 @@
       </div>
       <button class="fm-btn fm-btn-xl fm-btn-start" id="fmStartBtn" onclick="fmStartTapped()" style="min-width:260px;">🟢 Start My Route</button>
       <button class="fm-skip" id="fmStartEndBtn" style="color:#fca5a5;display:none;margin-top:12px;" onclick="fmEmergencyEnd()">🏁 End route &amp; clock out</button>
-      <button class="fm-skip" onclick="pmcsOpenMenu()" style="color:#9ed8b1;margin-top:18px;">🔧 PMCS / Maintenance Checks</button>
-      <button class="fm-skip" onclick="ncOpen()" style="color:#9ed8b1;margin-top:10px;">➕ New Customer</button>
-      <button class="fm-skip" onclick="loadData(true)" style="color:#9ed8b1;margin-top:10px;">↻ Refresh jobs</button>
+      <div style="display:flex;gap:10px;width:100%;max-width:380px;margin:18px auto 0;"><button onclick="pmcsOpenMenu()" style="flex:1;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:13px 8px;color:#fff;font-family:inherit;font-weight:800;font-size:13.5px;cursor:pointer;line-height:1.5;">🔧 PMCS<br><span style="font-weight:600;font-size:11px;color:#9ed8b1;">maintenance checks</span></button><button onclick="ncOpen()" style="flex:1;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:13px 8px;color:#fff;font-family:inherit;font-weight:800;font-size:13.5px;cursor:pointer;line-height:1.5;">➕ New customer<br><span style="font-weight:600;font-size:11px;color:#9ed8b1;">book on the spot</span></button></div>
     </div>
   </div>
   <!-- START-OF-ROUTE CHECKLIST -->
@@ -1867,6 +1865,9 @@ function fmEmergencyEnd(){
   _fmRenderDone(_fmStops());
 }
 function fmBeginRoute(){
+  // Nothing on the board? SAY so — silently landing back on the Start screen made
+  // the whole flow look broken. Also: never clock in against an empty day.
+  if(!_fmStops().length){ _fmLoading(false); showToast('📭 Nothing on today\'s board for your crew — there\'s nothing to route yet. Jobs added by the office show up here automatically.', 8000); _fmRender(); return; }
   // PMCS + load-out already ran and logged their own checklists; just clock in and roll.
   if(!_clockInTime || _clockedOut){ _clockInTime=new Date(); _clockedOut=false; _clockOutTime=null; }
   // Freeze today's order — this is THE route until HQ pushes or the crew re-routes.
