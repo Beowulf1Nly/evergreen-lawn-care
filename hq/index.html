@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-08.25 */
-(function(){ var V='2026-07-08.25'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-08.26 */
+(function(){ var V='2026-07-08.26'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -2579,7 +2579,8 @@ function _dayOrderPanel(c,iso,cell,zi){
   const k=c+'|'+iso, open=_dayReorderOpen[k];
   let h='<div style="padding:5px 2px 0;"><button class="dev-btn" style="font-size:11px;padding:5px 11px;" onclick="toggleDayOrder(\''+c+'\',\''+iso+'\')">'+(open?'▾':'▸')+' ↕ Reorder run ('+jobs.length+')</button>'
     +(c!=='un'?'<button class="dev-btn" style="font-size:11px;padding:5px 11px;margin-left:6px;" onclick="crewMapsRoute('+(zi||0)+',\''+c+'\')" title="Open this crew\'s day as Google Maps directions — long routes split into 10-stop legs">🗺 Route in Google Maps</button>'
-    +'<button class="dev-btn" style="font-size:11px;padding:5px 11px;margin-left:6px;" onclick="hqPushCrewDay('+(zi||0)+',\''+c+'\')" title="Write the board\'s times to the sheet + Google Calendar and save the run order for the crew app">📅 Push to Google Calendar</button>':'');
+    +'<button class="dev-btn" style="font-size:11px;padding:5px 11px;margin-left:6px;" onclick="hqPushCrewDay('+(zi||0)+',\''+c+'\')" title="Write the board\'s times to the sheet + Google Calendar and save the run order for the crew app">📅 Push to Google Calendar</button>'
+    +((!zi)?'<button class="dev-btn" style="font-size:11px;padding:5px 11px;margin-left:6px;" onclick="hqOptimizeRun(\''+c+'\',\''+iso+'\','+(zi||0)+')" title="Re-order this crew\'s open stops for the shortest drive (nearest-neighbor + 2-opt on geocoded addresses)">⚡ Optimize run</button>':''):'');
   if(open){
     let st=480;
     h+='<div style="margin-top:5px;">'+jobs.map(function(b,i){
@@ -2748,6 +2749,98 @@ function _onCrewMoved(b,fromCrew,toCrew){
   fromCrew=String(fromCrew||'').toUpperCase().trim(); toCrew=String(toCrew||'').toUpperCase().trim();
   if(toCrew){ _placeJobOnRoute(b,toCrew,iso); _syncCrewRoute(toCrew,iso); }   // slot into the new crew's run + push to /field
   if(fromCrew) _rechainCrewRoute(fromCrew,iso);                                // old crew compacts left to close the gap
+}
+/* ── ⚡ OPTIMIZE RUN — HQ never optimized; the board just replays pushed order or
+   job times, which is how a 40-mile day becomes a 112-mile zigzag. This geocodes
+   the crew's open stops (Nominatim, cached per address), solves nearest-neighbor
+   + a 2-opt pass, and saves through the exact same path as a manual reorder. ── */
+let _hqGeo={}; try{ _hqGeo=JSON.parse(localStorage.getItem('hq_geo1')||'{}'); }catch(e){}
+async function _hqGeocode(addr){
+  const k=addr.toLowerCase().trim();
+  if(_hqGeo[k]!==undefined) return _hqGeo[k];
+  try{
+    const d=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q='+encodeURIComponent(addr)).then(function(r){ return r.json(); });
+    _hqGeo[k]=(d&&d[0])?{lat:+d[0].lat,lon:+d[0].lon}:null;
+  }catch(e){ return undefined; }   // network blip — don't cache the failure
+  try{ localStorage.setItem('hq_geo1',JSON.stringify(_hqGeo)); }catch(e){}
+  await new Promise(function(r){ setTimeout(r,1100); });   // Nominatim rate limit
+  return _hqGeo[k];
+}
+function _hqHav(a,b){ const R=3959,dLa=(b.lat-a.lat)*Math.PI/180,dLo=(b.lon-a.lon)*Math.PI/180; const x=Math.sin(dLa/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(x)); }
+function _hqRouteMiles(pts){ let m=0; for(let i=1;i<pts.length;i++) m+=_hqHav(pts[i-1],pts[i]); return m; }
+let _hqOptBusy=false;
+async function hqOptimizeRun(c,iso,zi){
+  if(_hqOptBusy) return; _hqOptBusy=true;
+  try{
+    const g=_dayJobsInOrder(c,iso);
+    if(g.length<3){ toast(g.length?'Too few stops to optimize':'No open stops'); return; }
+    toast('🧭 Locating '+g.length+' stops… (first run takes a few seconds)');
+    const pts=[];
+    for(const b of g){
+      const addr=(b.address||'')+(b.zip?', '+b.zip:'')+', FL';
+      const co=await _hqGeocode(addr);
+      pts.push({ b:b, co:co||null });
+    }
+    const ok=pts.filter(function(p){ return p.co; }), bad=pts.filter(function(p){ return !p.co; });
+    if(ok.length<3){ toast('📍 Couldn\'t locate enough addresses ('+bad.length+' failed) — fix them first'); return; }
+    // start point: crew's live GPS today, else the current first stop
+    let start=null;
+    if(iso===todayISO()){ const m=(_crews||[]).find(function(x){ const set=String(x.crew||'').toUpperCase().split(/[^A-Z0-9]+/); return set.indexOf(c)>=0&&x.lat!=null; }); if(m) start={lat:m.lat,lon:m.lon}; }
+    if(!start) start=ok[0].co;
+    // nearest neighbor
+    const rest=ok.slice(); const path=[]; let cur=start;
+    while(rest.length){ let bi=0,bd=1e9; rest.forEach(function(p,i){ const d=_hqHav(cur,p.co); if(d<bd){ bd=d; bi=i; } }); const nx=rest.splice(bi,1)[0]; path.push(nx); cur=nx.co; }
+    // 2-opt improvement
+    let improved=true, guard=0;
+    while(improved&&guard++<40){
+      improved=false;
+      for(let i=0;i<path.length-2;i++){ for(let j=i+2;j<path.length;j++){
+        const A=i===0?start:path[i-1].co, B=path[i].co, C=path[j].co, D=(j+1<path.length)?path[j+1].co:null;
+        const cur2=_hqHav(A,B)+(D?_hqHav(C,D):0), alt=_hqHav(A,C)+(D?_hqHav(B,D):0);
+        if(alt<cur2-0.05){ const seg=path.slice(i,j+1).reverse(); path.splice.apply(path,[i,seg.length].concat(seg)); improved=true; }
+      } }
+    }
+    const before=_hqRouteMiles([start].concat(pts.filter(function(p){return p.co;}).map(function(p){return p.co;})));
+    const after=_hqRouteMiles([start].concat(path.map(function(p){return p.co;})));
+    const finalJobs=path.map(function(p){ return p.b; }).concat(bad.map(function(p){ return p.b; }));   // unlocatable stops ride at the end
+    _dayApplyOrder(c,iso,finalJobs);
+    const pct=before>0?Math.max(0,Math.round((before-after)/before*100)):0;
+    toast('⚡ Optimized — ~'+after.toFixed(0)+' mi vs ~'+before.toFixed(0)+' mi ('+pct+'% shorter, straight-line)'+(bad.length?' · 📍 '+bad.length+' unlocatable at the end':''), 7000);
+  } finally { _hqOptBusy=false; }
+}
+// Apply a full new order — identical persist path to a manual reorder.
+function _dayApplyOrder(c,iso,g){
+  const rec=_dispRoute[iso]||(_dispRoute[iso]={times:{},order:{},loading:false,at:Date.now()});
+  let st=_dayStartMin(c,iso); const crewKey=(c==='un')?'':c;
+  rec.order[crewKey]=[]; rec.at=Date.now();
+  const jobs=[];
+  const stops=g.map(function(b,i){
+    if(i>0) st+=DRIVE_BUF;
+    const dur=_jobMins(b);
+    const hh=String(Math.floor(st/60)).padStart(2,'0'), mm=String(st%60).padStart(2,'0');
+    const key=_svKey(b);
+    rec.times[key]=hh+':'+mm; rec.order[crewKey].push(key);
+    b.jobTime=hh+':'+mm;
+    jobs.push(b);
+    const stop={ order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:iso, name:b.name||'', address:b.address||'', zip:b.zip||'', crew:crewKey, jobTime:hh+':'+mm };
+    st+=dur;
+    return stop;
+  });
+  renderDispatch();
+  const tk=c+'|'+iso;
+  clearTimeout(_dayPushTimers[tk]);
+  _dayPushTimers[tk]=setTimeout(async function(){
+    _dayPushTimers[tk]=null;
+    try{
+      const d=await fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'put_route', date:iso, crew:crewKey, stops:JSON.stringify(stops), updatedBy:myName||'Owner', idemKey:'hqopt:'+iso+':'+crewKey+':'+Date.now(), adminToken:token })).then(r=>r.json());
+      if(!(d&&d.success)){ toast('⚠ Could not save order'); return; }
+    }catch(e){ toast('⚠ Network error saving order'); return; }
+    for(let i=0;i<jobs.length;i++){
+      try{ await fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'set_job_time', rowIndex:_ri(jobs[i]), email:jobs[i].email||'', serviceDate:iso, jobTime:jobs[i].jobTime, adminToken:token })); }catch(e){}
+      await new Promise(function(r){ setTimeout(r,120); });
+    }
+    toast('📲 Optimized order saved — times locked in');
+  },800);
 }
 function dayMove(c,iso,idx,dir){
   const rec=_dispRoute[iso]||(_dispRoute[iso]={times:{},order:{},loading:false,at:Date.now()});
