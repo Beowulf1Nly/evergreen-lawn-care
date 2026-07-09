@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-09.1 */
-(function(){ var V='2026-07-09.1'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-09.2 */
+(function(){ var V='2026-07-09.2'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -3705,29 +3705,91 @@ function _hqRevCard(results){
       :'<text x="'+xx+'" y="'+(H-10)+'" text-anchor="middle" font-size="9.5" fill="rgba(255,255,255,.42)" font-family="ui-monospace,monospace">'+_xlbl(order[i])+'</text>'; }
   let hov='';
   const _fmtD=function(k2){ const d2=new Date(k2+'T12:00:00'); return isNaN(d2)?k2:d2.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); };
+  window._revTipD=[];
   order.forEach(function(k,i){
     const t=series.reduce(function(sm,sr){ return sm+sr.vals[i]; },0);
     const nj=series.reduce(function(sm,sr){ return sm+(sr.cnts[i]||0); },0);
-    const det=series.map(function(sr){ return esc(((sr.e||'')+' '+(sr.n||'')).trim())+': '+_fmtMoney(sr.vals[i])+' ('+(sr.cnts[i]||0)+' job'+((sr.cnts[i]||0)!==1?'s':'')+')'; }).join('&#10;');
     const endK=bw>1?new Date(new Date(k+'T12:00:00').getTime()+(bw-1)*864e5).toISOString().slice(0,10):null;
     const label=(bw>=30?'Month of ':bw===7?'Week of ':'')+_fmtD(k)+(endK?(' – '+_fmtD(endK)):'');
+    window._revTipD[i]='<div style="font-weight:800;margin-bottom:4px;">'+esc(label)+'</div>'
+      +'<div style="font-size:15px;font-family:var(--mono);font-weight:800;color:#4ade80;">'+_fmtMoney(t)+'</div>'
+      +'<div style="color:var(--muted);font-size:11px;margin-bottom:5px;">'+nj+' job'+(nj!==1?'s':'')+(nj?(' · avg '+_fmtMoney(t/nj)):'')+'</div>'
+      +series.map(function(sr){ return '<div style="display:flex;align-items:center;gap:6px;font-size:11.5px;"><span style="width:8px;height:8px;border-radius:2px;background:'+sr.c+';"></span>'+esc(((sr.e||'')+' '+(sr.n||'')).trim())+' <span style="margin-left:auto;font-family:var(--mono);">'+_fmtMoney(sr.vals[i])+' · '+(sr.cnts[i]||0)+'</span></div>'; }).join('');
     hov+='<g class="hv"><line x1="'+X(i).toFixed(1)+'" y1="'+T+'" x2="'+X(i).toFixed(1)+'" y2="'+(H-B)+'" stroke="rgba(255,255,255,.4)" stroke-dasharray="3 3"/>'
-      +'<rect x="'+(X(i)-((W-L-Rm)/Math.max(1,n-1))/2).toFixed(1)+'" y="'+T+'" width="'+((W-L-Rm)/Math.max(1,n-1)).toFixed(1)+'" height="'+(H-T-B)+'" fill="transparent"><title>'+label+'&#10;💵 '+_fmtMoney(t)+' earned · '+nj+' job'+(nj!==1?'s':'')+(nj?(' · avg '+_fmtMoney(t/nj)):'')+'&#10;'+det+'</title></rect></g>'; });
+      +'<rect x="'+(X(i)-((W-L-Rm)/Math.max(1,n-1))/2).toFixed(1)+'" y="'+T+'" width="'+((W-L-Rm)/Math.max(1,n-1)).toFixed(1)+'" height="'+(H-T-B)+'" fill="transparent" onmousemove="_revTipShow(event,'+i+')" onmouseleave="_revTipHide()"/></g>'; });
+  // ── every stat follows the selected period: quotes in → closed, plus deltas vs the prior window
+  const cutT=new Date(cut+'T00:00:00').getTime(), pcutT=new Date(pcut+'T00:00:00').getTime();
+  const _stampP=function(j){ let v=String(j.timestamp||dateOf(j)||''); if(/^\d{4}-\d{2}-\d{2}$/.test(v)) v+='T12:00:00'; const t2=new Date(v); return isNaN(t2)?NaN:t2.getTime(); };
+  let nq=0,ncl=0,nqP=0,nclP=0,newCust=0;
+  results.forEach(function(r){ if(r.locked||!r.st) return;
+    const _q=[],_rt={},_first={};
+    (r.books||[]).concat(r.jobs||[]).forEach(function(j){
+      if(j.rowCancelled) return; const em=String(j.email||'').toLowerCase().trim(); if(!em) return;
+      const t2=_stampP(j); if(isNaN(t2)) return;
+      if(_hqIsQuote(j)) _q.push({em:em,t:t2});
+      else { (_rt[em]=_rt[em]||[]).push(t2); if(_first[em]==null||t2<_first[em]) _first[em]=t2; }
+    });
+    const seenQ={};
+    _q.forEach(function(qq){
+      const inC=qq.t>=cutT, inP=qq.t>=pcutT&&qq.t<cutT; if(!inC&&!inP) return;
+      const dk=qq.em+(inC?'C':'P'); if(seenQ[dk]) return; seenQ[dk]=1;
+      const closed=(_rt[qq.em]||[]).some(function(t3){ return t3>=qq.t-172800000; });
+      if(inC){ nq++; if(closed) ncl++; } else { nqP++; if(closed) nclP++; }
+    });
+    Object.keys(_first).forEach(function(em){ if(_first[em]>=cutT) newCust++; });
+  });
+  const _pd=function(a,b3){ if(!(b3>0)) return ''; const p2=Math.round((a-b3)/b3*100); return p2>=0?' <span class="dev-pill g" style="font-size:10px;">▲'+p2+'%</span>':' <span class="dev-pill r" style="font-size:10px;">▼'+Math.abs(p2)+'%</span>'; };
+  const _pk=function(v,l){ return '<div style="flex:1;min-width:104px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:11px;padding:9px 11px;"><div style="font-size:17px;font-family:var(--mono);font-weight:800;">'+v+'</div><div style="font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-top:3px;">'+l+'</div></div>'; };
+  const periodStrip='<div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:10px;">'
+    +_pk(_fmtMoney(tot)+(_revPeriod!=='all'?_pd(tot,ptot):''),'Earned · '+_revPeriod)
+    +_pk(String(cur.length),'Jobs done')
+    +_pk(cur.length?_fmtMoney(tot/cur.length):'—','Avg ticket')
+    +_pk(String(nq)+(_revPeriod!=='all'?_pd(nq,nqP):''),'Quotes in')
+    +_pk(String(ncl)+(_revPeriod!=='all'?_pd(ncl,nclP):''),'Closed &amp; locked in')
+    +_pk(nq?Math.round(ncl/nq*100)+'%':'—','Close rate')
+    +_pk('+'+newCust,'New customers')
+    +'</div>';
   const svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block;margin-top:8px;"><style>g.hv line{opacity:0}g.hv:hover line{opacity:.5}</style><defs>'+defs+'</defs>'+grid+paint+hov+xl+'</svg>';
   const btn=function(p2,l2){ return '<button class="dev-btn'+(_revPeriod===p2?' go':'')+'" onclick="setRevPeriod(\''+p2+'\')">'+l2+'</button>'; };
   const legend=results.filter(function(r){ return !r.locked&&r.st; }).map(function(r){ return '<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px;font-size:11px;color:var(--muted);"><span style="width:9px;height:9px;border-radius:3px;background:'+esc((r.z&&r.z.c)||'#22c55e')+';box-shadow:0 0 8px '+esc((r.z&&r.z.c)||'#22c55e')+';"></span>'+esc(((r.z&&r.z.e)||'')+' '+((r.z&&r.z.n)||''))+'</span>'; }).join('');
-  return '<div class="dev-card" id="revChartCard" style="grid-column:1/-1;"><div class="dev-h">📈 Revenue<span class="grow"></span><span style="display:flex;gap:6px;">'+btn('7d','7d')+btn('30d','30d')+btn('90d','90d')+btn('1yr','1 yr')+btn('all','All')+'</span></div><div class="dev-b">'
+  return '<div class="dev-card" id="revChartCard" style="grid-column:1/-1;position:relative;"><div class="dev-h">📈 Revenue<span class="grow"></span><span style="display:flex;gap:6px;">'+btn('7d','7d')+btn('30d','30d')+btn('90d','90d')+btn('1yr','1 yr')+btn('all','All')+'</span></div><div class="dev-b">'
     +'<div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;">'
     +'<span style="font-size:38px;font-family:var(--mono);font-weight:800;background:linear-gradient(180deg,#fff,#4ade80);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">'+_fmtMoney(tot)+'</span>'
     +(delta==null?'':(delta>=0?'<span class="dev-pill g">▲ '+delta+'% vs prior '+_revPeriod+'</span>':'<span class="dev-pill r">▼ '+Math.abs(delta)+'% vs prior '+_revPeriod+'</span>'))
     +'<span style="color:var(--dim);font-size:12px;">'+cur.length+' paid-out jobs · avg '+_fmtMoney(cur.length?tot/cur.length:0)+'</span>'
     +'<span class="grow"></span>'+legend
-    +'</div>'+svg+'</div></div>';
+    +'</div>'+svg+periodStrip
+    +'<div id="revTip" style="display:none;position:absolute;z-index:40;background:#0b1524;border:1px solid rgba(255,255,255,.18);border-radius:11px;padding:10px 12px;min-width:190px;box-shadow:0 10px 34px rgba(0,0,0,.5);pointer-events:none;"></div>'
+    +'</div></div>';
 }
+// live chart tooltip — follows the cursor, no hover delay
+function _revTipShow(ev,i){
+  const card=document.getElementById('revChartCard'); const tip=card&&card.querySelector('#revTip');
+  if(!tip||!window._revTipD||!window._revTipD[i]) return;
+  tip.innerHTML=window._revTipD[i]; tip.style.display='block';
+  const r=card.getBoundingClientRect();
+  let x=ev.clientX-r.left+14, y=ev.clientY-r.top-10;
+  if(x+210>r.width) x=x-234;
+  tip.style.left=x+'px'; tip.style.top=y+'px';
+}
+function _revTipHide(){ const t=document.querySelector('#revTip'); if(t) t.style.display='none'; }
 function _hqPaidJob(j){
   const s=(String(j.payMethod||'')+' '+String(j.calendarEvent||'')).toLowerCase();
   if(s.indexOf('not paid')>=0||s.indexOf('unpaid')>=0||s.indexOf('pending')>=0) return false;
   return s.indexOf('✅')>=0||s.indexOf('autopay')>=0||s.indexOf('auto-pay')>=0||s.indexOf('cash')>=0||s.indexOf('paid')>=0;
+}
+// ✕ write-off: stamps the archive row waived (backend) + drops it locally
+async function hqWaiveOwed(oi){
+  const o=(window._owedReg||[])[oi]; if(!o) return;
+  if(!confirm('✕ Write off '+_fmtMoney(o.a)+' owed by '+(o.n||'?')+' ('+o.d+')?\n\nUse for duplicate invoices, comps, or junk rows — it stamps the archived job as waived so it stops counting as owed. This does NOT touch Stripe.')) return;
+  const ut=_bizUT(o.zi||0);
+  try{
+    const d=await fetch(ut.u+'?'+new URLSearchParams({ action:'owner_waive_owed', email:o.em||'', serviceDate:o.d, amount:String(o.a), adminToken:ut.t })).then(function(r){ return r.json(); });
+    if(!(d&&d.success)){ toast('⚠ '+((d&&d.error)||'Write-off failed — backend redeploy needed?')); return; }
+  }catch(e){ toast('⚠ Network error — not written off'); return; }
+  try{ if(o._j) o._j.payMethod=String(o._j.payMethod||'')+' · ✅ Waived'; }catch(e){}
+  toast('✕ Written off — '+(o.n||'')+' '+_fmtMoney(o.a));
+  renderStats(false);
 }
 function _hqMoneyBoard(results){
   const k=function(v,l,acc){ return '<div><div style="font-size:25px;font-family:var(--mono);font-weight:800;line-height:1;'+(acc||'')+'">'+v+'</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:700;margin-top:5px;">'+l+'</div></div>'; };
@@ -3738,7 +3800,7 @@ function _hqMoneyBoard(results){
     const z=r.z;
     let coll=0,owed=0,owedN=0;
     const _owCut=new Date(Date.now()-90*864e5).toISOString().slice(0,10);   // debts older than 90d are archive noise, not AR
-    (r.jobs||[]).forEach(function(j){ const a=amtOf(j); if(!a||j.rowCancelled) return; if(_hqPaidJob(j)){ coll+=a; } else if(String(dateOf(j)||'')>=_owCut){ owed+=a; owedN++; owes.push({n:j.name||'?',a:a,d:String(dateOf(j)||''),z:z}); } });
+    (r.jobs||[]).forEach(function(j){ const a=amtOf(j); if(!a||j.rowCancelled) return; if(_hqPaidJob(j)){ coll+=a; } else if(String(dateOf(j)||'')>=_owCut){ owed+=a; owedN++; owes.push({n:j.name||'?',a:a,d:String(dateOf(j)||''),z:z,zi:results.indexOf(r),em:String(j.email||'').toLowerCase().trim(),_j:j}); } });
     const plans=_hqActivePlans(r.books||[]);
     let mrr=0;
     plans.forEach(function(bk){ const mv=_hqPlanPrice(bk)*(30/_hqPlanInterval(String(bk.frequency||'').toLowerCase())); mrr+=mv; custAll.push({n:bk.name||'?',plan:bk.frequency||'',p:_hqPlanPrice(bk),m:mv,z:z}); });
@@ -3767,8 +3829,8 @@ function _hqMoneyBoard(results){
   });
   h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-top:12px;">';
   h+='<div><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#f87171;margin-bottom:6px;">🧾 Who owes money — '+owes.length+' unpaid job'+(owes.length!==1?'s':'')+' · '+_fmtMoney(T.owed)+' <span style="color:var(--dim);text-transform:none;letter-spacing:0;">(completed-jobs archive, last 90 days)</span></div>'
-    +(owes.length?('<div style="max-height:280px;overflow:auto;"><table class="dev-tbl"><tr><th>customer</th><th>biz</th><th>date</th><th style="text-align:right;">owes</th></tr>'
-      +owes.slice(0,100).map(function(o){ return '<tr><td>'+esc(o.n)+'</td><td>'+esc(o.z.e||'')+'</td><td>'+esc(o.d)+'</td><td style="text-align:right;color:#f87171;font-weight:800;">'+_fmtMoney(o.a)+'</td></tr>'; }).join('')+'</table></div>')
+    +(owes.length?('<div style="max-height:280px;overflow:auto;"><table class="dev-tbl"><tr><th>customer</th><th>biz</th><th>date</th><th style="text-align:right;">owes</th><th></th></tr>'
+      +owes.slice(0,100).map(function(o,oi){ window._owedReg=window._owedReg||[]; window._owedReg[oi]=o; return '<tr><td>'+esc(o.n)+'</td><td>'+esc(o.z.e||'')+'</td><td>'+esc(o.d)+'</td><td style="text-align:right;color:#f87171;font-weight:800;">'+_fmtMoney(o.a)+'</td><td style="text-align:right;"><button onclick="hqWaiveOwed('+oi+')" title="Write this off — duplicate invoice, comp, bad row. Stamps the archive row as waived." style="background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.4);color:#f87171;border-radius:7px;padding:2px 8px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">✕</button></td></tr>'; }).join('')+'</table></div>')
       :'<div class="dev-row" style="color:#4ade80;">Everyone\'s paid up 🟢</div>')
     +'</div>';
   h+='<div><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px;">👥 Active recurring customers — '+custAll.length+' · '+_fmtMoney(T.mrr)+'/mo</div>'
@@ -3878,12 +3940,7 @@ async function renderStats(force){
   h+=(function(){ const all=[].concat.apply([],results.map(function(r){ return r.books||[]; })); return all.length?('<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px;">'+_hqProjLine(all,'Projected recurring — all businesses')+'</div>'):''; })();
   h+='</div></div>';
   h+=_hqRevCard(results);
-  h+='<div class="dev-card"><div class="dev-h">🔻 This week — visits → quotes → closed</div><div class="dev-b">'
-    +'<div class="dev-row">👀 Site visits <b>'+E.twv+'</b>'+_delta(E.twv,E.lwv)+'</div>'
-    +'<div class="dev-row">📋 New quotes <b>'+E.nq+'</b>'+_delta(E.nq,E.nqL)+'</div>'
-    +'<div class="dev-row">🤝 Closed &amp; locked in <b>'+E.ncl+'</b>'+_delta(E.ncl,E.nclL)+(E.nq>0?' · <span class="dev-pill '+(Math.round(E.ncl/E.nq*100)>=40?'g':'y')+'">'+Math.round(E.ncl/E.nq*100)+'% close rate</span>':'')+'</div>'
-    +'<div class="dev-row" style="color:var(--dim);font-size:11.5px;">quotes = customers quoted this week · closed = those who now have a real booking on/after their quote</div>'
-    +'</div></div>';
+  // (funnel lives under the revenue chart now, bound to the 7d/30d/90d/1yr/all period)
   const crewSorted=Object.keys(crewBoard).sort(function(a,b){return crewBoard[b]-crewBoard[a];}).slice(0,6);
   h+='<div class="dev-card"><div class="dev-h">🏆 Crew — jobs completed</div><div class="dev-b">'
     +(crewSorted.length?crewSorted.map(function(nm){ const mx=crewBoard[crewSorted[0]]||1; return '<div class="dev-row" style="align-items:center;gap:9px;"><span style="flex:0 0 100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(nm)+'</span><span style="flex:1;height:9px;background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden;"><span style="display:block;height:100%;width:'+Math.round(crewBoard[nm]/mx*100)+'%;background:#22c55e;"></span></span><b style="flex:0 0 32px;text-align:right;font-family:var(--mono);">'+crewBoard[nm]+'</b></div>'; }).join(''):'<div class="dev-row" style="color:var(--dim);">No crew job data yet.</div>')
