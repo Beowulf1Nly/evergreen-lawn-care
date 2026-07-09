@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.35 */
+/* APP_VER:2026-07-08.34 */
 (function(){
-  var V='2026-07-08.35'; window.__APP_VER=V;
+  var V='2026-07-08.34'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -2529,7 +2529,7 @@ function qjRefresh(){
 function qjPriceVal(){
   const o=parseFloat((document.getElementById('qjPriceOverride')||{}).value);
   if(o>0) return Math.round(o);
-  const p=_qjPkgPrice(_qj.pkg);
+  const p=_qjCalcPrice();
   return p==null?0:Math.round(p);
 }
 async function qjOutcome(kind){
@@ -2618,25 +2618,7 @@ const QJ_TIERS=[
   {key:'xl',label:'1+ acre',price:null}
 ];
 const QJ_PRICING={ half:49, threequarter:65, one:79, xl:null };
-let _qj={tier:'half',freq:'onetime',overgrown:false,ogFee:49,promo:false,promoPrice:19,pkg:'better',pkgP:{}};
-// Good / Better / Best service packages — deltas ride on top of the yard-size
-// price; the crew can hand-edit any package's price on the card.
-const QJ_PKGS=[
- { key:'good',   label:'🥉 Good',   delta:0,  blurb:'Mow · weed-whack · leaf blow',
-   items:['Full mow at the right height for Florida grass','Weed-whacking around fences, trees & beds','Every clipping blown clear — driveway, walkways & porch'] },
- { key:'better', label:'🥈 Better', delta:5,  blurb:'+ crisp edging',
-   items:['Full mow at the right height for Florida grass','Weed-whacking around fences, trees & beds','Crisp blade edging — driveways, sidewalks & curbs','Every clipping blown clear — driveway, walkways & porch'] },
- { key:'best',   label:'🥇 Best',   delta:15, blurb:'+ weed control (bed spray)',
-   items:['Full mow at the right height for Florida grass','Weed-whacking around fences, trees & beds','Crisp blade edging — driveways, sidewalks & curbs','Weed control — beds sprayed every visit','Every clipping blown clear — driveway, walkways & porch'] }
-];
-function _qjPkg(){ return QJ_PKGS.find(function(p){ return p.key===_qj.pkg; })||QJ_PKGS[1]; }
-function _qjPkgPrice(key){
-  const base=_qjCalcPrice(); if(base==null) return null;
-  const pk=QJ_PKGS.find(function(p){ return p.key===key; });
-  return (_qj.pkgP[key]>0)?_qj.pkgP[key]:base+(pk?pk.delta:0);
-}
-function qjPkgSet(k){ _qj.pkg=k; qjRefresh(); }
-function qjPkgPriceInput(k,el){ const v=parseFloat(el.value); _qj.pkgP[k]=(v>0)?Math.round(v):0; const sh=document.getElementById('qjPriceShow'); if(sh&&_qj.pkg===k) sh.textContent='$'+qjPriceVal(); }
+let _qj={tier:'half',freq:'onetime',overgrown:false,ogFee:49,promo:false,promoPrice:19};
 function qjSet(k,v){ _qj[k]=v; qjRefresh(); }
 function qjRecTgl(){ _qj.freq=(_qj.freq==='onetime')?'weekly':'onetime'; qjRefresh(); }
 function qjOgTgl(){ _qj.overgrown=!_qj.overgrown; if(_qj.overgrown) _qj.promo=false; qjRefresh(); }
@@ -2647,7 +2629,7 @@ function qjOgFeeInput(el){ const v=parseFloat(el.value); _qj.ogFee=(v>0?v:0); }
 function qjFeeDone(){ qjRefresh(); }
 function _qjCalcPrice(){ return QJ_PRICING[_qj.tier]; }
 function _qjFreqLabel(){ return _qj.freq==='weekly'?'Weekly Plan':_qj.freq==='biweekly'?'Bi-Weekly Plan':'One-time'; }
-function _qjDesc(){ const t=QJ_TIERS.find(x=>x.key===_qj.tier); const pk=_qjPkg(); return (t?t.label:'yard')+' — '+_qjFreqLabel()+' mowing · '+pk.label.replace(/^\S+\s/,'')+' package ('+pk.blurb.replace('+ ','incl. ')+')'; }
+function _qjDesc(){ const t=QJ_TIERS.find(x=>x.key===_qj.tier); return (t?t.label:'yard')+' — '+_qjFreqLabel()+' mowing'; }
 function qjRenderBuilder(){
   const b=document.getElementById('qjBuilder'); if(!b) return;
   const check=(on,round)=>'<span style="width:23px;height:23px;border-radius:'+(round?'50%':'7px')+';border:2px solid '+(on?'#16a34a':'#cbd5e1')+';background:'+(on?'#16a34a':'#fff')+';color:#fff;font-size:15px;line-height:20px;text-align:center;flex-shrink:0;font-weight:800;">'+(on?'✓':'')+'</span>';
@@ -2660,16 +2642,6 @@ function qjRenderBuilder(){
     +'<div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 7px;">Schedule</div>'
     +row(recurring,'🔁 Recurring service — repeats on a schedule','',"qjRecTgl()")
     +(recurring?('<div style="display:flex;gap:7px;margin-bottom:7px;">'+seg('weekly','Weekly')+seg('biweekly','Bi-Weekly')+'</div>'):'')
-    +'<div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 7px;">Package — good · better · best</div>'
-    +QJ_PKGS.map(function(pk){
-      const on=_qj.pkg===pk.key; const pv=_qjPkgPrice(pk.key);
-      return '<div onclick="qjPkgSet(\''+pk.key+'\')" style="display:flex;align-items:center;gap:11px;padding:11px 13px;border:1.5px solid '+(on?'#16a34a':'#e2e8f0')+';border-radius:12px;background:'+(on?'#f0fdf4':'#fff')+';margin-bottom:7px;cursor:pointer;">'
-        +check(on,true)
-        +'<span style="flex:1;"><span style="font-size:14px;font-weight:800;">'+pk.label+'</span><span style="display:block;font-size:11.5px;color:#64748b;font-weight:600;">'+pk.blurb+'</span></span>'
-        +(pv!=null?('<span onclick="event.stopPropagation();" style="display:inline-flex;align-items:center;gap:3px;font-size:14px;font-weight:800;color:#15803d;">$<input type="number" inputmode="decimal" value="'+pv+'" oninput="qjPkgPriceInput(\''+pk.key+'\',this)" onclick="event.stopPropagation();" style="width:62px;padding:7px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;font-weight:800;text-align:center;font-family:inherit;"></span>')
-        :'<span style="font-size:12px;font-weight:800;color:#b45309;">set price</span>')
-        +'</div>';
-    }).join('')
     +'<div onclick="qjSrcTgl()" style="display:flex;align-items:center;gap:11px;padding:11px 13px;border:1.5px solid '+(_qjSourced?'#f59e0b':'#e2e8f0')+';border-radius:12px;background:'+(_qjSourced?'#fffbeb':'#fff')+';margin:10px 0 4px;cursor:pointer;">'
     +'<span style="width:23px;height:23px;border-radius:7px;border:2px solid '+(_qjSourced?'#f59e0b':'#cbd5e1')+';background:'+(_qjSourced?'#f59e0b':'#fff')+';color:#fff;font-size:15px;line-height:20px;text-align:center;flex-shrink:0;font-weight:800;">'+(_qjSourced?'✓':'')+'</span>'
     +'<span style="flex:1;font-size:14px;font-weight:700;">💰 We found this lead ourselves <span style="font-size:11px;color:#94a3b8;font-weight:800;">'+(_qjSourced?'80% commission':'40% — office lead')+'</span></span></div>'
@@ -2683,13 +2655,13 @@ function qjRenderBuilder(){
     +(_qj.tier==='xl'?'<div style="font-size:12.5px;color:#b45309;font-weight:700;margin-top:6px;">🔒 1+ acre — set the price in the adjust box. The estimate goes to the owner for approval before it emails the customer.</div>':'')
     +(recurring&&_qj.tier!=='xl'?'<div style="font-size:11.5px;color:#64748b;margin-top:8px;">💡 First-mow promo: $19 (up to ½ ac) · $29 (larger) — mention it!</div>':'');
   (function(){
-    let items=_qjPkg().items.slice();
+    let items=['Full mow at the right height for Florida grass','Trim & edge — fences, beds, driveways, sidewalks','Every clipping cleared — driveway, walkways & porch'];
     if(_qj.overgrown) items.push('First-cut overgrowth recovery (+$'+(Math.round(_qj.ogFee)||0)+' — first cut only)');
     if(_qj.promo&&_qj.tier!=='xl') items.push('🏷 First mow just $'+(Math.round(_qj.promoPrice)||0)+' — then plan price');
     b.innerHTML+='<div style="margin:14px 0 4px;padding:12px 14px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;">'
       +'<div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">📋 What\'s included at this price</div>'
       +items.map(function(x){ return '<div style="font-size:13px;line-height:1.85;"><span style="color:#16a34a;font-weight:800;">✓</span> '+x+'</div>'; }).join('')
-      +'<div style="font-size:11.5px;color:#64748b;margin-top:5px;">Everything above on every visit — no add-ons, no surprises.</div></div>';
+      +'<div style="font-size:11.5px;color:#64748b;margin-top:5px;">All three on every visit — no add-ons, no surprises.</div></div>';
   })();
   // 1+ acre gate: Book It locked — owner reviews & sends the estimate instead
   const bb=document.getElementById('qjBookBtn'), eb=document.getElementById('qjEstBtn');
