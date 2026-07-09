@@ -8895,6 +8895,8 @@ async function scanAndSaveLotSize(rowIdx, lat, lon, btnEl) {
     const params = new URLSearchParams({
       action:    'owner_update_booking',
       rowIndex:  bk._rowIndex || (rowIdx + 2),
+      matchEmail: String(bk.email||'').toLowerCase().trim(),
+      matchDate:  dateOf(bk),
       notes:     newNotes,
       address:   bk.address || '',
       zip:       bk.zip || '',
@@ -8939,6 +8941,7 @@ async function devScanAllLots(btnEl) {
     try {
       const p = new URLSearchParams({
         action:'owner_update_booking', rowIndex:bk._rowIndex||(rowIdx+2),
+        matchEmail:String(bk.email||'').toLowerCase().trim(), matchDate:dateOf(bk),
         notes:bk.notes, address:bk.address||'', zip:bk.zip||'',
         email:bk.email||'', name:bk.name||'', adminToken
       });
@@ -9497,6 +9500,7 @@ async function buildRoute() {
             const ri = allBookings.indexOf(bk);
             const p = new URLSearchParams({
               action:'owner_update_booking', rowIndex:bk._rowIndex||(ri+2),
+              matchEmail:String(bk.email||'').toLowerCase().trim(), matchDate:dateOf(bk),
               notes:bk.notes, address:bk.address||'', zip:bk.zip||'', email:bk.email||'',
               name:bk.name||'', adminToken
             });
