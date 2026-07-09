@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-08.24 */
-(function(){ var V='2026-07-08.24'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-08.25 */
+(function(){ var V='2026-07-08.25'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -2254,9 +2254,45 @@ function _econParts(c,jobs,zi){
   else tgtH=(pctC<=50)?Infinity:0;                                        // commission-only crew: margin is fixed by the %
   return { R:R, estM:estM, rate:rate, pctC:pctC, tgtH:tgtH, estProfit:estProfit, pct:pct, days:Object.keys(byD).length, qN:qN };
 }
+// 📊 Pay Log hours for the visible range — the weekly ACTUAL strip divides week
+// revenue by WEEK hours from Pay Log (the live bracket only knows today).
+let _payHrs={key:'',rows:null,at:0,loading:''};
+function _rangePayHrs(c,zi,from,to){
+  if(zi) return 0;                                        // Pay Log lives on the main backend
+  const key=from+'|'+to;
+  if((_payHrs.key!==key||Date.now()-_payHrs.at>120000)&&_payHrs.loading!==key){
+    _payHrs.loading=key;
+    fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'get_pay_hours', from:from, to:to, adminToken:token })).then(function(r){ return r.json(); }).then(function(d){
+      _payHrs.loading='';
+      if(d&&d.success){ _payHrs={key:key,rows:d.rows||[],at:Date.now(),loading:''}; if(_activeTab==='dispatch') renderDispatch(); }
+    }).catch(function(){ _payHrs.loading=''; });
+  }
+  if(_payHrs.key!==key||!_payHrs.rows) return 0;
+  const cp=_crewPayFor(0,c);
+  const names=((cp&&cp.who)||[]).map(function(n){ return String(n).toLowerCase().trim(); });
+  if(!names.length) return 0;
+  return _payHrs.rows.reduce(function(sm,r){ return sm+(names.indexOf(String(r.name||'').toLowerCase().trim())>=0?(r.hrs||0):0); },0);
+}
 // 🕐 Owner fix for a wrong clock-out — rewrites the LiveStatus bracket + Pay Log
 // hours server-side, then the ACTUAL strip and Pay - This Week both agree.
-async function fixClockOut(c){
+async function fixClockOut(c,iso){
+  iso=iso||todayISO();
+  const isToday=(iso===todayISO());
+  if(!isToday){
+    // Past day: the live bracket is long gone — this corrects that day's Pay Log hours.
+    const cp=_crewPayFor(0,c); const who=((cp&&cp.who)||[]);
+    let nm2=who.length===1?who[0]:prompt('Fix hours for who on '+iso+'?\n'+(who.length?who.map(function(n,i){ return (i+1)+'. '+n; }).join('\n')+'\n\nEnter the number, or type a name:':'Type the name exactly as it appears in Pay Log:'));
+    if(!nm2) return;
+    const ix2=parseInt(nm2)-1; if(who.length&&ix2>=0&&ix2<who.length) nm2=who[ix2];
+    const hv=prompt('Hours '+nm2+' actually worked on '+iso+'? (e.g. 8 or 8.5)');
+    if(!hv) return; const hn=parseFloat(hv);
+    if(!(hn>0&&hn<=24)){ toast('Hours must be 0–24'); return; }
+    if(!confirm('⚠ Set '+nm2+"'s "+iso+' Pay Log hours to '+hn+'h (replacing what\'s there)?')) return;
+    const d=await fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'owner_fix_clockout', targetName:nm2, date:iso, hours:String(hn), adminToken:token }).toString()).then(function(r){ return r.json(); }).catch(function(){ return null; });
+    if(d&&d.success){ toast('🕐 '+nm2+' → '+d.hours+'h on '+iso); setTimeout(function(){ try{ renderDispatch(); }catch(e){} },700); }
+    else toast('⚠ '+((d&&d.error)||'Fix failed — backend redeploy needed'));
+    return;
+  }
   const members=(_crews||[]).filter(function(x){ const set=String(x.crew||'').toUpperCase().split(/[^A-Z0-9]+/); return set.indexOf(c)>=0; });
   if(!members.length){ toast('No clock data for Crew '+c+' today'); return; }
   let pick=members[0];
@@ -2274,7 +2310,7 @@ async function fixClockOut(c){
   const _ciStr=(_ciD&&!isNaN(_ciD))?_t12(_ciD.getHours()*60+_ciD.getMinutes()):'?';
   const _hrs=(_ciD&&!isNaN(_ciD))?Math.max(0,((_newMin*60000+new Date(new Date().toDateString()).getTime())-_ciD.getTime())/3600000).toFixed(1):'?';
   if(!confirm('⚠ Confirm clock-out fix\n\n'+(pick.name||pick.email)+'\nClocked in: '+_ciStr+'\nNew clock-out: '+_t12(_newMin)+'\n≈ '+_hrs+'h will be written to today\'s Pay Log row (replacing what\'s there) and the day\'s actual-profit math.\n\nThis is TODAY only. Proceed?')) return;
-  const d=await fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'owner_fix_clockout', targetEmail:pick.email, date:todayISO(), time:('0'+m2[1]).slice(-2)+':'+m2[2], adminToken:token }).toString()).then(function(r){ return r.json(); }).catch(function(){ return null; });
+  const d=await fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'owner_fix_clockout', targetEmail:pick.email, targetName:(pick.name||''), date:iso, time:('0'+m2[1]).slice(-2)+':'+m2[2], adminToken:token }).toString()).then(function(r){ return r.json(); }).catch(function(){ return null; });
   if(d&&d.success){ toast('🕐 '+(d.name||'')+' → out at '+t+(d.hours?(' · '+d.hours+'h in Pay Log'):'')); try{ refreshStatus(); }catch(e){} setTimeout(function(){ try{ renderDispatch(); }catch(e){} },900); }
   else toast('⚠ '+((d&&d.error)||'Fix failed — this needs the backend redeploy'));
 }
@@ -2307,7 +2343,8 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
     if(_finMin==null) _finMin=_startMin+p.estM;
     var _shF=(typeof _crewShift==='function')?_crewShift(c):null;
     if(_allDone){ finishHtml=' · 🏁 <span class="dev-pill g">shift complete ✓</span>'; }
-    else if(_shF&&!_shF.active&&_shF.clockOut){ finishHtml=' · 🏁 <span class="dev-pill" style="cursor:pointer;" title="Wrong time? Tap to fix the clock-out (updates hours + actual profit)" onclick="fixClockOut(\''+c+'\')">clocked out '+_t12(_shF.clockOut.getHours()*60+_shF.clockOut.getMinutes())+' ✏</span>'; }
+    else if(iso===todayISO()&&_shF&&!_shF.active&&_shF.clockOut){ finishHtml=' · 🏁 <span class="dev-pill" style="cursor:pointer;" title="Wrong time? Tap to fix the clock-out (updates hours + actual profit)" onclick="fixClockOut(\''+c+'\',\''+iso+'\')">clocked out '+_t12(_shF.clockOut.getHours()*60+_shF.clockOut.getMinutes())+' ✏</span>'; }
+    else if(iso!==todayISO()){ finishHtml=' · <span class="dev-pill" style="cursor:pointer;" title="Correct this day\'s Pay Log hours" onclick="fixClockOut(\''+c+'\',\''+iso+'\')">🕐 fix hours ✏</span>'; }
     else {
       const _late=_finMin>1140, _fh=Math.floor(_finMin/60)%24, _fm=Math.round(_finMin)%60;
       finishHtml=' · 🏁 shift done ~<b style="color:'+(_late?'#f87171':'inherit')+'">'+((_fh%12)||12)+':'+String(_fm).padStart(2,'0')+(_fh<12?' AM':' PM')+'</b>'
@@ -2323,7 +2360,7 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
     if(_shL&&!_shL.active&&_shL.clockOut&&w>0){
       const _dayView=(_dispView!=='week'&&_dispView!=='month');
       live=' · ⏱ worked <b>'+w.toFixed(1)+'h</b> '+(_dayView
-        ?'<span class="dev-pill" style="cursor:pointer;" title="Wrong time? Tap to fix the clock-out (updates hours + actual profit)" onclick="fixClockOut(\''+c+'\')">✅ clocked out '+_t12(_shL.clockOut.getHours()*60+_shL.clockOut.getMinutes())+' ✏</span>'
+        ?'<span class="dev-pill" style="cursor:pointer;" title="Wrong time? Tap to fix the clock-out (updates hours + actual profit)" onclick="fixClockOut(\''+c+'\',\''+iso+'\')">✅ clocked out '+_t12(_shL.clockOut.getHours()*60+_shL.clockOut.getMinutes())+' ✏</span>'
         :'<span class="dev-pill">✅ clocked out '+_t12(_shL.clockOut.getHours()*60+_shL.clockOut.getMinutes())+'</span>');
     } else if(w>0){
       if(isFinite(p.tgtH)){ const diff=p.tgtH-w;
@@ -2343,11 +2380,19 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
     if(doneJobs.length){
       const Rd=doneJobs.reduce(function(s2,b){ return s2+amtOf(b); },0);
       const _dayV=(_dispView!=='week'&&_dispView!=='month');
-      const w=(_dayV&&iso===todayISO()&&zi===0)?_crewWorkedHrs(c):0;   // hours only pair with SAME-DAY revenue
+      let w=0, wlbl=' on the clock so far';
+      if(_dayV&&iso===todayISO()&&zi===0){ w=_crewWorkedHrs(c); }
+      else if(!_dayV&&zi===0){
+        // weekly: real hours from Pay Log for the visible Sun–Sat
+        const st0=new Date(_dispAnchor); st0.setDate(st0.getDate()-st0.getDay());
+        const en0=new Date(st0); en0.setDate(st0.getDate()+6);
+        const f=function(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+        w=_rangePayHrs(c,zi,f(st0),f(en0)); wlbl=' logged this week (Pay Log)';
+      }
       let mid='';
       if(w>0){
         const cost=w*p.rate+Rd*(p.pctC/100), prof=Rd-cost, mp=Rd>0?Math.round(prof/Rd*100):0;
-        mid=' · ⏱ <b>'+w.toFixed(1)+'h</b> on the clock so far · 💰 <b style="color:'+(mp>=50?'#34d399':'#fbbf24')+'">$'+Math.round(prof)+'</b> actual profit <span class="dev-pill '+(mp>=50?'g':'y')+'">'+mp+'% actual margin</span>';
+        mid=' · ⏱ <b>'+w.toFixed(1)+'h</b>'+wlbl+' · 💰 <b style="color:'+(mp>=50?'#34d399':'#fbbf24')+'">$'+Math.round(prof)+'</b> actual profit <span class="dev-pill '+(mp>=50?'g':'y')+'">'+mp+'% actual margin</span>';
       }
       act='<div class="st-econ" style="border-left:3px solid #34d399;">✅ <b>ACTUAL</b> · 💵 <b>$'+Rd.toFixed(0)+'</b> made · <b>'+doneJobs.length+'/'+_jNQ.length+'</b> done'+mid+'</div>';
     }
