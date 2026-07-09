@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-09.9 */
-(function(){ var V='2026-07-09.9'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-09.10 */
+(function(){ var V='2026-07-09.10'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -2070,9 +2070,9 @@ function renderDispatch(){
           const _watched=(Date.now()-(window._dispWatchTs||0))<180000;
           window._dispWatchTs=Date.now();
           let _pins={}, _seenOpen={}, _curT={};
-          try{ _pins=JSON.parse(localStorage.getItem('hq_dp3_'+iso)||'{}'); }catch(e){}
-          try{ _seenOpen=JSON.parse(localStorage.getItem('hq_ds3_'+iso)||'{}'); }catch(e){}
-          try{ _curT=JSON.parse(localStorage.getItem('hq_dc3_'+iso)||'{}'); }catch(e){}
+          try{ _pins=JSON.parse(localStorage.getItem('hq_dp4_'+iso)||'{}'); }catch(e){}
+          try{ _seenOpen=JSON.parse(localStorage.getItem('hq_ds4_'+iso)||'{}'); }catch(e){}
+          try{ _curT=JSON.parse(localStorage.getItem('hq_dc4_'+iso)||'{}'); }catch(e){}
           let _liveCur=_pmcsEn, _anyPlaced=false;
           evs.forEach(function(ev){
             if(!isDone(ev.b)) return;
@@ -2081,14 +2081,18 @@ function renderDispatch(){
             else if(_curT[_k]!=null){ ev.st=Math.min(_curT[_k],_nowM-1); ev.en=_watched?Math.max(_nowM,ev.st+5):Math.min(_nowM,ev.st+_d); _pins[_k]={s:ev.st,e:ev.en}; }   // watched live: real span · gap: estimate from its start
             else if(_seenOpen[_k]){ const _st=Math.min(_liveCur+(_anyPlaced?_dv:0),_nowM-5); ev.st=_st; ev.en=_watched?Math.max(_nowM,_st+5):Math.min(_nowM,_st+_d); _pins[_k]={s:ev.st,e:ev.en}; }
             else { const _st=_liveCur+(_anyPlaced?_dv:0); ev.st=_st; ev.en=_st+_d; _pins[_k]={s:ev.st,e:ev.en}; }               // first sight already done — estimate once, then frozen
+            // ⛑ sanity clamp: a stale on-deck timestamp (crew skipped around) can claim a 30-min
+            // yard ran 9 hours. Keep the END (the flip really happened then), pull the start in.
+            const _cap=Math.round(_d*1.5)+15;
+            if(ev.en-ev.st>_cap){ ev.st=ev.en-_cap; _pins[_k]={s:ev.st,e:ev.en}; }
             _liveCur=Math.max(_liveCur,ev.en); _anyPlaced=true;
           });
           evs.forEach(function(ev){ if(!isDone(ev.b)) _seenOpen[_svKey(ev.b)]=1; });
           try{
-            localStorage.setItem('hq_dp3_'+iso,JSON.stringify(_pins));
-            localStorage.setItem('hq_ds3_'+iso,JSON.stringify(_seenOpen));
-            localStorage.setItem('hq_dc3_'+iso,JSON.stringify(_curT));
-            for(let _li=localStorage.length-1;_li>=0;_li--){ const _lk=localStorage.key(_li); if(!_lk) continue; if(/^hq_dpins_|^hq_dseen_|^hq_dp2_|^hq_ds2_|^hq_dc2_/.test(_lk)){ localStorage.removeItem(_lk); continue; } if(/^hq_dp3_|^hq_ds3_|^hq_dc3_/.test(_lk)&&_lk.indexOf(iso)<0) localStorage.removeItem(_lk); }
+            localStorage.setItem('hq_dp4_'+iso,JSON.stringify(_pins));
+            localStorage.setItem('hq_ds4_'+iso,JSON.stringify(_seenOpen));
+            localStorage.setItem('hq_dc4_'+iso,JSON.stringify(_curT));
+            for(let _li=localStorage.length-1;_li>=0;_li--){ const _lk=localStorage.key(_li); if(!_lk) continue; if(/^hq_dpins_|^hq_dseen_|^hq_dp2_|^hq_ds2_|^hq_dc2_|^hq_dp3_|^hq_ds3_|^hq_dc3_/.test(_lk)){ localStorage.removeItem(_lk); continue; } if(/^hq_dp4_|^hq_ds4_|^hq_dc4_/.test(_lk)&&_lk.indexOf(iso)<0) localStorage.removeItem(_lk); }
           }catch(e){}
           // Current stop is IN PROGRESS: starts where the crew got to, end stretches through 'now'
           // when running long (no fake gap). Everything after cascades forward, never before 'now'.
@@ -2102,7 +2106,9 @@ function renderDispatch(){
               // DRIVING, not teleporting (Cheryl→Fillmore used to butt together).
               if(_curT[_k3]==null) _curT[_k3]=Math.max(_pmcsEn,Math.min(_st,_nowM+_dv2));
               ev.st=_curT[_k3]; ev.en=Math.max(ev.st+_d,_nowQ); _firstOpen=false;
-              try{ localStorage.setItem('hq_dc3_'+iso,JSON.stringify(_curT)); }catch(e){}
+              const _cap3=Math.round(_d*1.5)+15;
+              if(ev.en-ev.st>_cap3){ ev.st=ev.en-_cap3; _curT[_k3]=ev.st; }
+              try{ localStorage.setItem('hq_dc4_'+iso,JSON.stringify(_curT)); }catch(e){}
             }
             else { const _s2=Math.max(_st,_nowQ); ev.st=_s2; ev.en=_s2+_d; }
             _liveCur=ev.en; _anyPlaced=true;
@@ -2582,7 +2588,7 @@ function _stBlockEv(b,stMin,enMin,top,proj){
   const tRange=(proj?'~':'')+_t12(stMin)+'–'+_t12(enMin)+' · '+dur+'m';
   const _lsT=_lastSvcInfo(b);
   const tip=(_bg?'📍 ADDRESS NOT FOUND — fix it and re-run Route All · ':'')+esc(b.name||'')+' · '+(proj?'projected ':'')+_t12(stMin)+'–'+_t12(enMin)+' ('+dur+' min expected)'+(b.price?' · '+esc(String(b.price)):'')+(_lsT?(' · last serviced '+_lsT.d+' ('+_lsT.gap+'d ago'+(_lsT.off?' — ⚠ plan says '+_lsT.expct+'d':'')+')'):'')+(proj?' — no set time; drag to lock one in':'');
-  return '<div class="st-block'+(done?' done':'')+(arch?' arch':'')+(proj?' proj':'')+'" style="--pc:'+_dispPC(b)+';left:'+left+'%;width:'+width+'%;top:'+top+'px;'+(_bg?'border:2px solid #f87171;box-shadow:0 0 8px rgba(248,113,113,.5);':'')+'" '
+  return '<div class="st-block'+(done?' done':'')+(arch?' arch':'')+(proj?' proj':'')+'" style="--pc:'+_dispPC(b)+';left:'+left+'%;width:'+width+'%;top:'+top+'px;'+(left<92?'min-width:52px;':'')+(_bg?'border:2px solid #f87171;box-shadow:0 0 8px rgba(248,113,113,.5);':'')+'" '
     +'onclick="openJobRef('+_jr(b)+')" title="'+tip+(arch?' — tap for notes & photos':'')+'"'
     +'>'+(done?'✓ ':'')+_jobIcon(b)+' '+esc(b.name||'?')+'<span class="bt2">'+(zone?zone+' · ':'')+tRange+(b.price?' · '+esc(String(b.price)):'')+'</span></div>';
 }
