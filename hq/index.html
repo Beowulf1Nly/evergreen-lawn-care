@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-08.22 */
-(function(){ var V='2026-07-08.22'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-08.23 */
+(function(){ var V='2026-07-08.23'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -2267,6 +2267,13 @@ async function fixClockOut(c){
   const t=prompt('🕐 Real clock-out time for '+(pick.name||pick.email)+'? 24-hour HH:MM (e.g. 16:35)');
   if(!t) return;
   const m2=String(t).trim().match(/^(\d{1,2}):(\d{2})$/); if(!m2){ toast('Use HH:MM, 24-hour'); return; }
+  const _newMin=(+m2[1])*60+(+m2[2]);
+  const _nowMin=(new Date()).getHours()*60+(new Date()).getMinutes();
+  if(_newMin>_nowMin){ toast('That\'s in the future — clock-outs can\'t be'); return; }
+  const _ciD=pick.clockIn?new Date(pick.clockIn):null;
+  const _ciStr=(_ciD&&!isNaN(_ciD))?_t12(_ciD.getHours()*60+_ciD.getMinutes()):'?';
+  const _hrs=(_ciD&&!isNaN(_ciD))?Math.max(0,((_newMin*60000+new Date(new Date().toDateString()).getTime())-_ciD.getTime())/3600000).toFixed(1):'?';
+  if(!confirm('⚠ Confirm clock-out fix\n\n'+(pick.name||pick.email)+'\nClocked in: '+_ciStr+'\nNew clock-out: '+_t12(_newMin)+'\n≈ '+_hrs+'h will be written to today\'s Pay Log row (replacing what\'s there) and the day\'s actual-profit math.\n\nThis is TODAY only. Proceed?')) return;
   const d=await fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'owner_fix_clockout', targetEmail:pick.email, date:todayISO(), time:('0'+m2[1]).slice(-2)+':'+m2[2], adminToken:token }).toString()).then(function(r){ return r.json(); }).catch(function(){ return null; });
   if(d&&d.success){ toast('🕐 '+(d.name||'')+' → out at '+t+(d.hours?(' · '+d.hours+'h in Pay Log'):'')); try{ refreshStatus(); }catch(e){} setTimeout(function(){ try{ renderDispatch(); }catch(e){} },900); }
   else toast('⚠ '+((d&&d.error)||'Fix failed — this needs the backend redeploy'));
@@ -2314,7 +2321,10 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
     const _shL=(typeof _crewShift==='function')?_crewShift(c):null;
     const w=_crewWorkedHrs(c);
     if(_shL&&!_shL.active&&_shL.clockOut&&w>0){
-      live=' · ⏱ worked <b>'+w.toFixed(1)+'h</b> <span class="dev-pill" style="cursor:pointer;" title="Wrong time? Tap to fix the clock-out (updates hours + actual profit)" onclick="fixClockOut(\''+c+'\')">✅ clocked out '+_t12(_shL.clockOut.getHours()*60+_shL.clockOut.getMinutes())+' ✏</span>';
+      const _dayView=(_dispView!=='week'&&_dispView!=='month');
+      live=' · ⏱ worked <b>'+w.toFixed(1)+'h</b> '+(_dayView
+        ?'<span class="dev-pill" style="cursor:pointer;" title="Wrong time? Tap to fix the clock-out (updates hours + actual profit)" onclick="fixClockOut(\''+c+'\')">✅ clocked out '+_t12(_shL.clockOut.getHours()*60+_shL.clockOut.getMinutes())+' ✏</span>'
+        :'<span class="dev-pill">✅ clocked out '+_t12(_shL.clockOut.getHours()*60+_shL.clockOut.getMinutes())+'</span>');
     } else if(w>0){
       if(isFinite(p.tgtH)){ const diff=p.tgtH-w;
         live=' · ⏱ on clock <b>'+w.toFixed(1)+'h</b> '+(diff>=0
