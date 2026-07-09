@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.19 */
+/* APP_VER:2026-07-08.20 */
 (function(){
-  var V='2026-07-08.19'; window.__APP_VER=V;
+  var V='2026-07-08.20'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1137,6 +1137,29 @@ async function fmRerouteFromHere(){
   if(!confirm('📍 Re-route from your current location?\n\nYour '+open.length+' remaining stops get re-ordered for the shortest drive from RIGHT HERE. 🔒 Locked stops and finished stops don\'t move.')) return;
   _fmRerouteExec(false);
 }
+// Exact open-path TSP (Held-Karp) — same engine as HQ's ⚡ Optimize run.
+// idx 0 = current GPS position; provably-best order for ≤15 open stops.
+function _fmTspExact(M){
+  const n=M.length-1, FULL=(1<<n)-1, INF=1e15;
+  const dp=new Array((FULL+1)*n).fill(INF), par=new Array((FULL+1)*n).fill(-1);
+  for(let i=0;i<n;i++) dp[(1<<i)*n+i]=M[0][i+1];
+  for(let mask=1;mask<=FULL;mask++){
+    for(let i=0;i<n;i++){
+      if(!(mask&(1<<i))) continue;
+      const cur=dp[mask*n+i]; if(cur>=INF) continue;
+      for(let j2=0;j2<n;j2++){
+        if(mask&(1<<j2)) continue;
+        const nm=mask|(1<<j2), v=cur+M[i+1][j2+1];
+        if(v<dp[nm*n+j2]){ dp[nm*n+j2]=v; par[nm*n+j2]=i; }
+      }
+    }
+  }
+  let bi=0,bv=INF;
+  for(let i=0;i<n;i++){ if(dp[FULL*n+i]<bv){ bv=dp[FULL*n+i]; bi=i; } }
+  const order=[]; let mask=FULL, i=bi;
+  while(i>=0){ order.unshift(i); const pi=par[mask*n+i]; mask&=~(1<<i); i=pi; }
+  return { order:order, cost:bv };
+}
 async function _fmRerouteExec(auto){
   if(_rerouting) return;
   if(navigator.onLine===false){ if(!auto) showToast('📴 Offline — can\'t re-optimize right now'); return; }
@@ -1169,8 +1192,31 @@ async function _fmRerouteExec(auto){
     const failed=geo.filter(function(s){ return s.failed||s.lat==null; });
     if(valid.length<2){ showToast('Couldn\'t locate enough addresses — keeping current order'); return; }
     let ordered=rcOptimizeGeographic(valid,{ lat:pos.lat, lon:pos.lon });
-    try{ ordered=await rcRefineWithRoads(ordered,{ lat:pos.lat, lon:pos.lon }); }catch(e){}
-    const openKeys=_fmApplyLocks(ordered.concat(failed).filter(function(s){ return s&&s.bk; }).map(function(s){ return _stopKey(s.bk); }));
+    // 🧮 EXACT solve on REAL road times (same engine as HQ's ⚡) — provably-best
+    // order for ≤15 stops from the crew's actual GPS. Falls back to the
+    // geographic + road-refine pipeline when OSRM is unreachable or the day is huge.
+    let _exactOK=false;
+    try{
+      if(valid.length>=2&&valid.length<=15){
+        const _coords=[{lat:pos.lat,lon:pos.lon}].concat(valid.map(function(s){ return {lat:s.lat,lon:s.lon}; }));
+        const _d=await fetch('https://router.project-osrm.org/table/v1/driving/'+_coords.map(function(p){ return p.lon+','+p.lat; }).join(';')+'?annotations=duration').then(function(r){ return r.json(); });
+        if(_d&&_d.code==='Ok'&&Array.isArray(_d.durations)&&_d.durations.length===_coords.length){
+          const _sol=_fmTspExact(_d.durations);
+          ordered=_sol.order.map(function(i){ return valid[i]; });
+          _exactOK=true;
+        }
+      }
+    }catch(e){}
+    if(!_exactOK){ try{ ordered=await rcRefineWithRoads(ordered,{ lat:pos.lat, lon:pos.lon }); }catch(e){} }
+    // Un-geocodable stops slot NEXT TO a same-ZIP neighbor instead of dangling at
+    // the end (which could bolt a cross-county backtrack onto the day).
+    const _seq=ordered.slice();
+    failed.forEach(function(f){
+      const z2=String((f.bk&&f.bk.zip)||'').trim(); let at=-1;
+      if(z2){ for(let i2=_seq.length-1;i2>=0;i2--){ if(String((_seq[i2].bk&&_seq[i2].bk.zip)||'').trim()===z2){ at=i2; break; } } }
+      if(at>=0) _seq.splice(at+1,0,f); else _seq.push(f);
+    });
+    const openKeys=_fmApplyLocks(_seq.filter(function(s){ return s&&s.bk; }).map(function(s){ return _stopKey(s.bk); }));
     const resolvedKeys=_fmStops().filter(_fmResolved).map(function(s){ return _stopKey(s.bk); });
     _routeLock=resolvedKeys.concat(openKeys);
     // Any same-day pin whose stop the optimizer just placed is obsolete — the
