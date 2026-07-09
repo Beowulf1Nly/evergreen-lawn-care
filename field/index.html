@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.25 */
+/* APP_VER:2026-07-08.26 */
 (function(){
-  var V='2026-07-08.25'; window.__APP_VER=V;
+  var V='2026-07-08.26'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -374,14 +374,17 @@
 
 <!-- CREW / HELPER PICKER -->
 <div id="fmCrewPicker" style="display:none;position:fixed;inset:0;z-index:3200;background:rgba(0,0,0,.55);align-items:flex-end;justify-content:center;" onclick="if(event.target===this)fmCrewCancel()">
-  <div class="fm-sheet">
-    <div class="fm-sheet-title">🟢 Who's working today?</div>
-    <div class="fm-sheet-sub">You're auto-included. Add any helpers riding along — tap a name to add.</div>
-    <div id="fmCrewChosen" style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px;"></div>
-    <input id="fmCrewSearch" class="login-input" placeholder="Search crew…" style="margin-bottom:10px;" oninput="_fmRenderCrewPicker()">
-    <div id="fmCrewResults" class="fm-checklist" style="max-height:44vh;overflow-y:auto;margin-bottom:10px;"></div>
-    <button class="fm-toggle-btn" onclick="fmCrewAddManual()">✏️ Add by name…</button>
-    <button class="fm-btn fm-btn-xl fm-btn-start" style="margin-top:12px;" onclick="fmCrewConfirm()">Continue →</button>
+  <div class="fm-sheet" style="padding-top:20px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:2px;"><span style="font-size:26px;">👥</span><div class="fm-sheet-title" style="margin:0;">Today's crew</div></div>
+    <div class="fm-sheet-sub" style="margin-bottom:14px;">You're in automatically — tap anyone riding along.</div>
+    <div style="background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:14px;padding:10px 12px;margin-bottom:12px;">
+      <div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#15803d;margin-bottom:6px;">On the truck</div>
+      <div id="fmCrewChosen" style="display:flex;flex-wrap:wrap;gap:7px;"></div>
+    </div>
+    <input id="fmCrewSearch" class="login-input" placeholder="🔎 Search the roster…" style="margin-bottom:8px;border-radius:12px;" oninput="_fmRenderCrewPicker()">
+    <div id="fmCrewResults" class="fm-checklist" style="max-height:38vh;overflow-y:auto;margin-bottom:6px;border:1.5px solid #e2e8f0;border-radius:14px;padding:4px;"></div>
+    <button class="fm-mini-link" style="display:block;margin:2px auto 0;" onclick="fmCrewAddManual()">✏️ Not on the list? Add by name</button>
+    <button class="fm-btn fm-btn-xl fm-btn-start" style="margin-top:12px;width:100%;" onclick="fmCrewConfirm()">Continue →</button>
     <button class="fm-mini-link" onclick="fmCrewCancel()">Cancel</button>
   </div>
 </div>
@@ -1746,25 +1749,52 @@ function _fmGasStep(cont){
   window._fmGasCont=cont;
 }
 function _fmGasGo(){ const ov=document.getElementById('fmGasSheet'); if(ov) ov.style.display='none'; const c=window._fmGasCont; window._fmGasCont=null; if(c) c(); }
+/* ── polished start flow: loading screens between steps + a flow guard so
+   background polls can never repaint the Start screen mid-sequence ── */
+function _fmLoading(on,msg){
+  let ov=document.getElementById('fmLoadingOv');
+  if(!on){ if(ov) ov.style.display='none'; return; }
+  if(!ov){
+    ov=document.createElement('div'); ov.id='fmLoadingOv';
+    ov.innerHTML='<div style="text-align:center;"><div style="width:46px;height:46px;border:4px solid rgba(255,255,255,.25);border-top-color:#4ade80;border-radius:50%;margin:0 auto 16px;animation:fmspin .8s linear infinite;"></div><div id="fmLoadingMsg" style="color:#e7f6ec;font-weight:800;font-size:16px;letter-spacing:.02em;"></div></div>';
+    const st=document.createElement('style'); st.textContent='@keyframes fmspin{to{transform:rotate(360deg)}}'; document.head.appendChild(st);
+    document.body.appendChild(ov);
+  }
+  ov.style.cssText='position:fixed;inset:0;z-index:5000;display:flex;align-items:center;justify-content:center;background:rgba(7,26,15,.92);backdrop-filter:blur(4px);';
+  const m=document.getElementById('fmLoadingMsg'); if(m) m.textContent=msg||'Loading…';
+}
+async function _fmStep(msg,ms){ _fmLoading(true,msg); await new Promise(function(r){ setTimeout(r,ms||500); }); _fmLoading(false); }
 async function fmStartTapped(){
   // Resume: already clocked in & rolling today → jump straight back into the route.
   if(_clockInTime&&!_clockedOut&&_fmStarted){ _fmBooted=true; _fmRender(); return; }
-  // 1) Who's working today (prefilled roster picker; cancel aborts the start).
-  const who = await fmOpenCrewPicker();
-  if(who===false) return;
-  // Owners/managers skip the PMCS + load-out gates entirely — crews still get them.
-  if(!_fmIsBoss()){
-    // 2) PMCS gate — daily/weekly/monthly checks that are due (identical to /invoice).
-    let pmcsOK=true;
-    try{ if(typeof pmcsGateForClockIn==='function') pmcsOK=await pmcsGateForClockIn(); }catch(e){}
-    if(pmcsOK===false) return;
-    // 3) 'Got everything?' load-out checklist. Cancel aborts the start.
-    let loOK=true;
-    try{ if(typeof loadoutGate==='function') loOK=await loadoutGate(); }catch(e){}
-    if(loOK===false) return;
+  window._fmStartFlowActive=true;   // treated like an open sheet — polls won't repaint under the flow
+  try{
+    // stale gate overlays from an aborted start would hang the next one — clear them
+    try{ ['pmcsOverlay','loadoutOverlay'].forEach(function(id){ const o=document.getElementById(id); if(o) o.remove(); }); }catch(e){}
+    // 1) Who's working today (prefilled roster picker; cancel aborts the start).
+    const who = await fmOpenCrewPicker();
+    if(who===false){ window._fmStartFlowActive=false; return; }
+    // Owners/managers skip the PMCS + load-out gates entirely — crews still get them.
+    if(!_fmIsBoss()){
+      await _fmStep('🔧 Equipment checks…',450);
+      let pmcsOK=true;
+      try{ if(typeof pmcsGateForClockIn==='function') pmcsOK=await pmcsGateForClockIn(); }catch(e){}
+      if(pmcsOK===false){ window._fmStartFlowActive=false; return; }
+      await _fmStep('🧰 Load-out…',450);
+      let loOK=true;
+      try{ if(typeof loadoutGate==='function') loOK=await loadoutGate(); }catch(e){}
+      if(loOK===false){ window._fmStartFlowActive=false; return; }
+    }
+    await _fmStep('⛽ One more thing…',400);
+    _fmGasStep(function(){
+      window._fmStartFlowActive=false;
+      _fmLoading(true,'🛰 Building your route…');
+      try{ fmBeginRoute(); }finally{ setTimeout(function(){ _fmLoading(false); },900); }
+    });
+  }catch(e){
+    window._fmStartFlowActive=false; _fmLoading(false);
+    showToast('⚠ Start hit a snag — try again'); 
   }
-  // 4) ⛽ Gas prompt (optional stop) → 5) clock in + roll from wherever they are.
-  _fmGasStep(function(){ fmBeginRoute(); });
 }
 function _renderStartChecklist(){
   const wrap=document.getElementById('fmStartChecklist');
@@ -1780,7 +1810,8 @@ function fmRemoveHelper(i){ _helpers.splice(i,1); _persist(); _renderHelpers(); 
 function _anySheetOpen(){
   // ANY open overlay pauses background refresh — a poll mid-quote/mid-checkout used
   // to swap the data out from under the crew's thumbs.
-  const flexIds=['fmCompleteSheet','fmSkipSheet','fmCrewPicker','qcOverlay','ncOverlay','qjOverlay','fmNotesSheet','fmGasSheet'];
+  if(window._fmStartFlowActive) return true;   // mid start-sequence — hands off
+  const flexIds=['fmCompleteSheet','fmSkipSheet','fmCrewPicker','qcOverlay','ncOverlay','qjOverlay','fmNotesSheet','fmGasSheet','pmcsOverlay','loadoutOverlay'];
   for(let i=0;i<flexIds.length;i++){ const el=document.getElementById(flexIds[i]); if(el&&el.style.display==='flex') return true; }
   return !!document.querySelector('.pmcs-overlay.open');
 }
