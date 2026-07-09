@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-09.7 */
-(function(){ var V='2026-07-09.7'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-09.8 */
+(function(){ var V='2026-07-09.8'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -813,6 +813,7 @@ function enterApp(){
   if(_bookInt) clearInterval(_bookInt);   _bookInt=setInterval(_guarded('b',refreshBookings),90000);
   if(_routeInt) clearInterval(_routeInt); _routeInt=setInterval(_guarded('r',refreshRouteOrder),60000);
   if(_tick) clearInterval(_tick); _tick=setInterval(updateClocks,1000);
+  document.addEventListener('visibilitychange',function(){ if(!document.hidden){ try{ refreshStatus(); }catch(e){} } });
   if(window._dispTick) clearInterval(window._dispTick); window._dispTick=setInterval(function(){ if(_activeTab==='dispatch'&&_dispView==='day'&&!_dispDrag){ try{ renderDispatch(); }catch(e){} } },20000);
   loadCrewPay();                                   // roster names for crew cards
   let t0tab='live'; try{ t0tab=(location.hash||'').replace('#','')||localStorage.getItem('hq_tab')||'live'; }catch(e){}
@@ -849,6 +850,17 @@ async function refreshStatus(){
     _statusBad=!(st&&st.success);
     if(st&&st.success){ _crews=(st.crews||[]).filter(c=>c.staleMin<=720); try{ localStorage.setItem('hq_cache_crews', JSON.stringify(_crews)); }catch(e){} }
     render();
+    // route overlay follows the truck: redraw when they've moved ~150m+ (or a stop got finished)
+    try{
+      if(window._routeShownFor&&!window._routeBusy){
+        const c2=_crews.find(function(x){ return x.email===window._routeShownFor; });
+        if(c2&&c2.lat!=null){
+          const d0=window._routeDrawnAt;
+          const moved=!d0||(Math.abs(c2.lat-d0.lat)+Math.abs(c2.lon-d0.lon))>0.0015;
+          if(moved){ window._routeBusy=1; Promise.resolve(showRouteOnMap(window._routeShownFor,true)).finally(function(){ window._routeBusy=0; }); }
+        }
+      }
+    }catch(e){}
     rb.innerHTML='<span class="pdot"></span>live · '+new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
   }catch(e){ rb.innerHTML='<span class="pdot" style="background:#f87171"></span>offline'; }
 }
@@ -1519,9 +1531,11 @@ async function geocode(addr){
   if(c){ cache[addr]=c; geoSet(cache); }
   return c;
 }
-async function showRouteOnMap(email){
+async function showRouteOnMap(email,auto){
   clearRouteLayers();
   const c=_crews.find(function(x){return x.email===email;}); if(!c) return;
+  window._routeShownFor=email;                                    // keep this overlay LIVE across status polls
+  window._routeDrawnAt=(c.lat!=null)?{lat:c.lat,lon:c.lon}:null;
   const route=routeFor(c.crew); const col=crewColor(c.crew);
   document.getElementById('mapNote').textContent='mapping '+(c.name||'route')+'…';
   const coords=await Promise.all(route.map(function(b){ return geocode((b.address||'')+(b.zip?', '+b.zip:'')+', FL').catch(function(){return null;}); }));
@@ -1574,8 +1588,10 @@ async function showRouteOnMap(email){
     _routeLayers.push(tm);
   }
   const fit=allPts.concat(c.lat!=null?[[c.lat,c.lon]]:[]);
-  if(fit.length>1){ try{ map.fitBounds(fit,{padding:[55,55]}); }catch(e){} }
-  else if(fit.length===1){ map.setView(fit[0],14); }
+  if(!auto){                                                       // auto-redraws must not yank the viewport around
+    if(fit.length>1){ try{ map.fitBounds(fit,{padding:[55,55]}); }catch(e){} }
+    else if(fit.length===1){ map.setView(fit[0],14); }
+  }
 }
 
 function updateClocks(){
