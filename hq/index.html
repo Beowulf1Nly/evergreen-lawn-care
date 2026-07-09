@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-08.37 */
-(function(){ var V='2026-07-08.37'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-09.1 */
+(function(){ var V='2026-07-09.1'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1699,6 +1699,8 @@ async function loadBizBookings(){
 
 /* Per-date route record (order + planned times pushed from /invoice) */
 const _dispRoute={};   // iso → { times:{key:HH:MM}, order:{crew:[keys]}, loading, at }
+function _recKey(zi,c){ return ((zi||0)?zi+'#':'')+((c==='un')?'':c); }
+function _bizUT(zi){ const z=_bizLoad()[zi||0]||_bizLoad()[0]; return (zi||0)?{u:_bizUrl(z),t:_bizTok(z)}:{u:SCRIPT_URL,t:token}; }
 function _ensureDayRoute(iso){
   const rec0=_dispRoute[iso];
   const pushPending=Object.keys(_dayPushTimers||{}).some(function(k){ return k.indexOf('|'+iso)>=0&&_dayPushTimers[k]; });
@@ -1707,23 +1709,30 @@ function _ensureDayRoute(iso){
   // Blanking them here made every render between expiry and fetch-completion fall
   // back to jobTime order — new appointments visibly jumped around every 20s.
   _dispRoute[iso]={ times:(rec0&&rec0.times)||{}, order:(rec0&&rec0.order)||{}, drive:(rec0&&rec0.drive)||{}, badGeo:(rec0&&rec0.badGeo)||{}, loading:true, at:Date.now() };
-  fetch(SCRIPT_URL+'?action=get_route&date='+iso+'&adminToken='+encodeURIComponent(token)).then(r=>r.json()).then(function(d){
+  const _bizList=_bizLoad();
+  const _fetches=_bizList.map(function(z,zi){
+    if(zi>0&&!_bizConnected(z)) return Promise.resolve(null);
+    const ut=_bizUT(zi);
+    return fetch(ut.u+'?action=get_route&date='+iso+'&adminToken='+encodeURIComponent(ut.t)).then(function(r){ return r.json(); }).catch(function(){ return null; });
+  });
+  Promise.all(_fetches).then(function(all){
     const rec=_dispRoute[iso]; rec.loading=false; rec.at=Date.now();
-    if(d&&d.success&&Array.isArray(d.routes)){
-      rec.times={}; rec.order={}; rec.badGeo={}; rec.drive={};   // fresh data arrived — replace the carried-over copy
+    rec.times={}; rec.order={}; rec.badGeo={}; rec.drive={};   // fresh data arrived — replace the carried-over copy
+    all.forEach(function(d,zi){
+      if(!(d&&d.success&&Array.isArray(d.routes))) return;
       // newest push wins when stale rows ('' / unassigned crews from older pushes) share stops
       d.routes.slice().sort(function(a,b){ return (new Date(a.updatedAt||0).getTime()||0)-(new Date(b.updatedAt||0).getTime()||0); })
       .forEach(function(rt){
         const cw=String(rt.crew||'').toUpperCase().trim();
-        rec.order[cw]=(rt.stops||[]).map(function(st){ return String(st.email||'').toLowerCase().trim()+'|'+String(st.serviceDate||st.date||''); });
+        rec.order[_recKey(zi,cw||'un')]=(rt.stops||[]).map(function(st){ return String(st.email||'').toLowerCase().trim()+'|'+String(st.serviceDate||st.date||''); });
         (rt.stops||[]).forEach(function(st){
           const k=String(st.email||'').toLowerCase().trim()+'|'+String(st.serviceDate||st.date||'');
           if(/^\d{1,2}:\d{2}$/.test(String(st.jobTime||'').trim())) rec.times[k]=String(st.jobTime).trim();
-          if(st.noGeo) rec.badGeo[k]={ n:String(st.name||''), a:String(st.address||'') };   // optimizer couldn't geocode this stop
-          if(+st.driveMin>0) rec.drive[k]=+st.driveMin;   // real per-leg drive time from the last ⚡
+          if(st.noGeo) rec.badGeo[k]={ n:String(st.name||''), a:String(st.address||'') };
+          if(+st.driveMin>0) rec.drive[k]=+st.driveMin;
         });
       });
-    }
+    });
     if(_activeTab==='dispatch'&&_dispView==='day') renderDispatch();
   }).catch(function(){ if(_dispRoute[iso]) _dispRoute[iso].loading=false; });
 }
@@ -1923,7 +1932,7 @@ function renderDispatch(){
         const rec=_dispRoute[iso]||{times:{},order:{},badGeo:{},drive:{}};
         // per-stop drive-in time: real OSRM leg from the last ⚡, else the flat 12
         const _drv=function(b){ const dm=rec.drive&&rec.drive[_svKey(b)]; return (dm>0&&dm<180)?Math.round(dm):DRIVE_BUF; };
-        const ordKeys=rec.order[c==='un'?'':c]||[];
+        const ordKeys=rec.order[_recKey(zi,c)]||rec.order[c==='un'?'':c]||[];
         const cell=(rowJobsAll[iso]||[]).slice().sort(function(a,b2){
           if(ordKeys.length){ let pa=ordKeys.indexOf(_svKey(a)), pb=ordKeys.indexOf(_svKey(b2)); pa=pa<0?9999:pa; pb=pb<0?9999:pb; if(pa!==pb) return pa-pb; }
           return _jobSort(a,b2);
@@ -2051,7 +2060,7 @@ function renderDispatch(){
           +(function(){
             const lines=[];
             cell.forEach(function(b){ const r2=_hqDoubtFor(b,iso,c); if(r2) lines.push('<b>'+esc(b.name||'?')+'</b>: '+esc(r2)); });
-            const od=_optDoubts[iso+'|'+c];
+            const od=_optDoubts[iso+'|'+_recKey(zi,c)]||_optDoubts[iso+'|'+c];
             ((od&&od.general)||[]).forEach(function(gd){ lines.push(esc(gd)); });
             return lines.length?('<div style="margin:4px 0 6px;padding:8px 11px;background:rgba(248,113,113,.10);border:1px solid rgba(248,113,113,.45);border-radius:9px;font-size:12px;color:#f87171;font-weight:700;line-height:1.55;">🔴 ROUTE NOT GUARANTEED OPTIMAL:<br>'+lines.join('<br>')+'</div>'):'';
           })()
@@ -2330,17 +2339,17 @@ function _econParts(c,jobs,zi){
 // revenue by WEEK hours from Pay Log (the live bracket only knows today).
 let _payHrs={key:'',rows:null,at:0,loading:''};
 function _rangePayHrs(c,zi,from,to){
-  if(zi) return 0;                                        // Pay Log lives on the main backend
-  const key=from+'|'+to;
+  zi=zi||0;
+  const key=zi+'|'+from+'|'+to;
   if((_payHrs.key!==key||Date.now()-_payHrs.at>120000)&&_payHrs.loading!==key){
     _payHrs.loading=key;
-    fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'get_pay_hours', from:from, to:to, adminToken:token })).then(function(r){ return r.json(); }).then(function(d){
+    fetch(_bizUT(zi).u+'?'+new URLSearchParams({ action:'get_pay_hours', from:from, to:to, adminToken:_bizUT(zi).t })).then(function(r){ return r.json(); }).then(function(d){
       _payHrs.loading='';
       if(d&&d.success){ _payHrs={key:key,rows:d.rows||[],at:Date.now(),loading:''}; if(_activeTab==='dispatch') renderDispatch(); }
     }).catch(function(){ _payHrs.loading=''; });
   }
   if(_payHrs.key!==key||!_payHrs.rows) return 0;
-  const cp=_crewPayFor(0,c);
+  const cp=_crewPayFor(zi,c);
   const names=((cp&&cp.who)||[]).map(function(n){ return String(n).toLowerCase().trim(); });
   if(!names.length) return 0;
   return _payHrs.rows.reduce(function(sm,r){ return sm+(names.indexOf(String(r.name||'').toLowerCase().trim())>=0?(r.hrs||0):0); },0);
@@ -2415,8 +2424,8 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
     if(_finMin==null) _finMin=_startMin+p.estM;
     var _shF=(typeof _crewShift==='function')?_crewShift(c):null;
     if(_allDone){ finishHtml=' · 🏁 <span class="dev-pill g">shift complete ✓</span>'; }
-    else if(iso===todayISO()&&_shF&&!_shF.active&&_shF.clockOut){ finishHtml=' · 🏁 <span class="dev-pill" style="cursor:pointer;" title="Wrong time? Tap to fix the clock-out (updates hours + actual profit)" onclick="fixClockOut(\''+c+'\',\''+iso+'\')">clocked out '+_t12(_shF.clockOut.getHours()*60+_shF.clockOut.getMinutes())+' ✏</span>'; }
-    else if(iso!==todayISO()){ finishHtml=' · <span class="dev-pill" style="cursor:pointer;" title="Correct this day\'s Pay Log hours" onclick="fixClockOut(\''+c+'\',\''+iso+'\')">🕐 fix hours ✏</span>'; }
+    else if(zi===0&&iso===todayISO()&&_shF&&!_shF.active&&_shF.clockOut){ finishHtml=' · 🏁 <span class="dev-pill" style="cursor:pointer;" title="Wrong time? Tap to fix the clock-out (updates hours + actual profit)" onclick="fixClockOut(\''+c+'\',\''+iso+'\')">clocked out '+_t12(_shF.clockOut.getHours()*60+_shF.clockOut.getMinutes())+' ✏</span>'; }
+    else if(zi===0&&iso!==todayISO()){ finishHtml=' · <span class="dev-pill" style="cursor:pointer;" title="Correct this day\'s Pay Log hours" onclick="fixClockOut(\''+c+'\',\''+iso+'\')">🕐 fix hours ✏</span>'; }
     else {
       const _late=_finMin>1140, _fh=Math.floor(_finMin/60)%24, _fm=Math.round(_finMin)%60;
       finishHtml=' · 🏁 shift done ~<b style="color:'+(_late?'#f87171':'inherit')+'">'+((_fh%12)||12)+':'+String(_fm).padStart(2,'0')+(_fh<12?' AM':' PM')+'</b>'
@@ -2454,8 +2463,8 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
       const _dayV=(_dispView!=='week'&&_dispView!=='month');
       let w=0, wlbl=' on the clock so far';
       if(_dayV&&iso===todayISO()&&zi===0){ w=_crewWorkedHrs(c); }
-      else if(!_dayV&&zi===0){
-        // weekly: real hours from Pay Log for the visible Sun–Sat
+      else if(!_dayV){
+        // weekly: real hours from Pay Log for the visible Sun–Sat (any business)
         const st0=new Date(_dispAnchor); st0.setDate(st0.getDate()-st0.getDay());
         const en0=new Date(st0); en0.setDate(st0.getDate()+6);
         const f=function(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
@@ -2493,7 +2502,7 @@ function _stAuxBlock(label,stMin,enMin,top){
 }
 function _stBlockEv(b,stMin,enMin,top,proj){
   const arch=_isArch(b), done=isDone(b)||arch, zone=_zoneOf(b);
-  const _bg=(function(){ try{ const r0=_dispRoute[dateOf(b)]; if(r0&&r0.badGeo&&r0.badGeo[_svKey(b)]) return true; const cw=String(b.crew||'').toUpperCase().trim()||'un'; const od=_optDoubts[dateOf(b)+'|'+cw]; return !!(od&&od.stops&&od.stops[_svKey(b)]); }catch(e){ return false; } })();
+  const _bg=(function(){ try{ const r0=_dispRoute[dateOf(b)]; if(r0&&r0.badGeo&&r0.badGeo[_svKey(b)]) return true; const cw=String(b.crew||'').toUpperCase().trim()||'un'; const od=_optDoubts[dateOf(b)+'|'+_recKey(b._srcBiz||0,cw)]||_optDoubts[dateOf(b)+'|'+cw]; return !!(od&&od.stops&&od.stops[_svKey(b)]); }catch(e){ return false; } })();
   const left=Math.max(0,Math.min(98,_tlX(stMin)));
   const width=Math.max(2,Math.min(100-left,((enMin-stMin)/Math.max(1,_tlB-_tlA))*100));
   const dur=(enMin-stMin);
@@ -2646,13 +2655,13 @@ function crewMapsRoute(zi,c){
   }
 }
 function _dayOrderPanel(c,iso,cell,zi){
-  const jobs=cell.filter(function(b){ return !_isArch(b)&&!isDone(b)&&!(b._srcBiz>0); });
+  const jobs=cell.filter(function(b){ return !_isArch(b)&&!isDone(b)&&((b._srcBiz||0)===(zi||0)); });
   if(!jobs.length) return '';
   const k=c+'|'+iso, open=_dayReorderOpen[k];
   let h='<div style="padding:5px 2px 0;"><button class="dev-btn" style="font-size:11px;padding:5px 11px;" onclick="toggleDayOrder(\''+c+'\',\''+iso+'\')">'+(open?'▾':'▸')+' ↕ Reorder run ('+jobs.length+')</button>'
     +(c!=='un'?'<button class="dev-btn" style="font-size:11px;padding:5px 11px;margin-left:6px;" onclick="crewMapsRoute('+(zi||0)+',\''+c+'\')" title="Open this crew\'s day as Google Maps directions — long routes split into 10-stop legs">🗺 Route in Google Maps</button>'
     +'<button class="dev-btn" style="font-size:11px;padding:5px 11px;margin-left:6px;" onclick="hqPushCrewDay('+(zi||0)+',\''+c+'\')" title="Write the board\'s times to the sheet + Google Calendar and save the run order for the crew app">📅 Push to Google Calendar</button>'
-    +((!zi)?'<button class="dev-btn" style="font-size:11px;padding:5px 11px;margin-left:6px;" onclick="hqOptimizeRun(\''+c+'\',\''+iso+'\','+(zi||0)+')" title="Re-order this crew\'s open stops for the shortest drive (nearest-neighbor + 2-opt on geocoded addresses)">⚡ Optimize run</button>':''):'');
+    +'<button class="dev-btn" style="font-size:11px;padding:5px 11px;margin-left:6px;" onclick="hqOptimizeRun(\''+c+'\',\''+iso+'\','+(zi||0)+')" title="Re-order this crew\'s open stops for the shortest drive — exact solve on real road times">⚡ Optimize run</button>':'');
   if(open){
     let st=480;
     h+='<div style="margin-top:5px;">'+jobs.map(function(b,i){
@@ -2667,8 +2676,8 @@ function _dayOrderPanel(c,iso,cell,zi){
         return '<button onclick="event.stopPropagation();setJobMins('+_jr(b)+')" title="'+_src+'" style="background:rgba(56,189,248,.12);border:1px solid '+(_off?'rgba(251,191,36,.6)':'rgba(56,189,248,.35)')+';color:'+(_off?'#fbbf24':'#7dd3fc')+';border-radius:7px;padding:1px 7px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">⏱ '+dur+'m'+(_off?' ⚠':'')+' ✎</button>';
       })()+(b.price?' · '+esc(String(b.price)):'')+'</div></div>'
         +'<div class="ro-arrows">'
-        +'<button onclick="dayMove(\''+c+'\',\''+iso+'\','+i+',-1)" '+(i===0?'disabled':'')+'>▲</button>'
-        +'<button onclick="dayMove(\''+c+'\',\''+iso+'\','+i+',1)" '+(i===jobs.length-1?'disabled':'')+'>▼</button></div></div>';
+        +'<button onclick="dayMove(\''+c+'\',\''+iso+'\','+i+',-1,'+(zi||0)+')" '+(i===0?'disabled':'')+'>▲</button>'
+        +'<button onclick="dayMove(\''+c+'\',\''+iso+'\','+i+',1,'+(zi||0)+')" '+(i===jobs.length-1?'disabled':'')+'>▼</button></div></div>';
       st+=dur;
       return row;
     }).join('')
@@ -2739,7 +2748,7 @@ function openCrewDay(zi,c){
 function closeCrewDay(){ const ov=document.getElementById('crewDayOv'); if(ov) ov.remove(); document.body.style.overflow=''; }
 function _amDurFor(iso){ const dt=new Date(String(iso)+'T12:00'); return (isNaN(dt)?25:(dt.getDay()===1?45:25)); }   // lawn PMCS/load + 15m ⛽: Mon 45 / else 25
 function _crewNorm(x){ x=String(x||'').toUpperCase().trim(); return x||'un'; }
-function _dayStartMin(c,iso){ let base=420; if(iso===todayISO()){ const sh=_crewShift(c==='un'?'':c); if(sh&&sh.clockIn) base=sh.clockIn.getHours()*60+sh.clockIn.getMinutes(); else { const nm=(new Date()).getHours()*60+(new Date()).getMinutes(); if(nm>420) base=Math.ceil(nm/5)*5; } } return base+_amDurFor(iso); }   // 7:00 plan · early start shifts left · late creeps right
+function _dayStartMin(c,iso,zi){ let base=420; if(iso===todayISO()){ const sh=(zi||0)?null:_crewShift(c==='un'?'':c); if(sh&&sh.clockIn) base=sh.clockIn.getHours()*60+sh.clockIn.getMinutes(); else { const nm=(new Date()).getHours()*60+(new Date()).getMinutes(); if(nm>420) base=Math.ceil(nm/5)*5; } } return base+_amDurFor(iso); }   // 7:00 plan · early start shifts left · late creeps right
 // Re-time a crew's whole day from (clock-in|7:30)+PMCS, chaining with drive buffers — called when a job
 // is added/removed from the crew so the schedule actually shifts instead of leaving stale locked times.
 function _reflowCrewDay(c,iso){ return;   // disabled: /invoice is the single source of job times (avoids competing HQ route writes)
@@ -2879,7 +2888,7 @@ function _hqDoubtFor(b,iso,c){
     const rec=_dispRoute[iso];
     const k=_svKey(b);
     if(rec&&rec.badGeo&&rec.badGeo[k]) return 'address not found by the last Route All push';
-    const od=_optDoubts[iso+'|'+c];
+    const od=_optDoubts[iso+'|'+_recKey(b._srcBiz||0,c)]||_optDoubts[iso+'|'+c];
     if(od&&od.stops&&od.stops[k]) return od.stops[k];
   }catch(e){}
   return '';
@@ -2938,9 +2947,10 @@ function _hqTspHeur(M){
   return best;
 }
 async function hqOptimizeRun(c,iso,zi){
+  zi=zi||0;
   if(_hqOptBusy) return; _hqOptBusy=true;
   try{
-    const g=_dayJobsInOrder(c,iso);
+    const g=_dayJobsInOrder(c,iso,zi);
     if(g.length<2){ toast(g.length?'Too few stops to optimize':'No open stops'); return; }
     toast('🧭 Locating '+g.length+' stops… (first run takes a few seconds)');
     const doubts={ stops:{}, general:[] };
@@ -2961,11 +2971,11 @@ async function hqOptimizeRun(c,iso,zi){
     }
     const ok=pts.filter(function(p){ return p.co; }), bad=pts.filter(function(p){ return !p.co; });
     if(ok.length<2){
-      _optDoubts[iso+'|'+c]=doubts; _optDoubtSave(); renderDispatch();
+      _optDoubts[iso+'|'+_recKey(zi,c)]=doubts; _optDoubtSave(); renderDispatch();
       toast('📍 Couldn\'t locate enough addresses — see the red flags on the lane', 8000); return;
     }
     let start=null;
-    if(iso===todayISO()){ const m=(_crews||[]).find(function(x){ const set=String(x.crew||'').toUpperCase().split(/[^A-Z0-9]+/); return set.indexOf(c)>=0&&x.lat!=null; }); if(m) start={lat:m.lat,lon:m.lon}; }
+    if(!zi&&iso===todayISO()){ const m=(_crews||[]).find(function(x){ const set=String(x.crew||'').toUpperCase().split(/[^A-Z0-9]+/); return set.indexOf(c)>=0&&x.lat!=null; }); if(m) start={lat:m.lat,lon:m.lon}; }
     if(!start){ start=ok[0].co; doubts.general.push('No live GPS for this crew — route starts from the current first stop, not from wherever the truck is.'); }
     // ── REAL ROAD DISTANCES: one OSRM table call → full drive-time matrix
     const coords=[start].concat(ok.map(function(p){ return p.co; }));
@@ -3004,19 +3014,20 @@ async function hqOptimizeRun(c,iso,zi){
       const secs=M[fromIdx][oi+1];
       legMap[_svKey(ok[oi].b)]=road?Math.max(2,Math.round(secs/60)):Math.max(2,Math.round(secs*2));   // straight-line mi ≈ 2 min/mi fallback
     });
-    _optDoubts[iso+'|'+c]=doubts; _optDoubtSave();
-    _dayApplyOrder(c,iso,finalJobs,legMap);
+    _optDoubts[iso+'|'+_recKey(zi,c)]=doubts; _optDoubtSave();
+    _dayApplyOrder(c,iso,finalJobs,legMap,zi);
     const fmtC=function(v){ return road?(Math.round(v/60)+' min drive'):(v.toFixed(0)+' mi'); };
     const nDoubt=Object.keys(doubts.stops).length+doubts.general.length;
     toast('⚡ '+(exact?'PROVABLY OPTIMAL':'Optimized')+(road?' on real roads':'')+' — '+fmtC(sol.cost)+' vs '+fmtC(before)+' before'+(nDoubt?' · 🔴 '+nDoubt+' warning'+(nDoubt>1?'s':'')+' on the lane':' · no doubts ✓'), 9000);
   } finally { _hqOptBusy=false; }
 }
 // Apply a full new order — identical persist path to a manual reorder.
-function _dayApplyOrder(c,iso,g,legMap){
+function _dayApplyOrder(c,iso,g,legMap,zi){
+  zi=zi||0;
   const rec=_dispRoute[iso]||(_dispRoute[iso]={times:{},order:{},loading:false,at:Date.now()});
   rec.drive=rec.drive||{};
-  let st=_dayStartMin(c,iso); const crewKey=(c==='un')?'':c;
-  rec.order[crewKey]=[]; rec.at=Date.now();
+  let st=_dayStartMin(c,iso,zi); const crewKey=(c==='un')?'':c;
+  rec.order[_recKey(zi,c)]=[]; rec.at=Date.now();
   const jobs=[];
   const stops=g.map(function(b,i){
     const _dm=(legMap&&legMap[_svKey(b)]>0)?legMap[_svKey(b)]:DRIVE_BUF;
@@ -3025,7 +3036,7 @@ function _dayApplyOrder(c,iso,g,legMap){
     const dur=_jobMins(b);
     const hh=String(Math.floor(st/60)).padStart(2,'0'), mm=String(st%60).padStart(2,'0');
     const key=_svKey(b);
-    rec.times[key]=hh+':'+mm; rec.order[crewKey].push(key);
+    rec.times[key]=hh+':'+mm; rec.order[_recKey(zi,c)].push(key);
     b.jobTime=hh+':'+mm;
     jobs.push(b);
     const stop={ order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:iso, name:b.name||'', address:b.address||'', zip:b.zip||'', crew:crewKey, jobTime:hh+':'+mm, driveMin:_dm };
@@ -3038,32 +3049,34 @@ function _dayApplyOrder(c,iso,g,legMap){
   _dayPushTimers[tk]=setTimeout(async function(){
     _dayPushTimers[tk]=null;
     try{
-      const d=await fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'put_route', date:iso, crew:crewKey, stops:JSON.stringify(stops), updatedBy:myName||'Owner', idemKey:'hqopt:'+iso+':'+crewKey+':'+Date.now(), adminToken:token })).then(r=>r.json());
+      const ut=_bizUT(zi);
+      const d=await fetch(ut.u+'?'+new URLSearchParams({ action:'put_route', date:iso, crew:crewKey, stops:JSON.stringify(stops), updatedBy:myName||'Owner', idemKey:'hqopt:'+iso+':'+crewKey+':'+Date.now(), adminToken:ut.t })).then(r=>r.json());
       if(!(d&&d.success)){ toast('⚠ Could not save order'); return; }
     }catch(e){ toast('⚠ Network error saving order'); return; }
     for(let i=0;i<jobs.length;i++){
-      try{ await fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'set_job_time', rowIndex:_ri(jobs[i]), email:jobs[i].email||'', serviceDate:iso, jobTime:jobs[i].jobTime, adminToken:token })); }catch(e){}
+      try{ await fetch(_bizUT(zi).u+'?'+new URLSearchParams({ action:'set_job_time', rowIndex:_ri(jobs[i]), email:jobs[i].email||'', serviceDate:iso, jobTime:jobs[i].jobTime, adminToken:_bizUT(zi).t })); }catch(e){}
       await new Promise(function(r){ setTimeout(r,120); });
     }
     toast('📲 Optimized order saved — times locked in');
   },800);
 }
-function dayMove(c,iso,idx,dir){
+function dayMove(c,iso,idx,dir,zi){
+  zi=zi||0;
   const rec=_dispRoute[iso]||(_dispRoute[iso]={times:{},order:{},loading:false,at:Date.now()});
-  const g=_dayJobsInOrder(c,iso);
+  const g=_dayJobsInOrder(c,iso,zi);
   const to=idx+dir; if(to<0||to>=g.length) return;
   try{ if(rec.drive) g.forEach(function(b){ delete rec.drive[_svKey(b)]; }); }catch(e){}   // manual order → last ⚡'s legs no longer apply
   const t=g[idx]; g[idx]=g[to]; g[to]=t;
   // re-chain times from (clock-in|7:30)+PMCS and store as the new plan
-  let st=_dayStartMin(c,iso); const crewKey=(c==='un')?'':c;
-  rec.order[crewKey]=[]; rec.at=Date.now();
+  let st=_dayStartMin(c,iso,zi); const crewKey=(c==='un')?'':c;
+  rec.order[_recKey(zi,c)]=[]; rec.at=Date.now();
   const jobs=[];
   const stops=g.map(function(b,i){
     if(i>0) st+=DRIVE_BUF;
     const dur=_jobMins(b);
     const hh=String(Math.floor(st/60)).padStart(2,'0'), mm=String(st%60).padStart(2,'0');
     const key=_svKey(b);
-    rec.times[key]=hh+':'+mm; rec.order[crewKey].push(key);
+    rec.times[key]=hh+':'+mm; rec.order[_recKey(zi,c)].push(key);
     b.jobTime=hh+':'+mm;                       // local bookings copy follows immediately
     jobs.push(b);
     const stop={ order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:iso, name:b.name||'', address:b.address||'', zip:b.zip||'', crew:crewKey, jobTime:hh+':'+mm };
@@ -3077,25 +3090,27 @@ function dayMove(c,iso,idx,dir){
     _dayPushTimers[tk]=null;
     // 1. route record (order + times) — what /field follows
     try{
-      const d=await fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'put_route', date:iso, crew:crewKey, stops:JSON.stringify(stops), updatedBy:myName||'Owner', idemKey:'hqday:'+iso+':'+crewKey+':'+Date.now(), adminToken:token })).then(r=>r.json());
+      const ut=_bizUT(zi);
+      const d=await fetch(ut.u+'?'+new URLSearchParams({ action:'put_route', date:iso, crew:crewKey, stops:JSON.stringify(stops), updatedBy:myName||'Owner', idemKey:'hqday:'+iso+':'+crewKey+':'+Date.now(), adminToken:ut.t })).then(r=>r.json());
       if(!(d&&d.success)){ toast('⚠ Could not save order'); return; }
     }catch(e){ toast('⚠ Network error saving order'); return; }
     // 2. persist each stop's time onto its Bookings row too, so the order
     //    survives refresh even on backends without the get_route fix yet
     for(let i=0;i<jobs.length;i++){
-      try{ await fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'set_job_time', rowIndex:_ri(jobs[i]), email:jobs[i].email||'', serviceDate:iso, jobTime:jobs[i].jobTime, adminToken:token })); }catch(e){}
+      try{ await fetch(_bizUT(zi).u+'?'+new URLSearchParams({ action:'set_job_time', rowIndex:_ri(jobs[i]), email:jobs[i].email||'', serviceDate:iso, jobTime:jobs[i].jobTime, adminToken:_bizUT(zi).t })); }catch(e){}
       await new Promise(function(r){ setTimeout(r,120); });
     }
     toast('📲 Run order saved — times locked in');
   },800);
 }
-function _dayJobsInOrder(c,iso){
+function _dayJobsInOrder(c,iso,zi){
+  zi=zi||0;
   const rec=_dispRoute[iso]||{times:{},order:{}};
-  const ordKeys=rec.order[c==='un'?'':c]||[];
+  const ordKeys=rec.order[_recKey(zi,c)]||rec.order[c==='un'?'':c]||[];
   return _dispFilter(_dispJobs()).filter(function(b){
     if(dateOf(b)!==iso) return false;
     const bc=String(b.crew||'').toUpperCase().trim()||'un';
-    return bc===c&&!_isArch(b)&&!isDone(b)&&!(b._srcBiz>0);
+    return bc===c&&!_isArch(b)&&!isDone(b)&&((b._srcBiz||0)===zi);
   }).sort(function(a,b2){
     if(ordKeys.length){ let pa=ordKeys.indexOf(_svKey(a)), pb=ordKeys.indexOf(_svKey(b2)); pa=pa<0?9999:pa; pb=pb<0?9999:pb; if(pa!==pb) return pa-pb; }
     return _jobSort(a,b2);
