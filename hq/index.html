@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-08.20 */
-(function(){ var V='2026-07-08.20'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-08.21 */
+(function(){ var V='2026-07-08.21'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -2447,11 +2447,39 @@ function dispDropTL(ev,crewKey,iso){
 /* ── Day-view run reorder: arrows only, times re-chain automatically ── */
 const _dayReorderOpen={}, _dayPushTimers={};
 function toggleDayOrder(c,iso){ const k=c+'|'+iso; _dayReorderOpen[k]=!_dayReorderOpen[k]; renderDispatch(); }
+// ── 🗺 Open a crew's day as Google Maps directions. Maps caps a URL at ~10
+//    locations, so long routes split into legs — same pattern as /invoice.
+function crewMapsRoute(zi,c){
+  const rec=(window._dayEvsCache||{})[zi+'|'+c];
+  if(!rec||!rec.evs||!rec.evs.length){ toast('No stops on this crew\'s board'); return; }
+  const addrs=rec.evs.slice().sort(function(a,b){ return a.st-b.st; })
+    .map(function(ev){ const b=ev.b; return (b.address||'')+(b.zip?', '+b.zip:'')+', FL'; })
+    .filter(function(a){ return a.replace(/[,\sFL]/g,'').length>3; });
+  if(!addrs.length){ toast('No addresses to route'); return; }
+  const CHUNK=10, legs=[]; let i=0, prev='';
+  while(i<addrs.length){
+    const originParts=prev?[prev]:[];
+    const take=addrs.slice(i,i+(CHUNK-originParts.length));
+    legs.push({ url:'https://www.google.com/maps/dir/'+originParts.concat(take).map(encodeURIComponent).join('/'), from:i+1, to:i+take.length });
+    prev=take[take.length-1]; i+=take.length;
+  }
+  window.open(legs[0].url,'_blank','noopener');
+  if(legs.length>1){
+    const old=document.getElementById('hqLegsOv'); if(old) old.remove();
+    const ov=document.createElement('div'); ov.id='hqLegsOv';
+    ov.style.cssText='position:fixed;right:16px;bottom:16px;z-index:9500;background:var(--panel,#111827);border:1px solid var(--line);border-radius:14px;padding:13px 15px;box-shadow:0 12px 40px rgba(0,0,0,.5);max-width:290px;';
+    ov.innerHTML='<div style="font-weight:800;font-size:13px;margin-bottom:8px;">🗺 Crew '+esc(c)+' — '+legs.length+' legs (Maps caps at 10 stops)</div>'
+      +legs.map(function(l,li){ return '<button class="dev-btn" style="display:block;width:100%;margin-bottom:6px;text-align:left;" onclick="window.open(\''+l.url+'\',\'_blank\',\'noopener\')">Leg '+(li+1)+' · stops '+l.from+'–'+l.to+(li===0?' (opened)':'')+'</button>'; }).join('')
+      +'<button class="ghost" style="width:100%;margin-top:2px;" onclick="document.getElementById(\'hqLegsOv\').remove()">Close</button>';
+    document.body.appendChild(ov);
+  }
+}
 function _dayOrderPanel(c,iso,cell,zi){
   const jobs=cell.filter(function(b){ return !_isArch(b)&&!isDone(b)&&!(b._srcBiz>0); });
   if(!jobs.length) return '';
   const k=c+'|'+iso, open=_dayReorderOpen[k];
-  let h='<div style="padding:5px 2px 0;"><button class="dev-btn" style="font-size:11px;padding:5px 11px;" onclick="toggleDayOrder(\''+c+'\',\''+iso+'\')">'+(open?'▾':'▸')+' ↕ Reorder run ('+jobs.length+')</button>';
+  let h='<div style="padding:5px 2px 0;"><button class="dev-btn" style="font-size:11px;padding:5px 11px;" onclick="toggleDayOrder(\''+c+'\',\''+iso+'\')">'+(open?'▾':'▸')+' ↕ Reorder run ('+jobs.length+')</button>'
+    +(c!=='un'?'<button class="dev-btn" style="font-size:11px;padding:5px 11px;margin-left:6px;" onclick="crewMapsRoute('+(zi||0)+',\''+c+'\')" title="Open this crew\'s day as Google Maps directions — long routes split into 10-stop legs">🗺 Route in Google Maps</button>':'');
   if(open){
     let st=480;
     h+='<div style="margin-top:5px;">'+jobs.map(function(b,i){
