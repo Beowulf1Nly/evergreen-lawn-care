@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-08.31 */
-(function(){ var V='2026-07-08.31'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-08.32 */
+(function(){ var V='2026-07-08.32'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -586,6 +586,13 @@
       <div class="dev-row" style="margin-bottom:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;">
         <span style="font-weight:800;font-size:12px;white-space:nowrap;">🏠 Home base</span>
         <input class="dev-inp" id="opsHomeBase" placeholder="Shop address — crews get routed here after their last yard" style="flex:1;font-size:16px;">
+        <button class="dev-btn go" onclick="saveHomeBase()">Save</button>
+      </div>
+      <div class="dev-row" style="margin-bottom:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;">
+        <span style="font-weight:800;font-size:12px;white-space:nowrap;">⛽ Gas station</span>
+        <input class="dev-inp" id="opsGasReg" placeholder="Close-by station (regular gas) — crews see it after morning PMCS" style="flex:1;font-size:16px;">
+        <span style="font-weight:800;font-size:12px;white-space:nowrap;">🌿 Non-ethanol</span>
+        <input class="dev-inp" id="opsGasNE" placeholder="Non-ethanol station (2-stroke mix — weed whackers)" style="flex:1;font-size:16px;">
         <button class="dev-btn go" onclick="saveHomeBase()">Save</button>
       </div>
       <div class="dev-grid" id="opsGrid"><div class="empty">Loading…</div></div>
@@ -3311,6 +3318,8 @@ async function loadHomeBase(){
   const d=await bizGet(z,{action:'get_schedule_config'});
   el.value=(d&&d.success&&d.config&&d.config.homeBase)?d.config.homeBase:'';
   el.placeholder='Shop address for '+(z.n||'this business')+' — crews get routed here after their last yard';
+  const gr=document.getElementById('opsGasReg'); if(gr) gr.value=(d&&d.success&&d.config&&d.config.gasStation)||'';
+  const gn=document.getElementById('opsGasNE'); if(gn) gn.value=(d&&d.success&&d.config&&d.config.gasStationNE)||'';
 }
 async function saveHomeBase(){
   const z=_bizLoad()[_opsBiz]||_bizLoad()[0];
@@ -3319,6 +3328,8 @@ async function saveHomeBase(){
   const cur=await bizGet(z,{action:'get_schedule_config'});
   const cfg=(cur&&cur.success&&cur.config&&typeof cur.config==='object')?cur.config:{};
   cfg.homeBase=addr;
+  cfg.gasStation=String((document.getElementById('opsGasReg')||{}).value||'').trim();
+  cfg.gasStationNE=String((document.getElementById('opsGasNE')||{}).value||'').trim();
   // set_schedule_config lives in doPost (JSON body) on the lawn backend — POST
   // first; fall back to GET for forks that route it through doGet instead.
   let d=null;

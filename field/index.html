@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.24 */
+/* APP_VER:2026-07-08.25 */
 (function(){
-  var V='2026-07-08.24'; window.__APP_VER=V;
+  var V='2026-07-08.25'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -765,6 +765,10 @@ async function _loadDataInner(refreshToast){
       if(d&&d.success&&d.config&&typeof d.config.homeBase==='string'){
         _homeBase=d.config.homeBase.trim();
         try{ localStorage.setItem('evg_homebase',_homeBase); }catch(e){}
+      }
+      if(d&&d.success&&d.config){
+        _gasReg=String(d.config.gasStation||'').trim(); _gasNE=String(d.config.gasStationNE||'').trim();
+        try{ localStorage.setItem('evg_gas',JSON.stringify({r:_gasReg,n:_gasNE})); }catch(e){}
       }
     }).catch(function(){ try{ _homeBase=localStorage.getItem('evg_homebase')||''; }catch(e){} });
     try{ if(!_homeBase) _homeBase=localStorage.getItem('evg_homebase')||''; }catch(e){}
@@ -1716,6 +1720,32 @@ function _fmRenderStart(){
 }
 
 /* ───────── Start-of-route checklist ───────── */
+/* ── ⛽ GAS STATION STEP — morning PMCS → gas prompt → start route. Optional:
+   crews tap Navigate if they need fuel (non-ethanol station for 2-stroke mix),
+   or skip straight through. Route always optimizes from wherever they END UP. ── */
+let _gasReg='', _gasNE=''; try{ const _g0=JSON.parse(localStorage.getItem('evg_gas')||'{}'); _gasReg=_g0.r||''; _gasNE=_g0.n||''; }catch(e){}
+function _fmGasStep(cont){
+  if(!_gasReg&&!_gasNE){ cont(); return; }
+  let ov=document.getElementById('fmGasSheet');
+  if(!ov){ ov=document.createElement('div'); ov.id='fmGasSheet'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;z-index:400;display:flex;align-items:flex-end;justify-content:center;background:rgba(10,30,18,.55);';
+  const stn=function(lbl,addr,note){
+    if(!addr) return '';
+    return '<div class="fm-block" style="margin-bottom:10px;"><div class="fm-block-label"><span>'+lbl+'</span></div>'
+      +'<div style="font-size:15px;font-weight:700;margin-bottom:4px;">'+esc(addr)+'</div>'
+      +(note?'<div style="font-size:12.5px;color:#64748b;margin-bottom:8px;">'+note+'</div>':'')
+      +'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="_fmOpenUrl(\'https://www.google.com/maps/dir/?api=1&destination=\'+encodeURIComponent(\''+esc(addr).replace(/'/g,"\\'")+'\'))">🧭 Navigate there</button></div>';
+  };
+  ov.innerHTML='<div class="fm-sheet">'
+    +'<div class="fm-sheet-title">⛽ Gas up?</div>'
+    +'<div class="fm-sheet-sub">Need fuel before the route? Go fill up, then come back and hit Start — the route plans itself from wherever you are. Don\'t need gas? Just start.</div>'
+    +stn('⛽ Regular — close by',_gasReg,'')
+    +stn('🌿 Non-ethanol',_gasNE,'Need mix gas for the weed whackers / 2-strokes? Use THIS one.')
+    +'<button class="fm-btn fm-btn-lg" style="margin-top:8px;width:100%;" onclick="_fmGasGo()">▶ Start route</button>'
+    +'</div>';
+  window._fmGasCont=cont;
+}
+function _fmGasGo(){ const ov=document.getElementById('fmGasSheet'); if(ov) ov.style.display='none'; const c=window._fmGasCont; window._fmGasCont=null; if(c) c(); }
 async function fmStartTapped(){
   // Resume: already clocked in & rolling today → jump straight back into the route.
   if(_clockInTime&&!_clockedOut&&_fmStarted){ _fmBooted=true; _fmRender(); return; }
@@ -1733,8 +1763,8 @@ async function fmStartTapped(){
     try{ if(typeof loadoutGate==='function') loOK=await loadoutGate(); }catch(e){}
     if(loOK===false) return;
   }
-  // 4) Clock in + roll.
-  fmBeginRoute();
+  // 4) ⛽ Gas prompt (optional stop) → 5) clock in + roll from wherever they are.
+  _fmGasStep(function(){ fmBeginRoute(); });
 }
 function _renderStartChecklist(){
   const wrap=document.getElementById('fmStartChecklist');
@@ -1750,7 +1780,7 @@ function fmRemoveHelper(i){ _helpers.splice(i,1); _persist(); _renderHelpers(); 
 function _anySheetOpen(){
   // ANY open overlay pauses background refresh — a poll mid-quote/mid-checkout used
   // to swap the data out from under the crew's thumbs.
-  const flexIds=['fmCompleteSheet','fmSkipSheet','fmCrewPicker','qcOverlay','ncOverlay','qjOverlay','fmNotesSheet'];
+  const flexIds=['fmCompleteSheet','fmSkipSheet','fmCrewPicker','qcOverlay','ncOverlay','qjOverlay','fmNotesSheet','fmGasSheet'];
   for(let i=0;i<flexIds.length;i++){ const el=document.getElementById(flexIds[i]); if(el&&el.style.display==='flex') return true; }
   return !!document.querySelector('.pmcs-overlay.open');
 }
