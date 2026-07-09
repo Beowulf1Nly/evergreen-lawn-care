@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.30 */
+/* APP_VER:2026-07-08.31 */
 (function(){
-  var V='2026-07-08.30'; window.__APP_VER=V;
+  var V='2026-07-08.31'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -129,6 +129,10 @@
   .fm-jobnav button{ background:rgba(255,255,255,.12); color:#dcfce7; border:none; border-radius:10px; padding:8px 14px; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; }
   .fm-jobnav button:disabled{ opacity:.3; }
   #fmCompleteSheet,#fmSkipSheet{ display:none; position:fixed; inset:0; z-index:3100; background:rgba(0,0,0,.55); align-items:flex-end; justify-content:center; }
+  /* finish-job is a full PAGE — the popup style clipped the top on long jobs */
+  #fmCompleteSheet{ background:#eef6f0; align-items:stretch; }
+  #fmCompleteSheet .fm-sheet{ height:100dvh; max-height:100dvh; border-radius:0; box-shadow:none; padding-top:max(18px, env(safe-area-inset-top)); }
+  .fm-block{ border:1.5px solid #e6ebf0; box-shadow:0 1px 4px rgba(15,42,25,.05); background:#fff; }
   .fm-sheet{ background:#fff; color:#14361f; border-radius:24px 24px 0 0; width:100%; max-width:520px; padding:24px 20px max(28px,env(safe-area-inset-bottom)); box-shadow:0 -10px 50px rgba(0,0,0,.3); max-height:92vh; overflow-y:auto; }
   .fm-sheet-title{ font-size:22px; font-weight:800; margin-bottom:2px; }
   .fm-sheet-sub{ color:#64748b; font-size:14px; margin-bottom:18px; }
@@ -339,11 +343,11 @@
       <div class="fm-block-label"><span>Notes</span><span style="color:#94a3b8;">optional</span></div>
       <div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">🗒 This visit only — one-time note to the office</div>
       <textarea class="fm-textarea" id="fmcOwnerNote" placeholder="Just about today (e.g. 'mower threw a belt, ran late')…"></textarea>
-      <div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 5px;">📌 Customer note — sticks on their profile until changed</div>
+      <div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 5px;" id="fmcCustNoteLbl">📌 Customer note — sticks on their profile until changed</div>
       <textarea class="fm-textarea" id="fmcCustNote" placeholder="Gate code, dogs, sprinkler heads to avoid…"></textarea>
     </div>
     <div class="fm-block">
-      <div class="fm-block-label"><span>Before you leave</span><span id="fmcCheckState" class="req">required</span></div>
+      <div class="fm-block-label"><span>Before you leave</span><span style="display:flex;align-items:center;gap:8px;"><button onclick="fmcCheckAll()" style="background:#f0fdf4;border:1.5px solid #bbf7d0;color:#15803d;border-radius:9px;padding:4px 11px;font-family:inherit;font-weight:800;font-size:12px;cursor:pointer;">✓ Check all</button><span id="fmcCheckState" class="req">required</span></span></div>
       <div class="fm-checklist" id="fmcChecklist"></div>
     </div>
     <div class="fm-err" id="fmcErr"></div>
@@ -2083,6 +2087,11 @@ function fmOpenComplete(){
     const cust0=em0?(allCustomers||[]).find(c=>String(c.Email||'').toLowerCase().trim()===em0):null;
     _fmcCustNote0=(cust0&&String(cust0.Notes||'').trim())||'';
     cn.value=_fmcCustNote0;
+    // Crews can READ the sticky profile note but not rewrite it — only the
+    // one-time note to the office is theirs. Owners/managers still edit.
+    const _lbl=document.getElementById('fmcCustNoteLbl');
+    if(!_fmIsBoss()){ cn.disabled=true; cn.style.background='#f1f5f9'; cn.style.color='#475569'; if(_lbl) _lbl.textContent='📌 Customer note (view only — put changes in the note to the office above)'; }
+    else { cn.disabled=false; cn.style.background=''; cn.style.color=''; if(_lbl) _lbl.textContent='📌 Customer note — sticks on their profile until changed'; }
     cn.disabled=!em0;
     cn.placeholder=em0?'Gate code, dogs, sprinkler heads to avoid…':'(needs a customer email on file)';
   })();
@@ -2123,7 +2132,7 @@ function _fmcRenderPay(){
     {k:'invoice',lbl:'🧾 Invoice'}
   ];
   const bar='<div style="display:flex;gap:7px;margin-bottom:10px;">'+methods.map(function(m){ const on=_fmcPayType===m.k;
-    return '<button '+(m.dis?('disabled title="'+m.tip+'"'):('onclick="fmcSetMethod(\''+m.k+'\')"'))+' style="flex:1;padding:9px 4px;border-radius:10px;border:1.5px solid '+(on?'#22c55e':'rgba(255,255,255,.15)')+';background:'+(on?'rgba(34,197,94,.16)':'transparent')+';color:'+(m.dis?'#64748b':'#e9edec')+';font-weight:700;font-size:13px;'+(m.dis?'opacity:.5;':'cursor:pointer;')+'">'+m.lbl+'</button>';
+    return '<button '+(m.dis?('disabled title="'+m.tip+'"'):('onclick="fmcSetMethod(\''+m.k+'\')"'))+' style="flex:1;padding:11px 4px;border-radius:11px;border:2px solid '+(on?'#16a34a':'#cbd5e1')+';background:'+(on?'#dcfce7':'#f8fafc')+';color:'+(m.dis?'#94a3b8':(on?'#15803d':'#14361f'))+';font-weight:800;font-size:13.5px;'+(m.dis?'opacity:.55;':'cursor:pointer;')+'">'+m.lbl+'</button>';
   }).join('')+'</div>';
   let ctrl='';
   if(_fmcPayType==='autopay'){
@@ -2156,6 +2165,7 @@ function _fmcRenderEndChk(){
   const st=document.getElementById('fmcCheckState'); if(st){ st.textContent=allChecked?'✓ done':'required'; st.className=allChecked?'ok':'req'; }
   _fmcUpdateSubmit();
 }
+function fmcCheckAll(){ Object.keys(_fmcEndChk).forEach(function(l){ _fmcEndChk[l]=true; }); _fmcRenderCheck(); _fmcRefreshSubmit(); }
 function fmToggleEndChk(label){ _fmcEndChk[label]=!_fmcEndChk[label]; if(label==='Collected cash') _fmcCash=_fmcEndChk[label], _fmcRenderPay(); _fmcRenderEndChk(); }
 function _fmcEndChkDone(){ return Object.keys(_fmcEndChk).every(l=>_fmcEndChk[l]); }
 function _fmcCanFinish(){ return _fmcPayResolved()&&_fmcEndChkDone(); }
