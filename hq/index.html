@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-08.35 */
-(function(){ var V='2026-07-08.35'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-08.36 */
+(function(){ var V='2026-07-08.36'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -3647,12 +3647,13 @@ function _hqRevCard(results){
   // business is never buried under a big one.
   const series=results.filter(function(r){ return !r.locked&&r.st; }).map(function(r){
     const vals=order.map(function(){ return 0; });
+    const cnts=order.map(function(){ return 0; });
     (r.jobs||[]).concat((r.books||[]).filter(function(j){ return isDone(j); })).forEach(function(j){
       const d=String(dateOf(j)||''); const a2=amtOf(j); if(!a2||d<cut) return;
       let ki=0; for(let i=0;i<order.length;i++){ if(d>=order[i]) ki=i; else break; }
-      vals[ki]+=a2;
+      vals[ki]+=a2; cnts[ki]++;
     });
-    return { c:(r.z&&r.z.c)||'#22c55e', e:(r.z&&r.z.e)||'', n:(r.z&&r.z.n)||'', vals:vals };
+    return { c:(r.z&&r.z.c)||'#22c55e', e:(r.z&&r.z.e)||'', n:(r.z&&r.z.n)||'', vals:vals, cnts:cnts };
   });
   const max=Math.max.apply(null,series.reduce(function(acc,sr){ return acc.concat(sr.vals); },[1]));
   const W=1000,H=238,L=48,Rm=14,T=16, n=order.length, B=(n>14?52:30);
@@ -3688,11 +3689,15 @@ function _hqRevCard(results){
       ?'<text x="'+xx+'" y="'+(H-6)+'" text-anchor="end" transform="rotate(-45 '+xx+' '+(H-6)+')" font-size="8.5" fill="rgba(255,255,255,.42)" font-family="ui-monospace,monospace">'+_xlbl(order[i])+'</text>'
       :'<text x="'+xx+'" y="'+(H-10)+'" text-anchor="middle" font-size="9.5" fill="rgba(255,255,255,.42)" font-family="ui-monospace,monospace">'+_xlbl(order[i])+'</text>'; }
   let hov='';
-  order.forEach(function(k,i){ const t=series.reduce(function(sm,sr){ return sm+sr.vals[i]; },0);
-    const det=series.map(function(sr){ return esc(((sr.e||'')+' '+(sr.n||'')).trim())+': '+_fmtMoney(sr.vals[i]); }).join('&#10;');
-    const span=bw>1?(' – '+new Date(new Date(k+'T12:00:00').getTime()+(bw-1)*864e5).toISOString().slice(0,10)):'';
+  const _fmtD=function(k2){ const d2=new Date(k2+'T12:00:00'); return isNaN(d2)?k2:d2.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); };
+  order.forEach(function(k,i){
+    const t=series.reduce(function(sm,sr){ return sm+sr.vals[i]; },0);
+    const nj=series.reduce(function(sm,sr){ return sm+(sr.cnts[i]||0); },0);
+    const det=series.map(function(sr){ return esc(((sr.e||'')+' '+(sr.n||'')).trim())+': '+_fmtMoney(sr.vals[i])+' ('+(sr.cnts[i]||0)+' job'+((sr.cnts[i]||0)!==1?'s':'')+')'; }).join('&#10;');
+    const endK=bw>1?new Date(new Date(k+'T12:00:00').getTime()+(bw-1)*864e5).toISOString().slice(0,10):null;
+    const label=(bw>=30?'Month of ':bw===7?'Week of ':'')+_fmtD(k)+(endK?(' – '+_fmtD(endK)):'');
     hov+='<g class="hv"><line x1="'+X(i).toFixed(1)+'" y1="'+T+'" x2="'+X(i).toFixed(1)+'" y2="'+(H-B)+'" stroke="rgba(255,255,255,.4)" stroke-dasharray="3 3"/>'
-      +'<rect x="'+(X(i)-((W-L-Rm)/Math.max(1,n-1))/2).toFixed(1)+'" y="'+T+'" width="'+((W-L-Rm)/Math.max(1,n-1)).toFixed(1)+'" height="'+(H-T-B)+'" fill="transparent"><title>'+k+span+' — '+_fmtMoney(t)+' total&#10;'+det+'</title></rect></g>'; });
+      +'<rect x="'+(X(i)-((W-L-Rm)/Math.max(1,n-1))/2).toFixed(1)+'" y="'+T+'" width="'+((W-L-Rm)/Math.max(1,n-1)).toFixed(1)+'" height="'+(H-T-B)+'" fill="transparent"><title>'+label+'&#10;💵 '+_fmtMoney(t)+' earned · '+nj+' job'+(nj!==1?'s':'')+(nj?(' · avg '+_fmtMoney(t/nj)):'')+'&#10;'+det+'</title></rect></g>'; });
   const svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block;margin-top:8px;"><style>g.hv line{opacity:0}g.hv:hover line{opacity:.5}</style><defs>'+defs+'</defs>'+grid+paint+hov+xl+'</svg>';
   const btn=function(p2,l2){ return '<button class="dev-btn'+(_revPeriod===p2?' go':'')+'" onclick="setRevPeriod(\''+p2+'\')">'+l2+'</button>'; };
   const legend=results.filter(function(r){ return !r.locked&&r.st; }).map(function(r){ return '<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px;font-size:11px;color:var(--muted);"><span style="width:9px;height:9px;border-radius:3px;background:'+esc((r.z&&r.z.c)||'#22c55e')+';box-shadow:0 0 8px '+esc((r.z&&r.z.c)||'#22c55e')+';"></span>'+esc(((r.z&&r.z.e)||'')+' '+((r.z&&r.z.n)||''))+'</span>'; }).join('');
@@ -3792,7 +3797,8 @@ async function renderStats(force){
   const now=new Date(); const months=[];
   for(let k=5;k>=0;k--){ const d=new Date(now.getFullYear(),now.getMonth()-k,1); months.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); }
   function _n(v){ return +(String(v==null?0:v).replace(/[^0-9.-]/g,''))||0; }
-  function _wkRev(jobs){ const now=new Date(); const ws=new Date(now.getFullYear(),now.getMonth(),now.getDate()-now.getDay()); const wsT=ws.getTime(),lastT=wsT-7*864e5,endT=wsT+7*864e5; let tw=0,lw=0; const seen={}; (jobs||[]).forEach(function(j){ if(j.rowCancelled||_hqIsQuote(j)) return; const d=new Date(String(dateOf(j)||'')+'T12:00:00').getTime(); if(isNaN(d))return; const k=String(j.email||j.name||'').toLowerCase().trim()+'|'+dateOf(j)+'|'+amtOf(j); if(seen[k])return; seen[k]=1; if(d>=wsT&&d<endT)tw+=amtOf(j); else if(d>=lastT&&d<wsT)lw+=amtOf(j); }); return {tw:tw,lw:lw}; }
+  function _wkRev(jobs){ // BOOKED $ scheduled Sun–Sat — done or not, paid or not (owner's call)
+    const now=new Date(); const ws=new Date(now.getFullYear(),now.getMonth(),now.getDate()-now.getDay()); const wsT=ws.getTime(),lastT=wsT-7*864e5,endT=wsT+7*864e5; let tw=0,lw=0; const seen={}; (jobs||[]).forEach(function(j){ if(j.rowCancelled||_hqIsQuote(j)) return; const d=new Date(String(dateOf(j)||'')+'T12:00:00').getTime(); if(isNaN(d))return; const k=String(j.email||j.name||'').toLowerCase().trim()+'|'+dateOf(j)+'|'+amtOf(j); if(seen[k])return; seen[k]=1; if(d>=wsT&&d<endT)tw+=amtOf(j); else if(d>=lastT&&d<wsT)lw+=amtOf(j); }); return {tw:tw,lw:lw}; }
   function _delta(a,b){ if(!(b>0)) return ''; const p=Math.round((a-b)/b*100); return p>=0?' <span class="dev-pill g">▲'+p+'%</span>':' <span class="dev-pill r">▼'+Math.abs(p)+'%</span>'; }
   function _kpi(val,label,accent){ return '<div><div style="font-size:25px;font-family:var(--mono);font-weight:800;line-height:1;'+(accent||'')+'">'+val+'</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:700;margin-top:5px;">'+label+'</div></div>'; }
   function _k(v){ return v>=1000?('$'+(Math.round(v/100)/10)+'k'):('$'+Math.round(v)); }
@@ -3801,26 +3807,35 @@ async function renderStats(force){
   const crewBoard={}, srcBoard={};
   results.forEach(function(r){ if(r.locked||!r.st) return; const b=r.st.bookings||{}, a=r.st.analytics||{};
     const arch=r.jobs.reduce(function(s,j){return s+amtOf(j);},0);
-    // Quote funnel — THIS WEEK (Sun–Sat): fresh quote rows in, conversions out.
+    // Quote funnel — THIS WEEK (Sun–Sat). "Closed" pairs each quote CUSTOMER with
+    // any real (non-quote) booking on/after their quote — however it was booked.
+    // The old notes-text match ("booked at quote") missed most actual closes.
     (function(){
       const _nw=new Date(); const _ws=new Date(_nw.getFullYear(),_nw.getMonth(),_nw.getDate()-_nw.getDay());
       const _wsT=_ws.getTime(), _endT=_wsT+7*864e5, _lastT=_wsT-7*864e5;
       const _stamp=function(j){ let v=String(j.timestamp||dateOf(j)||''); if(/^\d{4}-\d{2}-\d{2}$/.test(v)) v+='T12:00:00'; const t=new Date(v); return isNaN(t)?NaN:t.getTime(); };
-      const _sn={};
+      const _quotes=[], _realT={};
       (r.books||[]).concat(r.jobs||[]).forEach(function(j){
         if(j.rowCancelled) return;
+        const em=String(j.email||'').toLowerCase().trim(); if(!em) return;
         const t=_stamp(j); if(isNaN(t)) return;
-        const k=String(j.email||j.name||'').toLowerCase().trim()+'|'+dateOf(j)+'|'+(_hqIsQuote(j)?'q':'b'); if(_sn[k]) return; _sn[k]=1;
-        const inTW=(t>=_wsT&&t<_endT), inLW=(t>=_lastT&&t<_wsT);
+        if(_hqIsQuote(j)) _quotes.push({ em:em, t:t });
+        else (_realT[em]=_realT[em]||[]).push(t);
+      });
+      const _seenQ={};
+      _quotes.forEach(function(q){
+        const inTW=(q.t>=_wsT&&q.t<_endT), inLW=(q.t>=_lastT&&q.t<_wsT);
         if(!inTW&&!inLW) return;
-        if(_hqIsQuote(j)){ if(inTW)E.nq++; else E.nqL++; }
-        else if(/booked at quote/i.test(String(j.notes||''))){ if(inTW)E.ncl++; else E.nclL++; }
+        const dk=q.em+(inTW?'|T':'|L'); if(_seenQ[dk]) return; _seenQ[dk]=1;   // one quote per customer per week
+        if(inTW) E.nq++; else E.nqL++;
+        const closed=(_realT[q.em]||[]).some(function(t2){ return t2>=q.t-172800000; });   // real booking on/after the quote (2-day grace)
+        if(closed){ if(inTW) E.ncl++; else E.nclL++; }
       });
     })();
     // Real completed jobs only — quotes are visits, not tickets.
     r.jobs.concat((r.books||[]).filter(function(j){ return isDone(j); })).forEach(function(j){ if(j.rowCancelled||_hqIsQuote(j)) return; E.doneNQ++; const a0=amtOf(j); if(a0>0) _tixAll.push(a0); });
     E.paid+=_n(b.estimatedRev); E.rev+=Math.max(arch,_n(b.estimatedRev)); E.done+=_n(b.done); E.total+=_n(b.total); E.cust+=_n(b.customers);
-    const w=_wkRev(r.jobs.concat((r.books||[]).filter(function(j){ return isDone(j); }))), bw=b.weekOverWeek||{}, aw=a.weekOverWeek||{};
+    const w=_wkRev(r.jobs.concat(r.books||[])), bw=b.weekOverWeek||{}, aw=a.weekOverWeek||{};   // ALL booked jobs this week, not just done
     E.twr+=(w.tw||_n(bw.thisWeekRev)); E.lwr+=(w.lw||_n(bw.lastWeekRev));
     E.newC+=_n(a.newVisitors); E.visits+=_n(a.totalVisits);
     E.twv+=_n(aw.thisWeekVisits); E.lwv+=_n(aw.lastWeekVisits); E.twq+=_n(aw.thisWeekQuotes); E.lwq+=_n(aw.lastWeekQuotes);
@@ -3836,7 +3851,7 @@ async function renderStats(force){
   h+='<div class="dev-card" style="grid-column:1/-1;"><div class="dev-h">👑 Empire totals — all businesses</div><div class="dev-b">'
     +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:16px;">'
     +_kpi(_fmtMoney(E.rev),'Revenue (done work)','background:linear-gradient(180deg,#fff,#4ade80);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;')
-    +_kpi(_fmtMoney(E.twr)+_delta(E.twr,E.lwr),'Rev this week (Sun–Sat)')
+    +_kpi(_fmtMoney(E.twr)+_delta(E.twr,E.lwr),'Booked this week (Sun–Sat)')
     +_kpi(String(E.doneNQ||E.done),'Jobs completed')
     +_kpi(compRate+'%','Completion rate')
     +_kpi(String(E.cust),'Customers')
@@ -3852,7 +3867,7 @@ async function renderStats(force){
     +'<div class="dev-row">👀 Site visits <b>'+E.twv+'</b>'+_delta(E.twv,E.lwv)+'</div>'
     +'<div class="dev-row">📋 New quotes <b>'+E.nq+'</b>'+_delta(E.nq,E.nqL)+'</div>'
     +'<div class="dev-row">🤝 Closed &amp; locked in <b>'+E.ncl+'</b>'+_delta(E.ncl,E.nclL)+(E.nq>0?' · <span class="dev-pill '+(Math.round(E.ncl/E.nq*100)>=40?'g':'y')+'">'+Math.round(E.ncl/E.nq*100)+'% close rate</span>':'')+'</div>'
-    +'<div class="dev-row" style="color:var(--dim);font-size:11.5px;">quotes = quote rows created this week · closed = "booked at quote visit" rows this week</div>'
+    +'<div class="dev-row" style="color:var(--dim);font-size:11.5px;">quotes = customers quoted this week · closed = those who now have a real booking on/after their quote</div>'
     +'</div></div>';
   const crewSorted=Object.keys(crewBoard).sort(function(a,b){return crewBoard[b]-crewBoard[a];}).slice(0,6);
   h+='<div class="dev-card"><div class="dev-h">🏆 Crew — jobs completed</div><div class="dev-b">'
@@ -3866,7 +3881,7 @@ async function renderStats(force){
     const z=r.z;
     if(r.locked){ h+='<div class="dev-card"><div class="dev-h" style="--bc:'+esc(z.c)+'">'+esc(z.e)+' '+esc(z.n)+'</div><div class="dev-b"><div class="dev-row" style="color:var(--dim);">🔒 Not connected — link it in ⚙ 🏢 Businesses.</div></div></div>'; return; }
     const b=(r.st&&r.st.bookings)||{}, a=(r.st&&r.st.analytics)||{};
-    const w=_wkRev(r.jobs.concat((r.books||[]).filter(function(j){ return isDone(j); })));
+    const w=_wkRev(r.jobs.concat(r.books||[]));
     const doneLive=(r.books||[]).filter(function(j){ return isDone(j)&&!j.rowCancelled&&!_hqIsQuote(j); });
     const doneAll=r.jobs.filter(function(j){ return !j.rowCancelled&&!_hqIsQuote(j); }).concat(doneLive);
     const doneN=doneAll.length;
@@ -3880,7 +3895,7 @@ async function renderStats(force){
     const max=Math.max.apply(null,months.map(function(m){return byMonth[m];}).concat([1]));
     h+='<div class="dev-card"><div class="dev-h"><span style="width:4px;height:16px;border-radius:3px;background:'+esc(z.c)+';box-shadow:0 0 10px '+esc(z.c)+';"></span>'+esc(z.e)+' '+esc(z.n)+'<span class="grow"></span><span class="ph-c">'+(r.st?'live':'error')+'</span></div><div class="dev-b">'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:11px 14px;margin-bottom:12px;">'
-      +_kpi(_fmtMoney(w.tw)+_delta(w.tw,w.lw),'This week (Sun–Sat)')
+      +_kpi(_fmtMoney(w.tw)+_delta(w.tw,w.lw),'Booked this week (Sun–Sat)')
       +_kpi(_fmtMoney(revB),'Revenue (done)')
       +_kpi(String(doneN||_n(b.done)),'Jobs completed')
       +_kpi(String(_n(b.customers)),'Customers')
