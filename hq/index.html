@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-08.28 */
-(function(){ var V='2026-07-08.28'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-08.29 */
+(function(){ var V='2026-07-08.29'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -2801,20 +2801,47 @@ function _onCrewMoved(b,fromCrew,toCrew){
    job times, which is how a 40-mile day becomes a 112-mile zigzag. This geocodes
    the crew's open stops (Nominatim, cached per address), solves nearest-neighbor
    + a 2-opt pass, and saves through the exact same path as a manual reorder. ── */
-let _hqGeo={}; try{ _hqGeo=JSON.parse(localStorage.getItem('hq_geo2')||'{}'); }catch(e){}
+/* Geocode chain — SAME pipeline /invoice and /field already use:
+   1) US Census (JSONP — house-level, authoritative for US addresses; finds the
+      rural-FL house numbers OpenStreetMap is missing, e.g. 4478 E Ravenna St)
+   2) Nominatim with abbreviation expansion ("E ... St" → "East ... Street")
+   Cache key bumped to v3 so addresses the old Nominatim-only version marked
+   "not found" get re-resolved through Census automatically. */
+let _hqGeo={}; try{ _hqGeo=JSON.parse(localStorage.getItem('hq_geo3')||'{}'); }catch(e){}
+function _hqCensus(addr){
+  return new Promise(function(resolve){
+    var cb='__hqCensus_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+    var sc=document.createElement('script'); var done=false;
+    function cleanup(){ try{ delete window[cb]; }catch(e){} try{ if(sc&&sc.parentNode) sc.parentNode.removeChild(sc); }catch(e){} }
+    window[cb]=function(data){ done=true; cleanup(); try{ var m=data&&data.result&&data.result.addressMatches&&data.result.addressMatches[0]; if(m&&m.coordinates){ resolve({ lat:+m.coordinates.y, lon:+m.coordinates.x }); return; } }catch(e){} resolve(null); };
+    sc.onerror=function(){ if(!done){ cleanup(); resolve(null); } };
+    sc.src='https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?benchmark=Public_AR_Current&format=jsonp&callback='+cb+'&address='+encodeURIComponent(addr);
+    (document.head||document.documentElement).appendChild(sc);
+    setTimeout(function(){ if(!done){ cleanup(); resolve(null); } }, 7000);
+  });
+}
+const _HQ_GEO_EXP={ N:'North',S:'South',E:'East',W:'West',NE:'Northeast',NW:'Northwest',SE:'Southeast',SW:'Southwest',St:'Street',Ave:'Avenue',Av:'Avenue',Blvd:'Boulevard',Dr:'Drive',Ct:'Court',Ln:'Lane',Rd:'Road',Ter:'Terrace',Terr:'Terrace',Pl:'Place',Cir:'Circle',Hwy:'Highway',Pkwy:'Parkway',Trl:'Trail',Pt:'Point',Sq:'Square',Xing:'Crossing',Cv:'Cove',Trce:'Trace' };
+function _hqExpandAbbr(x){ let y=' '+String(x||'')+' '; for(const k2 in _HQ_GEO_EXP){ y=y.replace(new RegExp('(^|[\\s,])'+k2+'\\.?(?=[\\s,])','gi'), '$1'+_HQ_GEO_EXP[k2]); } return y.replace(/\s+/g,' ').trim(); }
 async function _hqGeocode(addr){
   const k=addr.toLowerCase().trim();
   if(_hqGeo[k]!==undefined) return _hqGeo[k];
+  const _flWide=function(co){ return co&&co.lat>=24&&co.lat<=31.6&&co.lon>=-88&&co.lon<=-79.4; };
+  // 1) Census — exact house-level when it hits
   try{
-    const d=await fetch('https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=1&countrycodes=us&q='+encodeURIComponent(addr)).then(function(r){ return r.json(); });
+    const cc=await _hqCensus(addr);
+    if(cc&&_flWide(cc)){ _hqGeo[k]={ lat:cc.lat, lon:cc.lon, q:'exact' }; try{ localStorage.setItem('hq_geo3',JSON.stringify(_hqGeo)); }catch(e){} return _hqGeo[k]; }
+  }catch(e){}
+  // 2) Nominatim with expanded abbreviations
+  try{
+    const d=await fetch('https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=1&countrycodes=us&q='+encodeURIComponent(_hqExpandAbbr(addr))).then(function(r){ return r.json(); });
     if(d&&d[0]){
       const r0=d[0];
-      // exact = the geocoder matched the HOUSE, not just the street or the town
       const exact=(String(r0.addresstype||'')==='house')||(String(r0.class||'')==='building')||(String(r0.type||'')==='house')||!!(r0.address&&r0.address.house_number);
-      _hqGeo[k]={ lat:+r0.lat, lon:+r0.lon, q:exact?'exact':'approx' };
+      const co={ lat:+r0.lat, lon:+r0.lon };
+      _hqGeo[k]=_flWide(co)?{ lat:co.lat, lon:co.lon, q:exact?'exact':'approx' }:null;   // same-named street in another state = not found
     } else _hqGeo[k]=null;
   }catch(e){ return undefined; }   // network blip — don't cache the failure
-  try{ localStorage.setItem('hq_geo2',JSON.stringify(_hqGeo)); }catch(e){}
+  try{ localStorage.setItem('hq_geo3',JSON.stringify(_hqGeo)); }catch(e){}
   await new Promise(function(r){ setTimeout(r,1100); });   // Nominatim rate limit
   return _hqGeo[k];
 }
