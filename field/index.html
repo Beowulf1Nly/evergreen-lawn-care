@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.22 */
+/* APP_VER:2026-07-08.23 */
 (function(){
-  var V='2026-07-08.22'; window.__APP_VER=V;
+  var V='2026-07-08.23'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1818,6 +1818,13 @@ function fmBeginRoute(){
 // expected minutes for every resolved stop + drive) vs the real clock. Also
 // projects the finish from the remaining stops. Crews see it on every job screen.
 function _fmLoadMins(){ return (new Date().getDay()===1?30:10); }
+let _fmDrivePhase={}; try{ _fmDrivePhase=JSON.parse(localStorage.getItem('evg_fm_drive')||'{}'); }catch(e){}
+function _fmDriveArrive(k){
+  delete _fmDrivePhase[k];
+  if(!_jobTimers[k]) _jobTimers[k]=new Date().toISOString();   // yard clock starts NOW — drive time never counts as yard time
+  try{ localStorage.setItem('evg_fm_drive',JSON.stringify(_fmDrivePhase)); }catch(e){}
+  _persist();
+}
 let _fmYardNudged={};
 // ⏱ Live per-yard pace: elapsed on THIS yard vs its expected minutes. Crews get
 // nudged at 1× (heads-up) and 1.5× (loud) — same threshold that alerts the office.
@@ -1827,7 +1834,26 @@ function _fmYardPaceTick(){
   if(!scr||!scr.classList.contains('active')){ el.textContent=''; return; }
   const stops=_fmStops(); const st=(_fmViewIdx!=null)&&stops[_fmViewIdx]; if(!st){ el.textContent=''; return; }
   const bk=st.bk; if(isDone(bk)||_fmIsSkipped(bk)){ el.textContent=''; return; }
-  const k=_stopKey(bk); const t0=_jobTimers[k]; if(!t0){ el.textContent=''; return; }
+  const k=_stopKey(bk); let t0=_jobTimers[k];
+  if(!t0){
+    const dp=_fmDrivePhase[k]; if(!dp){ el.textContent=''; return; }
+    // where's the yard? (geocode cache from routing)
+    let co=null;
+    try{ const cache=_geoCacheLoad(); const city=ZIP_CITY[bk.zip]||''; co=cache[(bk.address||'')+(bk.zip?', '+bk.zip:'')+(city?', '+city:'')+', FL']||null; }catch(e){}
+    const elapsed=(Date.now()-dp.t0)/60000;
+    let arrive=null;
+    if(co&&co.lat!=null&&_lastPos&&_lastPos.lat!=null){
+      const mi=haversineMiles(_lastPos.lat,_lastPos.lon,co.lat,co.lon);
+      if(mi<0.08){ _fmDriveArrive(k); return; }                    // ~130 yd — they're there
+      arrive=Math.max(1,Math.round(mi*1.3/28*60)+1);               // live ETA from GPS
+    } else {
+      const est=12-elapsed;                                        // no fix — assume the standard hop
+      if(est<=0){ _fmDriveArrive(k); return; }
+      arrive=Math.ceil(est);
+    }
+    el.innerHTML='<span style="color:#7dd3fc;">🚗 Driving — arrive ~'+arrive+'m</span>';
+    return;
+  }
   const mins=(Date.now()-new Date(t0).getTime())/60000, exp=mowMinutes(bk), m=Math.floor(mins);
   if(mins<=exp) el.innerHTML='<span style="color:#4ade80;">⏱ '+m+'m on this yard · ~'+exp+'m expected — good pace</span>';
   else if(mins<=exp*1.5) el.innerHTML='<span style="color:#fbbf24;">⏱ '+m+'m — past the ~'+exp+'m estimate, tighten up</span>';
@@ -1877,7 +1903,10 @@ function _fmRenderJob(stops,idx){
   // Working an unresolved stop means you're clocked IN — clear any stale "clocked out"
   // flag left over from a previously finished route (this was blocking live tracking).
   if(!done && !skipped && (!_clockInTime || _clockedOut)){ _clockInTime=new Date(); _clockedOut=false; _clockOutTime=null; _persist(); }
-  if(!done && !skipped && !_jobTimers[_stopKey(bk)]){ _jobTimers[_stopKey(bk)]=new Date().toISOString(); _persist(); }
+  // Timer used to start the second the next job rendered — so "on this yard" ran
+  // during the DRIVE. Now a driving phase runs first (live GPS countdown) and the
+  // yard clock auto-starts on arrival (or when the drive estimate runs out).
+  if(!done && !skipped && !_jobTimers[_stopKey(bk)] && !_fmDrivePhase[_stopKey(bk)]){ _fmDrivePhase[_stopKey(bk)]={t0:Date.now()}; try{ localStorage.setItem('evg_fm_drive',JSON.stringify(_fmDrivePhase)); }catch(e){} }
   const lotM=String(bk.notes||'').match(/lot:\s*([\d.]+)ac/i);
   let pills='';
   if(amt){ if(_seeMoney(bk)) pills+='<span class="fm-pill amt">$'+amt.toFixed(0)+' '+(pt==='cash'?'cash':pt==='autopay'?'autopay':'invoice')+'</span>'; else pills+='<span class="fm-pill muted">'+(pt==='autopay'?'Autopay':'Invoice')+'</span>'; }
@@ -2135,7 +2164,7 @@ async function fmSubmitComplete(){
   const _jk=_stopKey(bk); const _jStart=_jobTimers[_jk]; const _jEnd=new Date().toISOString();
   const _jMin=_jStart?Math.max(0,Math.round((Date.now()-new Date(_jStart).getTime())/60000)):null;
   extra.push({ kind:'endchk', idemKey:'endck:'+base, method:'GET', params:{ action:'log_checklist', type:'job_complete', date:svcDate, rowIndex, email, by:adminName||'Crew', items:JSON.stringify({checklist:Object.keys(_fmcEndChk), jobMinutes:_jMin, startedAt:_jStart||null, completedAt:_jEnd}), adminToken } });
-  delete _jobTimers[_jk];
+  delete _jobTimers[_jk]; try{ delete _fmDrivePhase[_jk]; localStorage.setItem('evg_fm_drive',JSON.stringify(_fmDrivePhase)); }catch(e){}
   _fmcPhotos.forEach((p,i)=>extra.push({ kind:'photo', idemKey:'photo:'+base+':'+_uuid(), method:'POST', body:{ action:'upload_job_photo', base64Data:p.b64, fileName:p.fileName, mimeType:p.mimeType, rowIndex, email, serviceDate:svcDate, jobLabel:(bk.name||'')+' - '+svcDate+(_fmcPhotos.length>1?' ('+(i+1)+')':''), markedBy:adminName||'Crew', adminToken } }));
 
   const finish=(offline)=>{
