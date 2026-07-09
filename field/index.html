@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.28 */
+/* APP_VER:2026-07-08.29 */
 (function(){
-  var V='2026-07-08.28'; window.__APP_VER=V;
+  var V='2026-07-08.29'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1729,7 +1729,7 @@ function _fmGasStep(cont){
   if(!_gasReg&&!_gasNE){ cont(); return; }
   let ov=document.getElementById('fmGasSheet');
   if(!ov){ ov=document.createElement('div'); ov.id='fmGasSheet'; document.body.appendChild(ov); }
-  ov.style.cssText='position:fixed;inset:0;z-index:400;display:flex;align-items:flex-end;justify-content:center;background:rgba(10,30,18,.55);';
+  ov.style.cssText='position:fixed;inset:0;z-index:3400;display:flex;align-items:flex-end;justify-content:center;background:rgba(10,30,18,.55);';
   const stn=function(lbl,addr,note){
     if(!addr) return '';
     return '<div class="fm-block" style="margin-bottom:10px;"><div class="fm-block-label"><span>'+lbl+'</span></div>'
@@ -1758,7 +1758,7 @@ function _fmLoading(on,msg){
     const st=document.createElement('style'); st.textContent='@keyframes fmspin{to{transform:rotate(360deg)}}'; document.head.appendChild(st);
     document.body.appendChild(ov);
   }
-  ov.style.cssText='position:fixed;inset:0;z-index:5000;display:flex;align-items:center;justify-content:center;background:rgba(7,26,15,.92);backdrop-filter:blur(4px);';
+  ov.style.cssText='position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;background:rgba(7,26,15,.92);backdrop-filter:blur(4px);';
   const m=document.getElementById('fmLoadingMsg'); if(m) m.textContent=msg||'Loading…';
 }
 async function _fmStep(msg,ms){ _fmLoading(true,msg); await new Promise(function(r){ setTimeout(r,ms||500); }); _fmLoading(false); }
@@ -1769,21 +1769,24 @@ async function fmStartTapped(){
   try{
     // stale gate overlays from an aborted start would hang the next one — clear them
     try{ ['pmcsOverlay','loadoutOverlay'].forEach(function(id){ const o=document.getElementById(id); if(o) o.remove(); }); }catch(e){}
+    // The loader goes up NOW and stays under every sheet until the route screen —
+    // the Start page is never visible again once the button's been tapped.
+    _fmLoading(true,'Getting the day ready…');
     // 1) Who's working today (prefilled roster picker; cancel aborts the start).
     const who = await fmOpenCrewPicker();
-    if(who===false){ window._fmStartFlowActive=false; return; }
+    if(who===false){ window._fmStartFlowActive=false; _fmLoading(false); return; }
     // Owners/managers skip the PMCS + load-out gates entirely — crews still get them.
     if(!_fmIsBoss()){
-      await _fmStep('🔧 Equipment checks…',450);
+      _fmLoading(true,'🔧 Equipment checks…');
       let pmcsOK=true;
       try{ if(typeof pmcsGateForClockIn==='function') pmcsOK=await pmcsGateForClockIn(); }catch(e){}
-      if(pmcsOK===false){ window._fmStartFlowActive=false; return; }
-      await _fmStep('🧰 Load-out…',450);
+      if(pmcsOK===false){ window._fmStartFlowActive=false; _fmLoading(false); return; }
+      _fmLoading(true,'🧰 Load-out…');
       let loOK=true;
       try{ if(typeof loadoutGate==='function') loOK=await loadoutGate(); }catch(e){}
-      if(loOK===false){ window._fmStartFlowActive=false; return; }
+      if(loOK===false){ window._fmStartFlowActive=false; _fmLoading(false); return; }
     }
-    await _fmStep('⛽ One more thing…',400);
+    _fmLoading(true,'⛽ Almost there…');
     _fmGasStep(function(){
       window._fmStartFlowActive=false;
       _fmLoading(true,'🛰 Building your route…');
