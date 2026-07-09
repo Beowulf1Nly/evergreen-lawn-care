@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.33 */
+/* APP_VER:2026-07-08.34 */
 (function(){
-  var V='2026-07-08.33'; window.__APP_VER=V;
+  var V='2026-07-08.34'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1257,6 +1257,16 @@ async function _fmRerouteExec(auto){
     const openKeys=_fmApplyLocks(_seq.filter(function(s){ return s&&s.bk; }).map(function(s){ return _stopKey(s.bk); }));
     const resolvedKeys=_fmStops().filter(_fmResolved).map(function(s){ return _stopKey(s.bk); });
     _routeLock=resolvedKeys.concat(openKeys);
+    // 📡 publish the REAL order — HQ's map/dispatch used to keep showing the
+    // morning plan for hours after the truck re-routed
+    try{
+      const _stopsUp=_routeLock.map(function(k,i){
+        const st2=_fmStops().find(function(x){ return _stopKey(x.bk)===k; }); if(!st2) return null;
+        const b=st2.bk;
+        return { order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:dateOf(b), name:b.name||'', address:b.address||'', zip:String(b.zip||''), crew:String(adminCrews||b.crew||''), jobTime:String(b.jobTime||'') };
+      }).filter(Boolean);
+      if(_stopsUp.length) fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'put_route', date:todayISOStr(), crew:String(adminCrews||'').toUpperCase().split(/[^A-Z0-9]+/)[0]||'', stops:JSON.stringify(_stopsUp), updatedBy:(adminName||'crew')+' (live route)', idemKey:'live:'+todayISOStr()+':'+Date.now(), adminToken })).catch(function(){});
+    }catch(e){}
     // Any same-day pin whose stop the optimizer just placed is obsolete — the
     // route lock owns its position now (pin only survives as a failure fallback).
     try{ let _iaDrop=false; Object.keys(_fmInsertAfter||{}).forEach(function(k){ if(_routeLock.indexOf(k)>=0){ delete _fmInsertAfter[k]; _iaDrop=true; } }); if(_iaDrop) _fmInsAfterSave(); }catch(e){}
@@ -1706,7 +1716,13 @@ function _fmRender(){
     _fmRenderDone(stops); return;                                           // then drop-off PMCS + clock out
   }
   let idx=_fmViewIdx;
-  if(idx==null||idx<0||idx>=total||_fmResolved(stops[idx])) idx=stops.findIndex(s=>!_fmResolved(s));
+  // background merges can reorder the stops array — re-find the job we were
+  // LOOKING AT by key so the screen never silently swaps to another customer
+  if(window._fmViewKey!=null&&idx!=null){
+    const ki=stops.findIndex(function(x){ return _stopKey(x.bk)===window._fmViewKey; });
+    if(ki>=0) idx=ki;
+  }
+  if(idx==null||idx<0||idx>=total||_fmResolved(stops[idx])){ window._fmViewKey=null; idx=stops.findIndex(s=>!_fmResolved(s)); }
   _fmViewIdx=idx; _persist(); _fmRenderJob(stops,idx);
 }
 function _fmRenderStart(){
@@ -1937,6 +1953,7 @@ function _fmPace(stops){
 }
 function _fmRenderJob(stops,idx){
   _fmShow('fmScreenJob');
+  try{ if(stops[idx]) window._fmViewKey=_stopKey(stops[idx].bk); }catch(e){}   // KEY tracks the job — array order can shift under us
   const total=stops.length, doneCount=stops.filter(s=>isDone(s.bk)).length, skippedCount=stops.filter(s=>!isDone(s.bk)&&_fmIsSkipped(s.bk)).length;
   const stop=stops[idx]; if(!stop){ _fmRender(); return; }
   const bk=stop.bk;

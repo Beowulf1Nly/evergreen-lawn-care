@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-09.6 */
-(function(){ var V='2026-07-09.6'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-09.7 */
+(function(){ var V='2026-07-09.7'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -697,6 +697,13 @@
     <input type="email" id="addEmail" class="field" placeholder="Email">
     <div class="lbl">Job</div>
     <div style="display:flex;gap:10px;"><input type="date" id="addDate" class="field" style="flex:1;"><input type="text" id="addPrice" class="field" placeholder="$ price" style="flex:0 0 120px;"></div>
+    <div class="lbl">Plan</div>
+    <select id="addFreq" class="field" style="width:100%;">
+      <option value="One-time">One-time job</option>
+      <option value="Weekly Plan">Weekly plan (auto-reschedules every 7d)</option>
+      <option value="Bi-Weekly Plan">Bi-weekly plan (every 14d)</option>
+      <option value="Monthly Plan">Monthly plan (every 30d)</option>
+    </select>
     <div class="lbl">Crew</div><div class="crewpick" id="addCrewPick"></div>
     <input type="text" id="addNotes" class="field" placeholder="Notes (optional)" style="margin-top:10px;">
     <button class="primary" id="addGo" onclick="doAddJob()" style="margin-top:12px;">Schedule job</button>
@@ -1462,7 +1469,7 @@ async function doAddJob(){
   const btn=document.getElementById('addGo'); btn.disabled=true; btn.textContent='Scheduling…';
   try{ const price=(document.getElementById('addPrice').value||'').replace(/[^0-9.]/g,'');
     const _z=_bizLoad()[_addBiz]||_bizLoad()[0];
-    const p=new URLSearchParams({ action:'manual_schedule', name:name, email:document.getElementById('addEmail').value.trim(), phone:document.getElementById('addPhone').value.trim(), address:addr, zip:document.getElementById('addZip').value.trim(), frequency:'One-time', price:price, serviceDate:date, notes:document.getElementById('addNotes').value.trim(), payMethod:'card', crew:_addCrew, adminToken:_bizTok(_z) });
+    const p=new URLSearchParams({ action:'manual_schedule', name:name, email:document.getElementById('addEmail').value.trim(), phone:document.getElementById('addPhone').value.trim(), address:addr, zip:document.getElementById('addZip').value.trim(), frequency:(document.getElementById('addFreq')||{}).value||'One-time', price:price, serviceDate:date, notes:document.getElementById('addNotes').value.trim(), payMethod:'card', crew:_addCrew, adminToken:_bizTok(_z) });
     const d=await(await fetch(_bizUrl(_z)+'?'+p)).json();
     if(d.success){
       const _zn=_bizLoad()[_addBiz]||_bizLoad()[0];
@@ -1518,17 +1525,57 @@ async function showRouteOnMap(email){
   const route=routeFor(c.crew); const col=crewColor(c.crew);
   document.getElementById('mapNote').textContent='mapping '+(c.name||'route')+'…';
   const coords=await Promise.all(route.map(function(b){ return geocode((b.address||'')+(b.zip?', '+b.zip:'')+', FL').catch(function(){return null;}); }));
-  const pts=[];
-  for(let i=0;i<route.length;i++){ const g=coords[i]; const b=route[i]; if(!g) continue;
-    pts.push([g.lat,g.lon]);
-    const mk=L.circleMarker([g.lat,g.lon],{radius:10,color:'#fff',weight:2,fillColor:(isDone(b)?'#22c55e':col),fillOpacity:.95}).addTo(map)
-      .bindTooltip(String(pts.length),{permanent:true,direction:'center',className:'rt-num'})
-      .bindPopup((pts.length)+'. '+esc(b.name||'')+(isDone(b)?' ✓':''));
-    _routeLayers.push(mk);
+  const doneStops=[], openStops=[]; const allPts=[];
+  for(let i=0;i<route.length;i++){ const g=coords[i]; if(!g) continue; const rec2={ b:route[i], ll:[g.lat,g.lon] };
+    allPts.push(rec2.ll);
+    (isDone(route[i])?doneStops:openStops).push(rec2);
   }
-  if(pts.length>1){ const pl=L.polyline(pts,{color:col,weight:4,opacity:.85,dashArray:'7,7'}).addTo(map); _routeLayers.push(pl); try{map.fitBounds(pts,{padding:[55,55]});}catch(e){} }
-  else if(pts.length===1){ map.setView(pts[0],14); }
-  document.getElementById('mapNote').textContent=(c.name||'route')+' · '+pts.length+' stops';
+  // ✓ finished homes: small quiet green checks — history, not the plan
+  doneStops.forEach(function(p){
+    const mk=L.circleMarker(p.ll,{radius:7,color:'#fff',weight:1.5,fillColor:'#16a34a',fillOpacity:.85}).addTo(map)
+      .bindTooltip('✓',{permanent:true,direction:'center',className:'rt-num'})
+      .bindPopup('✓ '+esc(p.b.name||'')+' — done');
+    _routeLayers.push(mk);
+  });
+  // remaining stops: numbered from WHERE THE TRUCK IS, in their live order
+  openStops.forEach(function(p,i){
+    const mk=L.circleMarker(p.ll,{radius:11,color:'#fff',weight:2,fillColor:col,fillOpacity:.95}).addTo(map)
+      .bindTooltip(String(i+1),{permanent:true,direction:'center',className:'rt-num'})
+      .bindPopup((i+1)+'. '+esc(p.b.name||'')+'<br><span style="font-size:11px;color:#64748b;">'+esc(p.b.address||'')+'</span>');
+    _routeLayers.push(mk);
+  });
+  // the drive ahead: truck position → remaining stops, following REAL ROADS
+  const chain=[]; if(c.lat!=null&&c.lon!=null) chain.push([c.lat,c.lon]);
+  openStops.forEach(function(p){ chain.push(p.ll); });
+  if(chain.length>1){
+    let drew=false;
+    try{
+      const u='https://router.project-osrm.org/route/v1/driving/'+chain.map(function(p){ return p[1]+','+p[0]; }).join(';')+'?overview=full&geometries=geojson';
+      const d=await fetch(u).then(function(r){ return r.json(); });
+      if(d&&d.code==='Ok'&&d.routes&&d.routes[0]&&d.routes[0].geometry){
+        const latlngs=d.routes[0].geometry.coordinates.map(function(xy){ return [xy[1],xy[0]]; });
+        _routeLayers.push(L.polyline(latlngs,{color:'#0b1524',weight:8,opacity:.55}).addTo(map));       // dark casing
+        _routeLayers.push(L.polyline(latlngs,{color:col,weight:4,opacity:.95}).addTo(map));             // crew color on top
+        const mins=Math.round((d.routes[0].duration||0)/60), mi=((d.routes[0].distance||0)/1609.34);
+        document.getElementById('mapNote').textContent=(c.name||'route')+' · '+openStops.length+' to go ('+doneStops.length+' ✓) · ~'+mins+' min / '+mi.toFixed(0)+' mi of driving left';
+        drew=true;
+      }
+    }catch(e){}
+    if(!drew){
+      _routeLayers.push(L.polyline(chain,{color:col,weight:4,opacity:.9}).addTo(map));
+      document.getElementById('mapNote').textContent=(c.name||'route')+' · '+openStops.length+' to go ('+doneStops.length+' ✓)';
+    }
+  } else {
+    document.getElementById('mapNote').textContent=(c.name||'route')+' · '+(openStops.length?openStops.length+' to go':'all done ✓')+' ('+doneStops.length+' ✓)';
+  }
+  // truck marker
+  if(c.lat!=null&&c.lon!=null){
+    const tm=L.marker([c.lat,c.lon],{ icon:L.divIcon({ className:'', html:'<div style="font-size:22px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.6));">🚚</div>', iconSize:[24,24], iconAnchor:[12,12] }) }).addTo(map).bindPopup(esc(c.name||'')+' — live position');
+    _routeLayers.push(tm);
+  }
+  const fit=allPts.concat(c.lat!=null?[[c.lat,c.lon]]:[]);
+  if(fit.length>1){ try{ map.fitBounds(fit,{padding:[55,55]}); }catch(e){} }
+  else if(fit.length===1){ map.setView(fit[0],14); }
 }
 
 function updateClocks(){
