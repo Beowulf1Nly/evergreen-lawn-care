@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-08.17 */
-(function(){ var V='2026-07-08.17'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-08.18 */
+(function(){ var V='2026-07-08.18'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -2249,6 +2249,23 @@ function _econParts(c,jobs,zi){
   else tgtH=(pctC<=50)?Infinity:0;                                        // commission-only crew: margin is fixed by the %
   return { R:R, estM:estM, rate:rate, pctC:pctC, tgtH:tgtH, estProfit:estProfit, pct:pct, days:Object.keys(byD).length, qN:qN };
 }
+// 🕐 Owner fix for a wrong clock-out — rewrites the LiveStatus bracket + Pay Log
+// hours server-side, then the ACTUAL strip and Pay - This Week both agree.
+async function fixClockOut(c){
+  const members=(_crews||[]).filter(function(x){ const set=String(x.crew||'').toUpperCase().split(/[^A-Z0-9]+/); return set.indexOf(c)>=0; });
+  if(!members.length){ toast('No clock data for Crew '+c+' today'); return; }
+  let pick=members[0];
+  if(members.length>1){
+    const nm=prompt('Fix clock-out for who?\n'+members.map(function(m2,i){ return (i+1)+'. '+(m2.name||m2.email); }).join('\n')+'\n\nEnter the number:');
+    const ix=parseInt(nm)-1; if(!(ix>=0&&ix<members.length)) return; pick=members[ix];
+  }
+  const t=prompt('🕐 Real clock-out time for '+(pick.name||pick.email)+'? 24-hour HH:MM (e.g. 16:35)');
+  if(!t) return;
+  const m2=String(t).trim().match(/^(\d{1,2}):(\d{2})$/); if(!m2){ toast('Use HH:MM, 24-hour'); return; }
+  const d=await fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'owner_fix_clockout', targetEmail:pick.email, date:todayISO(), time:('0'+m2[1]).slice(-2)+':'+m2[2], adminToken:token }).toString()).then(function(r){ return r.json(); }).catch(function(){ return null; });
+  if(d&&d.success){ toast('🕐 '+(d.name||'')+' → out at '+t+(d.hours?(' · '+d.hours+'h in Pay Log'):'')); try{ refreshStatus(); }catch(e){} setTimeout(function(){ try{ renderDispatch(); }catch(e){} },900); }
+  else toast('⚠ '+((d&&d.error)||'Fix failed — this needs the backend redeploy'));
+}
 function _econStrip(c,jobs,iso,labelHtml,zi){
   zi=zi||0;
   if(c==='un'||!jobs.length) return '';
@@ -2278,7 +2295,7 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
     if(_finMin==null) _finMin=_startMin+p.estM;
     var _shF=(typeof _crewShift==='function')?_crewShift(c):null;
     if(_allDone){ finishHtml=' · 🏁 <span class="dev-pill g">shift complete ✓</span>'; }
-    else if(_shF&&!_shF.active&&_shF.clockOut){ finishHtml=' · 🏁 <span class="dev-pill">clocked out '+_t12(_shF.clockOut.getHours()*60+_shF.clockOut.getMinutes())+'</span>'; }
+    else if(_shF&&!_shF.active&&_shF.clockOut){ finishHtml=' · 🏁 <span class="dev-pill" style="cursor:pointer;" title="Wrong time? Tap to fix the clock-out (updates hours + actual profit)" onclick="fixClockOut(\''+c+'\')">clocked out '+_t12(_shF.clockOut.getHours()*60+_shF.clockOut.getMinutes())+' ✏</span>'; }
     else {
       const _late=_finMin>1140, _fh=Math.floor(_finMin/60)%24, _fm=Math.round(_finMin)%60;
       finishHtml=' · 🏁 shift done ~<b style="color:'+(_late?'#f87171':'inherit')+'">'+((_fh%12)||12)+':'+String(_fm).padStart(2,'0')+(_fh<12?' AM':' PM')+'</b>'
@@ -2292,7 +2309,7 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
     const _shL=(typeof _crewShift==='function')?_crewShift(c):null;
     const w=_crewWorkedHrs(c);
     if(_shL&&!_shL.active&&_shL.clockOut&&w>0){
-      live=' · ⏱ worked <b>'+w.toFixed(1)+'h</b> <span class="dev-pill">✅ clocked out '+_t12(_shL.clockOut.getHours()*60+_shL.clockOut.getMinutes())+'</span>';
+      live=' · ⏱ worked <b>'+w.toFixed(1)+'h</b> <span class="dev-pill" style="cursor:pointer;" title="Wrong time? Tap to fix the clock-out (updates hours + actual profit)" onclick="fixClockOut(\''+c+'\')">✅ clocked out '+_t12(_shL.clockOut.getHours()*60+_shL.clockOut.getMinutes())+' ✏</span>';
     } else if(w>0){
       if(isFinite(p.tgtH)){ const diff=p.tgtH-w;
         live=' · ⏱ on clock <b>'+w.toFixed(1)+'h</b> '+(diff>=0
