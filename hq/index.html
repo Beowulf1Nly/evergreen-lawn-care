@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-08.33 */
-(function(){ var V='2026-07-08.33'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-08.34 */
+(function(){ var V='2026-07-08.34'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -2430,9 +2430,9 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
   //    TODAY's 8.8h of clock and printing an 88% fantasy margin. Quotes excluded.
   let act='';
   if(iso){
-    const _jNQ=jobs.filter(function(b){ return !_hqIsQuote(b); });
-    const doneJobs=_jNQ.filter(function(b){ return isDone(b); });
-    if(doneJobs.length){
+    const _jNQ=jobs.filter(function(b){ try{ return !_hqIsQuote(b); }catch(e){ return true; } });
+    const doneJobs=_jNQ.filter(function(b){ return isDone(b)||_isArch(b); });
+    if(_jNQ.length){   // ALWAYS show the actual line once there's billable work on the board — a $0/0-done day is information, not something to hide
       const Rd=doneJobs.reduce(function(s2,b){ return s2+amtOf(b); },0);
       const _dayV=(_dispView!=='week'&&_dispView!=='month');
       let w=0, wlbl=' on the clock so far';
