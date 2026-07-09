@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-09.3 */
-(function(){ var V='2026-07-09.3'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-09.4 */
+(function(){ var V='2026-07-09.4'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -662,8 +662,8 @@
 </div>
 
 <!-- sheets -->
-<div class="sheet-wrap" id="jobSheet" onclick="if(event.target===this)closeSheet('jobSheet')"><div class="sheet" id="jobSheetBody"></div></div>
-<div class="sheet-wrap" id="reschedSheet" onclick="if(event.target===this)closeSheet('reschedSheet')">
+<div class="sheet-wrap" id="jobSheet" onmousedown="this._dsd=(event.target===this)" onclick="if(this._dsd&&event.target===this)closeSheet('jobSheet')"><div class="sheet" id="jobSheetBody"></div></div>
+<div class="sheet-wrap" id="reschedSheet" onmousedown="this._dsd=(event.target===this)" onclick="if(this._dsd&&event.target===this)closeSheet('reschedSheet')">
   <div class="sheet">
     <h3>📅 Reschedule</h3><div class="sub" id="reschedSub"></div>
     <div class="lbl">New date</div><input type="date" id="reschedDate" class="field">
@@ -675,7 +675,7 @@
     <button class="ghost" onclick="closeSheet('reschedSheet')">Cancel</button>
   </div>
 </div>
-<div class="sheet-wrap" id="cancelSheet" onclick="if(event.target===this)closeSheet('cancelSheet')">
+<div class="sheet-wrap" id="cancelSheet" onmousedown="this._dsd=(event.target===this)" onclick="if(this._dsd&&event.target===this)closeSheet('cancelSheet')">
   <div class="sheet">
     <h3>🗑 Cancel job</h3><div class="sub" id="cancelSub"></div>
     <div class="lbl">Reason (optional)</div><input type="text" id="cancelReason" class="field" placeholder="e.g. customer requested">
@@ -684,7 +684,7 @@
     <button class="ghost" onclick="closeSheet('cancelSheet')">Keep it</button>
   </div>
 </div>
-<div class="sheet-wrap" id="addSheet" onclick="if(event.target===this)closeSheet('addSheet')">
+<div class="sheet-wrap" id="addSheet" onmousedown="this._dsd=(event.target===this)" onclick="if(this._dsd&&event.target===this)closeSheet('addSheet')">
   <div class="sheet">
     <h3>＋ Add a job</h3><div class="sub">Books straight onto that business's website &amp; Google Sheet.</div>
     <div class="lbl">Business</div><div class="crewpick" id="addBizPick"></div>
@@ -703,7 +703,7 @@
     <button class="ghost" onclick="closeSheet('addSheet')">Cancel</button>
   </div>
 </div>
-<div class="sheet-wrap" id="notesSheet" onclick="if(event.target===this)closeSheet('notesSheet')">
+<div class="sheet-wrap" id="notesSheet" onmousedown="this._dsd=(event.target===this)" onclick="if(this._dsd&&event.target===this)closeSheet('notesSheet')">
   <div class="sheet">
     <h3>📝 Job notes</h3><div class="sub" id="notesSub"></div>
     <textarea id="notesText" class="field" rows="6" style="resize:vertical;font-family:inherit;"></textarea>
@@ -711,7 +711,7 @@
     <button class="ghost" onclick="closeSheet('notesSheet')">Cancel</button>
   </div>
 </div>
-<div class="sheet-wrap" id="bizSheet" onclick="if(event.target===this)closeSheet('bizSheet')">
+<div class="sheet-wrap" id="bizSheet" onmousedown="this._dsd=(event.target===this)" onclick="if(this._dsd&&event.target===this)closeSheet('bizSheet')">
   <div class="sheet">
     <h3>🏢 Businesses</h3>
     <div class="sub">These become the sections on the Dispatch board. Keywords (comma-separated) route jobs into a business by matching the job's services &amp; notes — a business with no keywords catches everything else.</div>
@@ -3853,10 +3853,10 @@ function _hqProjRev(books,days){
 }
 function _hqProjLine(books,label){
   const n=_hqActivePlans(books).length;
-  const box=function(v,l){ return '<div style="flex:1;min-width:92px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:10px;padding:8px 10px;"><div style="font-size:16px;font-family:var(--mono);font-weight:800;color:#4ade80;">'+v+'</div><div style="font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-top:3px;">'+l+'</div></div>'; };
+  const box=function(v,l){ return '<div style="background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:10px;padding:8px 10px;"><div style="font-size:16px;font-family:var(--mono);font-weight:800;color:#4ade80;white-space:nowrap;">'+v+'</div><div style="font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-top:3px;">'+l+'</div></div>'; };
   return '<div style="margin:10px 0 8px;">'
     +'<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:7px;"><span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);">📈 '+(label||'Projected recurring')+'</span><span style="font-size:11px;color:var(--dim);">'+n+' active plan'+(n!==1?'s':'')+'</span></div>'
-    +'<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;">'
     +box(_fmtMoney(_hqProjRev(books,null)),'Rest of month')
     +box(_fmtMoney(_hqProjRev(books,7)),'Next 7 days')
     +box(_fmtMoney(_hqProjRev(books,30)),'Next 30 days')
