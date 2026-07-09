@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.20 */
+/* APP_VER:2026-07-08.21 */
 (function(){
-  var V='2026-07-08.20'; window.__APP_VER=V;
+  var V='2026-07-08.21'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1141,7 +1141,7 @@ async function fmRerouteFromHere(){
 // idx 0 = current GPS position; provably-best order for ≤15 open stops.
 function _fmTspExact(M){
   const n=M.length-1, FULL=(1<<n)-1, INF=1e15;
-  const dp=new Array((FULL+1)*n).fill(INF), par=new Array((FULL+1)*n).fill(-1);
+  const dp=new Float64Array((FULL+1)*n).fill(INF), par=new Int8Array((FULL+1)*n).fill(-1);   // typed → fast + phone-RAM-safe to 16 stops
   for(let i=0;i<n;i++) dp[(1<<i)*n+i]=M[0][i+1];
   for(let mask=1;mask<=FULL;mask++){
     for(let i=0;i<n;i++){
@@ -1197,7 +1197,7 @@ async function _fmRerouteExec(auto){
     // geographic + road-refine pipeline when OSRM is unreachable or the day is huge.
     let _exactOK=false;
     try{
-      if(valid.length>=2&&valid.length<=15){
+      if(valid.length>=2&&valid.length<=16){
         const _coords=[{lat:pos.lat,lon:pos.lon}].concat(valid.map(function(s){ return {lat:s.lat,lon:s.lon}; }));
         const _d=await fetch('https://router.project-osrm.org/table/v1/driving/'+_coords.map(function(p){ return p.lon+','+p.lat; }).join(';')+'?annotations=duration').then(function(r){ return r.json(); });
         if(_d&&_d.code==='Ok'&&Array.isArray(_d.durations)&&_d.durations.length===_coords.length){
