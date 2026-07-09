@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-08.19 */
-(function(){ var V='2026-07-08.19'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-08.20 */
+(function(){ var V='2026-07-08.20'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1662,7 +1662,7 @@ function _ensureDayRoute(iso){
   fetch(SCRIPT_URL+'?action=get_route&date='+iso+'&adminToken='+encodeURIComponent(token)).then(r=>r.json()).then(function(d){
     const rec=_dispRoute[iso]; rec.loading=false; rec.at=Date.now();
     if(d&&d.success&&Array.isArray(d.routes)){
-      rec.times={}; rec.order={};   // fresh data arrived — replace the carried-over copy
+      rec.times={}; rec.order={}; rec.badGeo={};   // fresh data arrived — replace the carried-over copy
       // newest push wins when stale rows ('' / unassigned crews from older pushes) share stops
       d.routes.slice().sort(function(a,b){ return (new Date(a.updatedAt||0).getTime()||0)-(new Date(b.updatedAt||0).getTime()||0); })
       .forEach(function(rt){
@@ -1671,6 +1671,7 @@ function _ensureDayRoute(iso){
         (rt.stops||[]).forEach(function(st){
           const k=String(st.email||'').toLowerCase().trim()+'|'+String(st.serviceDate||st.date||'');
           if(/^\d{1,2}:\d{2}$/.test(String(st.jobTime||'').trim())) rec.times[k]=String(st.jobTime).trim();
+          if(st.noGeo) rec.badGeo[k]={ n:String(st.name||''), a:String(st.address||'') };   // optimizer couldn't geocode this stop
         });
       });
     }
@@ -1870,7 +1871,7 @@ function renderDispatch(){
         h+=_econStrip(c,weekAll,todayIso,null,zi);
       } else {
         const iso=rangeStart; _ensureDayRoute(iso);
-        const rec=_dispRoute[iso]||{times:{},order:{}};
+        const rec=_dispRoute[iso]||{times:{},order:{},badGeo:{}};
         const ordKeys=rec.order[c==='un'?'':c]||[];
         const cell=(rowJobsAll[iso]||[]).slice().sort(function(a,b2){
           if(ordKeys.length){ let pa=ordKeys.indexOf(_svKey(a)), pb=ordKeys.indexOf(_svKey(b2)); pa=pa<0?9999:pa; pb=pb<0?9999:pb; if(pa!==pb) return pa-pb; }
@@ -1978,6 +1979,10 @@ function renderDispatch(){
           +evs.map(function(ev){ return _stBlockEv(ev.b,ev.st,ev.en,7+(ev.lane+(_aux?1:0))*42,ev.proj); }).join('')
           +(_aux?_stAuxBlock('🏠 Base & unload',baseSt,baseEn,7):'')+'</div>'
           +(hasProj?'<div style="font-size:10.5px;color:var(--dim);padding:3px 2px 0;">┅ dashed = projected · push times from /invoice, or reorder below</div>':'')
+          +(function(){
+            const bad=cell.filter(function(b){ return rec.badGeo&&rec.badGeo[_svKey(b)]; });
+            return bad.length?('<div style="margin:4px 0 6px;padding:8px 11px;background:rgba(248,113,113,.10);border:1px solid rgba(248,113,113,.45);border-radius:9px;font-size:12px;color:#f87171;font-weight:700;">📍 '+bad.length+' address'+(bad.length>1?'es':'')+' couldn\'t be found by the route optimizer — '+bad.map(function(b){ return esc(b.name||'?'); }).join(', ')+'. '+(bad.length>1?'They ride':'It rides')+' at the end of the route unoptimized — fix the address on the job card, then Route All again.</div>'):'';
+          })()
           +_dayOrderPanel(c,iso,cell,zi)
           +_econStrip(c,cell,iso,null,zi)
           +'</div></div>';
@@ -2357,13 +2362,14 @@ function _stAuxBlock(label,stMin,enMin,top){
 }
 function _stBlockEv(b,stMin,enMin,top,proj){
   const arch=_isArch(b), done=isDone(b)||arch, zone=_zoneOf(b);
+  const _bg=(function(){ try{ const r0=_dispRoute[dateOf(b)]; return !!(r0&&r0.badGeo&&r0.badGeo[_svKey(b)]); }catch(e){ return false; } })();
   const left=Math.max(0,Math.min(98,_tlX(stMin)));
   const width=Math.max(2,Math.min(100-left,((enMin-stMin)/Math.max(1,_tlB-_tlA))*100));
   const dur=(enMin-stMin);
   const tRange=(proj?'~':'')+_t12(stMin)+'–'+_t12(enMin)+' · '+dur+'m';
   const _lsT=_lastSvcInfo(b);
-  const tip=esc(b.name||'')+' · '+(proj?'projected ':'')+_t12(stMin)+'–'+_t12(enMin)+' ('+dur+' min expected)'+(b.price?' · '+esc(String(b.price)):'')+(_lsT?(' · last serviced '+_lsT.d+' ('+_lsT.gap+'d ago'+(_lsT.off?' — ⚠ plan says '+_lsT.expct+'d':'')+')'):'')+(proj?' — no set time; drag to lock one in':'');
-  return '<div class="st-block'+(done?' done':'')+(arch?' arch':'')+(proj?' proj':'')+'" style="--pc:'+_dispPC(b)+';left:'+left+'%;width:'+width+'%;top:'+top+'px;" '
+  const tip=(_bg?'📍 ADDRESS NOT FOUND — fix it and re-run Route All · ':'')+esc(b.name||'')+' · '+(proj?'projected ':'')+_t12(stMin)+'–'+_t12(enMin)+' ('+dur+' min expected)'+(b.price?' · '+esc(String(b.price)):'')+(_lsT?(' · last serviced '+_lsT.d+' ('+_lsT.gap+'d ago'+(_lsT.off?' — ⚠ plan says '+_lsT.expct+'d':'')+')'):'')+(proj?' — no set time; drag to lock one in':'');
+  return '<div class="st-block'+(done?' done':'')+(arch?' arch':'')+(proj?' proj':'')+'" style="--pc:'+_dispPC(b)+';left:'+left+'%;width:'+width+'%;top:'+top+'px;'+(_bg?'border:2px solid #f87171;box-shadow:0 0 8px rgba(248,113,113,.5);':'')+'" '
     +'onclick="openJobRef('+_jr(b)+')" title="'+tip+(arch?' — tap for notes & photos':'')+'"'
     +'>'+(done?'✓ ':'')+_jobIcon(b)+' '+esc(b.name||'?')+'<span class="bt2">'+(zone?zone+' · ':'')+tRange+(b.price?' · '+esc(String(b.price)):'')+'</span></div>';
 }
