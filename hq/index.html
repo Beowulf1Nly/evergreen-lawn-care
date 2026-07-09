@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-09.2 */
-(function(){ var V='2026-07-09.2'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-09.3 */
+(function(){ var V='2026-07-09.3'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -3739,8 +3739,11 @@ function _hqRevCard(results){
     Object.keys(_first).forEach(function(em){ if(_first[em]>=cutT) newCust++; });
   });
   const _pd=function(a,b3){ if(!(b3>0)) return ''; const p2=Math.round((a-b3)/b3*100); return p2>=0?' <span class="dev-pill g" style="font-size:10px;">▲'+p2+'%</span>':' <span class="dev-pill r" style="font-size:10px;">▼'+Math.abs(p2)+'%</span>'; };
-  const _pk=function(v,l){ return '<div style="flex:1;min-width:104px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:11px;padding:9px 11px;"><div style="font-size:17px;font-family:var(--mono);font-weight:800;">'+v+'</div><div style="font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-top:3px;">'+l+'</div></div>'; };
-  const periodStrip='<div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:10px;">'
+  const _pk=function(v,l){ return '<div style="background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:11px;padding:10px 12px;"><div style="font-size:17px;font-family:var(--mono);font-weight:800;white-space:nowrap;">'+v+'</div><div style="font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-top:3px;">'+l+'</div></div>'; };
+  const _perLbl={'7d':'last 7 days','30d':'last 30 days','90d':'last 90 days','1yr':'last 12 months','all':'all time'}[_revPeriod]||_revPeriod;
+  const periodStrip='<div style="border-top:1px solid var(--line);margin-top:12px;padding-top:10px;">'
+    +'<div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;">📊 This period — '+_perLbl+' <span style="color:var(--dim);text-transform:none;letter-spacing:0;font-weight:600;">· ▲▼ vs the '+_perLbl.replace('last','prior')+'</span></div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:9px;">'
     +_pk(_fmtMoney(tot)+(_revPeriod!=='all'?_pd(tot,ptot):''),'Earned · '+_revPeriod)
     +_pk(String(cur.length),'Jobs done')
     +_pk(cur.length?_fmtMoney(tot/cur.length):'—','Avg ticket')
@@ -3748,7 +3751,7 @@ function _hqRevCard(results){
     +_pk(String(ncl)+(_revPeriod!=='all'?_pd(ncl,nclP):''),'Closed &amp; locked in')
     +_pk(nq?Math.round(ncl/nq*100)+'%':'—','Close rate')
     +_pk('+'+newCust,'New customers')
-    +'</div>';
+    +'</div></div>';
   const svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block;margin-top:8px;"><style>g.hv line{opacity:0}g.hv:hover line{opacity:.5}</style><defs>'+defs+'</defs>'+grid+paint+hov+xl+'</svg>';
   const btn=function(p2,l2){ return '<button class="dev-btn'+(_revPeriod===p2?' go':'')+'" onclick="setRevPeriod(\''+p2+'\')">'+l2+'</button>'; };
   const legend=results.filter(function(r){ return !r.locked&&r.st; }).map(function(r){ return '<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px;font-size:11px;color:var(--muted);"><span style="width:9px;height:9px;border-radius:3px;background:'+esc((r.z&&r.z.c)||'#22c55e')+';box-shadow:0 0 8px '+esc((r.z&&r.z.c)||'#22c55e')+';"></span>'+esc(((r.z&&r.z.e)||'')+' '+((r.z&&r.z.n)||''))+'</span>'; }).join('');
