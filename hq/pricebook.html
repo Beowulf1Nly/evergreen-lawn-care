@@ -466,7 +466,9 @@ function render(){
   document.getElementById('listTitle').textContent=_cat==='__all'?'All items':_cat;
   document.getElementById('listCount').textContent=rows.length+(rows.length===1?' item':' items');
   const scroll=document.getElementById('tblScroll');
-  if(!_items.length){ scroll.innerHTML='<div class="empty"><div class="em">💵</div><div class="eh">No items yet</div><div>Add your first service or material to build '+esc((bizLoad()[_bizIdx]||{}).n||'this')+'\'s pricebook.</div><br><button class="tbtn add" onclick="openEdit(null)">＋ Add item</button></div>'; return; }
+  if(!_items.length){
+    const _isCln=/clean/i.test(String((bizLoad()[_bizIdx]||{}).n||''));
+    scroll.innerHTML='<div class="empty"><div class="em">💵</div><div class="eh">No items yet</div><div>'+(_isCln?'Load the starter catalog — every price the crew app and HQ builder use, ready to edit.':'Add your first service or material to build '+esc((bizLoad()[_bizIdx]||{}).n||'this')+'\'s pricebook.')+'</div><br>'+(_isCln?'<button class="tbtn add" onclick="seedCleaning()">✨ Load cleaning catalog (30 prices)</button> ':'')+'<button class="tbtn'+(_isCln?'':' add')+'" onclick="openEdit(null)">＋ Add item</button></div>'; return; }
   if(!rows.length){ scroll.innerHTML='<div class="empty"><div class="em">🔎</div><div class="eh">No matches</div><div>Try a different search or filter.</div></div>'; return; }
   // group by category
   const groups={}; rows.forEach(function(it){ (groups[it.category]=groups[it.category]||[]).push(it); });
