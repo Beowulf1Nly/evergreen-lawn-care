@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.36 */
+/* APP_VER:2026-07-08.37 */
 (function(){
-  var V='2026-07-08.36'; window.__APP_VER=V;
+  var V='2026-07-08.37'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1083,7 +1083,8 @@ function _fmRelockFromSaved(){
   const resolved=[], open=[];
   _fmStops().forEach(function(s){ (_fmResolved(s)?resolved:open).push(_stopKey(s.bk)); });
   open.sort(function(a,b){ return pos(a)-pos(b); });
-  const newLock=resolved.concat(open);
+  const open2=_fmApplyLocks(open);   // 🔒 locks beat ANY incoming order — HQ push, phone republish, all of it
+  const newLock=resolved.concat(open2);
   const changed=newLock.join('~')!==(_routeLock||[]).join('~');
   _routeLock=newLock; _persist();
   return changed;
@@ -1577,6 +1578,18 @@ function _fmStops(){
   } else {
     jobs.sort((a,b)=>{ const ta=a.bk.jobTime||'99:99', tb=b.bk.jobTime||'99:99'; return ta<tb?-1:ta>tb?1:0; }); // (c) job time last resort
   }
+  // 🔒 locks lead the list in EVERY branch above — saved order, self-optimized,
+  // job-time fallback, pre-start preview. (Mid-route _routeLock is already locked
+  // by _fmRelockFromSaved / the re-route pipeline.)
+  try{
+    if(!(_fmStarted&&_routeLock&&_routeLock.length)&&Object.keys(_stopLocks||{}).length){
+      const _res2=[],_op2=[];
+      jobs.forEach(function(s){ (_fmResolved(s)?_res2:_op2).push(s); });
+      const _ok2=_fmApplyLocks(_op2.map(function(s){ return _stopKey(s.bk); }));
+      _op2.sort(function(a,b){ return _ok2.indexOf(_stopKey(a.bk))-_ok2.indexOf(_stopKey(b.bk)); });
+      jobs.length=0; _res2.concat(_op2).forEach(function(s){ jobs.push(s); });
+    }
+  }catch(e){}
   // Same-day additions slot in right after the stop they were sold at
   try{
     const iaKeys=Object.keys(_fmInsertAfter||{});
