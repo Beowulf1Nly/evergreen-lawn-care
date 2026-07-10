@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-09.22 */
-(function(){ var V='2026-07-09.22'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-09.23 */
+(function(){ var V='2026-07-09.23'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -701,8 +701,9 @@
     <div class="lbl">Job</div>
     <div style="display:flex;gap:10px;"><input type="date" id="addDate" class="field" style="flex:1;"><input type="text" id="addPrice" class="field" placeholder="$ price" style="flex:0 0 120px;"></div>
     <div class="lbl">Plan</div>
-    <select id="addFreq" class="field" style="width:100%;">
+    <select id="addFreq" class="field" style="width:100%;" onchange="_ajFreqChg()">
       <option value="One-time">One-time job</option>
+      <option value="📋 Quote Visit">📋 Quote visit — no price, estimate on site</option>
       <option value="Weekly Plan">Weekly plan (auto-reschedules every 7d)</option>
       <option value="Bi-Weekly Plan">Bi-weekly plan (every 14d)</option>
       <option value="Monthly Plan">Monthly plan (every 30d)</option>
@@ -1463,9 +1464,13 @@ let _addBiz=0;
 function pickAddBiz(el,i){ _addBiz=i; document.querySelectorAll('#addBizPick button').forEach(function(b){b.classList.remove('on');}); el.classList.add('on'); _ajClnRender(); }
 /* ── 🧮 cleaning job builder — same math as the crew app, prices from /hq/pricebook.html ── */
 let _hqPb=null;
-function _hqPbNum(code,def){ const it=(_hqPb||[]).find(function(x){ return String(x.code||'').toUpperCase()===code&&x.active!==false; }); const p=it?parseFloat(it.price):NaN; return (p>0)?p:def; }
+function _hqPbNum(code,def){ const src=/^LAWN-/.test(code)?_hqPbLawn:_hqPb; const it=(src||[]).find(function(x){ return String(x.code||'').toUpperCase()===code&&x.active!==false; }); const p=it?parseFloat(it.price):NaN; return (p>0)?p:def; }
+let _hqPbLawn=null;
 function _hqPbFetch(){
   try{ const c=localStorage.getItem('hq_pb_cln'); if(c&&!_hqPb) _hqPb=JSON.parse(c); }catch(e){}
+  try{ const c2=localStorage.getItem('hq_pb_lawn'); if(c2&&!_hqPbLawn) _hqPbLawn=JSON.parse(c2); }catch(e){}
+  fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'get_pricebook', bizKey:'Lawn Care', adminToken:token })).then(function(r){ return r.json(); })
+    .then(function(d){ if(d&&d.success&&Array.isArray(d.items)&&d.items.length){ _hqPbLawn=d.items; try{ localStorage.setItem('hq_pb_lawn',JSON.stringify(d.items)); }catch(e){} try{ _ajClnRender(); }catch(e2){} } }).catch(function(){});
   const biz=_bizLoad(); let zi=-1; biz.forEach(function(z,i){ if(zi<0&&/clean/i.test(String(z.n||''))) zi=i; });
   if(zi<0) return;
   const ut=_bizUT(zi);
@@ -1487,6 +1492,56 @@ const AJ_ADDONS=[
 ];
 let _ajC={bed:1,bath:1,extra:0,deepAll:0,firstOnly:0,addons:{}};
 function _ajClnActive(){ const z=_bizLoad()[_addBiz]||{}; return /clean/i.test(String(z.n||'')); }
+function _ajIsQuote(){ return /quote/i.test(String((document.getElementById('addFreq')||{}).value||'')); }
+function _ajFreqChg(){ _ajClnRender(); }
+/* ── 🌿 lawn quick-pricer — sizes from the pricebook (LAWN-MOW-*), extras ride as
+   per-visit Services just like cleaning. Built tier-ready for good/better/best later. ── */
+const AJ_LAWN_SIZES=[
+ {id:'S', l:'Under ¼ ac', wk:'LAWN-MOW-S-W', bw:'LAWN-MOW-S-BW', dw:39, db:45},
+ {id:'M', l:'¼–½ ac',     wk:'LAWN-MOW-M-W', bw:'LAWN-MOW-M-BW', dw:45, db:49},
+ {id:'TQ',l:'½–¾ ac',     wk:'LAWN-MOW-TQ-W',bw:'LAWN-MOW-TQ-BW',dw:55, db:65},
+ {id:'XL',l:'¾–1 ac',     wk:'LAWN-MOW-XL-W',bw:'LAWN-MOW-XL-BW',dw:65, db:79},
+ {id:'C', l:'1+ ac (custom)'}
+];
+const AJ_LAWN_EXTRAS=[
+ {id:'HEDGE', l:'🌳 Hedge trim',      code:'LAWN-HEDGE',    d:45},
+ {id:'LEAF',  l:'🍂 Leaf cleanup',    code:'LAWN-LEAF',     d:60},
+ {id:'WEED',  l:'🌿 Weed treatment',  code:'LAWN-WEED',     d:25},
+ {id:'MULCH', l:'🪵 Mulch',           code:'LAWN-MULCH-YD', d:85, per:1, max:6, unit:'yard'},
+ {id:'EDGE2', l:'🧱 Bed re-edging',   code:'LAWN-BEDEDGE',  d:50}
+];
+let _ajL={size:'',extras:{}};
+function _ajLawnBase(){
+  const sz=AJ_LAWN_SIZES.find(function(x){ return x.id===_ajL.size; });
+  if(!sz||!sz.wk) return 0;
+  const wk=/weekly/i.test(String((document.getElementById('addFreq')||{}).value||''))&&!/bi/i.test(String((document.getElementById('addFreq')||{}).value||''));
+  return Math.round(_hqPbNum(wk?sz.wk:sz.bw, wk?sz.dw:sz.db));
+}
+function _ajLawnExtras(){ let t=0; AJ_LAWN_EXTRAS.forEach(function(x){ const n=_ajL.extras[x.id]||0; if(n) t+=_hqPbNum(x.code,x.d)*(x.per?n:1); }); return Math.round(t); }
+function _ajLawnSvcStr(){ const out=[]; AJ_LAWN_EXTRAS.forEach(function(x){ const n=_ajL.extras[x.id]||0; if(n) out.push(x.l.replace(/^[^ ]+ /,'')+(x.per&&n>1?(' x'+n+' '+x.unit+'s'):'')+': $'+Math.round(_hqPbNum(x.code,x.d)*(x.per?n:1))); }); return out.join('; '); }
+function _ajLawnSummary(){ const sz=AJ_LAWN_SIZES.find(function(x){return x.id===_ajL.size;}); const b=_ajLawnBase(), ex=_ajLawnExtras(); return 'Mowing'+(sz?(' · '+sz.l):'')+(b?(' · $'+b+'/visit'):'')+(ex?(' | as-needed: '+_ajLawnSvcStr()):''); }
+function ajLawnSize(id){ _ajL.size=id; _ajClnRender(); }
+function ajLawnExtra(id){ const x=AJ_LAWN_EXTRAS.find(function(e){return e.id===id;}); const n=_ajL.extras[id]||0; _ajL.extras[id]=x.per?((n>=(x.max||4))?0:n+1):(n?0:1); _ajClnRender(); }
+function _ajLawnRender(box){
+  const base=_ajLawnBase(), ex=_ajLawnExtras();
+  box.innerHTML='<div class="lbl">🌿 Lawn quick-pricer — prices from the <a href="pricebook.html" target="_blank" style="color:#34d399;">Pricebook</a></div>'
+    +'<div style="border:1px solid var(--line2);border-radius:12px;padding:10px;background:var(--panel2);">'
+    +'<div style="font-size:10.5px;font-weight:800;color:var(--dim);text-transform:uppercase;margin-bottom:5px;">Yard size</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:9px;">'
+    +AJ_LAWN_SIZES.map(function(x){ const on=_ajL.size===x.id;
+      return '<button onclick="ajLawnSize(\''+x.id+'\')" style="padding:8px 4px;border-radius:9px;border:1px solid '+(on?'#34d399':'var(--line2)')+';background:'+(on?'rgba(52,211,153,.12)':'var(--panel)')+';color:'+(on?'#34d399':'var(--txt)')+';font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">'+x.l+(on?' ✓':'')+'</button>'; }).join('')
+    +'</div>'
+    +'<div style="font-size:10.5px;font-weight:800;color:var(--dim);text-transform:uppercase;margin-bottom:5px;">Extras — save as per-visit add-ons</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:9px;">'
+    +AJ_LAWN_EXTRAS.map(function(x){ const n=_ajL.extras[x.id]||0;
+      return '<button onclick="ajLawnExtra(\''+x.id+'\')" style="padding:8px 4px;border-radius:9px;border:1px solid '+(n?'#34d399':'var(--line2)')+';background:'+(n?'rgba(52,211,153,.12)':'var(--panel)')+';color:'+(n?'#34d399':'var(--txt)')+';font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">'+x.l+(x.per&&n?(' ×'+n):'')+(n?' ✓':'')+'</button>'; }).join('')
+    +'</div>'
+    +'<div style="font-size:12.5px;font-weight:800;color:#34d399;">'+(base?('Mowing <b>$'+base+'</b>/visit'):(_ajL.size==='C'?'Custom acreage — set the price yourself':'Pick a yard size'))+(ex?(' · extras (as needed) $'+ex):'')+'</div>'
+    +(base?(function(){ const rt=50, m=Math.round(base/rt*60/5)*5; return '<div style="font-size:11.5px;font-weight:800;color:#7dd3fc;margin-top:4px;">⏱ ~'+m+'m on site at $'+rt+'/hr'+(ex?(' · +extras when checked'):'')+'</div>'; })():'')
+    +'<div style="font-size:10.5px;color:var(--dim);margin-top:3px;">Weekly rate follows the Plan picker · extras save to the customer and the crew checks them per visit.</div>'
+    +'</div>';
+  if(base){ const pf=document.getElementById('addPrice'); if(pf) pf.value=base; }
+}
 function _ajR(code,def){ return _hqPbNum(code,def); }
 function _ajCore(){ return Math.round(_ajR('CLN-BASE',79)+Math.max(0,(_ajC.bed||0)-1)*_ajR('CLN-ROOM-BED',15)+(_ajC.bath||0)*_ajR('CLN-ROOM-BATH',25)+(_ajC.extra||0)*_ajR('CLN-ROOM-EXTRA',15)); }
 function _ajDeep(){ return _ajC.deepAll?Math.round(_ajR('CLN-DEEP-KIT',50)+_ajR('CLN-DEEP-LIV',25)+(_ajC.bed||0)*_ajR('CLN-DEEP-BED',20)+(_ajC.bath||0)*_ajR('CLN-DEEP-BATH',30)+(_ajC.extra||0)*_ajR('CLN-DEEP-EXTRA',20)):0; }
@@ -1519,7 +1574,13 @@ function ajScope(id,v){ (_ajC.addons[id]=_ajC.addons[id]||{on:1}).scope=parseInt
 function ajDeepSel(id,v){ (_ajC.addons[id]=_ajC.addons[id]||{on:1}).deep=parseInt(v)?1:0; _ajClnRender(); }
 function _ajClnRender(){
   const box=document.getElementById('ajClnBox'); if(!box) return;
-  if(!_ajClnActive()){ box.style.display='none'; return; }
+  if(_ajIsQuote()){
+    box.style.display='block';
+    box.innerHTML='<div style="border:1px dashed var(--line2);border-radius:12px;padding:12px;background:var(--panel2);font-size:12.5px;color:var(--muted);font-weight:700;">📋 Quote visit — 15 min on the board, excluded from revenue, no price needed. '+(_ajClnActive()?'The crew builds the estimate on site.':'The crew prices the yard on site.')+'</div>';
+    const pf=document.getElementById('addPrice'); if(pf) pf.value='';
+    return;
+  }
+  if(!_ajClnActive()){ _ajLawnRender(box); box.style.display='block'; return; }
   box.style.display='block';
   const stp=function(k,lab){ return '<div style="flex:1;text-align:center;"><div style="font-size:10.5px;font-weight:800;color:var(--dim);text-transform:uppercase;">'+lab+'</div>'
     +'<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:3px;">'
@@ -1567,6 +1628,7 @@ function _ajClnRender(){
 function openAddJob(){
   _addBiz=0;
   _ajC={bed:1,bath:1,extra:0,deepAll:0,firstOnly:0,addons:{}};
+  _ajL={size:'',extras:{}};
   try{ _hqPbFetch(); }catch(e){}
   setTimeout(function(){ try{ _ajClnRender(); }catch(e){} },30);
   document.getElementById('addBizPick').innerHTML=_bizLoad().map(function(z,i){
@@ -1596,8 +1658,8 @@ async function doAddJob(){
   const btn=document.getElementById('addGo'); btn.disabled=true; btn.textContent='Scheduling…';
   try{ const price=(document.getElementById('addPrice').value||'').replace(/[^0-9.]/g,'');
     const _z=_bizLoad()[_addBiz]||_bizLoad()[0];
-    const _cln=_ajClnActive();
-    const p=new URLSearchParams({ action:'manual_schedule', name:name, email:document.getElementById('addEmail').value.trim(), phone:document.getElementById('addPhone').value.trim(), address:addr, zip:document.getElementById('addZip').value.trim(), frequency:(document.getElementById('addFreq')||{}).value||'One-time', price:price, serviceDate:date, notes:(_cln?(_ajSummary()+' | '):'')+document.getElementById('addNotes').value.trim(), payMethod:'card', crew:_addCrew, services:(_cln?_ajSvcStr():''), adminToken:_bizTok(_z) });
+    const _q=_ajIsQuote(), _cln=_ajClnActive()&&!_q, _lwn=!_ajClnActive()&&!_q;
+    const p=new URLSearchParams({ action:'manual_schedule', name:name, email:document.getElementById('addEmail').value.trim(), phone:document.getElementById('addPhone').value.trim(), address:addr, zip:document.getElementById('addZip').value.trim(), frequency:(document.getElementById('addFreq')||{}).value||'One-time', price:_q?'':price, serviceDate:date, notes:(_cln?(_ajSummary()+' | '):(_lwn&&_ajL.size?(_ajLawnSummary()+' | '):''))+document.getElementById('addNotes').value.trim(), payMethod:'card', crew:_addCrew, services:(_cln?_ajSvcStr():(_lwn?_ajLawnSvcStr():'')), adminToken:_bizTok(_z) });
     const d=await(await fetch(_bizUrl(_z)+'?'+p)).json();
     if(d.success){
       const _zn=_bizLoad()[_addBiz]||_bizLoad()[0];

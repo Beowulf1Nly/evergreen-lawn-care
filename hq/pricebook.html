@@ -419,6 +419,29 @@ const CLN_SEED=[
  ['ADD-LINENS-PER','Bed linens change','Add-ons',15,'per bed','~18m each · strip, remake, pillowcases'],
  ['ADD-MICRO','Inside microwave','Add-ons',10,'each','~12m']
 ];
+const LAWN_SEED=[
+ ['LAWN-MOW-S-W','Mowing — under ¼ acre (weekly)','Mowing',39,'per visit','mow, edge, blow'],
+ ['LAWN-MOW-S-BW','Mowing — under ¼ acre (bi-weekly)','Mowing',45,'per visit',''],
+ ['LAWN-MOW-M-W','Mowing — ¼–½ acre (weekly)','Mowing',45,'per visit',''],
+ ['LAWN-MOW-M-BW','Mowing — ¼–½ acre (bi-weekly)','Mowing',49,'per visit',''],
+ ['LAWN-MOW-TQ-W','Mowing — ½–¾ acre (weekly)','Mowing',55,'per visit',''],
+ ['LAWN-MOW-TQ-BW','Mowing — ½–¾ acre (bi-weekly)','Mowing',65,'per visit',''],
+ ['LAWN-MOW-XL-W','Mowing — ¾–1 acre (weekly)','Mowing',65,'per visit',''],
+ ['LAWN-MOW-XL-BW','Mowing — ¾–1 acre (bi-weekly)','Mowing',79,'per visit',''],
+ ['LAWN-HEDGE','Hedge trim','Extras',45,'each','as-needed per visit'],
+ ['LAWN-LEAF','Leaf cleanup','Extras',60,'each','as-needed per visit'],
+ ['LAWN-WEED','Weed treatment','Extras',25,'each','as-needed per visit'],
+ ['LAWN-MULCH-YD','Mulch — per yard installed','Extras',85,'per yard',''],
+ ['LAWN-BEDEDGE','Bed re-edging','Extras',50,'each','']
+];
+function seedLawn(){
+  const have={}; _items.forEach(function(it){ if(it.code) have[String(it.code).toUpperCase()]=1; });
+  let added=0;
+  LAWN_SEED.forEach(function(r){ if(have[r[0]]) return; _items.push(normalize({ id:uid(), type:'service', code:r[0], name:r[1], category:r[2], price:r[3], unit:r[4], description:r[5], active:true })); added++; });
+  if(!added){ toast('Lawn catalog already loaded.'); return; }
+  render(); queueSave();
+  toast('✨ '+added+' lawn price'+(added>1?'s':'')+' added — HQ Add-a-job reads these.');
+}
 function seedCleaning(){
   const have={}; _items.forEach(function(it){ if(it.code) have[String(it.code).toUpperCase()]=1; });
   let added=0;
@@ -428,7 +451,7 @@ function seedCleaning(){
   toast('✨ '+added+' price'+(added>1?'s':'')+' added — edit any $ and it changes HQ + the crew app.');
 }
 function selectBiz(i){ _bizIdx=i;
-  try{ const z=bizLoad()[i]; document.getElementById('seedBtn').style.display=/clean/i.test(String(z&&z.n||''))?'':'none'; }catch(e){} _type='all'; document.querySelectorAll('#typeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.t==='all')); document.getElementById('q').value=''; renderBizBar(); loadPricebook(bizLoad()[i]); }
+  try{ const z=bizLoad()[i]; const cln=/clean/i.test(String(z&&z.n||'')); const b=document.getElementById('seedBtn'); b.style.display=''; b.textContent=cln?'✨ Load cleaning catalog':'✨ Load lawn catalog'; b.onclick=cln?seedCleaning:seedLawn; }catch(e){} _type='all'; document.querySelectorAll('#typeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.t==='all')); document.getElementById('q').value=''; renderBizBar(); loadPricebook(bizLoad()[i]); }
 function setType(t){ _type=t; document.querySelectorAll('#typeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.t===t)); render(); }
 function setCat(c){ _cat=c; render(); }
 
@@ -468,7 +491,7 @@ function render(){
   const scroll=document.getElementById('tblScroll');
   if(!_items.length){
     const _isCln=/clean/i.test(String((bizLoad()[_bizIdx]||{}).n||''));
-    scroll.innerHTML='<div class="empty"><div class="em">💵</div><div class="eh">No items yet</div><div>'+(_isCln?'Load the starter catalog — every price the crew app and HQ builder use, ready to edit.':'Add your first service or material to build '+esc((bizLoad()[_bizIdx]||{}).n||'this')+'\'s pricebook.')+'</div><br>'+(_isCln?'<button class="tbtn add" onclick="seedCleaning()">✨ Load cleaning catalog (30 prices)</button> ':'')+'<button class="tbtn'+(_isCln?'':' add')+'" onclick="openEdit(null)">＋ Add item</button></div>'; return; }
+    scroll.innerHTML='<div class="empty"><div class="em">💵</div><div class="eh">No items yet</div><div>Load the starter catalog — every price HQ\'s Add-a-job'+(_isCln?' and the crew estimate builder':'')+' read, ready to edit.</div><br><button class="tbtn add" onclick="'+(_isCln?'seedCleaning()':'seedLawn()')+'">✨ Load '+(_isCln?'cleaning catalog (30 prices)':'lawn catalog (13 prices)')+'</button> <button class="tbtn" onclick="openEdit(null)">＋ Add item</button></div>'; return; }
   if(!rows.length){ scroll.innerHTML='<div class="empty"><div class="em">🔎</div><div class="eh">No matches</div><div>Try a different search or filter.</div></div>'; return; }
   // group by category
   const groups={}; rows.forEach(function(it){ (groups[it.category]=groups[it.category]||[]).push(it); });
