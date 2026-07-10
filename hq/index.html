@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-09.27 */
-(function(){ var V='2026-07-09.27'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-09.28 */
+(function(){ var V='2026-07-09.28'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1354,7 +1354,7 @@ async function doMarkDone(){
   const b=_jobCur; if(!b) return; const be=_jobBE(b); toast('Marking done…');
   try{ const p=new URLSearchParams({action:'mark_done', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), amount:amtOf(b).toFixed(2), markedBy:myName||'Owner', adminToken:be.t});
     const d=await(await fetch(be.u+'?'+p)).json();
-    if(d.success){ b.done='✓ Done'; _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{done:'✓ Done',ts:Date.now()}); toast('✅ Marked done'); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings(); closeSheet('jobSheet'); }
+    if(d.success){ b.done='✓ Done'; _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{done:'✓ Done',ts:Date.now()}); _ghostAdd(b); toast('✅ Marked done'); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings(); closeSheet('jobSheet'); }
     else toast('Error: '+(d.error||'could not mark done'));
   }catch(e){ toast('Network error'); }
 }
@@ -2087,6 +2087,12 @@ async function loadCompleted(){
     if(d&&d.success&&Array.isArray(d.jobs)){ _completed=_fixTimes(d.jobs); _rebuildLearnedMins(); _rebuildLastSvc(); if(_activeTab==='dispatch') renderDispatch(); }
   }catch(e){}
 }
+// 👻 just-completed ghosts: marking done ARCHIVES the row instantly, but the board
+// only re-learns archived jobs from the completed feed (60s cache + 90s poll) — the
+// job used to vanish (and the day count shrink) for a couple minutes. The ghost
+// holds its place until a real feed shows it again.
+let _ghostDone={}; try{ _ghostDone=JSON.parse(localStorage.getItem('hq_ghostdone')||'{}'); }catch(e){}
+function _ghostAdd(b){ try{ _ghostDone[_svKey(b)]={b:JSON.parse(JSON.stringify(b)),ts:Date.now()}; localStorage.setItem('hq_ghostdone',JSON.stringify(_ghostDone)); }catch(e){} }
 function _dispJobs(){
   const live=(_bookings||[]).filter(function(b){ return !b.rowCancelled; });
   // dedup live↔archive on FULL identity (email|date|address) so two different completed jobs for the
@@ -2095,6 +2101,16 @@ function _dispJobs(){
   const seen={}; live.forEach(function(b){ seen[_archKey(b)]=1; });
   const arch=(_completed||[]).filter(function(b){ return dateOf(b) && !seen[_archKey(b)]; });
   let out=live.concat(arch);
+  try{
+    const have={}; out.forEach(function(b){ have[_svKey(b)]=1; });
+    let dirty=false;
+    Object.keys(_ghostDone).forEach(function(k){
+      const g=_ghostDone[k];
+      if(have[k]||Date.now()-g.ts>43200000){ delete _ghostDone[k]; dirty=true; return; }   // real row is back (or 12h stale)
+      out.push(g.b);
+    });
+    if(dirty) localStorage.setItem('hq_ghostdone',JSON.stringify(_ghostDone));
+  }catch(e){}
   Object.values(_bizExtra||{}).forEach(function(list){ out=out.concat(list); });
   return out;
 }
