@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.40 */
+/* APP_VER:2026-07-08.41 */
 (function(){
-  var V='2026-07-08.40'; window.__APP_VER=V;
+  var V='2026-07-08.41'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1405,27 +1405,33 @@ async function _fmFlushQueue(){
   _fmFlushing=true;
   try{
     let q=_fmQueueLoad();
-    while(q.length){
-      const item=q[0];
+    // NO head-of-line blocking: one rejected item used to freeze the whole queue —
+    // cash emails (direct calls) arrived while mark_done sat jammed behind a failure,
+    // so jobs never closed. Now every item gets a try each flush; a failure only
+    // holds back items for the SAME customer+date (their order matters), and a real
+    // network drop stops the pass entirely (retries next flush).
+    const _blocked={};
+    let _qi=0;
+    while(_qi<q.length){
+      const item=q[_qi];
+      const _base=(item.params?(String(item.params.email||'')+'|'+String(item.params.serviceDate||'')):'')||String(item.idemKey||'');
+      if(_blocked[_base]){ _qi++; continue; }
       try{
         let res;
         if(item.method==='POST') res=await fetch(SCRIPT_URL,{ method:'POST', body:JSON.stringify(item.body) });
         else res=await fetch(SCRIPT_URL+'?'+new URLSearchParams(item.params).toString());
         if(!res.ok) throw new Error('HTTP '+res.status);
-        // HTTP 200 isn't enough — the backend saying {success:false} used to get
-        // swallowed here, which is how an invoice could silently never send.
-        // Every item now has its body checked; failures retry + get surfaced.
         try{ const j=JSON.parse(await res.text()); if(j&&j.success===false) { item.lastErr=String(j.error||'rejected'); throw new Error('backend: '+item.lastErr); } }catch(pe){ if(String(pe.message||'').indexOf('backend:')===0) throw pe; }
-        _fmMarkKeyDone(item.idemKey); q.shift(); _fmQueueSave(q);
+        _fmMarkKeyDone(item.idemKey); q.splice(_qi,1); _fmQueueSave(q);
       }catch(netErr){
+        const _isLogical=/^backend:|^HTTP \d/.test(String((netErr&&netErr.message)||''));
         item.tries=(item.tries||0)+1;
-        // Never silently drop money or photos — a stuck invoice/charge/completion = lost revenue.
-        // After 12 tries: drop only non-financial items (notes/checklists); rotate money+photos to
-        // the back so one stuck item can't block the rest, and keep retrying them forever.
         const _crit=(item.kind==='photo'||item.kind==='done'||item.kind==='invoice'||item.kind==='cash'||item.kind==='addons');
         if(_crit&&item.lastErr&&item.tries===3){ try{ showToast('⚠️ '+item.kind.toUpperCase()+' not going through: '+item.lastErr+' — it will keep retrying'); }catch(e){} }
-        if(item.tries>12){ q.shift(); if(_crit) q.push(item); }
-        _fmQueueSave(q); break;
+        if(item.tries>12&&!_crit){ q.splice(_qi,1); _fmQueueSave(q); continue; }   // stale non-money items age out
+        _fmQueueSave(q);
+        if(!_isLogical) break;        // device offline / network drop — stop the pass
+        _blocked[_base]=1; _qi++;     // backend rejected — hold this customer's items, keep going
       }
     }
   } finally { _fmFlushing=false; _fmUpdateSyncBadge(); }
@@ -1433,7 +1439,7 @@ async function _fmFlushQueue(){
 function _fmUpdateSyncBadge(){
   const _q=_fmQueueLoad(); const n=_q.length, online=navigator.onLine!==false;
   const stuck=_q.some(function(it){ return (it.tries||0)>5; });
-  document.querySelectorAll('.fm-sync').forEach(el=>{ if(n===0){ el.style.display='none'; return; } el.style.display=''; if(!online){ el.className='fm-sync offline'; el.textContent='📴 '+n+' to sync'; } else if(stuck){ el.className='fm-sync offline'; el.textContent='⚠ '+n+' stuck — stay on wifi & keep app open'; } else { el.className='fm-sync pending'; el.textContent='⏳ Syncing '+n+'…'; } });
+  document.querySelectorAll('.fm-sync').forEach(el=>{ if(n===0){ el.style.display='none'; return; } el.style.display=''; if(!online){ el.className='fm-sync offline'; el.textContent='📴 '+n+' to sync'; } else if(stuck){ el.className='fm-sync offline'; const s1=_q.find(function(it){ return (it.tries||0)>5&&it.lastErr; }); el.textContent=('⚠ '+n+' stuck'+(s1?(' — '+s1.kind+': '+String(s1.lastErr).slice(0,48)):'')+' — keep app open'); } else { el.className='fm-sync pending'; el.textContent='⏳ Syncing '+n+'…'; } });
   const b=document.getElementById('netBanner'); if(b){ if(navigator.onLine===false){ b.className='show'; b.textContent='📴 Offline — work is saved, syncs when you reconnect'+(n?(' · '+n+' pending'):''); } else b.className=''; }
 }
 
