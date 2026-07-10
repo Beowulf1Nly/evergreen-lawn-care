@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-09.28 */
-(function(){ var V='2026-07-09.28'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-09.29 */
+(function(){ var V='2026-07-09.29'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1704,7 +1704,9 @@ async function hqEESave(){
   const btn=document.getElementById('hqEEGo'); btn.disabled=true; btn.textContent='Saving…';
   try{
     const be=_jobBE(b);
-    const d=await fetch(be.u+'?'+new URLSearchParams({ action:'update_quote_booking', email:String(b.email||'').toLowerCase().trim(), serviceDate:dateOf(b), frequency:String(b.frequency||''), price:String(core), services:svc, address:b.address||'', noteAppend:'✏️ Plan edited from HQ — '+summ, adminToken:be.t })).then(function(r){ return r.json(); });
+    const hs=(_ajC.bed||0)+'bd/'+(_ajC.bath||0)+'ba'+((_ajC.extra||0)?('+'+_ajC.extra+'rm'):'');
+    const d=await fetch(be.u+'?'+new URLSearchParams({ action:'update_quote_booking', email:String(b.email||'').toLowerCase().trim(), serviceDate:dateOf(b), frequency:String(b.frequency||''), price:String(core), services:svc, address:b.address||'', homeSummary:hs, noteAppend:'✏️ Plan edited from HQ — '+summ, adminToken:be.t })).then(function(r){ return r.json(); });
+    try{ const tokRe=/(\d+)\s*bd\s*\/\s*(\d+)\s*ba(?:\s*\+\s*(\d+)\s*rm)?/i; b.notes=tokRe.test(String(b.notes||''))?String(b.notes).replace(tokRe,hs):(hs+' | '+String(b.notes||'')); }catch(e){}
     if(d&&d.success){ b.price='$'+core; toast('💾 '+(b.name||'Job')+' → $'+core+'/visit · add-ons saved'); document.getElementById('hqEESheet').classList.remove('show'); if(b._srcBiz) loadBizBookings(); else refreshBookings(); }
     else toast('⚠ Not saved: '+((d&&d.error)||'backend error'));
   }catch(e){ toast('⚠ Network error — not saved'); }
