@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.35 */
+/* APP_VER:2026-07-08.36 */
 (function(){
-  var V='2026-07-08.35'; window.__APP_VER=V;
+  var V='2026-07-08.36'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -869,7 +869,19 @@ function _extractRouteKeys(rRes){
       base+=1000;
     });
     const keys=Object.keys(seq).sort(function(a,b){ return seq[a]-seq[b]; });
-    if(window._fmLkDirty){ window._fmLkDirty=false; try{ _persist(); }catch(e){} }
+    if(window._fmLkDirty){
+      window._fmLkDirty=false;
+      try{ _persist(); }catch(e){}
+      // apply fresh locks to the LIVE route immediately — don't wait for the next re-route
+      try{
+        if(_fmStarted&&_routeLock&&_routeLock.length){
+          const _rv=_fmStops().filter(_fmResolved).map(function(x){ return _stopKey(x.bk); });
+          const _op=_fmStops().filter(function(x){ return !_fmResolved(x); }).map(function(x){ return _stopKey(x.bk); });
+          _routeLock=_rv.concat(_fmApplyLocks(_op));
+          _persist(); _fmRender();
+        }
+      }catch(e){}
+    }
     return keys.length?keys:null;
   }catch(e){ return null; }
 }
@@ -1272,7 +1284,9 @@ async function _fmRerouteExec(auto){
       const _stopsUp=_routeLock.map(function(k,i){
         const st2=_fmStops().find(function(x){ return _stopKey(x.bk)===k; }); if(!st2) return null;
         const b=st2.bk;
-        return { order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:dateOf(b), name:b.name||'', address:b.address||'', zip:String(b.zip||''), crew:String(adminCrews||b.crew||''), jobTime:String(b.jobTime||''), locked:(+(_stopLocks&&_stopLocks[k])>0)?+_stopLocks[k]:0 };
+        const _o={ order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:dateOf(b), name:b.name||'', address:b.address||'', zip:String(b.zip||''), crew:String(adminCrews||b.crew||''), jobTime:String(b.jobTime||'') };
+        if(+(_stopLocks&&_stopLocks[k])>0) _o.locked=+_stopLocks[k];   // phone never claims locked:0 — only HQ can unlock
+        return _o;
       }).filter(Boolean);
       if(_stopsUp.length) fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'put_route', date:todayISOStr(), crew:String(adminCrews||'').toUpperCase().split(/[^A-Z0-9]+/)[0]||'', stops:JSON.stringify(_stopsUp), updatedBy:(adminName||'crew')+' (live route)', idemKey:'live:'+todayISOStr()+':'+Date.now(), adminToken })).catch(function(){});
     }catch(e){}

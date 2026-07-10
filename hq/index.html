@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-09.13 */
-(function(){ var V='2026-07-09.13'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-09.14 */
+(function(){ var V='2026-07-09.14'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -2001,7 +2001,11 @@ function renderDispatch(){
         // per-stop drive-in time: real OSRM leg from the last ⚡, else the flat 12
         const _drv=function(b){ const dm=rec.drive&&rec.drive[_svKey(b)]; return (dm>0&&dm<180)?Math.round(dm):DRIVE_BUF; };
         const ordKeys=rec.order[_recKey(zi,c)]||rec.order[c==='un'?'':c]||[];
+        const _lkOrd=(typeof _dayLocks==='function')?_dayLocks(iso,zi,c):[];
         const cell=(rowJobsAll[iso]||[]).slice().sort(function(a,b2){
+          // 🔒 locked OPEN stops lead the lane no matter what order was last published
+          const _la=(!isDone(a)&&!_isArch(a))?_lkOrd.indexOf(_svKey(a)):-1, _lb=(!isDone(b2)&&!_isArch(b2))?_lkOrd.indexOf(_svKey(b2)):-1;
+          if(_la>=0||_lb>=0){ if(_la<0) return 1; if(_lb<0) return -1; if(_la!==_lb) return _la-_lb; }
           if(ordKeys.length){ let pa=ordKeys.indexOf(_svKey(a)), pb=ordKeys.indexOf(_svKey(b2)); pa=pa<0?9999:pa; pb=pb<0?9999:pb; if(pa!==pb) return pa-pb; }
           return _jobSort(a,b2);
         });
@@ -3247,6 +3251,10 @@ function _dayJobsInOrder(c,iso,zi){
     const bc=String(b.crew||'').toUpperCase().trim()||'un';
     return bc===c&&!_isArch(b)&&!isDone(b)&&((b._srcBiz||0)===zi);
   }).sort(function(a,b2){
+    // 🔒 locks BEAT any published order — the crew phone's auto-route publishes its
+    // own order as the newest route row, which used to override the locked prefix.
+    const _lo=_dayLocks(iso,zi,c), _la=_lo.indexOf(_svKey(a)), _lb=_lo.indexOf(_svKey(b2));
+    if(_la>=0||_lb>=0){ if(_la<0) return 1; if(_lb<0) return -1; if(_la!==_lb) return _la-_lb; }
     if(ordKeys.length){ let pa=ordKeys.indexOf(_svKey(a)), pb=ordKeys.indexOf(_svKey(b2)); pa=pa<0?9999:pa; pb=pb<0?9999:pb; if(pa!==pb) return pa-pb; }
     return _jobSort(a,b2);
   });
