@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-09.18 */
-(function(){ var V='2026-07-09.18'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-09.19 */
+(function(){ var V='2026-07-09.19'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -704,6 +704,7 @@
       <option value="Bi-Weekly Plan">Bi-weekly plan (every 14d)</option>
       <option value="Monthly Plan">Monthly plan (every 30d)</option>
     </select>
+    <div id="ajClnBox" style="display:none;"></div>
     <div class="lbl">Crew</div><div class="crewpick" id="addCrewPick"></div>
     <input type="text" id="addNotes" class="field" placeholder="Notes (optional)" style="margin-top:10px;">
     <button class="primary" id="addGo" onclick="doAddJob()" style="margin-top:12px;">Schedule job</button>
@@ -1456,9 +1457,66 @@ async function doCancel(){
 /* ═════════ ADD JOB ═════════ */
 function _uniqueCustomers(){ const seen={}, out=[]; (_bookings||[]).concat(_completed||[]).forEach(function(b){ const k=(String(b.email||'').toLowerCase())||(String(b.name||'')+String(b.address||'')); if(!k||seen[k]) return; seen[k]=1; out.push(b); }); return out; }
 let _addBiz=0;
-function pickAddBiz(el,i){ _addBiz=i; document.querySelectorAll('#addBizPick button').forEach(function(b){b.classList.remove('on');}); el.classList.add('on'); }
+function pickAddBiz(el,i){ _addBiz=i; document.querySelectorAll('#addBizPick button').forEach(function(b){b.classList.remove('on');}); el.classList.add('on'); _ajClnRender(); }
+/* ── 🧮 cleaning job builder — same math as the crew app's estimate builder ── */
+const AJ_ADDONS=[
+ {id:'grout',l:'🧽 Grout scrub',p:50},{id:'dishes',l:'🍽 Dishes',p:15},
+ {id:'oven',l:'🔥 Oven degrease',p:45},{id:'fridge',l:'🧊 Fridge empty-out',p:45},
+ {id:'windows',l:'🪟 Windows (house)',p:40},{id:'laundry',l:'🧺 Laundry',p:15},
+ {id:'base',l:'📏 Baseboards scrub',p:50},{id:'pet',l:'🐾 Pet hair',p:30},
+ {id:'couch',l:'🛋 Couch steam',p:35,per:1,max:4},{id:'linens',l:'🛏 Linens',p:5,per:1,max:6},
+ {id:'fans',l:'🌀 Ceiling fans',p:10},{id:'micro',l:'🍲 Microwave',p:10}
+];
+let _ajC={bed:1,bath:1,extra:0,deepAll:0,firstOnly:0,addons:{}};
+function _ajClnActive(){ const z=_bizLoad()[_addBiz]||{}; return /clean/i.test(String(z.n||'')); }
+function _ajCore(){ return 79+Math.max(0,(_ajC.bed||0)-1)*15+(_ajC.bath||0)*25+(_ajC.extra||0)*15; }
+function _ajDeep(){ return _ajC.deepAll?(50+25+(_ajC.bed||0)*20+(_ajC.bath||0)*30+(_ajC.extra||0)*20):0; }
+function _ajAdd(){ let t=0; AJ_ADDONS.forEach(function(a){ const n=_ajC.addons[a.id]||0; if(n) t+=a.p*(a.per?n:1); }); return t; }
+function _ajSvcStr(){
+  const out=[];
+  AJ_ADDONS.forEach(function(a){ const n=_ajC.addons[a.id]||0; if(n) out.push(a.l.replace(/^[^ ]+ /,'')+(a.per&&n>1?(' x'+n):'')+': $'+(a.p*(a.per?n:1))); });
+  const dp=_ajDeep(); if(dp>0) out.push('Deep clean upcharge'+(_ajC.firstOnly?' (first visit)':'')+': $'+dp);
+  return out.join('; ');
+}
+function _ajSummary(){ const dp=_ajDeep(), ad=_ajAdd(); return 'Standard Clean · '+(_ajC.bed||0)+'bd/'+(_ajC.bath||0)+'ba'+((_ajC.extra||0)?('+'+_ajC.extra+'rm'):'')+' · $'+_ajCore()+'/visit'+(ad||dp?(' | as-needed: '+_ajSvcStr()):'')+(dp?(' | first visit ~$'+(_ajCore()+ad+dp)):''); }
+function ajBump(k,d){ _ajC[k]=Math.max(k==='bed'?0:0,Math.min(10,(_ajC[k]||0)+d)); _ajClnRender(); }
+function ajTgl(k){ _ajC[k]=_ajC[k]?0:1; _ajClnRender(); }
+function ajAddonTap(id){
+  const a=AJ_ADDONS.find(function(x){return x.id===id;}); if(!a) return;
+  const n=_ajC.addons[id]||0;
+  _ajC.addons[id]=a.per?((n>=(a.max||4))?0:n+1):(n?0:1);   // per-item cycles 1..max → off; others toggle
+  _ajClnRender();
+}
+function _ajClnRender(){
+  const box=document.getElementById('ajClnBox'); if(!box) return;
+  if(!_ajClnActive()){ box.style.display='none'; return; }
+  box.style.display='block';
+  const stp=function(k,lab){ return '<div style="flex:1;text-align:center;"><div style="font-size:10.5px;font-weight:800;color:var(--dim);text-transform:uppercase;">'+lab+'</div>'
+    +'<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:3px;">'
+    +'<button onclick="ajBump(\''+k+'\',-1)" style="width:30px;height:30px;border-radius:8px;border:1px solid var(--line2);background:var(--panel2);color:var(--txt);font-weight:800;cursor:pointer;">−</button>'
+    +'<b style="width:22px;font-size:16px;">'+(_ajC[k]||0)+'</b>'
+    +'<button onclick="ajBump(\''+k+'\',1)" style="width:30px;height:30px;border-radius:8px;border:1px solid var(--line2);background:var(--panel2);color:var(--txt);font-weight:800;cursor:pointer;">+</button></div></div>'; };
+  const core=_ajCore(), ad=_ajAdd(), dp=_ajDeep();
+  box.innerHTML='<div class="lbl">🧮 Cleaning estimate (sets the price + per-visit add-ons)</div>'
+    +'<div style="border:1px solid var(--line2);border-radius:12px;padding:10px;background:var(--panel2);">'
+    +'<div style="display:flex;gap:6px;margin-bottom:9px;">'+stp('bed','Beds')+stp('bath','Baths')+stp('extra','Extra rms')+'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:9px;">'
+    +AJ_ADDONS.map(function(a){ const n=_ajC.addons[a.id]||0;
+      return '<button onclick="ajAddonTap(\''+a.id+'\')" style="padding:7px 4px;border-radius:9px;border:1px solid '+(n?'#34d399':'var(--line2)')+';background:'+(n?'rgba(52,211,153,.12)':'var(--panel)')+';color:'+(n?'#34d399':'var(--txt)')+';font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">'+a.l+(a.per&&n?(' ×'+n):'')+(n?' ✓':'')+'</button>'; }).join('')
+    +'</div>'
+    +'<div style="display:flex;gap:6px;margin-bottom:9px;">'
+    +'<button onclick="ajTgl(\'deepAll\')" style="flex:1;padding:9px 4px;border-radius:9px;border:1px solid '+(_ajC.deepAll?'#a78bfa':'var(--line2)')+';background:'+(_ajC.deepAll?'rgba(167,139,250,.14)':'var(--panel)')+';color:'+(_ajC.deepAll?'#a78bfa':'var(--txt)')+';font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">🧼 Deep clean whole home'+(_ajC.deepAll?(' +$'+dp+' ✓'):'')+'</button>'
+    +(_ajC.deepAll?('<button onclick="ajTgl(\'firstOnly\')" style="flex:1;padding:9px 4px;border-radius:9px;border:1px solid '+(_ajC.firstOnly?'#fbbf24':'var(--line2)')+';background:'+(_ajC.firstOnly?'rgba(251,191,36,.13)':'var(--panel)')+';color:'+(_ajC.firstOnly?'#fbbf24':'var(--txt)')+';font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">First visit only'+(_ajC.firstOnly?' ✓':'')+'</button>'):'')
+    +'</div>'
+    +'<div style="font-size:12.5px;font-weight:800;color:#34d399;">Standard <b>$'+core+'</b>/visit'+(ad?(' · add-ons (as needed) $'+ad):'')+(dp?(' · deep +$'+dp):'')+((ad||dp)?(' · first visit ~<b>$'+(core+ad+dp)+'</b>'):'')+'</div>'
+    +'<div style="font-size:10.5px;color:var(--dim);margin-top:3px;">Price field is set to the standard visit — add-ons save to the customer and the crew checks them at each clean.</div>'
+    +'</div>';
+  const pf=document.getElementById('addPrice'); if(pf) pf.value=core;
+}
 function openAddJob(){
   _addBiz=0;
+  _ajC={bed:1,bath:1,extra:0,deepAll:0,firstOnly:0,addons:{}};
+  setTimeout(function(){ try{ _ajClnRender(); }catch(e){} },30);
   document.getElementById('addBizPick').innerHTML=_bizLoad().map(function(z,i){
     const ok=_bizConnected(z);
     return '<button class="'+(i===0?'on':'')+'" '+(ok?('onclick="pickAddBiz(this,'+i+')"'):'disabled style="opacity:.4;" title="Connect in 🏢 Businesses first"')+'>'+esc(z.e)+' '+esc(z.n)+(ok?'':' 🔒')+'</button>';
@@ -1476,16 +1534,18 @@ function renderAddSearch(q){
   const hits=_uniqueCustomers().filter(function(b){ return (String(b.name||'')+' '+String(b.address||'')+' '+String(b.email||'')+' '+String(b.phone||'')).toLowerCase().indexOf(q)>=0; }).slice(0,8);
   if(!hits.length){ box.style.display='none'; return; }
   box.style.display='block';
-  box.innerHTML=hits.map(function(b){ return '<div class="srch-item" onclick="fillCustomer('+_bookings.indexOf(b)+')"><b>'+esc(b.name||'Customer')+'</b><small>'+esc(b.address||'')+(b.zip?', '+esc(b.zip):'')+'</small></div>'; }).join('');
+  window._addHits=hits;
+  box.innerHTML=hits.map(function(b,i){ return '<div class="srch-item" onclick="fillCustomer('+i+')"><b>'+esc(b.name||'Customer')+'</b><small>'+esc(b.address||'')+(b.zip?', '+esc(b.zip):'')+'</small></div>'; }).join('');
 }
-function fillCustomer(bi){ const b=_bookings[bi]; if(!b) return; document.getElementById('addName').value=b.name||''; document.getElementById('addAddr').value=b.address||''; document.getElementById('addZip').value=b.zip||''; document.getElementById('addPhone').value=b.phone||''; document.getElementById('addEmail').value=b.email||''; if(b.price) document.getElementById('addPrice').value=String(b.price).replace(/[^0-9.]/g,''); document.getElementById('addResults').style.display='none'; document.getElementById('addSearch').value=b.name||''; }
+function fillCustomer(bi){ const b=(window._addHits||[])[bi]; if(!b) return; document.getElementById('addName').value=b.name||''; document.getElementById('addAddr').value=b.address||''; document.getElementById('addZip').value=b.zip||''; document.getElementById('addPhone').value=b.phone||''; document.getElementById('addEmail').value=b.email||''; if(b.price) document.getElementById('addPrice').value=String(b.price).replace(/[^0-9.]/g,''); document.getElementById('addResults').style.display='none'; document.getElementById('addSearch').value=b.name||''; }
 async function doAddJob(){
   const name=document.getElementById('addName').value.trim(); const addr=document.getElementById('addAddr').value.trim(); const date=document.getElementById('addDate').value;
   if(!name||!addr){ toast('Name and address required'); return; } if(!date){ toast('Pick a date'); return; }
   const btn=document.getElementById('addGo'); btn.disabled=true; btn.textContent='Scheduling…';
   try{ const price=(document.getElementById('addPrice').value||'').replace(/[^0-9.]/g,'');
     const _z=_bizLoad()[_addBiz]||_bizLoad()[0];
-    const p=new URLSearchParams({ action:'manual_schedule', name:name, email:document.getElementById('addEmail').value.trim(), phone:document.getElementById('addPhone').value.trim(), address:addr, zip:document.getElementById('addZip').value.trim(), frequency:(document.getElementById('addFreq')||{}).value||'One-time', price:price, serviceDate:date, notes:document.getElementById('addNotes').value.trim(), payMethod:'card', crew:_addCrew, adminToken:_bizTok(_z) });
+    const _cln=_ajClnActive();
+    const p=new URLSearchParams({ action:'manual_schedule', name:name, email:document.getElementById('addEmail').value.trim(), phone:document.getElementById('addPhone').value.trim(), address:addr, zip:document.getElementById('addZip').value.trim(), frequency:(document.getElementById('addFreq')||{}).value||'One-time', price:price, serviceDate:date, notes:(_cln?(_ajSummary()+' | '):'')+document.getElementById('addNotes').value.trim(), payMethod:'card', crew:_addCrew, services:(_cln?_ajSvcStr():''), adminToken:_bizTok(_z) });
     const d=await(await fetch(_bizUrl(_z)+'?'+p)).json();
     if(d.success){
       const _zn=_bizLoad()[_addBiz]||_bizLoad()[0];
@@ -2566,6 +2626,7 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
       const _dayV=(_dispView!=='week'&&_dispView!=='month');
       let w=0, wlbl=' on the clock so far';
       if(_dayV&&iso===todayISO()&&zi===0){ w=_crewWorkedHrs(c); }
+      else if(_dayV){ w=_rangePayHrs(c,zi,iso,iso); wlbl=' logged (Pay Log)'; }   // past days + cleaning biz: real hours → real margin
       else if(!_dayV){
         // weekly: real hours from Pay Log for the visible Sun–Sat (any business)
         const st0=new Date(_dispAnchor); st0.setDate(st0.getDate()-st0.getDay());
