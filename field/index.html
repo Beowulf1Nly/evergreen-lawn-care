@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.34 */
+/* APP_VER:2026-07-08.35 */
 (function(){
-  var V='2026-07-08.34'; window.__APP_VER=V;
+  var V='2026-07-08.35'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -857,10 +857,19 @@ function _extractRouteKeys(rRes){
         const t=String(st.jobTime||'').trim();
         if(/^\d{1,2}:\d{2}$/.test(t)) _savedTimes[em+'|'+d]=t;
         if(+st.driveMin>0) _savedDrive[em+'|'+d]=Math.round(+st.driveMin);   // planned per-leg drive from HQ's ⚡
+        // 🔒 HQ route locks ride the route payload: locked:N pins the stop at
+        // position N through every phone-side re-route; explicit locked:0 unlocks.
+        // Pushes WITHOUT the field (older paths) never touch existing locks.
+        if(st.locked!==undefined&&st.locked!==null&&st.locked!==''){
+          const _lp=parseInt(st.locked);
+          if(_lp>0){ if(_stopLocks[em+'|'+d]!==_lp){ _stopLocks[em+'|'+d]=_lp; window._fmLkDirty=true; } }
+          else if(_stopLocks[em+'|'+d]!=null){ delete _stopLocks[em+'|'+d]; window._fmLkDirty=true; }
+        }
       });
       base+=1000;
     });
     const keys=Object.keys(seq).sort(function(a,b){ return seq[a]-seq[b]; });
+    if(window._fmLkDirty){ window._fmLkDirty=false; try{ _persist(); }catch(e){} }
     return keys.length?keys:null;
   }catch(e){ return null; }
 }
@@ -1263,7 +1272,7 @@ async function _fmRerouteExec(auto){
       const _stopsUp=_routeLock.map(function(k,i){
         const st2=_fmStops().find(function(x){ return _stopKey(x.bk)===k; }); if(!st2) return null;
         const b=st2.bk;
-        return { order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:dateOf(b), name:b.name||'', address:b.address||'', zip:String(b.zip||''), crew:String(adminCrews||b.crew||''), jobTime:String(b.jobTime||'') };
+        return { order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:dateOf(b), name:b.name||'', address:b.address||'', zip:String(b.zip||''), crew:String(adminCrews||b.crew||''), jobTime:String(b.jobTime||''), locked:(+(_stopLocks&&_stopLocks[k])>0)?+_stopLocks[k]:0 };
       }).filter(Boolean);
       if(_stopsUp.length) fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'put_route', date:todayISOStr(), crew:String(adminCrews||'').toUpperCase().split(/[^A-Z0-9]+/)[0]||'', stops:JSON.stringify(_stopsUp), updatedBy:(adminName||'crew')+' (live route)', idemKey:'live:'+todayISOStr()+':'+Date.now(), adminToken })).catch(function(){});
     }catch(e){}
