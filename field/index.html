@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.38 */
+/* APP_VER:2026-07-08.39 */
 (function(){
-  var V='2026-07-08.38'; window.__APP_VER=V;
+  var V='2026-07-08.39'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -850,11 +850,11 @@ function _extractRouteKeys(rRes){
     _savedTimes={}; _savedDrive={};
     routes.forEach(function(rt){
       (rt.stops||[]).forEach(function(st,idx){
-        const _e0=String(st.email||st.Email||'').toLowerCase().trim();
-        const _n0=String(st.name||st.Name||'').toLowerCase().trim();
+        const _e0=_nkNorm(st.email||st.Email);
+        const _n0=_nkNorm(st.name||st.Name);
         const d=String(st.serviceDate||st.date||'').trim();
         if(!_e0&&!_n0) return;
-        const em=_e0||('n:'+_n0);                   // no-email customers key by name — same rule as _stopKey
+        const em=_e0||('n:'+_n0+'~'+_nkNorm(st.address||st.Address));   // no-email → name+address, same rule as _stopKey
         seq[em+'|'+d]=base+idx;                     // later (newer) rows overwrite duplicates
         const t=String(st.jobTime||'').trim();
         if(/^\d{1,2}:\d{2}$/.test(t)) _savedTimes[em+'|'+d]=t;
@@ -1545,7 +1545,8 @@ function _autoClockOut(){
 }
 
 /* ───────── Stops / ordering ───────── */
-function _stopKey(bk){ const e=String(bk.email||'').toLowerCase().trim(); return (e||('n:'+String(bk.name||'').toLowerCase().trim()))+'|'+dateOf(bk); }
+function _nkNorm(v){ return String(v||'').toLowerCase().trim().replace(/\s+/g,' '); }
+function _stopKey(bk){ const e=_nkNorm(bk.email); return (e||('n:'+_nkNorm(bk.name)+'~'+_nkNorm(bk.address)))+'|'+dateOf(bk); }
 function _crewMatch(bk){ if(_crewSel){ if(_crewSel==='ALL') return true; const c=String(bk.crew||'').toUpperCase().trim(); if(_crewSel==='UNASSIGNED') return !c; return c===_crewSel||!c; } return _crewOk(bk); } // explicit override else staff assignment
 
 /* ── Same-day additions: local insert so the new job is playable IMMEDIATELY ── */
