@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-09.10 */
-(function(){ var V='2026-07-09.10'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-09.11 */
+(function(){ var V='2026-07-09.11'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -2014,6 +2014,7 @@ function renderDispatch(){
         // Anchor the day to the crew's ACTUAL clock-in today (PMCS/load-up + jobs shift with it); else 8:00.
         const _shift=(iso===todayIso && zi===0)?_crewShift(c):null;   // clock data is lawn-only; other biz use the 7:30 assumption
         const _ciMin=(_shift&&_shift.clockIn)?(_shift.clockIn.getHours()*60+_shift.clockIn.getMinutes()):null;
+        const _coCap=(_shift&&_shift.clockOut)?(_shift.clockOut.getHours()*60+_shift.clockOut.getMinutes()):null;
         const _isCleanTL=/clean/i.test((_bizLoad()[zi]||{}).n||'');
         const _amDur=_isCleanTL?15:((new Date(iso+'T12:00')).getDay()===1?30:10);   // morning PMCS+load: Mon 30 / Tue–Fri 10 (lawn); cleaning 15 — ⛽ gas is its own 15m block after
         const _nowMin0=(new Date()).getHours()*60+(new Date()).getMinutes();
@@ -2067,12 +2068,15 @@ function renderDispatch(){
           // v3 pins: a flip only pins "ended right now" if the board was actually
           // WATCHING (rendered <3 min ago). Reopening HQ at 4 PM used to make every
           // job finished since morning look like it ran 7:09→4:26, all overlapping.
-          const _watched=(Date.now()-(window._dispWatchTs||0))<180000;
+          let _watched=(Date.now()-(window._dispWatchTs||0))<180000;
           window._dispWatchTs=Date.now();
+          // a flip seen AFTER the crew clocked out isn't live work being watched —
+          // someone toggled a checkbox later. Place those by estimate, not "now".
+          if(_coCap!=null&&_nowM>_coCap+5) _watched=false;
           let _pins={}, _seenOpen={}, _curT={};
-          try{ _pins=JSON.parse(localStorage.getItem('hq_dp4_'+iso)||'{}'); }catch(e){}
-          try{ _seenOpen=JSON.parse(localStorage.getItem('hq_ds4_'+iso)||'{}'); }catch(e){}
-          try{ _curT=JSON.parse(localStorage.getItem('hq_dc4_'+iso)||'{}'); }catch(e){}
+          try{ _pins=JSON.parse(localStorage.getItem('hq_dp5_'+iso)||'{}'); }catch(e){}
+          try{ _seenOpen=JSON.parse(localStorage.getItem('hq_ds5_'+iso)||'{}'); }catch(e){}
+          try{ _curT=JSON.parse(localStorage.getItem('hq_dc5_'+iso)||'{}'); }catch(e){}
           let _liveCur=_pmcsEn, _anyPlaced=false;
           evs.forEach(function(ev){
             if(!isDone(ev.b)) return;
@@ -2085,14 +2089,26 @@ function renderDispatch(){
             // yard ran 9 hours. Keep the END (the flip really happened then), pull the start in.
             const _cap=Math.round(_d*1.5)+15;
             if(ev.en-ev.st>_cap){ ev.st=ev.en-_cap; _pins[_k]={s:ev.st,e:ev.en}; }
+            // 🕓 clock-out cap: a job marked done AFTER the crew clocked out was flipped
+            // from a desk, not a yard — snap it to the end of the shift, never past it.
+            if(_coCap!=null&&ev.en>_coCap){ ev.en=_coCap; ev.st=Math.max(ev.en-_d,Math.min(ev.st,ev.en-10)); if(ev.en-ev.st>_cap) ev.st=ev.en-_cap; _pins[_k]={s:ev.st,e:ev.en}; }
             _liveCur=Math.max(_liveCur,ev.en); _anyPlaced=true;
           });
+          // 📐 de-overlap: done blocks render as ONE readable chain — pins written by
+          // different renders through the day drift into overlaps; ends are kept, a
+          // colliding start slides to just after the previous block's end.
+          (function(){ let _pe=-1;
+            evs.filter(function(ev){ return isDone(ev.b); }).sort(function(a,b2){ return a.st-b2.st||a.en-b2.en; }).forEach(function(ev){
+              if(ev.st<_pe+1){ ev.st=_pe+2; if(ev.en<ev.st+5) ev.en=ev.st+5; _pins[_svKey(ev.b)]={s:ev.st,e:ev.en}; }
+              _pe=Math.max(_pe,ev.en);
+            });
+          })();
           evs.forEach(function(ev){ if(!isDone(ev.b)) _seenOpen[_svKey(ev.b)]=1; });
           try{
-            localStorage.setItem('hq_dp4_'+iso,JSON.stringify(_pins));
-            localStorage.setItem('hq_ds4_'+iso,JSON.stringify(_seenOpen));
-            localStorage.setItem('hq_dc4_'+iso,JSON.stringify(_curT));
-            for(let _li=localStorage.length-1;_li>=0;_li--){ const _lk=localStorage.key(_li); if(!_lk) continue; if(/^hq_dpins_|^hq_dseen_|^hq_dp2_|^hq_ds2_|^hq_dc2_|^hq_dp3_|^hq_ds3_|^hq_dc3_/.test(_lk)){ localStorage.removeItem(_lk); continue; } if(/^hq_dp4_|^hq_ds4_|^hq_dc4_/.test(_lk)&&_lk.indexOf(iso)<0) localStorage.removeItem(_lk); }
+            localStorage.setItem('hq_dp5_'+iso,JSON.stringify(_pins));
+            localStorage.setItem('hq_ds5_'+iso,JSON.stringify(_seenOpen));
+            localStorage.setItem('hq_dc5_'+iso,JSON.stringify(_curT));
+            for(let _li=localStorage.length-1;_li>=0;_li--){ const _lk=localStorage.key(_li); if(!_lk) continue; if(/^hq_dpins_|^hq_dseen_|^hq_dp2_|^hq_ds2_|^hq_dc2_|^hq_dp3_|^hq_ds3_|^hq_dc3_|^hq_dp4_|^hq_ds4_|^hq_dc4_/.test(_lk)){ localStorage.removeItem(_lk); continue; } if(/^hq_dp5_|^hq_ds5_|^hq_dc5_/.test(_lk)&&_lk.indexOf(iso)<0) localStorage.removeItem(_lk); }
           }catch(e){}
           // Current stop is IN PROGRESS: starts where the crew got to, end stretches through 'now'
           // when running long (no fake gap). Everything after cascades forward, never before 'now'.
@@ -2108,7 +2124,7 @@ function renderDispatch(){
               ev.st=_curT[_k3]; ev.en=Math.max(ev.st+_d,_nowQ); _firstOpen=false;
               const _cap3=Math.round(_d*1.5)+15;
               if(ev.en-ev.st>_cap3){ ev.st=ev.en-_cap3; _curT[_k3]=ev.st; }
-              try{ localStorage.setItem('hq_dc4_'+iso,JSON.stringify(_curT)); }catch(e){}
+              try{ localStorage.setItem('hq_dc5_'+iso,JSON.stringify(_curT)); }catch(e){}
             }
             else { const _s2=Math.max(_st,_nowQ); ev.st=_s2; ev.en=_s2+_d; }
             _liveCur=ev.en; _anyPlaced=true;
@@ -2733,6 +2749,21 @@ function crewMapsRoute(zi,c){
     document.body.appendChild(ov);
   }
 }
+/* ── 🔒 Route locks: locked stops ALWAYS lead the run in their shown order; ⚡ Optimize
+   keeps them first and solves the rest starting from the LAST locked stop's location. ── */
+let _dayLockStore={}; try{ _dayLockStore=JSON.parse(localStorage.getItem('hq_locks2')||'{}'); }catch(e){}
+function _dayLocks(iso,zi,c){ return _dayLockStore[iso+'|'+_recKey(zi,c)]||[]; }
+function dayLockToggle(ref,c,iso,zi){
+  const b=_jobRefs[ref]; if(!b) return;
+  const kk=iso+'|'+_recKey(zi||0,c), k=_svKey(b), arr=_dayLockStore[kk]||[];
+  const i=arr.indexOf(k);
+  if(i>=0){ arr.splice(i,1); toast('🔓 '+(b.name||'stop')+' unlocked — optimizer places it freely again'); }
+  else { arr.push(k); toast('🔒 '+(b.name||'stop')+' LOCKED — stays at the front of the route (in shown order) when you ⚡ Optimize',6000); }
+  _dayLockStore[kk]=arr;
+  const _tod=todayISO(); Object.keys(_dayLockStore).forEach(function(x){ if(x.slice(0,10)<_tod) delete _dayLockStore[x]; });   // old days auto-purge
+  try{ localStorage.setItem('hq_locks2',JSON.stringify(_dayLockStore)); }catch(e){}
+  renderDispatch();
+}
 function _dayOrderPanel(c,iso,cell,zi){
   const jobs=cell.filter(function(b){ return !_isArch(b)&&!isDone(b)&&((b._srcBiz||0)===(zi||0)); });
   if(!jobs.length) return '';
@@ -2755,6 +2786,8 @@ function _dayOrderPanel(c,iso,cell,zi){
         return '<button onclick="event.stopPropagation();setJobMins('+_jr(b)+')" title="'+_src+'" style="background:rgba(56,189,248,.12);border:1px solid '+(_off?'rgba(251,191,36,.6)':'rgba(56,189,248,.35)')+';color:'+(_off?'#fbbf24':'#7dd3fc')+';border-radius:7px;padding:1px 7px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">⏱ '+dur+'m'+(_off?' ⚠':'')+' ✎</button>';
       })()+(b.price?' · '+esc(String(b.price)):'')+'</div></div>'
         +'<div class="ro-arrows">'
+        +(function(){ const _lkd=_dayLocks(iso,zi||0,c).indexOf(_svKey(b))>=0;
+          return '<button onclick="event.stopPropagation();dayLockToggle('+_jr(b)+',\''+c+'\',\''+iso+'\','+(zi||0)+')" title="'+(_lkd?'Locked — leads the route even after ⚡ Optimize. Tap to unlock.':'Lock this stop to the FRONT of the route — ⚡ Optimize will keep it there and route the rest from its location.')+'" style="'+(_lkd?'background:rgba(251,191,36,.18);border-color:rgba(251,191,36,.6);':'')+'">'+(_lkd?'🔒':'🔓')+'</button>'; })()
         +'<button onclick="dayMove(\''+c+'\',\''+iso+'\','+i+',-1,'+(zi||0)+')" '+(i===0?'disabled':'')+'>▲</button>'
         +'<button onclick="dayMove(\''+c+'\',\''+iso+'\','+i+',1,'+(zi||0)+')" '+(i===jobs.length-1?'disabled':'')+'>▼</button></div></div>';
       st+=dur;
@@ -3029,8 +3062,15 @@ async function hqOptimizeRun(c,iso,zi){
   zi=zi||0;
   if(_hqOptBusy) return; _hqOptBusy=true;
   try{
-    const g=_dayJobsInOrder(c,iso,zi);
-    if(g.length<2){ toast(g.length?'Too few stops to optimize':'No open stops'); return; }
+    const _g0=_dayJobsInOrder(c,iso,zi);
+    const _lks=_dayLocks(iso,zi,c);
+    const _locked=_g0.filter(function(b){ return _lks.indexOf(_svKey(b))>=0; });   // shown order
+    const g=_g0.filter(function(b){ return _lks.indexOf(_svKey(b))<0; });
+    if(g.length<2){
+      if(_locked.length&&_g0.length>=2){ _dayApplyOrder(c,iso,_locked.concat(g),null,zi); toast('🔒 '+_locked.length+' locked stop'+(_locked.length>1?'s':'')+' lead — nothing left to optimize'); }
+      else toast(_g0.length?'Too few stops to optimize':'No open stops');
+      return;
+    }
     toast('🧭 Locating '+g.length+' stops… (first run takes a few seconds)');
     const doubts={ stops:{}, general:[] };
     const pts=[];
@@ -3056,6 +3096,12 @@ async function hqOptimizeRun(c,iso,zi){
     let start=null;
     if(!zi&&iso===todayISO()){ const m=(_crews||[]).find(function(x){ const set=String(x.crew||'').toUpperCase().split(/[^A-Z0-9]+/); return set.indexOf(c)>=0&&x.lat!=null; }); if(m) start={lat:m.lat,lon:m.lon}; }
     if(!start){ start=ok[0].co; doubts.general.push('No live GPS for this crew — route starts from the current first stop, not from wherever the truck is.'); }
+    if(_locked.length){
+      const _lb=_locked[_locked.length-1];
+      const _lco=await _hqGeocode((_lb.address||'')+(_lb.zip?', '+_lb.zip:'')+', FL');
+      if(_lco){ start=_lco; doubts.general=doubts.general.filter(function(x){ return x.indexOf('No live GPS')<0; }); }
+      else doubts.general.push('Locked stop "'+(_lb.name||'?')+'" couldn\'t be located — the optimized part starts from crew GPS / first stop instead of from that yard.');
+    }
     // ── REAL ROAD DISTANCES: one OSRM table call → full drive-time matrix
     const coords=[start].concat(ok.map(function(p){ return p.co; }));
     let M=null, road=false;
@@ -3085,7 +3131,7 @@ async function hqOptimizeRun(c,iso,zi){
       if(at>=0){ seq.splice(at+1,0,p.b); doubts.stops[_svKey(p.b)]='ADDRESS NOT FOUND — slotted next to its ZIP-'+z2+' neighbors (not truly optimized). Fix the address, then ⚡ again.'; }
       else seq.push(p.b);
     });
-    const finalJobs=seq;
+    const finalJobs=_locked.concat(seq);
     // per-leg REAL drive minutes (OSRM seconds → min); unlocatable legs fall back to 12
     const legMap={};
     sol.order.forEach(function(oi,seqi){
@@ -3093,11 +3139,13 @@ async function hqOptimizeRun(c,iso,zi){
       const secs=M[fromIdx][oi+1];
       legMap[_svKey(ok[oi].b)]=road?Math.max(2,Math.round(secs/60)):Math.max(2,Math.round(secs*2));   // straight-line mi ≈ 2 min/mi fallback
     });
+    // locked stops keep their existing measured drive legs (never stomped to the flat 12)
+    (function(){ const _r0=_dispRoute[iso]; _locked.forEach(function(b){ const _pv=_r0&&_r0.drive&&_r0.drive[_svKey(b)]; if(_pv>0) legMap[_svKey(b)]=_pv; }); })();
     _optDoubts[iso+'|'+_recKey(zi,c)]=doubts; _optDoubtSave();
     _dayApplyOrder(c,iso,finalJobs,legMap,zi);
     const fmtC=function(v){ return road?(Math.round(v/60)+' min drive'):(v.toFixed(0)+' mi'); };
     const nDoubt=Object.keys(doubts.stops).length+doubts.general.length;
-    toast('⚡ '+(exact?'PROVABLY OPTIMAL':'Optimized')+(road?' on real roads':'')+' — '+fmtC(sol.cost)+' vs '+fmtC(before)+' before'+(nDoubt?' · 🔴 '+nDoubt+' warning'+(nDoubt>1?'s':'')+' on the lane':' · no doubts ✓'), 9000);
+    toast('⚡ '+(_locked.length?('🔒 '+_locked.length+' locked first · '):'')+(exact?'PROVABLY OPTIMAL':'Optimized')+(road?' on real roads':'')+' — '+fmtC(sol.cost)+' vs '+fmtC(before)+' before'+(nDoubt?' · 🔴 '+nDoubt+' warning'+(nDoubt>1?'s':'')+' on the lane':' · no doubts ✓'), 9000);
   } finally { _hqOptBusy=false; }
 }
 // Apply a full new order — identical persist path to a manual reorder.
