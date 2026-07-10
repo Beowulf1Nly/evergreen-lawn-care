@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-09.16 */
-(function(){ var V='2026-07-09.16'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-09.17 */
+(function(){ var V='2026-07-09.17'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -823,7 +823,8 @@ function enterApp(){
 }
 
 /* ── Canonical route order (Routes sheet — the same record /field follows) ── */
-function _svKey(b){ return String(b.email||'').toLowerCase().trim()+'|'+dateOf(b); }
+function _svKey(b){ const e=String(b.email||'').toLowerCase().trim(); return (e||('n:'+String(b.name||'').toLowerCase().trim()))+'|'+dateOf(b); }
+function _wireKey(st){ const e=String(st.email||st.Email||'').toLowerCase().trim(); const n=String(st.name||st.Name||'').toLowerCase().trim(); const d=String(st.serviceDate||st.date||''); if(!e&&!n) return ''; return (e||('n:'+n))+'|'+d; }
 async function refreshRouteOrder(){
   // don't clobber the on-screen order while a drag or an unsaved push is in flight
   if(_roDrag || Object.keys(_roPushTimers).some(function(k){return !!_roPushTimers[k];})) return;
@@ -832,7 +833,7 @@ async function refreshRouteOrder(){
     if(d&&d.success&&Array.isArray(d.routes)){
       const m={};
       d.routes.forEach(function(rt){ const cw=String(rt.crew||'').toUpperCase().trim();
-        m[cw]=(rt.stops||[]).map(function(st){ return String(st.email||st.Email||'').toLowerCase().trim()+'|'+String(st.serviceDate||st.date||''); }).filter(Boolean); });
+        m[cw]=(rt.stops||[]).map(_wireKey).filter(Boolean); });
       _routeSaved=m;
     }
   }catch(e){}
@@ -1794,9 +1795,9 @@ function _ensureDayRoute(iso){
       d.routes.slice().sort(function(a,b){ return (new Date(a.updatedAt||0).getTime()||0)-(new Date(b.updatedAt||0).getTime()||0); })
       .forEach(function(rt){
         const cw=String(rt.crew||'').toUpperCase().trim();
-        rec.order[_recKey(zi,cw||'un')]=(rt.stops||[]).map(function(st){ return String(st.email||'').toLowerCase().trim()+'|'+String(st.serviceDate||st.date||''); });
+        rec.order[_recKey(zi,cw||'un')]=(rt.stops||[]).map(_wireKey).filter(Boolean);
         (rt.stops||[]).forEach(function(st){
-          const k=String(st.email||'').toLowerCase().trim()+'|'+String(st.serviceDate||st.date||'');
+          const k=_wireKey(st); if(!k) return;
           if(/^\d{1,2}:\d{2}$/.test(String(st.jobTime||'').trim())) rec.times[k]=String(st.jobTime).trim();
           if(st.noGeo) rec.badGeo[k]={ n:String(st.name||''), a:String(st.address||'') };
           if(+st.driveMin>0) rec.drive[k]=+st.driveMin;
@@ -2704,7 +2705,7 @@ async function hqPushCrewDay(zi,c){
   const hhmm=function(min){ return ('0'+Math.floor(min/60)%24).slice(-2)+':'+('0'+Math.round(min)%60).slice(-2); };
   const isoAt=function(min){ const d=new Date(iso+'T00:00:00'); d.setMinutes(min); return d.toISOString(); };
   try{
-    const stops=evs.map(function(ev,i){ const b=ev.b; return { order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:iso, name:b.name||'', address:b.address||'', zip:String(b.zip||''), crew:c, jobTime:(!isDone(b)&&!_isArch(b))?hhmm(ev.st):String(b.jobTime||''), locked:(_dayLocks(iso,zi,c).indexOf(_svKey(b))>=0)?(i+1):0 }; }).filter(function(x){ return x.email; });
+    const stops=evs.map(function(ev,i){ const b=ev.b; return { order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:iso, name:b.name||'', address:b.address||'', zip:String(b.zip||''), crew:c, jobTime:(!isDone(b)&&!_isArch(b))?hhmm(ev.st):String(b.jobTime||''), locked:(_dayLocks(iso,zi,c).indexOf(_svKey(b))>=0)?(i+1):0 }; }).filter(function(x){ return x.email||x.name; });
     await fetch(u+'?'+new URLSearchParams({ action:'put_route', date:iso, crew:c, stops:JSON.stringify(stops), updatedBy:'HQ', idemKey:'hqroute:'+iso+':'+c+':'+Date.now(), adminToken:t }));
   }catch(e){}
   let saved=0;
@@ -2757,7 +2758,10 @@ function crewMapsRoute(zi,c){
 }
 /* ── 🔒 Route locks: locked stops ALWAYS lead the run in their shown order; ⚡ Optimize
    keeps them first and solves the rest starting from the LAST locked stop's location. ── */
-let _dayLockStore={}; try{ _dayLockStore=JSON.parse(localStorage.getItem('hq_locks2')||'{}'); }catch(e){}
+let _dayLockStore={}; try{ _dayLockStore=JSON.parse(localStorage.getItem('hq_locks2')||'{}');
+  let _lkFix=false; Object.keys(_dayLockStore).forEach(function(k){ const a=(_dayLockStore[k]||[]).filter(function(x){ return x&&x.charAt(0)!=='|'; }); if(a.length!==(_dayLockStore[k]||[]).length){ _dayLockStore[k]=a; _lkFix=true; } if(!a.length){ delete _dayLockStore[k]; _lkFix=true; } });
+  if(_lkFix) localStorage.setItem('hq_locks2',JSON.stringify(_dayLockStore));
+}catch(e){}
 function _dayLocks(iso,zi,c){ return _dayLockStore[iso+'|'+_recKey(zi,c)]||[]; }
 function dayLockToggle(ref,c,iso,zi){
   const b=_jobRefs[ref]; if(!b) return;
