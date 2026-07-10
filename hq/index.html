@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-09.23 */
-(function(){ var V='2026-07-09.23'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-09.24 */
+(function(){ var V='2026-07-09.24'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -1459,7 +1459,32 @@ async function doCancel(){
 }
 
 /* ═════════ ADD JOB ═════════ */
-function _uniqueCustomers(){ const seen={}, out=[]; (_bookings||[]).concat(_completed||[]).forEach(function(b){ const k=(String(b.email||'').toLowerCase())||(String(b.name||'')+String(b.address||'')); if(!k||seen[k]) return; seen[k]=1; out.push(b); }); return out; }
+let _custSheets={}, _custSheetsAt=0, _custSheetsLoading=false;
+async function _loadCustSheets(){
+  // the Customers SHEET is the real customer list — bookings only cover people
+  // with jobs on the board. Pull both businesses' sheets (cached 5 min).
+  if(_custSheetsLoading||Date.now()-_custSheetsAt<300000) return; _custSheetsLoading=true;
+  const biz=_bizLoad();
+  for(let i=0;i<biz.length;i++){
+    const z=biz[i]; if(i>0&&(!z.su||!_bizConnected(z))) continue;
+    try{
+      const ut=_bizUT(i);
+      const d=await fetch(ut.u+'?'+new URLSearchParams({ action:'customers_list', adminToken:ut.t })).then(function(r){ return r.json(); });
+      const arr=(d&&d.success)?(d.customers||d.list||d.rows||[]):[];
+      if(Array.isArray(arr)&&arr.length) _custSheets[i]=arr.map(function(c){ return { name:c.Name||c.name||'', email:String(c.Email||c.email||'').toLowerCase(), phone:c.Phone||c.phone||'', address:c.Address||c.address||'', zip:String(c.Zip||c.zip||''), price:'', _fromSheet:1, _srcBiz:i }; });
+    }catch(e){}
+  }
+  _custSheetsAt=Date.now(); _custSheetsLoading=false;
+  try{ const q=document.getElementById('addSearch'); if(q&&q.value) renderAddSearch(q.value); }catch(e){}
+}
+function _uniqueCustomers(){
+  const seen={}, out=[];
+  let all=(_bookings||[]).concat(_completed||[]);
+  Object.keys(_bizExtra||{}).forEach(function(k){ all=all.concat(_bizExtra[k]||[]); });
+  Object.keys(_custSheets||{}).forEach(function(k){ all=all.concat(_custSheets[k]||[]); });
+  all.forEach(function(b){ const k=(String(b.email||'').toLowerCase())||(String(b.name||'').toLowerCase().trim()+'|'+String(b.address||'').toLowerCase().trim()); if(!k||k==='|'||seen[k]) return; seen[k]=1; out.push(b); });
+  return out;
+}
 let _addBiz=0;
 function pickAddBiz(el,i){ _addBiz=i; document.querySelectorAll('#addBizPick button').forEach(function(b){b.classList.remove('on');}); el.classList.add('on'); _ajClnRender(); }
 /* ── 🧮 cleaning job builder — same math as the crew app, prices from /hq/pricebook.html ── */
@@ -1627,6 +1652,7 @@ function _ajClnRender(){
 }
 function openAddJob(){
   _addBiz=0;
+  try{ _loadCustSheets(); }catch(e){}
   _ajC={bed:1,bath:1,extra:0,deepAll:0,firstOnly:0,addons:{}};
   _ajL={size:'',extras:{}};
   try{ _hqPbFetch(); }catch(e){}
