@@ -211,6 +211,7 @@
       <button data-t="service" onclick="setType('service')">Services</button>
       <button data-t="material" onclick="setType('material')">Materials</button>
     </div>
+    <button class="tbtn" id="seedBtn" onclick="seedCleaning()" style="display:none;">✨ Load cleaning catalog</button>
     <button class="tbtn add" onclick="openEdit(null)">＋ Add item</button>
     <button class="tbtn sm" onclick="openCat()">＋ Category</button>
     <button class="tbtn sm ghost" onclick="exportCSV()">⬇ CSV</button>
@@ -384,7 +385,51 @@ function renderBizBar(){
   }).join('');
   document.getElementById('brandSub').textContent=(biz[_bizIdx]&&biz[_bizIdx].n)||'Evergreen HQ';
 }
-function selectBiz(i){ _bizIdx=i; _type='all'; document.querySelectorAll('#typeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.t==='all')); document.getElementById('q').value=''; renderBizBar(); loadPricebook(bizLoad()[i]); }
+/* ══════════ 🧽 CLEANING STARTER CATALOG — the CODES are the contract:
+   HQ Add-a-job and the crew estimate builder read prices BY CODE, so editing
+   these items changes prices everywhere. Delete nothing; edit the $ freely. ══════════ */
+const CLN_SEED=[
+ ['CLN-BASE','Standard clean — base (up to 1bd, kitchen & living)','Base & rates',79,'per visit','The step-inside price. Floor for every job.'],
+ ['CLN-RATE','Labor rate per hour','Base & rates',50,'per hour','Every price = time × this. $5 ≈ 6 minutes.'],
+ ['CLN-ROOM-BED','Extra bedroom','Rooms',15,'per room','~18m · 1st bedroom rides in the base'],
+ ['CLN-ROOM-BATH','Bathroom','Rooms',25,'per room','~30m · toilet, shower, sink, mirror'],
+ ['CLN-ROOM-EXTRA','Extra room (office, dining…)','Rooms',15,'per room','~18m'],
+ ['CLN-DEEP-KIT','Deep clean — kitchen','Deep clean',50,'upcharge','~60m extra · degrease, cabinet fronts, floors by hand'],
+ ['CLN-DEEP-BATH','Deep clean — bathroom','Deep clean',30,'upcharge','~36m extra · scale, grout lines, behind toilet'],
+ ['CLN-DEEP-LIV','Deep clean — living room','Deep clean',25,'upcharge','~30m extra · blinds, under cushions, behind furniture'],
+ ['CLN-DEEP-BED','Deep clean — bedroom','Deep clean',20,'upcharge','~24m extra · blinds, under bed, doors & plates'],
+ ['CLN-DEEP-EXTRA','Deep clean — extra room','Deep clean',20,'upcharge','~24m extra'],
+ ['ADD-GROUT','Grout scrub — whole house','Add-ons',50,'each','~60m'],
+ ['ADD-GROUT-PER','Grout scrub — per tiled area','Add-ons',20,'per area','~25m each (bathroom, kitchen, entryway)'],
+ ['ADD-DISHES','Dishes','Add-ons',15,'each','~18m'],
+ ['ADD-OVEN','Inside oven — quick wipe','Add-ons',15,'each','~18m'],
+ ['ADD-OVEN-DEEP','Inside oven — full degrease','Add-ons',45,'each','~54m'],
+ ['ADD-FRIDGE','Inside fridge — shelves only','Add-ons',15,'each','~18m'],
+ ['ADD-FRIDGE-DEEP','Inside fridge — full empty-out','Add-ons',45,'each','~54m'],
+ ['ADD-WINDOWS','Interior windows — whole house','Add-ons',40,'each','~48m glass only'],
+ ['ADD-WINDOWS-PER','Interior windows — per window','Add-ons',5,'per window','~6m each'],
+ ['ADD-WINDOWS-DEEP','Windows — tracks & sills (whole house)','Add-ons',60,'each','~72m'],
+ ['ADD-LAUNDRY','Laundry (load, switch, fold)','Add-ons',15,'each','~18m of labor'],
+ ['ADD-BASE','Baseboards — dust whole house','Add-ons',25,'each','~30m'],
+ ['ADD-BASE-PER','Baseboards — per room','Add-ons',5,'per room','~6m each'],
+ ['ADD-BASE-DEEP','Baseboards — scrub whole house','Add-ons',50,'each','~60m'],
+ ['ADD-PET','Pet hair (heavy) — whole house','Add-ons',30,'each','~36m'],
+ ['ADD-PET-PER','Pet hair — per room','Add-ons',10,'per room','~12m each'],
+ ['ADD-COUCH-PER','Couch steam clean','Add-ons',35,'per couch','~42m each'],
+ ['ADD-LINENS-PER','Bed linens change','Add-ons',5,'per bed','~6m each'],
+ ['ADD-FANS-PER','Ceiling fans','Add-ons',2.5,'per fan','~3m each'],
+ ['ADD-MICRO','Inside microwave','Add-ons',10,'each','~12m']
+];
+function seedCleaning(){
+  const have={}; _items.forEach(function(it){ if(it.code) have[String(it.code).toUpperCase()]=1; });
+  let added=0;
+  CLN_SEED.forEach(function(r){ if(have[r[0]]) return; _items.push(normalize({ id:uid(), type:'service', code:r[0], name:r[1], category:r[2], price:r[3], unit:r[4], description:r[5], active:true })); added++; });
+  if(!added){ toast('Catalog already loaded — every code is present.'); return; }
+  render(); queueSave();
+  toast('✨ '+added+' price'+(added>1?'s':'')+' added — edit any $ and it changes HQ + the crew app.');
+}
+function selectBiz(i){ _bizIdx=i;
+  try{ const z=bizLoad()[i]; document.getElementById('seedBtn').style.display=/clean/i.test(String(z&&z.n||''))?'':'none'; }catch(e){} _type='all'; document.querySelectorAll('#typeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.t==='all')); document.getElementById('q').value=''; renderBizBar(); loadPricebook(bizLoad()[i]); }
 function setType(t){ _type=t; document.querySelectorAll('#typeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.t===t)); render(); }
 function setCat(c){ _cat=c; render(); }
 
