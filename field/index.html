@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.42 */
+/* APP_VER:2026-07-08.43 */
 (function(){
-  var V='2026-07-08.42'; window.__APP_VER=V;
+  var V='2026-07-08.43'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -30,11 +30,17 @@
         var tgt=m[1];
         if(tgt===V) return;                                   // already current
         var done=''; try{ done=localStorage.getItem('evg_field_updated_to')||''; }catch(e){}
-        if(done===tgt) return;                                // already reloaded once for this version — stop
+        // self-healing guard: 'done' only counts if we actually LANDED on that build.
+        // (CDN lag used to serve the old shell during the reload — the guard then said
+        // 'updated' forever while the phone stayed stale. 90s backoff, then retry.)
+        if(done===tgt){
+          var at=0; try{ at=+localStorage.getItem('evg_field_upd_at')||0; }catch(e){}
+          if(Date.now()-at<90000) return;
+        }
         // NEVER yank the app out from under a crew mid-route — if a route is
         // running, hold the update until the day is finished (route lock owns the day).
         try{ if(window.__FM_BUSY){ return; } }catch(e){}
-        try{ localStorage.setItem('evg_field_updated_to', tgt); }catch(e){}
+        try{ localStorage.setItem('evg_field_updated_to', tgt); localStorage.setItem('evg_field_upd_at', String(Date.now())); }catch(e){}
         location.replace('index.html?_='+Date.now());         // one clean reload to the new build
       }).catch(function(){});
   }
