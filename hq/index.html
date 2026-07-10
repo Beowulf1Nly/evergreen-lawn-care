@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-09.25 */
-(function(){ var V='2026-07-09.25'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-09.26 */
+(function(){ var V='2026-07-09.26'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -2648,18 +2648,23 @@ let _payHrs={key:'',rows:null,at:0,loading:''};
 function _rangePayHrs(c,zi,from,to){
   zi=zi||0;
   const key=zi+'|'+from+'|'+to;
-  if((_payHrs.key!==key||Date.now()-_payHrs.at>120000)&&_payHrs.loading!==key){
-    _payHrs.loading=key;
+  // per-KEY cache — the old single-slot cache made two business lanes evict each
+  // other every render, fetch-looping both backends forever.
+  _payHrs.map=_payHrs.map||{}; _payHrs.busy=_payHrs.busy||{};
+  const ent=_payHrs.map[key];
+  if((!ent||Date.now()-ent.at>120000)&&!_payHrs.busy[key]){
+    _payHrs.busy[key]=1;
     fetch(_bizUT(zi).u+'?'+new URLSearchParams({ action:'get_pay_hours', from:from, to:to, adminToken:_bizUT(zi).t })).then(function(r){ return r.json(); }).then(function(d){
-      _payHrs.loading='';
-      if(d&&d.success){ _payHrs={key:key,rows:d.rows||[],at:Date.now(),loading:''}; if(_activeTab==='dispatch') renderDispatch(); }
-    }).catch(function(){ _payHrs.loading=''; });
+      delete _payHrs.busy[key];
+      if(d&&d.success){ _payHrs.map[key]={rows:d.rows||[],at:Date.now()}; if(_activeTab==='dispatch') renderDispatch(); }
+      else _payHrs.map[key]={rows:[],at:Date.now()};   // don't re-hammer a failing endpoint
+    }).catch(function(){ delete _payHrs.busy[key]; });
   }
-  if(_payHrs.key!==key||!_payHrs.rows) return 0;
+  if(!ent||!ent.rows) return 0;
   const cp=_crewPayFor(zi,c);
   const names=((cp&&cp.who)||[]).map(function(n){ return String(n).toLowerCase().trim(); });
   if(!names.length) return 0;
-  return _payHrs.rows.reduce(function(sm,r){ return sm+(names.indexOf(String(r.name||'').toLowerCase().trim())>=0?(r.hrs||0):0); },0);
+  return ent.rows.reduce(function(sm,r){ return sm+(names.indexOf(String(r.name||'').toLowerCase().trim())>=0?(r.hrs||0):0); },0);
 }
 // 🕐 Owner fix for a wrong clock-out — rewrites the LiveStatus bracket + Pay Log
 // hours server-side, then the ACTUAL strip and Pay - This Week both agree.
