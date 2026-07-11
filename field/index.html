@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.43 */
+/* APP_VER:2026-07-08.44 */
 (function(){
-  var V='2026-07-08.43'; window.__APP_VER=V;
+  var V='2026-07-08.44'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1957,6 +1957,15 @@ function fmBeginRoute(){
 // projects the finish from the remaining stops. Crews see it on every job screen.
 function _fmLoadMins(){ return (new Date().getDay()===1?45:25); }   // PMCS/load (Mon 30/else 10) + 15m ⛽ gas block
 let _fmDrivePhase={}; try{ _fmDrivePhase=JSON.parse(localStorage.getItem('evg_fm_drive')||'{}'); }catch(e){}
+// 🧹 per-stop stores purge old days at boot
+(function(){ try{
+  const tod=todayISOStr();
+  [['evg_fm_addonsel',_fmAddonSel],['evg_fm_insafter',_fmInsertAfter],['evg_fm_drive',_fmDrivePhase]].forEach(function(pair){
+    const key=pair[0], obj=pair[1]; if(!obj) return; let dirty=false;
+    Object.keys(obj).forEach(function(k){ const d=String(k).split('|')[1]||''; if(d&&d<tod){ delete obj[k]; dirty=true; } });
+    if(dirty) try{ localStorage.setItem(key,JSON.stringify(obj)); }catch(e){}
+  });
+}catch(e){} })();
 function _fmDriveArrive(k){
   delete _fmDrivePhase[k];
   if(!_jobTimers[k]) _jobTimers[k]=new Date().toISOString();   // yard clock starts NOW — drive time never counts as yard time
