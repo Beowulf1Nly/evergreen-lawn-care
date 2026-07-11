@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-07-09.30 */
-(function(){ var V='2026-07-09.30'; window.__LIVE_VER=V;
+/* APP_VER:2026-07-09.31 */
+(function(){ var V='2026-07-09.31'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -2747,6 +2747,16 @@ function _rangePayHrs(c,zi,from,to){
   if(!names.length) return 0;
   return ent.rows.reduce(function(sm,r){ return sm+(names.indexOf(String(r.name||'').toLowerCase().trim())>=0?(r.hrs||0):0); },0);
 }
+// per-person hours PAST 40 in the range (weekly view) — the 1.5x premium half
+function _rangePayOT(c,zi,from,to){
+  zi=zi||0;
+  const ent=(_payHrs.map||{})[zi+'|'+from+'|'+to]; if(!ent||!ent.rows) return 0;
+  const cp=_crewPayFor(zi,c); const names=((cp&&cp.who)||[]).map(function(n){ return String(n).toLowerCase().trim(); });
+  if(!names.length) return 0;
+  const per={}; ent.rows.forEach(function(r){ const nm=String(r.name||'').toLowerCase().trim(); if(names.indexOf(nm)>=0) per[nm]=(per[nm]||0)+(r.hrs||0); });
+  let ot=0; Object.keys(per).forEach(function(nm){ ot+=Math.max(0,per[nm]-40); });
+  return ot;
+}
 // 🕐 Owner fix for a wrong clock-out — rewrites the LiveStatus bracket + Pay Log
 // hours server-side, then the ACTUAL strip and Pay - This Week both agree.
 async function fixClockOut(c,iso){
@@ -2866,8 +2876,11 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
       }
       let mid='';
       if(w>0){
-        const cost=w*p.rate+Rd*(p.pctC/100), prof=Rd-cost, mp=Rd>0?Math.round(prof/Rd*100):0;
-        mid=' · ⏱ <b>'+w.toFixed(1)+'h</b>'+wlbl+' · 💰 <b style="color:'+(mp>=50?'#34d399':'#fbbf24')+'">$'+Math.round(prof)+'</b> actual profit <span class="dev-pill '+(mp>=50?'g':'y')+'">'+mp+'% actual margin</span>';
+        // ⏰ weekly view: hours past 40/person cost 1.5x — margins must feel it
+        let _otH=0; if(!_dayV){ try{ const st1=new Date(_dispAnchor); st1.setDate(st1.getDate()-st1.getDay()); const en1=new Date(st1); en1.setDate(st1.getDate()+6); const f2=function(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }; _otH=_rangePayOT(c,zi,f2(st1),f2(en1)); }catch(e){} }
+        const _otExtra=_otH*0.5*p.rate;
+        const cost=w*p.rate+_otExtra+Rd*(p.pctC/100), prof=Rd-cost, mp=Rd>0?Math.round(prof/Rd*100):0;
+        mid=' · ⏱ <b>'+w.toFixed(1)+'h</b>'+wlbl+(_otH>0?(' <span class="dev-pill r" title="Hours past 40/person this week pay 1.5x — the premium is in this margin">'+_otH.toFixed(1)+'h OT @1.5×</span>'):'')+' · 💰 <b style="color:'+(mp>=50?'#34d399':'#fbbf24')+'">$'+Math.round(prof)+'</b> actual profit <span class="dev-pill '+(mp>=50?'g':'y')+'">'+mp+'% actual margin</span>';
       }
       act='<div class="st-econ" style="border-left:3px solid #34d399;">✅ <b>ACTUAL</b> · 💵 <b>$'+Rd.toFixed(0)+'</b> made · <b>'+doneJobs.length+'/'+_jNQ.length+'</b> done'+mid+'</div>';
     }
