@@ -3428,8 +3428,23 @@ async function hqOptimizeRun(c,iso,zi){
     const doubts={ stops:{}, general:[] };
     const pts=[];
     for(const b of g){
-      const addr=(b.address||'')+(b.zip?', '+b.zip:'')+', FL';
+      // Build the query without doubling state/zip when the card already has them
+      const _aRaw=String(b.address||'').trim();
+      const _zipS=String(b.zip||'').trim();
+      let addr=_aRaw;
+      if(_zipS && addr.indexOf(_zipS)<0) addr+=', '+_zipS;
+      if(!/\bFL\b/i.test(addr)) addr+=', FL';
       let co=await _hqGeocode(addr);
+      if(!co){
+        // House number not in the map data (typo or new construction) — snap to the
+        // STREET first: way closer than the ZIP-area center.
+        const _street=_aRaw.replace(/^\s*\d+[\s-]*/,'');
+        if(_street && _street!==_aRaw){
+          let _sq=_street; if(_zipS && _sq.indexOf(_zipS)<0) _sq+=', '+_zipS; if(!/\bFL\b/i.test(_sq)) _sq+=', FL';
+          const sco=await _hqGeocode(_sq);
+          if(sco){ co={ lat:sco.lat, lon:sco.lon, q:'street' }; }
+        }
+      }
       if(!co&&String(b.zip||'').trim()){
         // Last resort: the ZIP's center — the stop stays INSIDE the optimization
         // (worst case a couple miles off) instead of tacked on where it can add hours.
@@ -3437,6 +3452,7 @@ async function hqOptimizeRun(c,iso,zi){
         if(zco){ co={ lat:zco.lat, lon:zco.lon, q:'zip' }; }
       }
       if(!co) doubts.stops[_svKey(b)]='ADDRESS NOT FOUND anywhere (not even the ZIP) — this stop is NOT optimized (rides at the end). Fix the address on the job card.';
+      else if(co.q==='street') doubts.stops[_svKey(b)]='HOUSE NUMBER NOT FOUND — optimized to the street (close, but verify the house number & street spelling on the job card).';
       else if(co.q==='zip') doubts.stops[_svKey(b)]='HOUSE NOT FOUND — optimized using the ZIP-area center (can be a couple miles off). Fix the address on the job card for exact routing.';
       else if(co.q!=='exact') doubts.stops[_svKey(b)]='APPROXIMATE location only (street/area level, not the exact house) — position in the route may be slightly off.';
       pts.push({ b:b, co:co||null });
