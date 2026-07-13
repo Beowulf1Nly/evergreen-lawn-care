@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.46 */
+/* APP_VER:2026-07-08.47 */
 (function(){
-  var V='2026-07-08.46'; window.__APP_VER=V;
+  var V='2026-07-08.47'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1440,7 +1440,8 @@ async function _fmFlushQueue(){
         item.tries=(item.tries||0)+1;
         const _crit=(item.kind==='photo'||item.kind==='done'||item.kind==='invoice'||item.kind==='cash'||item.kind==='addons'||item.kind==='quoteest');   // estimates are customer data — never silently dropped
         if(_crit&&item.lastErr&&item.tries===3){ try{ showToast('⚠️ '+item.kind.toUpperCase()+' not going through: '+item.lastErr+' — it will keep retrying'); }catch(e){} }
-        if(item.tries>12&&!_crit){ q.splice(_qi,1); _fmQueueSave(q); continue; }   // stale non-money items age out
+        // NO silent age-out — queued work is customer data. Items stay until they succeed
+        // or someone deletes them on purpose from the queue viewer (tap the sync badge).
         _fmQueueSave(q);
         if(!_isLogical) break;        // device offline / network drop — stop the pass
         _blocked[_base]=1; _qi++;     // backend rejected — hold this customer's items, keep going
@@ -1448,10 +1449,37 @@ async function _fmFlushQueue(){
     }
   } finally { _fmFlushing=false; _fmUpdateSyncBadge(); }
 }
+function fmQueueViewer(){
+  const q=_fmQueueLoad();
+  if(!q.length){ try{ showToast('Queue is empty — everything synced ✓'); }catch(e){} return; }
+  const rows=q.map(function(it,i){
+    const pr=it.params||it.body||{};
+    const who=[pr.name,pr.email,pr.serviceDate].filter(Boolean).join(' · ');
+    return '<div style="border:1px solid #334;border-radius:10px;padding:10px 12px;margin:8px 0;background:#101826;">'
+      +'<div style="font-weight:700;">'+(i+1)+'. '+(it.kind||'?')+' <span style="color:#8aa;">(tries: '+(it.tries||0)+')</span></div>'
+      +(who?('<div style="font-size:13px;color:#cde;margin-top:3px;">'+who.replace(/</g,'&lt;')+'</div>'):'')
+      +(it.lastErr?('<div style="font-size:12px;color:#f88;margin-top:3px;">last error: '+String(it.lastErr).replace(/</g,'&lt;')+'</div>'):'')
+      +'</div>';
+  }).join('');
+  let ov=document.getElementById('fmQvOverlay');
+  if(ov) ov.remove();
+  ov=document.createElement('div'); ov.id='fmQvOverlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:5000;display:flex;align-items:center;justify-content:center;padding:18px;';
+  ov.innerHTML='<div style="background:#0b1220;border:1px solid #345;border-radius:16px;max-width:480px;width:100%;max-height:80vh;overflow:auto;padding:16px 16px 12px;color:#e8f0f8;">'
+    +'<div style="font-weight:800;font-size:16px;">⏳ Waiting to sync ('+q.length+')</div>'
+    +'<div style="font-size:12px;color:#9ab;margin:4px 0 6px;">Nothing here ever deletes itself. Items send automatically when they can.</div>'
+    +rows
+    +'<div style="display:flex;gap:8px;margin-top:10px;">'
+    +'<button onclick="try{navigator.clipboard.writeText(JSON.stringify(JSON.parse(localStorage.getItem(FM_QUEUE_KEY)||\'[]\'),null,1));showToast(\'Copied queue details 📋\');}catch(e){alert(\'copy failed\')}" style="flex:1;padding:10px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:700;">📋 Copy all details</button>'
+    +'<button onclick="document.getElementById(\'fmQvOverlay\').remove()" style="flex:1;padding:10px;border-radius:10px;border:1px solid #456;background:transparent;color:#cde;font-weight:700;">Close</button>'
+    +'</div></div>';
+  ov.addEventListener('click',function(ev){ if(ev.target===ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
 function _fmUpdateSyncBadge(){
   const _q=_fmQueueLoad(); const n=_q.length, online=navigator.onLine!==false;
   const stuck=_q.some(function(it){ return (it.tries||0)>5; });
-  document.querySelectorAll('.fm-sync').forEach(el=>{ if(n===0){ el.style.display='none'; return; } el.style.display=''; if(!online){ el.className='fm-sync offline'; el.textContent='📴 '+n+' to sync'; } else if(stuck){ el.className='fm-sync offline'; const s1=_q.find(function(it){ return (it.tries||0)>5&&it.lastErr; }); el.textContent=('⚠ '+n+' stuck'+(s1?(' — '+s1.kind+': '+String(s1.lastErr).slice(0,48)):'')+' — keep app open'); } else { el.className='fm-sync pending'; el.textContent='⏳ Syncing '+n+'…'; } });
+  document.querySelectorAll('.fm-sync').forEach(el=>{ el.style.cursor='pointer'; el.onclick=fmQueueViewer; if(n===0){ el.style.display='none'; return; } el.style.display=''; if(!online){ el.className='fm-sync offline'; el.textContent='📴 '+n+' to sync'; } else if(stuck){ el.className='fm-sync offline'; const s1=_q.find(function(it){ return (it.tries||0)>5&&it.lastErr; }); el.textContent=('⚠ '+n+' stuck'+(s1?(' — '+s1.kind+': '+String(s1.lastErr).slice(0,48)):'')+' — keep app open'); } else { el.className='fm-sync pending'; el.textContent='⏳ Syncing '+n+'…'; } });
   const b=document.getElementById('netBanner'); if(b){ if(navigator.onLine===false){ b.className='show'; b.textContent='📴 Offline — work is saved, syncs when you reconnect'+(n?(' · '+n+' pending'):''); } else b.className=''; }
 }
 
