@@ -3330,6 +3330,19 @@ async function _hqGeocode(addr){
     const cc=await _hqCensus(addr);
     if(cc&&_flWide(cc)){ _hqGeo[k]={ lat:cc.lat, lon:cc.lon, q:'exact' }; try{ localStorage.setItem('hq_geo3',JSON.stringify(_hqGeo)); }catch(e){} return _hqGeo[k]; }
   }catch(e){}
+  // 1.5) Google via the backend (Apps Script Maps geocoder) — Google's data
+  // knows new-construction homes the free services haven't mapped yet.
+  try{
+    const gr=await fetch(SCRIPT_URL+'?action=hq_geocode&adminToken='+encodeURIComponent(token)+'&address='+encodeURIComponent(addr)).then(function(r){ return r.json(); });
+    if(gr&&gr.success&&gr.lat!=null){
+      const gco={ lat:+gr.lat, lon:+gr.lon };
+      if(_flWide(gco)){
+        _hqGeo[k]={ lat:gco.lat, lon:gco.lon, q:(gr.quality==='exact'&&!gr.partial)?'exact':'approx' };
+        try{ localStorage.setItem('hq_geo3',JSON.stringify(_hqGeo)); }catch(e){}
+        return _hqGeo[k];
+      }
+    }
+  }catch(e){}
   // 2) Nominatim with expanded abbreviations
   try{
     const d=await fetch('https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=1&countrycodes=us&q='+encodeURIComponent(_hqExpandAbbr(addr))).then(function(r){ return r.json(); });
