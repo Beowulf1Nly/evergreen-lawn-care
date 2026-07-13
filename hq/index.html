@@ -3306,7 +3306,7 @@ function _onCrewMoved(b,fromCrew,toCrew){
    2) Nominatim with abbreviation expansion ("E ... St" → "East ... Street")
    Cache key bumped to v3 so addresses the old Nominatim-only version marked
    "not found" get re-resolved through Census automatically. */
-let _hqGeo={}; try{ _hqGeo=JSON.parse(localStorage.getItem('hq_geo3')||'{}'); }catch(e){}
+let _hqGeo={}; try{ _hqGeo=JSON.parse(localStorage.getItem('hq_geo4')||'{}'); }catch(e){}
 function _hqCensus(addr){
   return new Promise(function(resolve){
     var cb='__hqCensus_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -3328,7 +3328,7 @@ async function _hqGeocode(addr){
   // 1) Census — exact house-level when it hits
   try{
     const cc=await _hqCensus(addr);
-    if(cc&&_flWide(cc)){ _hqGeo[k]={ lat:cc.lat, lon:cc.lon, q:'exact' }; try{ localStorage.setItem('hq_geo3',JSON.stringify(_hqGeo)); }catch(e){} return _hqGeo[k]; }
+    if(cc&&_flWide(cc)){ _hqGeo[k]={ lat:cc.lat, lon:cc.lon, q:'exact' }; try{ localStorage.setItem('hq_geo4',JSON.stringify(_hqGeo)); }catch(e){} return _hqGeo[k]; }
   }catch(e){}
   // 1.5) Google via the backend (Apps Script Maps geocoder) — Google's data
   // knows new-construction homes the free services haven't mapped yet.
@@ -3338,7 +3338,7 @@ async function _hqGeocode(addr){
       const gco={ lat:+gr.lat, lon:+gr.lon };
       if(_flWide(gco)){
         _hqGeo[k]={ lat:gco.lat, lon:gco.lon, q:(gr.quality==='exact'&&!gr.partial)?'exact':'approx' };
-        try{ localStorage.setItem('hq_geo3',JSON.stringify(_hqGeo)); }catch(e){}
+        try{ localStorage.setItem('hq_geo4',JSON.stringify(_hqGeo)); }catch(e){}
         return _hqGeo[k];
       }
     }
@@ -3353,7 +3353,7 @@ async function _hqGeocode(addr){
       _hqGeo[k]=_flWide(co)?{ lat:co.lat, lon:co.lon, q:exact?'exact':'approx' }:null;   // same-named street in another state = not found
     } else _hqGeo[k]=null;
   }catch(e){ return undefined; }   // network blip — don't cache the failure
-  try{ localStorage.setItem('hq_geo3',JSON.stringify(_hqGeo)); }catch(e){}
+  try{ localStorage.setItem('hq_geo4',JSON.stringify(_hqGeo)); }catch(e){}
   await new Promise(function(r){ setTimeout(r,1100); });   // Nominatim rate limit
   return _hqGeo[k];
 }
