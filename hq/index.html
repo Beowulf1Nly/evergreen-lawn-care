@@ -3333,7 +3333,16 @@ async function _hqGeocode(addr){
   // 1.5) Google via the backend (Apps Script Maps geocoder) — Google's data
   // knows new-construction homes the free services haven't mapped yet.
   try{
-    const gr=await fetch(SCRIPT_URL+'?action=hq_geocode&adminToken='+encodeURIComponent(token)+'&address='+encodeURIComponent(addr)).then(function(r){ return r.json(); });
+    const _gq=function(q){ return fetch(SCRIPT_URL+'?action=hq_geocode&adminToken='+encodeURIComponent(token)+'&address='+encodeURIComponent(q)).then(function(r){ return r.json(); }); };
+    let gr=await _gq(addr);
+    // Google chokes on spelled-out directionals ("North Allison Dr") — retry abbreviated
+    if(!(gr&&gr.success&&gr.lat!=null&&gr.quality==='exact'&&!gr.partial)){
+      const _abbr=addr.replace(/\bNortheast\b/gi,'NE').replace(/\bNorthwest\b/gi,'NW').replace(/\bSoutheast\b/gi,'SE').replace(/\bSouthwest\b/gi,'SW').replace(/\bNorth\b/gi,'N').replace(/\bSouth\b/gi,'S').replace(/\bEast\b/gi,'E').replace(/\bWest\b/gi,'W');
+      if(_abbr!==addr){
+        const gr2=await _gq(_abbr);
+        if(gr2&&gr2.success&&gr2.lat!=null&&((gr2.quality==='exact'&&!gr2.partial)||!(gr&&gr.success&&gr.lat!=null))) gr=gr2;
+      }
+    }
     if(gr&&gr.success&&gr.lat!=null){
       const gco={ lat:+gr.lat, lon:+gr.lon };
       if(_flWide(gco)){
