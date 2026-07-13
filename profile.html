@@ -2772,6 +2772,35 @@ function selectCancelType(type) {
   document.getElementById('confirmCancelBtn').disabled = false;
 }
 
+async function confirmCancellation() {
+  const session = getStoredSession();
+  if (!session || !selectedCancelType) return;
+  const why = prompt('Sorry to see you go \u2014 mind telling us why? (optional)', '') || '';
+  const btn = document.getElementById('confirmCancelBtn');
+  btn.disabled = true; btn.textContent = 'Cancelling\u2026';
+  try {
+    const data = await apiGet({
+      action:       'portal_cancel_subscription',
+      sessionToken: session.token,
+      cancelType:   selectedCancelType,
+      reason:       why.trim(),
+    });
+    if (data.success) {
+      closeCancelModal();
+      alert(selectedCancelType === 'immediate'
+        ? 'Your plan is cancelled and upcoming appointments have been removed.'
+        : 'Your plan will end after your remaining paid visits this cycle.');
+      await loadProfile(session.token);
+    } else {
+      alert(data.error || 'Could not cancel \u2014 please call or text us and we\u2019ll take care of it.');
+    }
+  } catch(err) {
+    alert('Error: ' + err.message + ' \u2014 please call or text us and we\u2019ll take care of it.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Confirm Cancel';
+  }
+}
+
 </script>
 </body>
 </html>
