@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.45 */
+/* APP_VER:2026-07-08.46 */
 (function(){
-  var V='2026-07-08.45'; window.__APP_VER=V;
+  var V='2026-07-08.46'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1423,6 +1423,12 @@ async function _fmFlushQueue(){
       const _base=(item.params?(String(item.params.email||'')+'|'+String(item.params.serviceDate||'')):'')||String(item.idemKey||'');
       if(_blocked[_base]){ _qi++; continue; }
       try{
+        // Always send with the CURRENT session token — queued items captured at enqueue
+        // time carry a token that may have expired hours ago ("Unauthorized" forever).
+        if(adminToken){
+          if(item.params&&item.params.adminToken!==undefined) item.params.adminToken=adminToken;
+          if(item.body&&item.body.adminToken!==undefined) item.body.adminToken=adminToken;
+        }
         let res;
         if(item.method==='POST') res=await fetch(SCRIPT_URL,{ method:'POST', body:JSON.stringify(item.body) });
         else res=await fetch(SCRIPT_URL+'?'+new URLSearchParams(item.params).toString());
