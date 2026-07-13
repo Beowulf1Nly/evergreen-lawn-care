@@ -3323,7 +3323,10 @@ const _HQ_GEO_EXP={ N:'North',S:'South',E:'East',W:'West',NE:'Northeast',NW:'Nor
 function _hqExpandAbbr(x){ let y=' '+String(x||'')+' '; for(const k2 in _HQ_GEO_EXP){ y=y.replace(new RegExp('(^|[\\s,])'+k2+'\\.?(?=[\\s,])','gi'), '$1'+_HQ_GEO_EXP[k2]); } return y.replace(/\s+/g,' ').trim(); }
 async function _hqGeocode(addr){
   const k=addr.toLowerCase().trim();
-  if(_hqGeo[k]!==undefined) return _hqGeo[k];
+  // Only trust cached SUCCESSES. A cached miss (null) gets re-tried every run —
+  // otherwise one bad day poisons the address forever (new geocoder steps,
+  // backend redeploys, or map-data updates would never get a second shot).
+  if(_hqGeo[k]) return _hqGeo[k];
   const _flWide=function(co){ return co&&co.lat>=24&&co.lat<=31.6&&co.lon>=-88&&co.lon<=-79.4; };
   // 1) Census — exact house-level when it hits
   try{
