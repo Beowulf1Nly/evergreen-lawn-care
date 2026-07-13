@@ -2688,33 +2688,41 @@ function _crewWorkedHrs(c){
 }
 function _econParts(c,jobs,zi){
   const qN=jobs.filter(function(b){ return _hqIsQuote(b); }).length;
+  const allJobs=jobs.slice();                                // quotes INCLUDED — the crew still spends that time on the road
   jobs=jobs.filter(function(b){ return !_hqIsQuote(b); });   // quotes are visits, not billable work — they were dragging margins to -491%
   const R=jobs.reduce(function(s2,b){return s2+amtOf(b);},0);
   // drive buffers reset each day — group by date so week/month math is honest
   const byD={};
-  jobs.forEach(function(b){ const d=dateOf(b)||'?'; (byD[d]=byD[d]||[]).push(b); });
+  allJobs.forEach(function(b){ const d=dateOf(b)||'?'; (byD[d]=byD[d]||[]).push(b); });
   const _isClean = /clean/i.test((_bizLoad()[zi]||{}).n||'');
   const _unload = _isClean ? 15 : 30;      // end-of-day drive back + unload at base
   const _baseDrive = 2*DRIVE_BUF;          // shop → first stop + last stop → shop (round-trip to base)
   // morning PMCS + load-up: lawn = 30 min Mondays / 10 min other days; cleaning = 15 min (load only, no PMCS)
   function _amMin(dateIso){ if(_isClean) return 30; const dt=new Date(String(dateIso)+'T12:00'); return (isNaN(dt)?25:(dt.getDay()===1?45:25)); }   // PMCS/load + 15m ⛽ gas block
-  let estM=0;   // clock-in → clock-out: morning phase + drive out + on-route span + drive back + unload
-  Object.keys(byD).forEach(function(d){
-    const list=byD[d]; if(!list.length) return;
-    const durs=list.reduce(function(s2,b){ return s2+_hqMins(b,zi,c); },0);   // per-crew minutes (manual ⏱ = wall-clock, model scales to crew size)
-    // If the day is fully scheduled, use the REAL first-start→last-end span (actual drive time between
-    // stops is baked into those times) so route optimization actually moves the number. Otherwise fall
-    // back to a flat 12-min-per-stop buffer estimate.
-    const T=list.map(function(b){ const t=String(b.jobTime||'').trim(); if(!/^\d{1,2}:\d{2}$/.test(t)) return null; const p=t.split(':'); const st=(+p[0])*60+(+(p[1]||0)); return {st:st,en:st+_jobMins(b)}; }).filter(Boolean).sort(function(a,b2){return a.st-b2.st;});
-    const onRoute=(T.length===list.length && T.length>=2)
-      ? Math.max(durs, T[T.length-1].en - T[0].st)                 // real span (drives + any idle from set times)
-      : durs + Math.max(0,list.length-1)*DRIVE_BUF;                // no set times → flat buffer estimate
-    estM += _amMin(d) + _baseDrive + _unload + onRoute;
-  });
+  function _dayMins(byDx){   // clock-in → clock-out: morning phase + drive out + on-route span + drive back + unload
+    let m=0;
+    Object.keys(byDx).forEach(function(d){
+      const list=byDx[d]; if(!list.length) return;
+      const durs=list.reduce(function(s2,b){ return s2+_hqMins(b,zi,c); },0);   // per-crew minutes (manual ⏱ = wall-clock, model scales to crew size)
+      // If the day is fully scheduled, use the REAL first-start→last-end span (actual drive time between
+      // stops is baked into those times) so route optimization actually moves the number. Otherwise fall
+      // back to a flat 12-min-per-stop buffer estimate.
+      const T=list.map(function(b){ const t=String(b.jobTime||'').trim(); if(!/^\d{1,2}:\d{2}$/.test(t)) return null; const p=t.split(':'); const st=(+p[0])*60+(+(p[1]||0)); return {st:st,en:st+_jobMins(b)}; }).filter(Boolean).sort(function(a,b2){return a.st-b2.st;});
+      const onRoute=(T.length===list.length && T.length>=2)
+        ? Math.max(durs, T[T.length-1].en - T[0].st)                 // real span (drives + any idle from set times)
+        : durs + Math.max(0,list.length-1)*DRIVE_BUF;                // no set times → flat buffer estimate
+      m += _amMin(d) + _baseDrive + _unload + onRoute;
+    });
+    return m;
+  }
+  const estM=_dayMins(byD);                 // FULL day incl quote visits — what the clock actually looks like
+  const byDBill={};
+  jobs.forEach(function(b){ const d=dateOf(b)||'?'; (byDBill[d]=byDBill[d]||[]).push(b); });
+  const estMBill=_dayMins(byDBill);         // billable-only minutes — keeps quote days from nuking margins
   const cp=_crewPayFor(zi,c);
   const rate=_crewRate(c,zi);                                             // hourly portion
   const pctC=cp?(cp.pct||0):0;                                            // commission portion (% of revenue)
-  const cost=(estM/60)*rate + R*(pctC/100);                               // expected labor: hours×rate + commissions
+  const cost=(estMBill/60)*rate + R*(pctC/100);                           // expected labor on BILLABLE work: hours×rate + commissions
   const estProfit=R-cost;
   const pct=R>0?Math.round((estProfit/R)*100):0;
   let tgtH;                                                               // hours where TOTAL labor = 50% of revenue
