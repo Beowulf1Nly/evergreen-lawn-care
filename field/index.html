@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.47 */
+/* APP_VER:2026-07-08.48 */
 (function(){
-  var V='2026-07-08.47'; window.__APP_VER=V;
+  var V='2026-07-08.48'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1392,6 +1392,8 @@ function _fmRenderRouteSetup(){
 const FM_QUEUE_KEY='evg_fm_sync_queue_v2', FM_DONEKEYS_KEY='evg_fm_done_keys_v1';
 let _fmFlushing=false;
 function _fmQueueLoad(){ try{ return JSON.parse(localStorage.getItem(FM_QUEUE_KEY)||'[]'); }catch(e){ return []; } }
+// one-time hygiene: drop legacy set_crew chasers — redundant (crew rides the booking call)
+try{ const _q0=JSON.parse(localStorage.getItem(FM_QUEUE_KEY)||'[]'); const _q1=_q0.filter(function(it){ return it&&it.kind!=='setcrew'; }); if(_q1.length!==_q0.length) localStorage.setItem(FM_QUEUE_KEY,JSON.stringify(_q1)); }catch(e){}
 function _fmQueueSave(q){ try{ localStorage.setItem(FM_QUEUE_KEY, JSON.stringify(q)); }catch(e){ try{ showToast('⚠️ Phone storage full — stay online so photos upload right away'); }catch(_e){} } }
 function _fmDoneKeys(){ try{ return new Set(JSON.parse(localStorage.getItem(FM_DONEKEYS_KEY)||'[]')); }catch(e){ return new Set(); } }
 function _fmMarkKeyDone(k){ try{ const s=_fmDoneKeys(); s.add(k); localStorage.setItem(FM_DONEKEYS_KEY, JSON.stringify([...s].slice(-500))); }catch(e){} }
