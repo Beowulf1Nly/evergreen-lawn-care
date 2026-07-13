@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.44 */
+/* APP_VER:2026-07-08.45 */
 (function(){
-  var V='2026-07-08.44'; window.__APP_VER=V;
+  var V='2026-07-08.45'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1432,7 +1432,7 @@ async function _fmFlushQueue(){
       }catch(netErr){
         const _isLogical=/^backend:|^HTTP \d/.test(String((netErr&&netErr.message)||''));
         item.tries=(item.tries||0)+1;
-        const _crit=(item.kind==='photo'||item.kind==='done'||item.kind==='invoice'||item.kind==='cash'||item.kind==='addons');
+        const _crit=(item.kind==='photo'||item.kind==='done'||item.kind==='invoice'||item.kind==='cash'||item.kind==='addons'||item.kind==='quoteest');   // estimates are customer data — never silently dropped
         if(_crit&&item.lastErr&&item.tries===3){ try{ showToast('⚠️ '+item.kind.toUpperCase()+' not going through: '+item.lastErr+' — it will keep retrying'); }catch(e){} }
         if(item.tries>12&&!_crit){ q.splice(_qi,1); _fmQueueSave(q); continue; }   // stale non-money items age out
         _fmQueueSave(q);
