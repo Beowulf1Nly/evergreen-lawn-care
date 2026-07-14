@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.55 */
+/* APP_VER:2026-07-08.56 */
 (function(){
-  var V='2026-07-08.55'; window.__APP_VER=V;
+  var V='2026-07-08.56'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -856,7 +856,11 @@ async function _loadDataInner(refreshToast){
           // office ADDED a yard mid-route? say so too — silent additions get missed
           const _prevAll={}; Object.keys(_prevOpen).forEach(function(k){ _prevAll[k]=1; });
           const _fresh=(allBookings||[]).filter(function(b){ return b&&!b.rowCancelled&&!b._localTemp&&dateOf(b)===todayISOStr()&&!isDone(b)&&!_prevAll[_stopKey(b)]&&!_fmSkipped[_stopKey(b)]; });
-          if(_fresh.length&&Object.keys(_prevOpen).length){ showToast('🆕 Added to today\'s route: '+_fresh.map(function(b){ return b.name||'new yard'; }).join(', '), 9000); }
+          if(_fresh.length&&Object.keys(_prevOpen).length){
+            showToast('🆕 Added to today\'s route: '+_fresh.map(function(b){ return b.name||'new yard'; }).join(', ')+' — squeezing it in from where you are', 9000);
+            // fold the new stop into the run NOW: GPS re-solve + echo so HQ Live/map show it too
+            setTimeout(function(){ try{ _fmAutoRoute(); }catch(e){} },1200);
+          }
         }
       }
     }catch(e){}
@@ -2142,7 +2146,8 @@ function _fmRenderJob(stops,idx){
   const lotM=String(bk.notes||'').match(/lot:\s*([\d.]+)ac/i);
   let pills='';
   if(amt){ if(_seeMoney(bk)) pills+='<span class="fm-pill amt">$'+amt.toFixed(0)+' '+(pt==='cash'?'cash':pt==='autopay'?'autopay':'invoice')+'</span>'; else pills+='<span class="fm-pill muted">'+(pt==='autopay'?'Autopay':'Invoice')+'</span>'; }
-  if(bk.frequency) pills+='<span class="fm-pill muted">'+esc(bk.frequency)+'</span>';
+  if(_isQuoteJob(bk)) pills+='<span class="fm-pill" style="background:#7c3aed;color:#fff;font-weight:900;">\ud83d\udccb QUOTE \u2014 no '+'mow'+'</span>';
+  else if(bk.frequency) pills+='<span class="fm-pill muted">'+esc(bk.frequency)+'</span>';
   if(bk.crew) pills+='<span class="fm-pill muted">Crew '+esc(bk.crew)+'</span>';
   if(lotM) pills+='<span class="fm-pill">📐 '+lotM[1]+' ac</span>';
   pills+='<span class="fm-pill muted">⏱ ~'+mow+'m</span>';
@@ -2162,7 +2167,7 @@ function _fmRenderJob(stops,idx){
     : '<button class="fm-btn fm-btn-lg fm-btn-nav" onclick="fmNavigate('+idx+')">🧭 Navigate Here</button>';
   document.getElementById('fmJobBody').innerHTML=
     '<div class="fm-card" style="'+(done?'opacity:.5;filter:grayscale(.6);':'')+'"><div class="fm-card-stopno">'+(idx+1)+'</div><div class="fm-card-name">'+esc(bk.name||'Customer')+'</div>'+
-    '<div class="fm-card-addr">📍 '+esc(bk.address||'—')+(bk.zip?', '+esc(bk.zip):'')+'</div><div class="fm-pills">'+pills+'</div>'+noteHtml+
+    '<div class="fm-card-addr">📍 '+esc(bk.address||'—')+(bk.zip?', '+esc(bk.zip):'')+'</div>'+(_isQuoteJob(bk)&&!done&&!skipped?'<div style="margin:10px 0;padding:13px 14px;border-radius:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;"><div style="font-size:16px;font-weight:900;letter-spacing:.02em;">\ud83d\udccb QUOTE VISIT \u2014 DO NOT MOW</div><div style="font-size:12.5px;font-weight:700;opacity:.92;margin-top:3px;">No equipment. Walk it with the customer, then tap \u201cBuild Estimate\u201d and Book / Email / Declined.</div></div>':'')+'<div class="fm-pills">'+pills+'</div>'+noteHtml+
     '<div class="fm-card-actions">'+_navBtn+
     '<div class="fm-secondary-row">'+phoneRow+(_isQuoteJob(bk)&&isDone(bk)&&_qjBookedStore[_stopKey(bk)]?'<button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#fdba74;color:#9a3412;" onclick="fmQuoteCloser(window._fmCurBk)">✏️ Edit booked plan</button>':'')+(_fmIsBoss()?'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmEditNotes()">✏️ Notes</button><button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmRemainingMap()">🗺 Remaining</button>':'')+'</div></div></div>'+
     '<div class="fm-jobnav"><button onclick="fmPrevStop()" '+(idx===0?'disabled':'')+'>‹ Prev</button>'
