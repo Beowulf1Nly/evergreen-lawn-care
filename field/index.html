@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.50 */
+/* APP_VER:2026-07-08.51 */
 (function(){
-  var V='2026-07-08.50'; window.__APP_VER=V;
+  var V='2026-07-08.51'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -905,7 +905,10 @@ function _extractRouteKeys(rRes){
         }
       }catch(e){}
     }
-    return keys.length?keys:null;
+    // ROUTE OWNERSHIP: the phone owns its order (GPS self-optimize + 🔒 anchors).
+    // Pushed routes only deliver locks, job times and planned drive minutes above —
+    // HQ's Optimize can never reorder a crew's day again. (owner decision 2026-07-13)
+    return null;
   }catch(e){ return null; }
 }
 
@@ -2190,7 +2193,7 @@ function fmRecordSkip(reason){
   const today=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
   const note=(String(bk.employeeNotes||'').trim()?bk.employeeNotes+' | ':'')+"⚠️ Couldn't service ("+reason+') — '+today+' by '+(adminName||'crew');
   _fmEnqueue({ kind:'skip', idemKey:'skip:'+rowIndex+':'+svcDate+':'+_uuid(), method:'GET', params:{ action:'set_employee_note', rowIndex, email:bk.email||'', serviceDate:svcDate, note, adminToken } });
-  _fmFlushQueue(); bk.employeeNotes=note; _fmSkipped[_stopKey(bk)]=reason; _fmMarkSeq(bk); _persist();
+  _fmFlushQueue(); bk.employeeNotes=note; _fmSkipped[_stopKey(bk)]=reason; _fmMarkSeq(bk); _persist(); setTimeout(function(){ try{ if(_fmStarted&&_fmOpenStops().length>2) _fmAutoRoute(); }catch(e){} },1500);
   fmCloseSkip(); showToast('⤼ Skipped: '+reason); _fmViewIdx=null; _fmRender();
 }
 
@@ -2365,6 +2368,8 @@ async function fmSubmitComplete(){
 
   const finish=(offline)=>{
     _fmMarkSeq(bk);   // completion order — done list shows the day as driven
+    // fresh anchor: re-solve the remaining stops from where the crew is standing
+    setTimeout(function(){ try{ if(_fmStarted&&_fmOpenStops().length>2) _fmAutoRoute(); }catch(e){} },1500);
     const lbl=new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
     if(_fmcRowIdx>=0){ allBookings[_fmcRowIdx].done='✓ Done — '+lbl; allBookings[_fmcRowIdx].markedBy=adminName; if(selAddons.length) allBookings[_fmcRowIdx].price='$'+grand.toFixed(0); } else bk.done='✓ Done — '+lbl;
     if(_fmcPayType==='cash') _fmCashTotal+=grand;
