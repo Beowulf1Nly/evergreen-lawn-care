@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.51 */
+/* APP_VER:2026-07-08.52 */
 (function(){
-  var V='2026-07-08.51'; window.__APP_VER=V;
+  var V='2026-07-08.52'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -748,10 +748,29 @@ function _restoreState(){
 
 /* ───────── Data load ───────── */
 let _ldBusy=false, _lastLoadTs=0, _custFetchedAt=0, _chkCfgKicked=false;
+// ── Loading veil: cover the app while data is stale (boot / long-background resume)
+// so nobody acts on yesterday's screen. Auto-clears when data lands; 12s failsafe.
+let _fmVeilT=null;
+function _fmShowVeil(msg){
+  try{
+    let v=document.getElementById('fmBootVeil');
+    if(!v){
+      v=document.createElement('div'); v.id='fmBootVeil';
+      v.style.cssText='position:fixed;inset:0;z-index:6000;background:#0b1220;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#dbe7f3;font-family:inherit;';
+      v.innerHTML='<div style="font-size:34px;">\ud83d\udee0\ufe0f</div><div id="fmBootVeilMsg" style="font-size:15px;font-weight:800;"></div><div style="width:34px;height:34px;border:3px solid #24405e;border-top-color:#38bdf8;border-radius:50%;animation:fmveilspin .8s linear infinite;"></div><style>@keyframes fmveilspin{to{transform:rotate(360deg)}}</style>';
+      document.body.appendChild(v);
+    }
+    v.style.display='flex';
+    const m=document.getElementById('fmBootVeilMsg'); if(m) m.textContent=msg||'Loading your day\u2026';
+    if(_fmVeilT) clearTimeout(_fmVeilT);
+    _fmVeilT=setTimeout(function(){ _fmHideVeil(); },12000);   // never stick
+  }catch(e){}
+}
+function _fmHideVeil(){ try{ if(_fmVeilT){ clearTimeout(_fmVeilT); _fmVeilT=null; } const v=document.getElementById('fmBootVeil'); if(v) v.style.display='none'; }catch(e){} }
 async function loadData(refreshToast){
   if(_ldBusy) return;               // one load at a time — overlapping loads caused flicker
   _ldBusy=true;
-  try{ await _loadDataInner(refreshToast); } finally { _ldBusy=false; _lastLoadTs=Date.now(); }
+  try{ await _loadDataInner(refreshToast); } finally { _ldBusy=false; _lastLoadTs=Date.now(); _fmHideVeil(); }
 }
 async function _loadDataInner(refreshToast){
   if(navigator.onLine===false){ _hydrateFromCache(); if(refreshToast) showToast('📴 Offline — showing saved jobs'); _fmRender(); return; }
@@ -2457,7 +2476,10 @@ function _fmResume(){
   // screen — so a reschedule / added / removed job shows without a manual refresh. This
   // was the "showing jobs that aren't there / missing jobs" bug: a warm foreground on the
   // start screen never re-fetched, so the app sat on stale cached bookings.
-  if(navigator.onLine!==false && !_anySheetOpen() && Date.now()-_lastLoadTs>5000) loadData();
+  if(navigator.onLine!==false && !_anySheetOpen() && Date.now()-_lastLoadTs>5000){
+    if(Date.now()-_lastLoadTs>600000) _fmShowVeil('Getting your latest route\u2026');   // long gap → screen is stale, cover it
+    loadData();
+  }
   if(!_fmStarted) return;
   _startTimers();                       // re-arm the ~20s heartbeat loop in case iOS suspended it
   _requestWake(); _startGeo();
@@ -2788,7 +2810,7 @@ function qjRenderBuilder(){
 window.addEventListener('DOMContentLoaded', ()=>{
   if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').then(function(reg){ try{ reg.update(); }catch(e){} }).catch(()=>{}); }
   const saved=loadSavedSession();
-  if(saved){ adminToken=saved.token; adminName=saved.name; adminEmail=saved.email; adminRole=saved.role||'employee'; adminCrews=saved.crews||''; _hydrateFromCache(); _restoreState(); showApp(); loadData(); }
+  if(saved){ adminToken=saved.token; adminName=saved.name; adminEmail=saved.email; adminRole=saved.role||'employee'; adminCrews=saved.crews||''; _fmShowVeil('Loading your day\u2026'); _hydrateFromCache(); _restoreState(); showApp(); loadData(); }
   else { const ls=document.getElementById('loginScreen'); ls.style.display='flex'; ls.style.visibility='visible'; }
   _fmUpdateSyncBadge();
 });
