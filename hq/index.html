@@ -850,6 +850,32 @@ async function refreshRouteOrder(){
       routes.forEach(function(rt){ const cw=String(rt.crew||'').toUpperCase().trim();
         m[cw]=(rt.stops||[]).map(_wireKey).filter(Boolean); });
       _routeSaved=m;
+      // 📡 LIVE MIRROR — once a crew clocks in and their phone starts reporting,
+      // TODAY's dispatch lane re-flows to the phone's actual order (times re-chained
+      // from measured drive legs). Before any echo exists, the board shows YOUR plan.
+      try{
+        const iso=todayISO();
+        const live={};
+        d.routes.forEach(function(rt){
+          if(!/\(live route\)/.test(String(rt.updatedBy||''))) return;
+          const cw=String(rt.crew||'').toUpperCase().trim();
+          if(!cw||cw.indexOf('.LK')>=0) return;
+          live[cw]=(rt.stops||[]).map(_wireKey).filter(Boolean);
+        });
+        window._liveMirrorSig=window._liveMirrorSig||{};
+        Object.keys(live).forEach(function(cw){
+          const sig=live[cw].join('~'); if(!sig||window._liveMirrorSig[cw]===sig) return;
+          const g=_dayJobsInOrder(cw,iso,0); if(!g.length) return;
+          const byKey={}; g.forEach(function(b){ byKey[_svKey(b)]=b; });
+          const echoed=live[cw].map(function(k){ return byKey[k]; }).filter(Boolean);
+          if(!echoed.length) return;
+          const seen={}; echoed.forEach(function(b){ seen[_svKey(b)]=1; });
+          const lead=g.filter(function(b){ return !seen[_svKey(b)]; });   // anything the phone doesn't know keeps its place up front
+          window._liveMirrorSig[cw]=sig;
+          const rec=_dispRoute[iso]||{};
+          _dayApplyOrder(cw,iso,lead.concat(echoed),rec.drive||null,0);
+        });
+      }catch(e){}
     }
   }catch(e){}
 }
