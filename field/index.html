@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.52 */
+/* APP_VER:2026-07-08.53 */
 (function(){
-  var V='2026-07-08.52'; window.__APP_VER=V;
+  var V='2026-07-08.53'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -750,20 +750,22 @@ function _restoreState(){
 let _ldBusy=false, _lastLoadTs=0, _custFetchedAt=0, _chkCfgKicked=false;
 // ── Loading veil: cover the app while data is stale (boot / long-background resume)
 // so nobody acts on yesterday's screen. Auto-clears when data lands; 12s failsafe.
-let _fmVeilT=null;
+let _fmVeilT=null,_fmVeilLast=0;
 function _fmShowVeil(msg){
   try{
+    if(Date.now()-_fmVeilLast<60000&&_fmVeilLast!==0){ return; }   // at most once a minute — a slow fetch can't nag
+    _fmVeilLast=Date.now();
     let v=document.getElementById('fmBootVeil');
     if(!v){
       v=document.createElement('div'); v.id='fmBootVeil';
       v.style.cssText='position:fixed;inset:0;z-index:6000;background:#0b1220;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#dbe7f3;font-family:inherit;';
-      v.innerHTML='<div style="font-size:34px;">\ud83d\udee0\ufe0f</div><div id="fmBootVeilMsg" style="font-size:15px;font-weight:800;"></div><div style="width:34px;height:34px;border:3px solid #24405e;border-top-color:#38bdf8;border-radius:50%;animation:fmveilspin .8s linear infinite;"></div><style>@keyframes fmveilspin{to{transform:rotate(360deg)}}</style>';
+      v.innerHTML='<div style="font-size:34px;">\ud83d\udee0\ufe0f</div><div id="fmBootVeilMsg" style="font-size:15px;font-weight:800;"></div><div style="width:34px;height:34px;border:3px solid #24405e;border-top-color:#38bdf8;border-radius:50%;animation:fmveilspin .8s linear infinite;"></div><div style="font-size:12px;color:#7d95ad;font-weight:700;">tap anywhere to skip</div><style>@keyframes fmveilspin{to{transform:rotate(360deg)}}</style>';
+      v.addEventListener('click',function(){ _fmHideVeil(); });   // always escapable
       document.body.appendChild(v);
     }
     v.style.display='flex';
     const m=document.getElementById('fmBootVeilMsg'); if(m) m.textContent=msg||'Loading your day\u2026';
-    if(_fmVeilT) clearTimeout(_fmVeilT);
-    _fmVeilT=setTimeout(function(){ _fmHideVeil(); },12000);   // never stick
+    if(!_fmVeilT) _fmVeilT=setTimeout(function(){ _fmHideVeil(); },8000);   // hard cap — re-shows can't extend it
   }catch(e){}
 }
 function _fmHideVeil(){ try{ if(_fmVeilT){ clearTimeout(_fmVeilT); _fmVeilT=null; } const v=document.getElementById('fmBootVeil'); if(v) v.style.display='none'; }catch(e){} }
