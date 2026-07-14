@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.59 */
+/* APP_VER:2026-07-08.60 */
 (function(){
-  var V='2026-07-08.59'; window.__APP_VER=V;
+  var V='2026-07-08.60'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -708,11 +708,16 @@ async function verifyCode(){
 function backToEmail(){ document.getElementById('loginStep2').style.display='none'; document.getElementById('loginStep1').style.display='block'; document.getElementById('codeInput').value=''; showLoginError(''); }
 // Zombie-session guard: server rejected our token — the app LOOKS logged in but
 // every call fails. Bounce to the login screen once with a clear message.
-let _authBounced=false;
+let _authBounced=false,_authStrikes=0,_authStrikeAt=0;
 function _authGuard(d){
   try{
     if(_authBounced) return false;
+    if(d && d.success===true){ _authStrikes=0; return false; }   // healthy call resets the count
     if(d && d.success===false && /unauthor/i.test(String(d.error||''))){
+      const _now=Date.now();
+      if(_now-_authStrikeAt>180000) _authStrikes=0;   // stale strikes expire
+      _authStrikes++; _authStrikeAt=_now;
+      if(_authStrikes<2) return false;                 // one fluke never logs anyone out
       _authBounced=true;
       try{ showToast('\ud83d\udd10 Session expired \u2014 log back in (10 seconds). Nothing is lost; queued work sends after login.',9000); }catch(e){}
       setTimeout(function(){ try{ logout(); }catch(e){} }, 1200);
@@ -1506,7 +1511,7 @@ async function _fmFlushQueue(){
         if(item.method==='POST') res=await fetch(SCRIPT_URL,{ method:'POST', body:JSON.stringify(item.body) });
         else res=await fetch(SCRIPT_URL+'?'+new URLSearchParams(item.params).toString());
         if(!res.ok) throw new Error('HTTP '+res.status);
-        try{ const j=JSON.parse(await res.text()); if(j&&j.success===false) { item.lastErr=String(j.error||'rejected'); _authGuard(j); throw new Error('backend: '+item.lastErr); } }catch(pe){ if(String(pe.message||'').indexOf('backend:')===0) throw pe; }
+        try{ const j=JSON.parse(await res.text()); if(j&&j.success===false) { item.lastErr=String(j.error||'rejected'); throw new Error('backend: '+item.lastErr); } }catch(pe){ if(String(pe.message||'').indexOf('backend:')===0) throw pe; }   // queue rejections show in the badge — they never log anyone out
         _fmMarkKeyDone(item.idemKey); q.splice(_qi,1); _fmQueueSave(q);
       }catch(netErr){
         const _isLogical=/^backend:|^HTTP \d/.test(String((netErr&&netErr.message)||''));
