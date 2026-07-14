@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.60 */
+/* APP_VER:2026-07-08.61 */
 (function(){
-  var V='2026-07-08.60'; window.__APP_VER=V;
+  var V='2026-07-08.61'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1527,6 +1527,14 @@ async function _fmFlushQueue(){
     }
   } finally { _fmFlushing=false; _fmUpdateSyncBadge(); }
 }
+function fmQueueDrop(i){
+  try{
+    const q=_fmQueueLoad(); const it=q[i]; if(!it) return;
+    if(!confirm('Remove this from the queue?\n'+(it.kind||'')+' — '+((it.params||{}).name||(it.params||{}).email||it.idemKey)+'\n\nIt will NEVER be sent. Only do this for items that can\'t succeed.')&&!_tapArm) return;
+    q.splice(i,1); _fmQueueSave(q); _fmUpdateSyncBadge();
+    const ov=document.getElementById('fmQvOverlay'); if(ov) ov.remove(); fmQueueViewer();
+  }catch(e){}
+}
 function fmQueueViewer(){
   const q=_fmQueueLoad();
   if(!q.length){ try{ showToast('Queue is empty — everything synced ✓'); }catch(e){} return; }
@@ -1537,6 +1545,7 @@ function fmQueueViewer(){
       +'<div style="font-weight:700;">'+(i+1)+'. '+(it.kind||'?')+' <span style="color:#8aa;">(tries: '+(it.tries||0)+')</span></div>'
       +(who?('<div style="font-size:13px;color:#cde;margin-top:3px;">'+who.replace(/</g,'&lt;')+'</div>'):'')
       +(it.lastErr?('<div style="font-size:12px;color:#f88;margin-top:3px;">last error: '+String(it.lastErr).replace(/</g,'&lt;')+'</div>'):'')
+      +'<button onclick="fmQueueDrop('+i+')" style="margin-top:7px;padding:6px 12px;border-radius:8px;border:1px solid #7f1d1d;background:transparent;color:#f87171;font-weight:800;font-size:12px;">🗑 Remove this item</button>'
       +'</div>';
   }).join('');
   let ov=document.getElementById('fmQvOverlay');
@@ -1664,6 +1673,7 @@ function _autoClockOut(){
   _clockOutTime=new Date(); _clockedOut=true;
   const hours=Math.max(0,(_clockOutTime.getTime()-_clockInTime.getTime())/3600000);
   const _coKey='clockout:'+(_clockInTime?_clockInTime.toISOString():todayISOStr());
+  if(!(parseFloat(hours)>0)){ try{ showToast('⏱ 0 hours on the clock — nothing to log for today'); }catch(e){} } else
   _fmEnqueue({ kind:'clockout', idemKey:_coKey, method:'GET', params:{ action:'employee_clock_out', hours:hours.toFixed(2), date:todayISOStr(), markedBy:adminName||'Crew', helpers:JSON.stringify((_helpers||[]).map(function(h){return (typeof h==='string')?{name:h}:{name:h&&h.name,hourlyRate:(h&&h.hourlyRate)||0};})), adminToken } });
   _fmSendClockedOut(); _fmFlushQueue(); _persist(); _stopGeo(); _releaseWake();
 }
@@ -2409,7 +2419,8 @@ async function fmSubmitComplete(){
   const extra=[];
   if(selAddons.length && _fmcPayType!=='autopay'){ const tag=selAddons.map(a=>a.name+'='+a.price).join(','); extra.push({ kind:'addons', idemKey:'addons:'+base+':'+tag, method:'GET', params:{ action:'apply_job_addons', rowIndex, email, serviceDate:svcDate, addons:JSON.stringify(selAddons), adminToken } }); } // autopay applies extras inside field_complete so the charge includes them
   if(_fmcPayType==='cash') extra.push({ kind:'cash', idemKey:'cash:'+base, method:'GET', params:{ action:'mark_cash_paid', rowIndex, email, serviceDate:svcDate, adminToken, markedBy:adminName||'Crew' } });
-  if(_fmcPayType==='invoice' && _fmcInvoiceSent) extra.push({ kind:'invoice', idemKey:'invoice:'+base, method:'GET', params:{ action:'send_invoice', rowIndex, email, serviceDate:svcDate, amount:grand.toFixed(2), description:(['Lawn service $'+(_fmcBase||0).toFixed(0)].concat((_fmcAddons||[]).filter(a=>a.on&&a.price>0).map(a=>a.name+' $'+(+a.price).toFixed(0))).join(' + ')), adminToken } });
+  if(_fmcPayType==='invoice' && _fmcInvoiceSent && !String(email||'').includes('@')){ try{ showToast('⚠️ No email on file — invoice NOT sent. Collect their email and invoice from HQ.',9000); }catch(e){} }
+  if(_fmcPayType==='invoice' && _fmcInvoiceSent && String(email||'').includes('@')) extra.push({ kind:'invoice', idemKey:'invoice:'+base, method:'GET', params:{ action:'send_invoice', rowIndex, email, serviceDate:svcDate, amount:grand.toFixed(2), description:(['Lawn service $'+(_fmcBase||0).toFixed(0)].concat((_fmcAddons||[]).filter(a=>a.on&&a.price>0).map(a=>a.name+' $'+(+a.price).toFixed(0))).join(' + ')), adminToken } });
   if(ownerNote){ const noteLine='📝 '+ownerNote+' — '+(adminName||'crew'); extra.push({ kind:'note', idemKey:'note:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex, email, serviceDate:svcDate, note:(String(bk.employeeNotes||'').trim()?bk.employeeNotes+' | ':'')+noteLine, adminToken } }); }
   // Sticky customer note — only sent when actually changed; REPLACES the profile note.
   (function(){
@@ -2578,12 +2589,24 @@ function ncOpen(){
       +'<div style="'+lab+'">Notes</div><textarea id="nc-notes" style="'+inp+'min-height:56px;resize:vertical;" placeholder="Gate code, pets, details…"></textarea>'
       +'</div>'
       +'<div style="padding:12px 16px calc(14px + env(safe-area-inset-bottom));border-top:1.5px solid #e2e8f0;">'
-      +'<button onclick="ncSubmit()" style="width:100%;padding:15px;border:none;border-radius:12px;background:#16a34a;color:#fff;font-family:inherit;font-size:16px;font-weight:800;cursor:pointer;">✅ Add customer & schedule</button></div></div>';
+      +'<button id="ncSubmitBtn" onclick="ncSubmit()" style="width:100%;padding:15px;border:none;border-radius:12px;background:#16a34a;color:#fff;font-family:inherit;font-size:16px;font-weight:800;cursor:pointer;">✅ Add customer & schedule</button></div></div>';
     document.body.appendChild(o);
   }
   const d=new Date(); d.setDate(d.getDate()+1);
   const dt=document.getElementById('nc-date'); if(dt&&!dt.value) dt.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   document.getElementById('ncOverlay').style.display='flex';
+}
+// confirm() can be silently suppressed in installed-PWA contexts — a tap then does
+// NOTHING and customer info goes nowhere. This double-tap pattern can't be blocked:
+// first tap arms the button ("tap again"), second tap within 8s proceeds.
+let _tapArm={};
+function _tapConfirm(id,label){
+  const el=document.getElementById(id); const now=Date.now();
+  if(_tapArm[id]&&now-_tapArm[id]<8000){ _tapArm[id]=0; if(el&&el._origTxt){ el.textContent=el._origTxt; } return true; }
+  _tapArm[id]=now;
+  if(el){ if(!el._origTxt) el._origTxt=el.textContent; el.textContent='👆 '+(label||'Tap again to confirm'); setTimeout(function(){ if(_tapArm[id]&&Date.now()-_tapArm[id]>=7900){ _tapArm[id]=0; el.textContent=el._origTxt; } },8200); }
+  try{ showToast('Tap the button again to confirm'); }catch(e){}
+  return false;
 }
 function ncSubmit(){
   const v=function(id){ return String((document.getElementById(id)||{}).value||'').trim(); };
@@ -2595,7 +2618,7 @@ function ncSubmit(){
   const isQuote=/quote/i.test(freq);
   if(!isQuote&&pay==='card'&&!email){ showToast('Card customers need an email (or switch to Cash)'); return; }
   if(!isQuote&&!price){ showToast('Set a price — or pick Quote Visit'); return; }
-  if(!confirm('Add '+name+'?\n'+freq+(price?(' · $'+price):'')+' · first visit '+date+'\n'+addr)) return;
+  if(!_tapConfirm('ncSubmitBtn','Tap again — add '+name)) return;
   _fmEnqueue({ kind:'newcust', idemKey:'nc:'+_uuid(), method:'GET', params:{ action:'manual_schedule', name:name, email:email, phone:phone, address:addr, zip:zip, frequency:freq, price:price, serviceDate:date, notes:(notes?notes+' — ':'')+'Added on route by '+(adminName||'crew'), payMethod:pay||'card', adminToken:adminToken } });
   if(!isQuote&&parseFloat(price)>0){
     // crew sourced AND closed this one on the spot → 80% of the first job
@@ -2734,7 +2757,7 @@ async function qjOutcome(kind){
     }
     const date=document.getElementById('qjDate').value;
     if(!date){ showToast('Pick a start date'); return; }
-    if(!confirm('Book '+(bk.name||'customer')+':\n'+desc+'\n'+(ogNote?('1st cut $'+firstPrice+' (overgrown +$'+ogFee+')'+(_qj.freq!=='onetime'?(' · then $'+price+'/cut'):'')):('$'+price+(_qj.freq!=='onetime'?'/cut':'')))+_qjCommLine(firstPrice)+'\nstarting '+date+'?')) return;
+    if(!_tapConfirm('qjBookBtn','Tap again — book $'+firstPrice)) return;
     _fmEnqueue({ kind:'quotebook', idemKey:'qb:'+base, method:'GET', params:{ action:'manual_schedule', name:bk.name||'', email:bk.email||'', phone:String(bk.phone||''), address:bk.address||'', zip:String(bk.zip||''), frequency:_qjFreqLabel(), price:String(promo?price:firstPrice), firstMowPromo:(promo?'true':''), firstMowPrice:(promo?String(promoPrice):''), serviceDate:date, notes:'Booked at quote visit — '+desc+ogNote+(ogNote&&_qj.freq!=='onetime'?(' · following cuts $'+price):'')+(_qjNote()?(' | 📝 '+_qjNote()):'')+' — by '+(adminName||'crew'), payMethod:'card', adminToken } });
     _qjLogCommission(base,firstPrice,bk,date);
     try{ _qjBookedStore[base]={ date:date, email:String(bk.email||'').toLowerCase().trim(), name:bk.name||'', freq:_qjFreqLabel(), price:String(firstPrice), qj:JSON.parse(JSON.stringify(_qj)), override:String((document.getElementById('qjPriceOverride')||{}).value||'') }; _qjBookedSave(); }catch(e){}
