@@ -1804,6 +1804,14 @@ function _censusGeocode(addr){
 async function geocode(addr){
   const cache=geoGet(); if(cache[addr]&&cache[addr].lat!=null) return cache[addr];
   let c=null; try{ c=await _censusGeocode(addr); }catch(e){}
+  if(!c){
+    // Google via the backend — same step the optimizer uses; without it, stops that
+    // only Google can locate (new builds) silently vanish from the Live map polyline.
+    try{
+      const g=await fetch(SCRIPT_URL+'?action=hq_geocode&adminToken='+encodeURIComponent(token)+'&address='+encodeURIComponent(addr)).then(function(r){ return r.json(); });
+      if(g&&g.success&&g.lat!=null) c={ lat:+g.lat, lon:+g.lon };
+    }catch(e){}
+  }
   if(!c){ try{ const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q='+encodeURIComponent(addr)); const d=await r.json(); if(d&&d[0]) c={lat:+d[0].lat,lon:+d[0].lon}; }catch(e){} }
   if(c){ cache[addr]=c; geoSet(cache); }
   return c;
