@@ -3141,7 +3141,7 @@ function dayLockToggle(ref,c,iso,zi){
   // the flag only travels inside a route push. Existing measured drive legs are kept.
   try{
     const _r0=_dispRoute[iso], _lm={};
-    const _gAll=_dayJobsInOrder(c,iso,zi||0);
+    const _gAll=_hqSpliceLocks(_dayJobsInOrder(c,iso,zi||0),iso,zi||0,c);
     _gAll.forEach(function(b2){ const _pv=_r0&&_r0.drive&&_r0.drive[_svKey(b2)]; if(_pv>0) _lm[_svKey(b2)]=_pv; });
     if(_gAll.length) _dayApplyOrder(c,iso,_gAll,_lm,zi||0);
   }catch(e){}
@@ -3506,7 +3506,7 @@ async function hqOptimizeRun(c,iso,zi){
     const _locked=_g0.filter(function(b){ return _lks.indexOf(_svKey(b))>=0; });   // shown order
     const g=_g0.filter(function(b){ return _lks.indexOf(_svKey(b))<0; });
     if(g.length<2){
-      if(_locked.length&&_g0.length>=2){ _dayApplyOrder(c,iso,_locked.concat(g),null,zi); toast('🔒 '+_locked.length+' locked stop'+(_locked.length>1?'s':'')+' lead — nothing left to optimize'); }
+      if(_locked.length&&_g0.length>=2){ _dayApplyOrder(c,iso,_hqSpliceLocks(_g0,iso,zi,c),null,zi); toast('🔒 '+_locked.length+' anchored stop'+(_locked.length>1?'s':'')+' pinned — nothing left to optimize'); }
       else toast(_g0.length?'Too few stops to optimize':'No open stops');
       return;
     }
@@ -3586,7 +3586,7 @@ async function hqOptimizeRun(c,iso,zi){
       if(at>=0){ seq.splice(at+1,0,p.b); doubts.stops[_svKey(p.b)]='ADDRESS NOT FOUND — slotted next to its ZIP-'+z2+' neighbors (not truly optimized). Fix the address, then ⚡ again.'; }
       else seq.push(p.b);
     });
-    const finalJobs=_locked.concat(seq);
+    const finalJobs=_hqSpliceLocks(_locked.concat(seq),iso,zi,c);   // anchors land at their exact positions
     // per-leg REAL drive minutes (OSRM seconds → min); unlocatable legs fall back to 12
     const legMap={};
     sol.order.forEach(function(oi,seqi){
@@ -3689,6 +3689,18 @@ function dayMove(c,iso,idx,dir,zi){
     toast('📲 Run order saved — times locked in');
   },800);
 }
+// splice anchored jobs into their exact positions among a job list (mirror of the phone)
+function _hqSpliceLocks(list,iso,zi,c){
+  try{
+    const m=_dayLockMap(iso,zi,c); const ks=Object.keys(m); if(!ks.length) return list;
+    const inList={}; list.forEach(function(b){ inList[_svKey(b)]=b; });
+    const anchored=ks.filter(function(k){ return inList[k]; }).sort(function(a,b){ return m[a]-m[b]; });
+    if(!anchored.length) return list;
+    const rest=list.filter(function(b){ return !(_svKey(b) in m); });
+    anchored.forEach(function(k){ rest.splice(Math.max(0,Math.min(rest.length,m[k]-1)),0,inList[k]); });
+    return rest;
+  }catch(e){ return list; }
+}
 function _dayJobsInOrder(c,iso,zi){
   zi=zi||0;
   const rec=_dispRoute[iso]||{times:{},order:{}};
@@ -3698,10 +3710,7 @@ function _dayJobsInOrder(c,iso,zi){
     const bc=String(b.crew||'').toUpperCase().trim()||'un';
     return bc===c&&!_isArch(b)&&!isDone(b)&&((b._srcBiz||0)===zi);
   }).sort(function(a,b2){
-    // 🔒 locks BEAT any published order — the crew phone's auto-route publishes its
-    // own order as the newest route row, which used to override the locked prefix.
-    const _lo=_dayLocks(iso,zi,c), _la=_lo.indexOf(_svKey(a)), _lb=_lo.indexOf(_svKey(b2));
-    if(_la>=0||_lb>=0){ if(_la<0) return 1; if(_lb<0) return -1; if(_la!==_lb) return _la-_lb; }
+    // anchors are POSITIONAL now — spliced in by _hqSpliceLocks where the list is used
     if(ordKeys.length){ let pa=ordKeys.indexOf(_svKey(a)), pb=ordKeys.indexOf(_svKey(b2)); pa=pa<0?9999:pa; pb=pb<0?9999:pb; if(pa!==pb) return pa-pb; }
     return _jobSort(a,b2);
   });
