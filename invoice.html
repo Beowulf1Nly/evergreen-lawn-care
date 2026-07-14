@@ -10010,6 +10010,14 @@ async function geocodeAddr(addr) {
   const _inFLwide=function(c){ return c&&c.lat>=24&&c.lat<=31.6&&c.lon>=-88&&c.lon<=-79.4; };
   try{ const _cc=await _censusGeocode(_rawAddr); if(_cc&&_inFLwide(_cc)) return _cc; }catch(e){}
 
+  // 0.5 Google via the backend (Apps Script Maps geocoder) — Google's data knows
+  // new-construction homes the free services haven't mapped yet. Same step /hq uses.
+  try{
+    const _grr=await fetch(SCRIPT_URL+'?action=hq_geocode&adminToken='+encodeURIComponent(adminToken)+'&address='+encodeURIComponent(_rawAddr));
+    const _gr=await _grr.json();
+    if(_gr&&_gr.success&&_gr.lat!=null){ const _gc={ lat:+_gr.lat, lon:+_gr.lon }; if(_inFLwide(_gc)) return _gc; }
+  }catch(e){}
+
   const _geoInFL=function(c){ return c&&c.lat>=28.3&&c.lat<=29.75&&c.lon>=-83.05&&c.lon<=-81.7; };
   const zipMatch   = addr.match(/,\s*(\d{5})/);
   const zip        = zipMatch ? zipMatch[1] : '';
