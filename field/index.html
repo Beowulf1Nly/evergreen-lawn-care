@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.49 */
+/* APP_VER:2026-07-08.50 */
 (function(){
-  var V='2026-07-08.49'; window.__APP_VER=V;
+  var V='2026-07-08.50'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -706,6 +706,21 @@ async function verifyCode(){
   finally{ btn.disabled=false; btn.textContent='Sign In →'; }
 }
 function backToEmail(){ document.getElementById('loginStep2').style.display='none'; document.getElementById('loginStep1').style.display='block'; document.getElementById('codeInput').value=''; showLoginError(''); }
+// Zombie-session guard: server rejected our token — the app LOOKS logged in but
+// every call fails. Bounce to the login screen once with a clear message.
+let _authBounced=false;
+function _authGuard(d){
+  try{
+    if(_authBounced) return false;
+    if(d && d.success===false && /unauthor/i.test(String(d.error||''))){
+      _authBounced=true;
+      try{ showToast('\ud83d\udd10 Session expired \u2014 log back in (10 seconds). Nothing is lost; queued work sends after login.',9000); }catch(e){}
+      setTimeout(function(){ try{ logout(); }catch(e){} }, 1200);
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
 function logout(){ try{ localStorage.removeItem(SESSION_KEY); }catch(e){} /* day state (clock-in, progress) is kept per-user — logging back in the same day resumes it */ if(_fmPollInt) clearInterval(_fmPollInt); _stopGeo(); _releaseWake(); adminToken=''; _fmStarted=false; _clockInTime=null; _clockedOut=false; document.getElementById('fieldMode').classList.remove('show'); const _ls=document.getElementById('loginScreen'); _ls.style.display='flex'; _ls.style.visibility='visible'; }
 function showApp(){ document.getElementById('loginScreen').style.display='none'; document.getElementById('fieldMode').classList.add('show'); _restoreState(); /* fresh login same day → resume clock/progress */ _startPoint=_loadStartPoint(); _crewSel=_loadCrewSel(); _startTimers(); _fmRender(); }
 
@@ -1435,7 +1450,7 @@ async function _fmFlushQueue(){
         if(item.method==='POST') res=await fetch(SCRIPT_URL,{ method:'POST', body:JSON.stringify(item.body) });
         else res=await fetch(SCRIPT_URL+'?'+new URLSearchParams(item.params).toString());
         if(!res.ok) throw new Error('HTTP '+res.status);
-        try{ const j=JSON.parse(await res.text()); if(j&&j.success===false) { item.lastErr=String(j.error||'rejected'); throw new Error('backend: '+item.lastErr); } }catch(pe){ if(String(pe.message||'').indexOf('backend:')===0) throw pe; }
+        try{ const j=JSON.parse(await res.text()); if(j&&j.success===false) { item.lastErr=String(j.error||'rejected'); _authGuard(j); throw new Error('backend: '+item.lastErr); } }catch(pe){ if(String(pe.message||'').indexOf('backend:')===0) throw pe; }
         _fmMarkKeyDone(item.idemKey); q.splice(_qi,1); _fmQueueSave(q);
       }catch(netErr){
         const _isLogical=/^backend:|^HTTP \d/.test(String((netErr&&netErr.message)||''));
@@ -1537,7 +1552,7 @@ function _fmHeartbeat(){
     if(_lastSync.ts===0){ _lastSync={ok:null,ts:Date.now(),msg:'sending'}; _renderSyncStatus(); }
     fetch(SCRIPT_URL+'?'+params.toString())
       .then(function(r){ return r.json(); })
-      .then(function(d){ _lastSync={ ok:!!(d&&d.success===true), ts:Date.now(), msg:(d&&d.success===true)?'':((d&&d.error)||'unexpected response') }; _renderSyncStatus(); })
+      .then(function(d){ _authGuard(d); _lastSync={ ok:!!(d&&d.success===true), ts:Date.now(), msg:(d&&d.success===true)?'':((d&&d.error)||'unexpected response') }; _renderSyncStatus(); })
       .catch(function(e){ _lastSync={ ok:false, ts:Date.now(), msg:'network: '+((e&&e.message)||'fail') }; _renderSyncStatus(); });
   }catch(err){ _lastSync={ok:false,ts:Date.now(),msg:'err: '+((err&&err.message)||err)}; _renderSyncStatus(); }
 }
