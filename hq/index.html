@@ -3029,7 +3029,7 @@ async function hqPushCrewDay(zi,c){
   const hhmm=function(min){ return ('0'+Math.floor(min/60)%24).slice(-2)+':'+('0'+Math.round(min)%60).slice(-2); };
   const isoAt=function(min){ const d=new Date(iso+'T00:00:00'); d.setMinutes(min); return d.toISOString(); };
   try{
-    const stops=evs.map(function(ev,i){ const b=ev.b; return { order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:iso, name:b.name||'', address:b.address||'', zip:String(b.zip||''), crew:c, jobTime:(!isDone(b)&&!_isArch(b))?hhmm(ev.st):String(b.jobTime||''), locked:(_dayLocks(iso,zi,c).indexOf(_svKey(b))>=0)?(i+1):0 }; }).filter(function(x){ return x.email||x.name; });
+    const stops=evs.map(function(ev,i){ const b=ev.b; return { order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:iso, name:b.name||'', address:b.address||'', zip:String(b.zip||''), crew:c, jobTime:(!isDone(b)&&!_isArch(b))?hhmm(ev.st):String(b.jobTime||''), locked:_dayLockPos(iso,zi,c,_svKey(b))||0 }; }).filter(function(x){ return x.email||x.name; });
     await fetch(u+'?'+new URLSearchParams({ action:'put_route', date:iso, crew:c, stops:JSON.stringify(stops), updatedBy:'HQ', idemKey:'hqroute:'+iso+':'+c+':'+Date.now(), adminToken:t }));
   }catch(e){}
   let saved=0;
@@ -3082,18 +3082,25 @@ function crewMapsRoute(zi,c){
 }
 /* ── 🔒 Route locks: locked stops ALWAYS lead the run in their shown order; ⚡ Optimize
    keeps them first and solves the rest starting from the LAST locked stop's location. ── */
-let _dayLockStore={}; try{ _dayLockStore=JSON.parse(localStorage.getItem('hq_locks2')||'{}');
-  let _lkFix=false; Object.keys(_dayLockStore).forEach(function(k){ const a=(_dayLockStore[k]||[]).filter(function(x){ return x&&x.charAt(0)!=='|'; }); if(a.length!==(_dayLockStore[k]||[]).length){ _dayLockStore[k]=a; _lkFix=true; } if(!a.length){ delete _dayLockStore[k]; _lkFix=true; } });
-  if(_lkFix) localStorage.setItem('hq_locks2',JSON.stringify(_dayLockStore));
+let _dayLockStore={}; try{ _dayLockStore=JSON.parse(localStorage.getItem('hq_locks3')||'{}'); }catch(e){}
+// migrate v2 (array = lock-to-front) → v3 (map key→position)
+try{ const _v2=JSON.parse(localStorage.getItem('hq_locks2')||'null');
+  if(_v2&&!localStorage.getItem('hq_locks3')){ Object.keys(_v2).forEach(function(kk){ const m={}; (_v2[kk]||[]).forEach(function(k2,i2){ if(k2&&k2.charAt(0)!=='|') m[k2]=i2+1; }); if(Object.keys(m).length) _dayLockStore[kk]=m; });
+    localStorage.setItem('hq_locks3',JSON.stringify(_dayLockStore)); localStorage.removeItem('hq_locks2'); }
 }catch(e){}
-function _dayLocks(iso,zi,c){ return _dayLockStore[iso+'|'+_recKey(zi,c)]||[]; }
+function _dayLockMap(iso,zi,c){ const v=_dayLockStore[iso+'|'+_recKey(zi,c)]; return (v&&!Array.isArray(v))?v:{}; }
+function _dayLocks(iso,zi,c){ const m=_dayLockMap(iso,zi,c); return Object.keys(m).sort(function(a,b){ return m[a]-m[b]; }); }   // keys in position order (back-compat)
+function _dayLockPos(iso,zi,c,key){ return _dayLockMap(iso,zi,c)[key]||0; }
 function dayLockToggle(ref,c,iso,zi){
   const b=_jobRefs[ref]; if(!b) return;
-  const kk=iso+'|'+_recKey(zi||0,c), k=_svKey(b), arr=_dayLockStore[kk]||[];
-  const i=arr.indexOf(k);
-  if(i>=0){ arr.splice(i,1); toast('🔓 '+(b.name||'stop')+' unlocked — optimizer places it freely again'); }
-  else { arr.push(k); toast('🔒 '+(b.name||'stop')+' LOCKED — stays at the front of the route (in shown order) when you ⚡ Optimize',6000); }
-  _dayLockStore[kk]=arr;
+  const kk=iso+'|'+_recKey(zi||0,c), k=_svKey(b);
+  const m=(_dayLockStore[kk]&&!Array.isArray(_dayLockStore[kk]))?_dayLockStore[kk]:{};
+  const v=prompt('🔒 Anchor "'+(b.name||'this stop')+'" at position # (1 = first stop of the run).\nLeave blank to unlock.', m[k]||'');
+  if(v===null) return;
+  const n=parseInt(v);
+  if(!(n>0)){ delete m[k]; toast('🔓 '+(b.name||'stop')+' unlocked — the crew\'s phone places it freely again'); }
+  else { m[k]=n; toast('🔒 '+(b.name||'stop')+' anchored as stop #'+n+' — the crew\'s phone keeps it there through every re-route',6000); }
+  _dayLockStore[kk]=m;
   const _tod=todayISO(); Object.keys(_dayLockStore).forEach(function(x){ if(x.slice(0,10)<_tod) delete _dayLockStore[x]; });   // old days auto-purge
   try{ localStorage.setItem('hq_locks2',JSON.stringify(_dayLockStore)); }catch(e){}
   // push the lock to the crew's phone NOW — locking is usually the LAST tap, and
@@ -3125,9 +3132,9 @@ async function _lockReassert(){
     const rk=kk.slice(11);                                    // _recKey: 'B' or '1#B'
     const zi=rk.indexOf('#')>0?parseInt(rk)||0:0;
     const c=(rk.indexOf('#')>0?rk.split('#')[1]:rk)||'un';
-    const locks=st[kk]||[]; if(!locks.length) continue;
+    const lm=(st[kk]&&!Array.isArray(st[kk]))?st[kk]:{}; if(!Object.keys(lm).length) continue;
     const g=_dayJobsInOrder(c,iso,zi); if(!g.length) continue;
-    const stops=g.map(function(b,i){ return { order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:iso, name:b.name||'', address:b.address||'', zip:b.zip||'', crew:(c==='un')?'':c, jobTime:String(b.jobTime||''), locked:(locks.indexOf(_svKey(b))>=0)?(i+1):0 }; });
+    const stops=g.map(function(b,i){ return { order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:iso, name:b.name||'', address:b.address||'', zip:b.zip||'', crew:(c==='un')?'':c, jobTime:String(b.jobTime||''), locked:lm[_svKey(b)]||0 }; });
     const sig=kk+'~'+stops.map(function(x){ return x.email+':'+x.locked; }).join(',');
     if(_lkPushed[kk]===sig) continue;                         // idempotent — only on change
     try{
@@ -3159,8 +3166,8 @@ function _dayOrderPanel(c,iso,cell,zi){
         return '<button onclick="event.stopPropagation();setJobMins('+_jr(b)+')" title="'+_src+'" style="background:rgba(56,189,248,.12);border:1px solid '+(_off?'rgba(251,191,36,.6)':'rgba(56,189,248,.35)')+';color:'+(_off?'#fbbf24':'#7dd3fc')+';border-radius:7px;padding:1px 7px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">⏱ '+dur+'m'+(_off?' ⚠':'')+' ✎</button>';
       })()+(b.price?' · '+esc(String(b.price)):'')+'</div></div>'
         +'<div class="ro-arrows">'
-        +(function(){ const _lkd=_dayLocks(iso,zi||0,c).indexOf(_svKey(b))>=0;
-          return '<button onclick="event.stopPropagation();dayLockToggle('+_jr(b)+',\''+c+'\',\''+iso+'\','+(zi||0)+')" title="'+(_lkd?'Locked — leads the route even after ⚡ Optimize. Tap to unlock.':'Lock this stop to the FRONT of the route — ⚡ Optimize will keep it there and route the rest from its location.')+'" style="'+(_lkd?'background:rgba(251,191,36,.18);border-color:rgba(251,191,36,.6);':'')+'">'+(_lkd?'🔒':'🔓')+'</button>'; })()
+        +(function(){ const _lkp=_dayLockPos(iso,zi||0,c,_svKey(b)); const _lkd=_lkp>0;
+          return '<button onclick="event.stopPropagation();dayLockToggle('+_jr(b)+',\''+c+'\',\''+iso+'\','+(zi||0)+')" title="'+(_lkd?('Anchored as stop #'+_lkp+' on the crew\'s phone. Tap to change or unlock.'):'Anchor this stop at a position — the crew\'s phone keeps it there through every re-route.')+'" style="'+(_lkd?'background:rgba(251,191,36,.18);border-color:rgba(251,191,36,.6);':'')+'">'+(_lkd?('🔒'+_lkp):'🔓')+'</button>'; })()
         +'<button onclick="dayMove(\''+c+'\',\''+iso+'\','+i+',-1,'+(zi||0)+')" '+(i===0?'disabled':'')+'>▲</button>'
         +'<button onclick="dayMove(\''+c+'\',\''+iso+'\','+i+',1,'+(zi||0)+')" '+(i===jobs.length-1?'disabled':'')+'>▼</button></div></div>';
       st+=dur;
@@ -3580,7 +3587,7 @@ function _dayApplyOrder(c,iso,g,legMap,zi){
     rec.times[key]=hh+':'+mm; rec.order[_recKey(zi,c)].push(key);
     b.jobTime=hh+':'+mm;
     jobs.push(b);
-    const stop={ order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:iso, name:b.name||'', address:b.address||'', zip:b.zip||'', crew:crewKey, jobTime:hh+':'+mm, driveMin:_dm, locked:(_dayLocks(iso,zi,c).indexOf(key)>=0)?(i+1):0 };
+    const stop={ order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:iso, name:b.name||'', address:b.address||'', zip:b.zip||'', crew:crewKey, jobTime:hh+':'+mm, driveMin:_dm, locked:_dayLockPos(iso,zi,c,key)||0 };
     st+=dur;
     return stop;
   });
@@ -3622,7 +3629,7 @@ function dayMove(c,iso,idx,dir,zi){
     rec.times[key]=hh+':'+mm; rec.order[_recKey(zi,c)].push(key);
     b.jobTime=hh+':'+mm;                       // local bookings copy follows immediately
     jobs.push(b);
-    const stop={ order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:iso, name:b.name||'', address:b.address||'', zip:b.zip||'', crew:crewKey, jobTime:hh+':'+mm, locked:(_dayLocks(iso,zi,c).indexOf(key)>=0)?(i+1):0 };
+    const stop={ order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:iso, name:b.name||'', address:b.address||'', zip:b.zip||'', crew:crewKey, jobTime:hh+':'+mm, locked:_dayLockPos(iso,zi,c,key)||0 };
     st+=dur;
     return stop;
   });
