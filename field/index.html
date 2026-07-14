@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.62 */
+/* APP_VER:2026-07-08.63 */
 (function(){
-  var V='2026-07-08.62'; window.__APP_VER=V;
+  var V='2026-07-08.63'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -2758,15 +2758,23 @@ async function qjOutcome(kind){
     const date=document.getElementById('qjDate').value;
     if(!date){ showToast('Pick a start date'); return; }
     if(!_tapConfirm('qjBookBtn','Tap again — book $'+firstPrice)) return;
+    // ⚠️ ORDER MATTERS: close the QUOTE row FIRST. Booking inserts a new row at the
+    // top of the sheet and shifts every rowIndex — a stale index + no email once
+    // marked the WRONG job done and left the quote open (2026-07-14).
+    (function(){
+      const _noteWon='Quote WON — booked '+_qjFreqLabel()+' $'+price+ogNote+' ('+desc+')'+(_qjNote()?(' | 📝 '+_qjNote()):'');
+      _fmEnqueue({ kind:'quotenote', idemKey:'qn:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), note:_noteWon, markedBy:adminName||'Crew', adminToken } });
+      _fmEnqueue({ kind:'quotedone', idemKey:'qd:'+base, method:'GET', params:{ action:'mark_done', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), amount:'0', markedBy:adminName||'Crew', adminToken } });
+    })();
     _fmEnqueue({ kind:'quotebook', idemKey:'qb:'+base, method:'GET', params:{ action:'manual_schedule', name:bk.name||'', email:bk.email||'', phone:String(bk.phone||''), address:bk.address||'', zip:String(bk.zip||''), frequency:_qjFreqLabel(), price:String(promo?price:firstPrice), firstMowPromo:(promo?'true':''), firstMowPrice:(promo?String(promoPrice):''), serviceDate:date, notes:'Booked at quote visit — '+desc+ogNote+(ogNote&&_qj.freq!=='onetime'?(' · following cuts $'+price):'')+(_qjNote()?(' | 📝 '+_qjNote()):'')+' — by '+(adminName||'crew'), payMethod:'card', adminToken } });
     _qjLogCommission(base,firstPrice,bk,date);
     try{ _qjBookedStore[base]={ date:date, email:String(bk.email||'').toLowerCase().trim(), name:bk.name||'', freq:_qjFreqLabel(), price:String(firstPrice), qj:JSON.parse(JSON.stringify(_qj)), override:String((document.getElementById('qjPriceOverride')||{}).value||'') }; _qjBookedSave(); }catch(e){}
     if(date===todayISOStr()){
       _fmAddLocalSameDay({ name:bk.name||'', email:String(bk.email||'').toLowerCase(), phone:String(bk.phone||''), address:bk.address||'', zip:String(bk.zip||''), frequency:_qjFreqLabel(), price:'$'+firstPrice, serviceDate:date, notes:'Booked at quote visit (same-day)', crew:bk.crew||'', jobTime:'', payMethod:'card' }, base);
-      _qjFinish('✅ Booked for TODAY — it\u2019s your next stop after this quote. 1st cut $'+firstPrice, 'Quote WON — booked '+_qjFreqLabel()+' $'+price+ogNote+' ('+desc+') — same-day job added');
+      _qjFinish('✅ Booked for TODAY — it\u2019s your next stop after this quote. 1st cut $'+firstPrice, 'Quote WON — booked '+_qjFreqLabel()+' $'+price+ogNote+' ('+desc+') — same-day job added', true);
       return;
     }
-    _qjFinish('✅ Booked! '+(ogNote?('1st cut $'+firstPrice):('$'+price))+' · starts '+date+' — ‹ Prev lets you edit it', 'Quote WON — booked '+_qjFreqLabel()+' $'+price+ogNote+' ('+desc+')');
+    _qjFinish('✅ Booked! '+(ogNote?('1st cut $'+firstPrice):('$'+price))+' · starts '+date+' — ‹ Prev lets you edit it', 'Quote WON — booked '+_qjFreqLabel()+' $'+price+ogNote+' ('+desc+')', true);
   } else if(kind==='estimate'){
     let _em=prompt('Send the estimate to this email — fix it if it\u2019s wrong:', String(bk.email||'').trim());
     if(_em===null) return;
@@ -2800,13 +2808,15 @@ async function qjOutcome(kind){
     _qjFinish('👍 Logged — maybe next time', 'Quote — not interested ('+desc+' · quoted $'+price+ogNote+')');
   }
 }
-function _qjFinish(toastMsg,note){
+function _qjFinish(toastMsg,note,skipQueue){
   const bk=_qjBk, base=_stopKey(bk);
   if(_qjNote()) note=note+' | 📝 '+_qjNote();
   // Note goes FIRST so it resolves onto the still-open QUOTE row — marking done
   // first (or a same-day booking shifting rows) could land it on the wrong job.
-  _fmEnqueue({ kind:'quotenote', idemKey:'qn:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), note:note, markedBy:adminName||'Crew', adminToken } });
-  _fmEnqueue({ kind:'quotedone', idemKey:'qd:'+base, method:'GET', params:{ action:'mark_done', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), amount:'0', markedBy:adminName||'Crew', adminToken } });
+  if(!skipQueue){
+    _fmEnqueue({ kind:'quotenote', idemKey:'qn:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), note:note, markedBy:adminName||'Crew', adminToken } });
+    _fmEnqueue({ kind:'quotedone', idemKey:'qd:'+base, method:'GET', params:{ action:'mark_done', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), amount:'0', markedBy:adminName||'Crew', adminToken } });
+  }
   _fmFlushQueue();
   bk.done='✓ Done'; _fmMarkSeq(bk);
   qjClose(); showToast(toastMsg); _persist(); _fmRender();
