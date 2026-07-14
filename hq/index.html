@@ -837,8 +837,17 @@ async function refreshRouteOrder(){
   try{
     const d=await fetch(SCRIPT_URL+'?action=get_route&date='+todayISO()+'&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null);
     if(d&&d.success&&Array.isArray(d.routes)){
+      // THE PHONE OWNS THE ORDER: crews self-optimize from live GPS. Their
+      // '(live route)' echoes always outrank HQ-side pushes, so the Live list
+      // and Route-on-map show what the crew is ACTUALLY driving.
+      const routes=d.routes.slice().sort(function(a2,b2){
+        const la=/\(live route\)/.test(String(a2.updatedBy||''))?1:0, lb=/\(live route\)/.test(String(b2.updatedBy||''))?1:0;
+        if(la!==lb) return la-lb;                                   // phone echo wins over HQ push
+        const ta=new Date(a2.updatedAt||0).getTime()||0, tb=new Date(b2.updatedAt||0).getTime()||0;
+        return ta-tb;                                               // then newest wins
+      });
       const m={};
-      d.routes.forEach(function(rt){ const cw=String(rt.crew||'').toUpperCase().trim();
+      routes.forEach(function(rt){ const cw=String(rt.crew||'').toUpperCase().trim();
         m[cw]=(rt.stops||[]).map(_wireKey).filter(Boolean); });
       _routeSaved=m;
     }
