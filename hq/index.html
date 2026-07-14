@@ -495,6 +495,7 @@
     <button class="hqtab" data-t="sites" onclick="setTab('sites')">🌐 Sites <span class="k">6</span></button>
     <button class="hqtab" data-t="pricebook" onclick="setTab('pricebook')">💵 Pricebook <span class="k">7</span></button>
     <button class="hqtab" data-t="dev" onclick="setTab('dev')">🛠 Dev <span class="k">8</span></button>
+    <button class="hqtab" onclick="cdOpen()" title="Add a customer's card, flip autopay, take a payment over the phone">💳 Cards</button>
   </div>
 
   <div id="pane-live" class="hq-pane on">
@@ -685,6 +686,32 @@
     <div class="toggle-row"><input type="checkbox" id="cancelNotify" checked><label for="cancelNotify">Email the customer</label></div>
     <button class="primary red" id="cancelGo" onclick="doCancel()">Cancel this job</button>
     <button class="ghost" onclick="closeSheet('cancelSheet')">Keep it</button>
+  </div>
+</div>
+<div class="sheet-wrap" id="cardSheet" onmousedown="this._dsd=(event.target===this)" onclick="if(this._dsd&&event.target===this)closeSheet('cardSheet')">
+  <div class="sheet">
+    <h3>💳 Card desk</h3><div class="sub">Add a card, flip autopay, or take a phone payment. Card numbers go straight to Stripe — they never touch our sheets.</div>
+    <div class="lbl">Business</div><div class="crewpick" id="cdBizPick"></div>
+    <div class="lbl">Customer email</div>
+    <input type="text" id="cdEmail" class="field" placeholder="customer@email.com" oninput="cdStatusStale()">
+    <button class="btn" style="margin:6px 0 2px;" onclick="cdLookup()">🔎 Look up card status</button>
+    <div id="cdStatus" style="font-size:13px;font-weight:700;margin:8px 0;color:var(--dim);">—</div>
+    <div class="lbl" style="margin-top:10px;">💳 Add / replace card <span style="font-weight:600;color:var(--dim);">(read it to them or key it in)</span></div>
+    <div id="cdElWrap" style="background:#fff;border-radius:10px;padding:12px;margin:6px 0;"><div id="cdCardEl"></div></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin:4px 0 8px;"><input type="checkbox" id="cdAutoOn" checked> Turn ON autopay with this card</label>
+    <button class="btn" id="cdSaveBtn" onclick="cdSaveCard()">💾 Save card to customer</button>
+    <div class="lbl" style="margin-top:14px;">⚡ Autopay</div>
+    <div style="display:flex;gap:8px;margin:6px 0;">
+      <button class="btn" style="flex:1;" onclick="cdAutopay(true)">Enable</button>
+      <button class="btn" style="flex:1;" onclick="cdAutopay(false)">Disable</button>
+    </div>
+    <div class="lbl" style="margin-top:14px;">📞 Charge their saved card now</div>
+    <div style="display:flex;gap:8px;margin:6px 0;">
+      <input type="number" id="cdAmt" class="field" style="flex:1;" placeholder="Amount $" min="1" step="0.01">
+      <input type="text" id="cdMemo" class="field" style="flex:2;" placeholder="What's it for (shows on their receipt)">
+    </div>
+    <button class="btn" id="cdChargeBtn" onclick="cdCharge()" style="background:#166534;">💵 Charge card</button>
+    <div id="cdOut" style="font-size:12.5px;margin-top:8px;color:var(--dim);"></div>
   </div>
 </div>
 <div class="sheet-wrap" id="addSheet" onmousedown="this._dsd=(event.target===this)" onclick="if(this._dsd&&event.target===this)closeSheet('addSheet')">
@@ -4987,6 +5014,89 @@ window.addEventListener('DOMContentLoaded', ()=>{
   if(s && (String(s.role||'').toLowerCase()==='owner'||String(s.role||'').toLowerCase()==='manager')){ token=s.token; myName=s.name; myEmail=s.email; myRole=String(s.role).toLowerCase(); myCrews=s.crews||''; enterApp(); }
   else { document.getElementById('login').style.display='flex'; }
 });
+</script>
+<script>
+/* ── 💳 CARD DESK ─────────────────────────────────────────────────────────── */
+const CD_STRIPE_PK='pk_live_51TLrat4J18msjfgfYqm9zvDa2pkr5ZPv6s10bl5UwMIYnAqpJbXEU14YXFlS6sEA3H0VgsLPTxHuPWD6YutUy1J000mzhTGL1N';
+let _cdBiz=0,_cdStripe=null,_cdCard=null;
+function cdOpen(){
+  const bl=_bizLoad();
+  document.getElementById('cdBizPick').innerHTML=bl.map(function(z,i){
+    const ok=_bizConnected(z)||i===0;
+    return '<button class="'+(i===_cdBiz?'on':'')+'" '+(ok?('onclick="cdBiz(this,'+i+')"'):'disabled style="opacity:.4;"')+'>'+esc(z.e)+' '+esc(z.n)+'</button>';
+  }).join('');
+  openSheet('cardSheet');
+  cdMountCard();
+}
+function cdBiz(el,i){ _cdBiz=i; document.querySelectorAll('#cdBizPick button').forEach(function(b){ b.classList.remove('on'); }); el.classList.add('on'); cdStatusStale(); }
+function cdStatusStale(){ const st=document.getElementById('cdStatus'); if(st) st.textContent='—'; }
+function cdMountCard(){
+  if(_cdCard) return;
+  const boot=function(){
+    try{
+      _cdStripe=Stripe(CD_STRIPE_PK);
+      _cdCard=_cdStripe.elements().create('card',{hidePostalCode:false});
+      _cdCard.mount('#cdCardEl');
+    }catch(e){ document.getElementById('cdOut').textContent='Stripe failed to load: '+e.message; }
+  };
+  if(window.Stripe) boot();
+  else{ const sc=document.createElement('script'); sc.src='https://js.stripe.com/v3'; sc.onload=boot; sc.onerror=function(){ document.getElementById('cdOut').textContent='Could not load Stripe.js — check the network.'; }; document.head.appendChild(sc); }
+}
+function _cdEmail(){ const v=String((document.getElementById('cdEmail')||{}).value||'').toLowerCase().trim(); if(!v||v.indexOf('@')<1){ toast('Enter the customer\'s email first'); return null; } return v; }
+async function _cdApi(params){
+  const ut=_bizUT(_cdBiz);
+  const q=new URLSearchParams(Object.assign({adminToken:ut.t},params));
+  return fetch(ut.u+'?'+q.toString()).then(function(r){ return r.json(); });
+}
+async function cdLookup(){
+  const em=_cdEmail(); if(!em) return;
+  const st=document.getElementById('cdStatus'); st.textContent='Looking up…';
+  const d=await _cdApi({action:'hq_card_status',custEmail:em}).catch(function(){ return null; });
+  if(!d||!d.success){ st.textContent='⚠ '+((d&&d.error)||'lookup failed'); return; }
+  if(!d.found){ st.textContent='No customer record yet — saving a card will create one.'; return; }
+  st.innerHTML=(d.hasCard?('💳 '+esc(d.brand||'card')+' ····'+esc(d.last4)):'No card on file')+' · autopay '+(d.autopayEnabled?'<b style="color:#34d399;">ON</b>':'<b style="color:#fbbf24;">OFF</b>');
+}
+async function cdSaveCard(){
+  const em=_cdEmail(); if(!em) return;
+  if(!_cdStripe||!_cdCard){ toast('Card box not ready yet'); return; }
+  const btn=document.getElementById('cdSaveBtn'); btn.disabled=true; btn.textContent='Saving…';
+  const out=document.getElementById('cdOut'); out.textContent='';
+  try{
+    const si=await _cdApi({action:'hq_setup_card',custEmail:em});
+    if(!si.success) throw new Error(si.error||'setup failed');
+    const res=await _cdStripe.confirmCardSetup(si.clientSecret,{ payment_method:{ card:_cdCard, billing_details:{ email:em } } });
+    if(res.error) throw new Error(res.error.message);
+    const pmId=res.setupIntent.payment_method;
+    const sv=await _cdApi({action:'hq_save_card',custEmail:em,paymentMethodId:pmId,enableAutopay:document.getElementById('cdAutoOn').checked?'true':'false'});
+    if(!sv.success) throw new Error(sv.error||'save failed');
+    out.innerHTML='✅ Saved '+esc(sv.brand||'card')+' ····'+esc(sv.last4)+(sv.autopayEnabled?' · autopay ON':'');
+    try{ _cdCard.clear(); }catch(e){}
+    cdLookup();
+  }catch(e){ out.textContent='❌ '+e.message; }
+  finally{ btn.disabled=false; btn.textContent='💾 Save card to customer'; }
+}
+async function cdAutopay(on){
+  const em=_cdEmail(); if(!em) return;
+  const d=await _cdApi({action:'hq_toggle_autopay',custEmail:em,enabled:on?'true':'false'});
+  toast(d&&d.success?('⚡ Autopay '+(on?'ENABLED':'disabled')+' for '+em):('⚠ '+((d&&d.error)||'failed')));
+  cdLookup();
+}
+async function cdCharge(){
+  const em=_cdEmail(); if(!em) return;
+  const amt=parseFloat((document.getElementById('cdAmt')||{}).value||'0');
+  const memo=String((document.getElementById('cdMemo')||{}).value||'').trim();
+  if(!(amt>=1)){ toast('Enter the amount first'); return; }
+  if(!confirm('Charge $'+amt.toFixed(2)+' to '+em+'\'s saved card now?'+(memo?('\n\nMemo: '+memo):''))) return;
+  const btn=document.getElementById('cdChargeBtn'); btn.disabled=true; btn.textContent='Charging…';
+  const out=document.getElementById('cdOut'); out.textContent='';
+  try{
+    const d=await _cdApi({action:'hq_charge_card',custEmail:em,amount:String(amt),memo:memo,idemKey:'hqcc:'+em+':'+Date.now()});
+    if(!d.success) throw new Error(d.error||'charge failed');
+    out.innerHTML='✅ Charged $'+esc(d.amount)+' to ····'+esc(d.last4)+' — Stripe receipt emailed to the customer.';
+    document.getElementById('cdAmt').value=''; document.getElementById('cdMemo').value='';
+  }catch(e){ out.textContent='❌ '+e.message; }
+  finally{ btn.disabled=false; btn.textContent='💵 Charge card'; }
+}
 </script>
 </body>
 </html>
