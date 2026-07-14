@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.57 */
+/* APP_VER:2026-07-08.58 */
 (function(){
-  var V='2026-07-08.57'; window.__APP_VER=V;
+  var V='2026-07-08.58'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -2652,7 +2652,7 @@ function fmQuoteCloser(bk){
       +'<div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 6px;">📝 Quote notes (internal)</div>'
       +'<textarea id="qjNotes" oninput="_qjNoteSave()" placeholder="Gate code, dogs, overgrown spots, what they care about…" style="width:100%;box-sizing:border-box;min-height:60px;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:12px;font-family:inherit;font-size:14px;resize:vertical;"></textarea>'
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0 4px;padding:12px 14px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;">'
-      +'<div><div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">Quoted price</div>'
+      +'<div><div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">Quoted price — type it →</div>'
       +'<div style="font-size:32px;font-weight:800;color:#0f172a;" id="qjPriceShow">$0</div></div>'
       +'<div style="text-align:right;"><div style="font-size:11px;color:#94a3b8;font-weight:700;">adjust</div>'
       +'<input id="qjPriceOverride" type="number" inputmode="decimal" placeholder="—" style="width:92px;padding:9px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:16px;font-weight:800;text-align:center;font-family:inherit;" oninput="qjRefresh()"></div></div>'
@@ -2691,18 +2691,18 @@ function qjRefresh(){
   const el=document.getElementById('qjPriceShow'); if(el) el.textContent='$'+qjPriceVal();
 }
 function qjPriceVal(){
+  // crew TYPES the price — pure judgment, tiny yards can go under $65 on purpose
   const o=parseFloat((document.getElementById('qjPriceOverride')||{}).value);
-  if(o>0) return Math.max(QJ_MIN_PRICE, Math.round(o));   // $65 floor — nobody quotes below it, even by typo
-  const p=_qjCalcPrice();
-  return p==null?0:Math.max(QJ_MIN_PRICE, Math.round(p));
+  return o>0?Math.round(o):0;
 }
 async function qjOutcome(kind){
   const bk=_qjBk; if(!bk) return;
   const price=qjPriceVal(), desc=_qjDesc();
+  if(kind!=='no'&&!(price>0)){ showToast('Type the price first — the box next to \u201cadjust\u201d'); try{ document.getElementById('qjPriceOverride').focus(); }catch(e){} return; }
   if(kind!=='no'&&(!price||price<=0)){ showToast(_qj.tier==='xl'?'1+ acre — set a price in the adjust box first':'Set a price first'); return; }
   const base=_stopKey(bk);
   const og=_qj.overgrown, ogFee=Math.max(0,Math.round(_qj.ogFee)||0);
-  const promo=_qj.promo&&_qj.tier!=='xl', promoPrice=Math.max(0,Math.round(_qj.promoPrice)||0);
+  const promo=false, promoPrice=0;   // first-mow deal retired 2026-07-14
   const firstPrice=promo?promoPrice:((og&&ogFee>0)?price+ogFee:price);
   const ogNote=promo?(' · first mow $'+promoPrice+' deal (then $'+price+'/cut)')
               :((og&&ogFee>0)?(' · first cut +$'+ogFee+' overgrown (1st cut $'+firstPrice+')'):'');
@@ -2804,36 +2804,26 @@ function qjRenderBuilder(){
     +'<span style="flex:1;font-size:14px;font-weight:700;">'+label+'</span>'+(right||'')+'</div>';
   const seg=(v,l)=>'<button onclick="qjSet(\'freq\',\''+v+'\')" style="flex:1;padding:10px 6px;border-radius:10px;border:1.5px solid '+(_qj.freq===v?'#16a34a':'#e2e8f0')+';background:'+(_qj.freq===v?'#f0fdf4':'#fff')+';font-family:inherit;font-size:12.5px;font-weight:800;cursor:pointer;">'+l+'</button>';
   const recurring=_qj.freq!=='onetime';
-  b.innerHTML='<div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">Price it — your judgment · $65 minimum</div>'
-    +QJ_TIERS.map(function(t){ return row(_qj.tier===t.key,t.label,'<span style="font-size:13.5px;font-weight:800;color:'+(t.price?'#15803d':'#b45309')+';">'+(t.price?('$'+t.price):'use adjust →')+'</span>',"qjSet('tier','"+t.key+"')",true); }).join('')
-    +'<div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 7px;">Schedule</div>'
+  b.innerHTML='<div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">Schedule</div>'
     +row(recurring,'🔁 Recurring service — repeats on a schedule','',"qjRecTgl()")
     +(recurring?('<div style="display:flex;gap:7px;margin-bottom:7px;">'+seg('weekly','Weekly')+seg('biweekly','Bi-Weekly')+'</div>'):'')
-    +'<div onclick="qjSrcTgl()" style="display:flex;align-items:center;gap:11px;padding:11px 13px;border:1.5px solid '+(_qjSourced?'#f59e0b':'#e2e8f0')+';border-radius:12px;background:'+(_qjSourced?'#fffbeb':'#fff')+';margin:10px 0 4px;cursor:pointer;">'
-    +'<span style="width:23px;height:23px;border-radius:7px;border:2px solid '+(_qjSourced?'#f59e0b':'#cbd5e1')+';background:'+(_qjSourced?'#f59e0b':'#fff')+';color:#fff;font-size:15px;line-height:20px;text-align:center;flex-shrink:0;font-weight:800;">'+(_qjSourced?'✓':'')+'</span>'
-    +'<span style="flex:1;font-size:14px;font-weight:700;">💰 We found this lead ourselves <span style="font-size:11px;color:#94a3b8;font-weight:800;">'+(_qjSourced?'80% commission':'40% — office lead')+'</span></span></div>'
     +'<div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 7px;">First cut</div>'
     +row(_qj.overgrown,'🌾 Overgrown — added to the first cut only',
       _qj.overgrown?('<span onclick="event.stopPropagation();" style="display:inline-flex;align-items:center;gap:4px;font-size:14px;font-weight:800;">+$<input id="qjOgFee" type="number" inputmode="decimal" value="'+_qj.ogFee+'" oninput="qjOgFeeInput(this)" onchange="qjFeeDone()" onclick="event.stopPropagation();" style="width:64px;padding:7px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;font-weight:800;text-align:center;font-family:inherit;"></span>'):'',
       "qjOgTgl()")
-    +(_qj.tier!=='xl'?row(_qj.promo,'🏷 First-mow deal — cheap first cut, then plan price',
-      _qj.promo?('<span onclick="event.stopPropagation();" style="display:inline-flex;align-items:center;gap:4px;font-size:14px;font-weight:800;">$<input id="qjPromoFee" type="number" inputmode="decimal" value="'+_qj.promoPrice+'" oninput="qjPromoInput(this)" onchange="qjFeeDone()" onclick="event.stopPropagation();" style="width:64px;padding:7px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:15px;font-weight:800;text-align:center;font-family:inherit;"></span>'):'',
-      "qjPromoTgl()"):'')
-    +(_qj.tier==='xl'?'<div style="font-size:12.5px;color:#b45309;font-weight:700;margin-top:6px;">🔒 1+ acre — set the price in the adjust box. The estimate goes to the owner for approval before it emails the customer.</div>':'')
-    +(recurring&&_qj.tier!=='xl'?'<div style="font-size:11.5px;color:#64748b;margin-top:8px;">💡 First-mow promo: $19 (up to ½ ac) · $29 (larger) — mention it!</div>':'');
+    +'<div style="font-size:11px;color:#94a3b8;margin-top:8px;font-weight:700;">guide: ¼ ac ≈ $65 · ½ ac ≈ $79 · 1 ac ≈ $99 — price it in the box below</div>';
   (function(){
     let items=['Full mow at the right height for Florida grass','Trim & edge — fences, beds, driveways, sidewalks','Every clipping cleared — driveway, walkways & porch'];
     if(_qj.overgrown) items.push('First-cut overgrowth recovery (+$'+(Math.round(_qj.ogFee)||0)+' — first cut only)');
-    if(_qj.promo&&_qj.tier!=='xl') items.push('🏷 First mow just $'+(Math.round(_qj.promoPrice)||0)+' — then plan price');
+
     b.innerHTML+='<div style="margin:14px 0 4px;padding:12px 14px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;">'
       +'<div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">📋 What\'s included at this price</div>'
       +items.map(function(x){ return '<div style="font-size:13px;line-height:1.85;"><span style="color:#16a34a;font-weight:800;">✓</span> '+x+'</div>'; }).join('')
       +'<div style="font-size:11.5px;color:#64748b;margin-top:5px;">All three on every visit — no add-ons, no surprises.</div></div>';
   })();
-  // 1+ acre gate: Book It locked — owner reviews & sends the estimate instead
   const bb=document.getElementById('qjBookBtn'), eb=document.getElementById('qjEstBtn');
-  if(bb){ bb.disabled=(_qj.tier==='xl'); bb.style.opacity=(_qj.tier==='xl')?'.4':'1'; }
-  if(eb){ eb.textContent=(_qj.tier==='xl')?'📨 Submit for owner approval':'✉️ Email estimate to customer'; }
+  if(bb){ bb.disabled=false; bb.style.opacity='1'; }
+  if(eb){ eb.textContent='✉️ Email estimate to customer'; }
 }
 
 window.addEventListener('DOMContentLoaded', ()=>{
