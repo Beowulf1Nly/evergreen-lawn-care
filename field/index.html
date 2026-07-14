@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.53 */
+/* APP_VER:2026-07-08.54 */
 (function(){
-  var V='2026-07-08.53'; window.__APP_VER=V;
+  var V='2026-07-08.54'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -769,10 +769,28 @@ function _fmShowVeil(msg){
   }catch(e){}
 }
 function _fmHideVeil(){ try{ if(_fmVeilT){ clearTimeout(_fmVeilT); _fmVeilT=null; } const v=document.getElementById('fmBootVeil'); if(v) v.style.display='none'; }catch(e){} }
+// Timeout-wrapped fetch → json (null on any failure). Mobile networks can hang a
+// raw fetch for MINUTES with no error; one hung request used to wedge _ldBusy and
+// silently stop ALL refreshes until the app reloaded. 20s cap = fail fast, retry next poll.
+function _fmFetchJ(url,ms){
+  ms=ms||20000;
+  return new Promise(function(res){
+    const ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+    const t=setTimeout(function(){ try{ if(ctrl) ctrl.abort(); }catch(e){} res(null); },ms);
+    fetch(url,ctrl?{signal:ctrl.signal}:{}).then(function(r){ return r.json(); })
+      .then(function(j){ clearTimeout(t); res(j); })
+      .catch(function(){ clearTimeout(t); res(null); });
+  });
+}
+let _ldBusySince=0;
 async function loadData(refreshToast){
-  if(_ldBusy) return;               // one load at a time — overlapping loads caused flicker
-  _ldBusy=true;
-  try{ await _loadDataInner(refreshToast); } finally { _ldBusy=false; _lastLoadTs=Date.now(); _fmHideVeil(); }
+  if(_ldBusy){
+    // watchdog: a load stuck >60s means a request hung — force-release so refreshes resume
+    if(_ldBusySince&&Date.now()-_ldBusySince>60000){ _ldBusy=false; }
+    else return;
+  }
+  _ldBusy=true; _ldBusySince=Date.now();
+  try{ await _loadDataInner(refreshToast); } finally { _ldBusy=false; _ldBusySince=0; _lastLoadTs=Date.now(); _fmHideVeil(); }
 }
 async function _loadDataInner(refreshToast){
   if(navigator.onLine===false){ _hydrateFromCache(); if(refreshToast) showToast('📴 Offline — showing saved jobs'); _fmRender(); return; }
@@ -788,11 +806,11 @@ async function _loadDataInner(refreshToast){
   try{
     const crewQ='';  // pull the whole day's saved order; we order our visible stops by it
     const [bRes,cRes,rRes]=await Promise.all([
-      fetch(SCRIPT_URL+'?action=bookings&includeCompleted=false&'+authParam()).then(r=>r.json()).catch(()=>null),
+      _fmFetchJ(SCRIPT_URL+'?action=bookings&includeCompleted=false&'+authParam()),
       (refreshToast || Date.now()-_custFetchedAt>300000 || !(allCustomers&&allCustomers.length))
-        ? fetch(SCRIPT_URL+'?action=customers_list&'+authParam()).then(r=>r.json()).catch(()=>null)
+        ? _fmFetchJ(SCRIPT_URL+'?action=customers_list&'+authParam())
         : Promise.resolve(null),   // customers change rarely — refetch every 5 min, not every poll
-      fetch(SCRIPT_URL+'?action=get_route&date='+todayISOStr()+crewQ+'&'+authParam()).then(r=>r.json()).catch(()=>null)
+      _fmFetchJ(SCRIPT_URL+'?action=get_route&date='+todayISOStr()+crewQ+'&'+authParam())
     ]);
     if(bRes&&bRes.success&&Array.isArray(bRes.bookings)){ allBookings=bRes.bookings; try{ localStorage.setItem('evg_field_bookings', JSON.stringify(allBookings)); }catch(e){} }
     else if(Array.isArray(bRes)){ allBookings=bRes; }
