@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.63 */
+/* APP_VER:2026-07-08.64 */
 (function(){
-  var V='2026-07-08.63'; window.__APP_VER=V;
+  var V='2026-07-08.64'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -649,7 +649,12 @@ if(typeof module!=='undefined'&&module.exports){ module.exports={ RC_VERSION:RC_
 function esc(s){ return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function todayISOStr(){ const t=new Date(); return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); }
 function dateOf(b){ const raw=b.serviceDate||b.serviceDateRaw||''; if(!raw) return ''; const s=String(raw).trim(); if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; const d=new Date(s); if(isNaN(d)) return s; return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-function isDone(b){ if(b.rowCompleted) return true; const d=String(b.done||''); return d.includes('Done')||d.startsWith('✓'); }
+// Ghost-done: the moment the crew finishes a job LOCALLY it stays done on screen,
+// even while the (slow) backend confirmation is still in the sync queue. Without
+// this, every ~30s refresh un-finished the job until Apps Script caught up.
+let _fmGhostDone={}; try{ const _g=JSON.parse(localStorage.getItem('evg_fm_ghostdone')||'{}'); const _cut=Date.now()-2*3600*1000; Object.keys(_g).forEach(function(k){ if(_g[k]>_cut) _fmGhostDone[k]=_g[k]; }); }catch(e){}
+function _fmGhostMark(bk){ try{ _fmGhostDone[_stopKey(bk)]=Date.now(); localStorage.setItem('evg_fm_ghostdone',JSON.stringify(_fmGhostDone)); }catch(e){} }
+function isDone(b){ if(b.rowCompleted) return true; const d=String(b.done||''); if(d.includes('Done')||d.startsWith('✓')) return true; try{ if(typeof _stopKey==='function'&&_fmGhostDone[_stopKey(b)]) return true; }catch(e){} return false; }
 function _fmAmt(bk){ return parseFloat(String(bk.price||'0').replace(/[^0-9.]/g,''))||0; }
 // Payment type: 'cash' | 'autopay' (card on file, auto-bills) | 'invoice' (card pay-after, needs invoice)
 function _payType(bk){
@@ -2442,6 +2447,7 @@ async function fmSubmitComplete(){
     setTimeout(function(){ try{ if(_fmStarted&&_fmOpenStops().length>2) _fmAutoRoute(); }catch(e){} },1500);
     const lbl=new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
     if(_fmcRowIdx>=0){ allBookings[_fmcRowIdx].done='✓ Done — '+lbl; allBookings[_fmcRowIdx].markedBy=adminName; if(selAddons.length) allBookings[_fmcRowIdx].price='$'+grand.toFixed(0); } else bk.done='✓ Done — '+lbl;
+    _fmGhostMark(bk);
     if(_fmcPayType==='cash') _fmCashTotal+=grand;
     _fmBilledTotal+=grand;
     try{ localStorage.setItem('evg_field_bookings', JSON.stringify(allBookings)); }catch(e){}
@@ -2818,7 +2824,7 @@ function _qjFinish(toastMsg,note,skipQueue){
     _fmEnqueue({ kind:'quotedone', idemKey:'qd:'+base, method:'GET', params:{ action:'mark_done', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), amount:'0', markedBy:adminName||'Crew', adminToken } });
   }
   _fmFlushQueue();
-  bk.done='✓ Done'; _fmMarkSeq(bk);
+  bk.done='✓ Done'; _fmGhostMark(bk); _fmMarkSeq(bk);
   qjClose(); showToast(toastMsg); _persist(); _fmRender();
 }
 
