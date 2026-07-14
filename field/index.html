@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.56 */
+/* APP_VER:2026-07-08.57 */
 (function(){
-  var V='2026-07-08.56'; window.__APP_VER=V;
+  var V='2026-07-08.57'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -2675,6 +2675,7 @@ function fmQuoteCloser(bk){
   const _snap=_qjBookedStore[_stopKey(bk)];
   _qjEditMode=!!(_snap&&isDone(bk));
   if(_qjEditMode&&_snap.qj){ try{ _qj=JSON.parse(JSON.stringify(_snap.qj)); }catch(e){} }
+  if(_qj&&!(_qj.tier in QJ_PRICING)) _qj.tier='base';
   if(_qjEditMode&&_snap.override){ document.getElementById('qjPriceOverride').value=_snap.override; }
   const _eb=document.getElementById('qjEditBanner'); if(_eb) _eb.style.display=_qjEditMode?'block':'none';
   const _bb=document.getElementById('qjBookBtn'); if(_bb) _bb.textContent=_qjEditMode?'💾 Save changes':'📅 Book it';
@@ -2691,9 +2692,9 @@ function qjRefresh(){
 }
 function qjPriceVal(){
   const o=parseFloat((document.getElementById('qjPriceOverride')||{}).value);
-  if(o>0) return Math.round(o);
+  if(o>0) return Math.max(QJ_MIN_PRICE, Math.round(o));   // $65 floor — nobody quotes below it, even by typo
   const p=_qjCalcPrice();
-  return p==null?0:Math.round(p);
+  return p==null?0:Math.max(QJ_MIN_PRICE, Math.round(p));
 }
 async function qjOutcome(kind){
   const bk=_qjBk; if(!bk) return;
@@ -2774,14 +2775,17 @@ function _qjFinish(toastMsg,note){
 }
 
 /* lawn quote builder: lot tier + frequency → plan price (same table as the website) */
+// Judgment pricing — $65 absolute floor, crew prices the yard by eye ("vibes").
+// Not tied to lot size; the presets are just fast taps. Use ADJUST for anything else.
+const QJ_MIN_PRICE=65;
 const QJ_TIERS=[
-  {key:'half',label:'Up to ½ acre',price:49},
-  {key:'threequarter',label:'½ – ¾ acre',price:65},
-  {key:'one',label:'¾ – 1 acre',price:79},
-  {key:'xl',label:'1+ acre',price:null}
+  {key:'base',label:'Standard yard',price:65},
+  {key:'plus',label:'More to it — bigger, edging, slopes',price:75},
+  {key:'large',label:'Large / slow yard',price:85},
+  {key:'xl',label:'XL or estate — type your price →',price:null}
 ];
-const QJ_PRICING={ half:49, threequarter:65, one:79, xl:null };
-let _qj={tier:'half',freq:'onetime',overgrown:false,ogFee:49,promo:false,promoPrice:19};
+const QJ_PRICING={ base:65, plus:75, large:85, xl:null, half:65, threequarter:65, one:79 };   // old keys kept so booked-plan edits still open
+let _qj={tier:'base',freq:'onetime',overgrown:false,ogFee:49,promo:false,promoPrice:19};
 function qjSet(k,v){ _qj[k]=v; qjRefresh(); }
 function qjRecTgl(){ _qj.freq=(_qj.freq==='onetime')?'weekly':'onetime'; qjRefresh(); }
 function qjOgTgl(){ _qj.overgrown=!_qj.overgrown; if(_qj.overgrown) _qj.promo=false; qjRefresh(); }
@@ -2800,8 +2804,8 @@ function qjRenderBuilder(){
     +'<span style="flex:1;font-size:14px;font-weight:700;">'+label+'</span>'+(right||'')+'</div>';
   const seg=(v,l)=>'<button onclick="qjSet(\'freq\',\''+v+'\')" style="flex:1;padding:10px 6px;border-radius:10px;border:1.5px solid '+(_qj.freq===v?'#16a34a':'#e2e8f0')+';background:'+(_qj.freq===v?'#f0fdf4':'#fff')+';font-family:inherit;font-size:12.5px;font-weight:800;cursor:pointer;">'+l+'</button>';
   const recurring=_qj.freq!=='onetime';
-  b.innerHTML='<div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">Yard size (walk it &amp; eyeball)</div>'
-    +QJ_TIERS.map(function(t){ return row(_qj.tier===t.key,t.label,'<span style="font-size:13.5px;font-weight:800;color:'+(t.price?'#15803d':'#b45309')+';">'+(t.price?('$'+t.price):'Owner approves')+'</span>',"qjSet('tier','"+t.key+"')",true); }).join('')
+  b.innerHTML='<div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">Price it — your judgment · $65 minimum</div>'
+    +QJ_TIERS.map(function(t){ return row(_qj.tier===t.key,t.label,'<span style="font-size:13.5px;font-weight:800;color:'+(t.price?'#15803d':'#b45309')+';">'+(t.price?('$'+t.price):'use adjust →')+'</span>',"qjSet('tier','"+t.key+"')",true); }).join('')
     +'<div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 7px;">Schedule</div>'
     +row(recurring,'🔁 Recurring service — repeats on a schedule','',"qjRecTgl()")
     +(recurring?('<div style="display:flex;gap:7px;margin-bottom:7px;">'+seg('weekly','Weekly')+seg('biweekly','Bi-Weekly')+'</div>'):'')
