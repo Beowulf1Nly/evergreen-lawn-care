@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.66 */
+/* APP_VER:2026-07-08.67 */
 (function(){
-  var V='2026-07-08.66'; window.__APP_VER=V;
+  var V='2026-07-08.67'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -984,7 +984,7 @@ function _extractRouteKeys(rRes){
    job time. Preference: (a) saved canonical route > (b) self-optimized > (c) job time.
    Geocoding needs a signal; with none we fall back gracefully to the cached
    optimized order, then to job time — never breaking the route view. */
-const _GEO_CACHE_KEY='evg_geocache_v6';   // v5: Census-first accurate geocoder      // v3: POI-rejecting geocoder — shared with /invoice (free cache hits)
+const _GEO_CACHE_KEY='evg_geocache_v7';   // v7: flush Google town-centroid poisoning   // v5: Census-first accurate geocoder      // v3: POI-rejecting geocoder — shared with /invoice (free cache hits)
 const _OPT_ORDER_KEY='evg_field_optorder_v1';
 // Approximate town centroids for the service area — a graceful fallback when a street
 // address will not geocode (provider down / rate-limited), so a route still clusters and
@@ -1043,7 +1043,10 @@ async function _geocodeAddr(addr){
   // stops collapse to the town centroid and the route order goes nonsense.
   try{
     const _gr=await fetch(SCRIPT_URL+'?action=hq_geocode&adminToken='+encodeURIComponent(adminToken)+'&address='+encodeURIComponent(addr)).then(function(r){ return r.json(); });
-    if(_gr&&_gr.success&&_gr.lat!=null){
+    if(_gr&&_gr.success&&_gr.lat!=null&&_gr.quality==='exact'&&!_gr.partial){
+      // 'approx' means Google only found the TOWN — caching that centroid poisoned
+      // routing AND sent Navigate to the wrong house. Only trust rooftop-quality hits;
+      // Census/Nominatim below get their shot at the exact house otherwise.
       const _gc={ lat:+_gr.lat, lon:+_gr.lon };
       if(_gc.lat>=28.3&&_gc.lat<=29.75&&_gc.lon>=-83.05&&_gc.lon<=-81.7) return _gc;
     }
