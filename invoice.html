@@ -7151,7 +7151,7 @@ function loadRouteFromStorage() {
     // real-road pass can re-optimize a reloaded route (saved orders only store
     // distances, not lat/lon).
     let _geo = {};
-    try { _geo = JSON.parse(localStorage.getItem('evg_geocache_v2') || '{}'); } catch(e){}
+    try { _geo = JSON.parse(localStorage.getItem('evg_geocache_v6') || '{}'); } catch(e){}
     const _coordFor = (bk) => {
       if (!bk) return null;
       const city = (typeof ZIP_CITY !== 'undefined' && ZIP_CITY[bk.zip]) ? ZIP_CITY[bk.zip] : '';
@@ -8426,7 +8426,7 @@ function routeWaypoint(s) {
   // No street address on file — fall back to a coordinate if we have one.
   if (s && s.lat != null && s.lon != null) return (+s.lat).toFixed(6) + ',' + (+s.lon).toFixed(6);
   try {
-    const cache = JSON.parse(localStorage.getItem('evg_geocache_v3') || '{}');
+    const cache = JSON.parse(localStorage.getItem('evg_geocache_v6') || '{}');
     const key   = (bk.address || '') + (bk.zip ? ', ' + bk.zip : '') + (city ? ', ' + city : '') + ', FL';
     const c     = cache[key];
     if (c && c.lat != null) return (+c.lat).toFixed(6) + ',' + (+c.lon).toFixed(6);
@@ -9464,7 +9464,7 @@ async function buildRoute() {
 
     // Geocode all job addresses — uses persistent localStorage cache so each address
     // is only ever looked up once, even across sessions.
-    const _GEO_CACHE_KEY = 'evg_geocache_v5';   // v5: Census-first accurate geocoder // v3: POI-rejecting geocoder — re-geocode everything
+    const _GEO_CACHE_KEY = 'evg_geocache_v6';   // v5: Census-first accurate geocoder // v3: POI-rejecting geocoder — re-geocode everything
     let geoCache = {};
     try { geoCache = JSON.parse(localStorage.getItem(_GEO_CACHE_KEY) || '{}'); } catch(e) {}
     let _geoCacheDirty = false;
