@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.58 */
+/* APP_VER:2026-07-08.59 */
 (function(){
-  var V='2026-07-08.58'; window.__APP_VER=V;
+  var V='2026-07-08.59'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1017,6 +1017,16 @@ function _censusGeocode(addr){
   });
 }
 async function _geocodeAddr(addr){
+  // 0. Google via the backend (Apps Script Maps geocoder) — Google's data knows
+  // new-construction homes the free services miss entirely. Without this, those
+  // stops collapse to the town centroid and the route order goes nonsense.
+  try{
+    const _gr=await fetch(SCRIPT_URL+'?action=hq_geocode&adminToken='+encodeURIComponent(adminToken)+'&address='+encodeURIComponent(addr)).then(function(r){ return r.json(); });
+    if(_gr&&_gr.success&&_gr.lat!=null){
+      const _gc={ lat:+_gr.lat, lon:+_gr.lon };
+      if(_gc.lat>=28.3&&_gc.lat<=29.75&&_gc.lon>=-83.05&&_gc.lon<=-81.7) return _gc;
+    }
+  }catch(e){}
   // Geocoders (Photon/Nominatim) miss abbreviated US addresses — "123 W Oak Ct" returns
   // nothing, but "123 West Oak Court" matches. So expand directionals + street-type
   // suffixes and query the expanded form first. (US Census would be ideal but it is
