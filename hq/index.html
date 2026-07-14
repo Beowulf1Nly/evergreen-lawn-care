@@ -2337,9 +2337,8 @@ function renderDispatch(){
         const ordKeys=rec.order[_recKey(zi,c)]||rec.order[c==='un'?'':c]||[];
         const _lkOrd=(typeof _dayLocks==='function')?_dayLocks(iso,zi,c):[];
         const cell=(rowJobsAll[iso]||[]).slice().sort(function(a,b2){
-          // 🔒 locked OPEN stops lead the lane no matter what order was last published
-          const _la=(!isDone(a)&&!_isArch(a))?_lkOrd.indexOf(_svKey(a)):-1, _lb=(!isDone(b2)&&!_isArch(b2))?_lkOrd.indexOf(_svKey(b2)):-1;
-          if(_la>=0||_lb>=0){ if(_la<0) return 1; if(_lb<0) return -1; if(_la!==_lb) return _la-_lb; }
+          // anchors are POSITIONAL — they're already spliced into the published order,
+          // so the lane just renders that order faithfully (no forced-to-front).
           if(ordKeys.length){ let pa=ordKeys.indexOf(_svKey(a)), pb=ordKeys.indexOf(_svKey(b2)); pa=pa<0?9999:pa; pb=pb<0?9999:pb; if(pa!==pb) return pa-pb; }
           return _jobSort(a,b2);
         });
