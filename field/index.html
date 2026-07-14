@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.64 */
+/* APP_VER:2026-07-08.65 */
 (function(){
-  var V='2026-07-08.64'; window.__APP_VER=V;
+  var V='2026-07-08.65'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -2627,9 +2627,9 @@ function ncSubmit(){
   if(!_tapConfirm('ncSubmitBtn','Tap again — add '+name)) return;
   _fmEnqueue({ kind:'newcust', idemKey:'nc:'+_uuid(), method:'GET', params:{ action:'manual_schedule', name:name, email:email, phone:phone, address:addr, zip:zip, frequency:freq, price:price, serviceDate:date, notes:(notes?notes+' — ':'')+'Added on route by '+(adminName||'crew'), payMethod:pay||'card', adminToken:adminToken } });
   if(!isQuote&&parseFloat(price)>0){
-    // crew sourced AND closed this one on the spot → 80% of the first job
+    // crew sourced AND closed this one on the spot → 40% of the first job
     const _ncNames=[adminName||'Crew'].concat((_helpers||[]).map(function(h){ return (typeof h==='string')?h:((h&&h.name)||''); })).filter(Boolean);
-    _fmEnqueue({ kind:'comm', idemKey:'cm:nc:'+email+'|'+date, method:'GET', params:{ action:'log_commission', key:'cm:nc:'+email+'|'+date+'|'+name, date:todayISOStr(), names:_ncNames.join(', '), jobName:name, email:email, jobDate:date, base:String(parseFloat(price)), pct:'80', type:'lead + close (80%)', adminToken } });
+    _fmEnqueue({ kind:'comm', idemKey:'cm:nc:'+email+'|'+date, method:'GET', params:{ action:'log_commission', key:'cm:nc:'+email+'|'+date+'|'+name, date:todayISOStr(), names:_ncNames.join(', '), jobName:name, email:email, jobDate:date, base:String(parseFloat(price)), pct:'40', type:'lead + close (40%)', adminToken } });
   }
   _fmFlushQueue();
   if(date===todayISOStr()){
@@ -2669,13 +2669,11 @@ let _qjSourced=false;
 function qjSrcTgl(){ _qjSourced=!_qjSourced; qjRefresh(); }
 function _qjCommNames(){ return [adminName||'Crew'].concat((_helpers||[]).map(function(h){ return (typeof h==='string')?h:((h&&h.name)||''); })).filter(Boolean); }
 function _qjCommLine(firstPrice){
-  const pct=_qjSourced?80:40, names=_qjCommNames();
-  const amt=Math.round(firstPrice*pct)/100;
-  return '\n💰 Commission: '+pct+'% of $'+firstPrice+' = $'+amt.toFixed(2)+(names.length>1?(' — split '+names.length+' ways ($'+(Math.round(amt/names.length*100)/100).toFixed(2)+' each)'):'');
+  return '';   // commission is intentionally NOT shown to the crew (owner decision 2026-07-14)
 }
 function _qjLogCommission(base,firstPrice,bk,date){
-  const pct=_qjSourced?80:40, names=_qjCommNames();
-  _fmEnqueue({ kind:'comm', idemKey:'cm:'+base, method:'GET', params:{ action:'log_commission', key:'cm:'+base, date:todayISOStr(), names:names.join(', '), jobName:bk.name||'', email:String(bk.email||'').toLowerCase(), jobDate:date, base:String(firstPrice), pct:String(pct), type:(_qjSourced?'lead + close (80%)':'quote close (40%)'), adminToken } });
+  const pct=_qjSourced?40:20, names=_qjCommNames();   // 40% their lead · 20% office lead
+  _fmEnqueue({ kind:'comm', idemKey:'cm:'+base, method:'GET', params:{ action:'log_commission', key:'cm:'+base, date:todayISOStr(), names:names.join(', '), jobName:bk.name||'', email:String(bk.email||'').toLowerCase(), jobDate:date, base:String(firstPrice), pct:String(pct), type:(_qjSourced?'lead + close (40%)':'quote close (20%)'), adminToken } });
 }
 
 function _qjBookedSave(){ try{ localStorage.setItem('evg_qj_booked',JSON.stringify(_qjBookedStore)); }catch(e){} }
