@@ -262,6 +262,9 @@
   .disp-pill .pp{ color:var(--muted); font-family:var(--mono); font-size:10px; }
   .disp-pill.dragging{ opacity:.3; }
   .disp-pill.zday{ border:1.5px solid #f87171; box-shadow:0 0 7px rgba(248,113,113,.45); }
+  .disp-pill.ghost{ opacity:.55; border:1.5px dashed rgba(255,255,255,.45); background:transparent; font-style:italic; }
+  .disp-pill.ghost::before{ background:rgba(255,255,255,.35); }
+  .disp-pill.ghost:hover{ opacity:.9; background:rgba(255,255,255,.08); }
   .disp-more{ font-size:10.5px; font-weight:800; color:#7dd3a0; cursor:pointer; padding:1px 4px; }
   .disp-more:hover{ text-decoration:underline; }
   /* week view */
@@ -1269,6 +1272,7 @@ function openJobSheetFor(b){
   document.getElementById('jobSheetBody').innerHTML='<h3>'+_jobIcon(b)+' '+esc(b.name||'Customer')+'</h3>'
     +'<div class="sub">📍 '+esc(b.address||'')+(b.zip?', '+esc(b.zip):'')+(_zoneOf(b)?' · '+_zoneOf(b):'')+' · '+esc(dateOf(b)||'no date')+(b.crew?(' · Crew '+esc(b.crew)):' · unassigned')+(b.price?(' · '+esc(b.price)):'')+(b._srcBiz?(' · '+esc(be.e2+' '+be.n)):'')+'</div>'
     +(function(){ const ls=_lastSvcInfo(b); if(!ls) return (b._srcBiz>0?'':'<div class="sub" style="color:var(--dim);">↩ No completed visit on record before this date</div>'); return '<div class="sub" style="color:'+(ls.off?'#f87171':'#4ade80')+';font-weight:700;cursor:pointer;" onclick="showSvcHistory(\''+esc(String(b.email||'').toLowerCase())+'\',\''+esc(String(b.name||'').replace(/'/g,''))+'\')" title="Tap to see every record this date is based on">↩ Last serviced '+ls.d+' — '+ls.gap+' days before this visit'+(ls.off?(' ⚠ plan is every '+ls.expct+'d — check this date'):(ls.expct?' ✓ matches the plan':''))+' <span style="opacity:.6;">▸ history</span></div>'; })()
+    +(function(){ const ow=_owedFor(b); return ow?'<div class="rs-note" style="border:1.5px solid #f87171;color:#f87171;font-weight:800;">💸 Owes $'+ow.toFixed(0)+' from unpaid past visits — details on Stats → Who owes money</div>':''; })()
     +(function(){ const zd=_zoneDayMsg(b); return zd?'<div class="rs-note" style="border:1.5px solid #f87171;color:#f87171;font-weight:800;">⚠ Wrong day for zone — '+esc(zd)+'</div>':''; })()
     +(cNotes?'<div class="rs-note">📝 Job notes: '+esc(cNotes)+'</div>':'<div class="rs-note" style="opacity:.55;">📝 No job notes</div>')
     +(function(){ const cn=_custNoteFor(b); return cn?'<div class="rs-note" style="border-left:3px solid #38bdf8;">👤 Customer notes: '+esc(cn)+'</div>':''; })()
@@ -1616,6 +1620,28 @@ const AJ_LAWN_EXTRAS=[
  {id:'EDGE2', l:'🧱 Bed re-edging',   code:'LAWN-BEDEDGE',  d:50}
 ];
 let _ajL={size:'',extras:{}};
+/* ── job TYPE — a weeding visit must not book (or email) as a mow ── */
+const AJ_JOB_TYPES=[
+ {id:'MOW',   l:'🌿 Mow & Blow',      st:'Lawn Mow & Blow'},
+ {id:'WEED',  l:'🌱 Weeding',         st:'Weeding'},
+ {id:'CLEAN', l:'🍂 Yard cleanup',    st:'Yard Cleanup'},
+ {id:'HEDGE', l:'✂️ Hedge trimming',  st:'Hedge Trimming'},
+ {id:'MULCH', l:'🪵 Mulch install',   st:'Mulch Install'},
+ {id:'PRESS', l:'💦 Pressure washing',st:'Pressure Washing'},
+ {id:'LSCAPE',l:'🏡 Landscaping',     st:'Landscaping'},
+ {id:'OTHER', l:'🔧 Other…',          st:''}
+];
+let _ajType='MOW', _ajTypeCustom='';
+function _ajTypeStr(){ if(_ajType==='OTHER') return (_ajTypeCustom||'').trim()||'Other Service'; const t=AJ_JOB_TYPES.find(function(x){return x.id===_ajType;}); return (t&&t.st)||'Lawn Mow & Blow'; }
+function ajTypePick(id){ _ajType=id; _ajClnRender(); }
+function _ajTypeChips(){
+  return '<div style="font-size:10.5px;font-weight:800;color:var(--dim);text-transform:uppercase;margin-bottom:5px;">Job type</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;margin-bottom:9px;">'
+    +AJ_JOB_TYPES.map(function(x){ const on=_ajType===x.id;
+      return '<button onclick="ajTypePick(\''+x.id+'\')" style="padding:8px 4px;border-radius:9px;border:1px solid '+(on?'#fbbf24':'var(--line2)')+';background:'+(on?'rgba(251,191,36,.12)':'var(--panel)')+';color:'+(on?'#fbbf24':'var(--txt)')+';font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">'+x.l+(on?' ✓':'')+'</button>'; }).join('')
+    +'</div>'
+    +(_ajType==='OTHER'?'<input id="ajTypeCustom" value="'+esc(_ajTypeCustom)+'" oninput="_ajTypeCustom=this.value" placeholder="What kind of job? (goes on the customer\'s email)" style="width:100%;box-sizing:border-box;padding:9px;border-radius:9px;border:1.5px solid rgba(251,191,36,.5);background:var(--panel);color:inherit;font-family:inherit;font-size:12.5px;font-weight:700;margin-bottom:9px;">':'');
+}
 function _ajLawnBase(){
   const sz=AJ_LAWN_SIZES.find(function(x){ return x.id===_ajL.size; });
   if(!sz||!sz.wk) return 0;
@@ -1628,9 +1654,18 @@ function _ajLawnSummary(){ const sz=AJ_LAWN_SIZES.find(function(x){return x.id==
 function ajLawnSize(id){ _ajL.size=id; _ajClnRender(); }
 function ajLawnExtra(id){ const x=AJ_LAWN_EXTRAS.find(function(e){return e.id===id;}); const n=_ajL.extras[id]||0; _ajL.extras[id]=x.per?((n>=(x.max||4))?0:n+1):(n?0:1); _ajClnRender(); }
 function _ajLawnRender(box){
+  if(_ajType!=='MOW'){
+    box.innerHTML='<div class="lbl">🌿 What kind of visit is this?</div>'
+      +'<div style="border:1px solid var(--line2);border-radius:12px;padding:10px;background:var(--panel2);">'
+      +_ajTypeChips()
+      +'<div style="font-size:12.5px;font-weight:800;color:#fbbf24;">'+esc(_ajTypeStr())+' — type the price below. The customer\'s email will say the service, not \u0022$X/mow\u0022.</div>'
+      +'</div>';
+    return;
+  }
   const base=_ajLawnBase(), ex=_ajLawnExtras();
   box.innerHTML='<div class="lbl">🌿 Lawn quick-pricer — prices from the <a href="pricebook.html" target="_blank" style="color:#34d399;">Pricebook</a></div>'
     +'<div style="border:1px solid var(--line2);border-radius:12px;padding:10px;background:var(--panel2);">'
+    +_ajTypeChips()
     +'<div style="font-size:10.5px;font-weight:800;color:var(--dim);text-transform:uppercase;margin-bottom:5px;">Yard size</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:9px;">'
     +AJ_LAWN_SIZES.map(function(x){ const on=_ajL.size===x.id;
@@ -1799,6 +1834,7 @@ function openAddJob(){
   try{ _loadCustSheets(); }catch(e){}
   _ajC={bed:1,bath:1,extra:0,deepAll:0,firstOnly:0,addons:{}};
   _ajL={size:'',extras:{}};
+  _ajType='MOW'; _ajTypeCustom='';
   try{ _hqPbFetch(); }catch(e){}
   setTimeout(function(){ try{ _ajClnRender(); }catch(e){} },30);
   document.getElementById('addBizPick').innerHTML=_bizLoad().map(function(z,i){
@@ -1829,7 +1865,9 @@ async function doAddJob(){
   try{ const price=(document.getElementById('addPrice').value||'').replace(/[^0-9.]/g,'');
     const _z=_bizLoad()[_addBiz]||_bizLoad()[0];
     const _q=_ajIsQuote(), _cln=_ajClnActive()&&!_q, _lwn=!_ajClnActive()&&!_q;
-    const p=new URLSearchParams({ action:'manual_schedule', name:name, email:document.getElementById('addEmail').value.trim(), phone:document.getElementById('addPhone').value.trim(), address:addr, zip:document.getElementById('addZip').value.trim(), frequency:(document.getElementById('addFreq')||{}).value||'One-time', price:_q?'':price, serviceDate:date, notes:(_cln?(_ajSummary()+' | '):(_lwn&&_ajL.size?(_ajLawnSummary()+' | '):''))+document.getElementById('addNotes').value.trim(), payMethod:'card', crew:_addCrew, services:(_cln?_ajSvcStr():(_lwn?_ajLawnSvcStr():'')), adminToken:_bizTok(_z) });
+    const _mow=_ajType==='MOW';
+    const p=new URLSearchParams({ action:'manual_schedule', name:name, email:document.getElementById('addEmail').value.trim(), phone:document.getElementById('addPhone').value.trim(), address:addr, zip:document.getElementById('addZip').value.trim(), frequency:(document.getElementById('addFreq')||{}).value||'One-time', price:_q?'':price, serviceDate:date, notes:(_cln?(_ajSummary()+' | '):(_lwn?((_mow?(_ajL.size?_ajLawnSummary()+' | ':''):(_ajTypeStr()+' | '))):''))+document.getElementById('addNotes').value.trim(), payMethod:'card', crew:_addCrew, services:(_cln?_ajSvcStr():((_lwn&&_mow)?_ajLawnSvcStr():'')), adminToken:_bizTok(_z) });
+    if(_lwn) p.set('serviceType',_ajTypeStr());   // backend emails + Service column follow this — weeding never reads "$X/mow"
     const d=await(await fetch(_bizUrl(_z)+'?'+p)).json();
     if(d.success){
       const _zn=_bizLoad()[_addBiz]||_bizLoad()[0];
@@ -2122,6 +2160,95 @@ function _hqNavUrl(b){   // navigate to the ROOFTOP the optimizer resolved — M
   }catch(e){}
   return 'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent((b.address||'')+(b.zip?', '+b.zip:'')+', FL');
 }
+/* ── 💸 who owes money — same rule as the Stats money board (unpaid archive, 90 days) ── */
+let _owedEmailMap={}, _owedCleanMap={}, _owedCleanAt=0, _owedCleanLoading=false;
+function _owedAdd_(m,j){
+  try{
+    const a=amtOf(j); if(!a||j.rowCancelled) return;
+    if(_hqPaidJob(j)) return;
+    const cut=new Date(Date.now()-90*864e5).toISOString().slice(0,10);
+    const d=String(dateOf(j)||''); if(!d||d<cut) return;
+    const em=String(j.email||'').toLowerCase().trim(); if(!em) return;
+    m[em]=(m[em]||0)+a;
+  }catch(e){}
+}
+function _owedRebuild(){
+  const m={};
+  (_completed||[]).forEach(function(j){ _owedAdd_(m,j); });
+  Object.keys(_owedCleanMap).forEach(function(em){ m[em]=(m[em]||0)+_owedCleanMap[em]; });
+  _owedEmailMap=m;
+}
+async function _owedCleanLoad(){   // cleaning archive isn't in _completed — pull it (cached 5 min)
+  if(_owedCleanLoading||Date.now()-_owedCleanAt<300000) return; _owedCleanLoading=true;
+  const biz=_bizLoad(); const m={};
+  for(let i=1;i<biz.length;i++){
+    const z=biz[i]; if(!z.su||!_bizConnected(z)) continue;
+    try{ const d=await bizGet(z,{action:'completed_jobs',limit:800}); if(d&&d.success) (d.jobs||[]).forEach(function(j){ _owedAdd_(m,j); }); }catch(e){}
+  }
+  _owedCleanMap=m; _owedCleanAt=Date.now(); _owedCleanLoading=false;
+  _owedRebuild();
+  try{ const db=document.getElementById('dispBoard'); if(db&&db.innerHTML) renderDispatch(); }catch(e){}
+}
+function _owedFor(b){
+  try{ if(isDone(b)||_isArch(b)) return 0; const em=String(b.email||'').toLowerCase().trim(); return em?(_owedEmailMap[em]||0):0; }catch(e){ return 0; }
+}
+/* ── 👻 projected next visits — recurring plans past their last scheduled row ── */
+function _ghostVisits(rangeStart,rangeEnd){
+  const out=[];
+  try{
+    const byEm={};
+    (_bookings||[]).forEach(function(b){
+      if(!b||b.rowCancelled) return;
+      try{ if(_hqIsQuote(b)) return; }catch(e){}
+      const em=String(b.email||'').toLowerCase().trim(); if(!em) return;
+      const d=String(dateOf(b)||''); if(!d) return;
+      const r=byEm[em]=byEm[em]||{last:'',b:null,dates:{}};
+      r.dates[d]=1;
+      if(d>r.last){ r.last=d; r.b=b; }
+    });
+    Object.keys(byEm).forEach(function(em){
+      const r=byEm[em], b=r.b; if(!b) return;
+      const f=String(b.frequency||'').toLowerCase();
+      if(!/week|month|every/.test(f)||/one|quote/.test(f)) return;   // recurring plans only
+      const iv=_hqPlanInterval(f); if(!(iv>0)) return;
+      const pp=r.last.split('-'); let dt=new Date(+pp[0],+pp[1]-1,+pp[2]);
+      for(let k=0;k<8;k++){
+        dt=new Date(dt.getTime()+iv*864e5);
+        const iso=_iso(dt);
+        if(iso>rangeEnd) break;
+        if(iso<rangeStart) continue;
+        let clash=false;   // a real row within ±2 days = already scheduled (dates drift)
+        for(let o=-2;o<=2;o++){ if(r.dates[_iso(new Date(dt.getTime()+o*864e5))]){ clash=true; break; } }
+        if(clash) continue;
+        out.push({ _ghost:1, name:b.name, email:b.email, phone:b.phone, address:b.address, zip:b.zip, crew:b.crew, price:b.price, frequency:b.frequency, serviceDate:iso, _srcBiz:b._srcBiz||0 });
+      }
+    });
+  }catch(e){}
+  if(_dispCrew!=='all') return out.filter(function(g){ const c=String(g.crew||'').toUpperCase().trim()||'un'; return c===(_dispCrew==='un'?'un':_dispCrew); });
+  return out;
+}
+function _ghostPill(g){
+  return '<div class="disp-pill ghost" onclick="ghostInfo('+_jr(g)+')" title="'+esc('👻 Projected next visit — NOT scheduled yet · '+(g.name||'')+' · '+(g.frequency||'')+' · tap to schedule it')+'">👻 '+esc(g.name||'?')+' <span class="pp">'+(_zoneOf(g)?_zoneOf(g)+' · ':'')+esc(String(g.price||''))+'</span></div>';
+}
+function ghostInfo(i){
+  const g=_jobRefs[i]; if(!g) return;
+  if(!confirm('👻 '+(g.name||'')+' — projected '+(g.frequency||'recurring')+' visit on '+g.serviceDate+'. Nothing is scheduled yet; this is where their plan says they land next.\n\nOpen Add Job pre-filled to lock it in?')) return;
+  openAddJob();
+  setTimeout(function(){ try{
+    if(g._srcBiz>0){ const bb=document.querySelectorAll('#addBizPick button')[g._srcBiz]; if(bb&&!bb.disabled) bb.click(); }
+    document.getElementById('addName').value=g.name||'';
+    document.getElementById('addAddr').value=g.address||'';
+    document.getElementById('addZip').value=g.zip||'';
+    document.getElementById('addEmail').value=g.email||'';
+    document.getElementById('addPhone').value=g.phone||'';
+    document.getElementById('addPrice').value=String(g.price||'').replace(/[^0-9.]/g,'');
+    document.getElementById('addDate').value=g.serviceDate;
+    document.getElementById('addSearch').value=g.name||'';
+    const f=document.getElementById('addFreq');
+    if(f&&g.frequency){ for(let i2=0;i2<f.options.length;i2++){ if(f.options[i2].value.toLowerCase()===String(g.frequency).toLowerCase()){ f.selectedIndex=i2; break; } } }
+    if(g.crew){ document.querySelectorAll('#addCrewPick button').forEach(function(bt){ if(bt.textContent.indexOf('Crew '+String(g.crew).toUpperCase())>=0) bt.click(); }); }
+  }catch(e){} },120);
+}
 function _jobIcon(b){
   // based on what the job IS (service/frequency fields) — never the notes
   const svc=(String(b.service||b.serviceType||'')+' '+String(b.services||'')).toLowerCase();
@@ -2288,6 +2415,7 @@ const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 function renderDispatch(){
   const board=document.getElementById('dispBoard'); if(!board) return;
   _zdEnsure(); try{ _loadCustSheets(); }catch(e){}   // zone-day rules + customer notes for the cards
+  try{ _owedRebuild(); _owedCleanLoad(); }catch(e){}   // 💸 unpaid-balance flags
   const ae=document.activeElement;
   if(ae&&ae.classList&&ae.classList.contains('st-rate')) return;   // mid-edit — the 20s auto-refresh was wiping the input before your change saved
   _jobRefs=[];
@@ -2303,6 +2431,9 @@ function renderDispatch(){
     const byDate={};
     _dispFilter(_dispJobs()).forEach(function(b){ const d=dateOf(b); if(d) (byDate[d]=byDate[d]||[]).push(b); });
     Object.keys(byDate).forEach(function(d){ byDate[d].sort(_jobSort); });
+    // 👻 projected next visits — rendered separately so they never touch $ sums or econ
+    const ghostByDate={};
+    (function(){ const en=new Date(start); en.setDate(start.getDate()+41); _ghostVisits(_iso(start),_iso(en)).forEach(function(g){ (ghostByDate[g.serviceDate]=ghostByDate[g.serviceDate]||[]).push(g); }); })();
     // per-crew month economics (booked / est hours / expected profit / 50% target)
     const mJobs=[].concat.apply([],Object.keys(byDate).map(function(d){return byDate[d];})).filter(function(b){ const dd=dateOf(b); const cur=new Date(y,mo,1), nxt=new Date(y,mo+1,1); const jd=new Date(dd+'T12:00:00'); return jd>=cur&&jd<nxt; });
     const mBiz=_bizLoad();
@@ -2323,6 +2454,7 @@ function renderDispatch(){
         +'<div class="dnum" onclick="dispGotoDay(\''+iso+'\')" title="Open day board">'+d.getDate()+(jobs.length?'<span class="dsum">'+jobs.length+' · $'+amt.toFixed(0)+'</span>':'')+'</div>';
       jobs.slice(0,MAXP).forEach(function(b){ h+=_dispPill(b); });
       if(jobs.length>MAXP) h+='<div class="disp-more" onclick="dispGotoDay(\''+iso+'\')">+'+(jobs.length-MAXP)+' more…</div>';
+      (ghostByDate[iso]||[]).slice(0,Math.max(0,MAXP-Math.min(jobs.length,MAXP))||2).forEach(function(g){ h+=_ghostPill(g); });
       h+='</div>';
     }
     h+='</div>';
@@ -2349,6 +2481,12 @@ function renderDispatch(){
   jobs.forEach(function(b){
     const bi=_bizOf(b,biz), c=String(b.crew||'').toUpperCase().trim()||'un', d=dateOf(b);
     idx[bi]=idx[bi]||{}; idx[bi][c]=idx[bi][c]||{}; (idx[bi][c][d]=idx[bi][c][d]||[]).push(b);
+  });
+  // 👻 projected next visits (week view only) — separate index, never in econ/routes
+  const gIdx={};
+  if(_dispView==='week') _ghostVisits(rangeStart,rangeEnd).forEach(function(g){
+    const bi=g._srcBiz||0, c=String(g.crew||'').toUpperCase().trim()||'un';
+    gIdx[bi]=gIdx[bi]||{}; gIdx[bi][c]=gIdx[bi][c]||{}; (gIdx[bi][c][g.serviceDate]=gIdx[bi][c][g.serviceDate]||[]).push(g);
   });
   // headers
   if(_dispView==='week'){
@@ -2408,7 +2546,8 @@ function renderDispatch(){
         h+='<div class="st-grid">'+lab+days.map(function(d){
           const iso=_iso(d); const cell=(rowJobsAll[iso]||[]).slice().sort(_jobSort);
           return '<div class="st-cell'+(iso===todayIso?' today':'')+'">'
-            +cell.map(function(b){ return _dispPill(b); }).join('')+'</div>';
+            +cell.map(function(b){ return _dispPill(b); }).join('')
+            +(((gIdx[zi]||{})[c]||{})[iso]||[]).map(_ghostPill).join('')+'</div>';
         }).join('')+'</div>';
         const weekAll=[].concat.apply([],Object.keys(rowJobsAll).map(function(d){return rowJobsAll[d];}));
         h+=_econStrip(c,weekAll,todayIso,null,zi);
@@ -2596,17 +2735,19 @@ function _dispStats(rangeStart,rangeEnd){
   document.getElementById('dispStats').innerHTML=
     '<span>📋 <b>'+all.length+'</b> jobs</span><span>✅ <b>'+doneN+'</b> done</span><span>🕐 <b>'+(all.length-doneN)+'</b> open</span>'
     +'<span>💵 <b>$'+all.reduce(function(s,b){return s+amtOf(b);},0).toFixed(0)+'</b> booked</span>'
-    +'<span>⚠️ <b>'+all.filter(function(b){return !_isArch(b)&&!String(b.crew||'').trim();}).length+'</b> unassigned</span>';
+    +'<span>⚠️ <b>'+all.filter(function(b){return !_isArch(b)&&!String(b.crew||'').trim();}).length+'</b> unassigned</span>'
+    +(function(){ const dbt={}; let t=0; all.forEach(function(b){ const o=_owedFor(b); if(o){ const em=String(b.email||'').toLowerCase(); if(!dbt[em]){ dbt[em]=1; t+=o; } } }); const n=Object.keys(dbt).length; return n?('<span style="color:#f87171;font-weight:800;">💸 <b>'+n+'</b> owe $'+t.toFixed(0)+' — collect at the door</span>'):''; })();
 }
 function _dispPill(b){
   const arch=_isArch(b), done=isDone(b)||arch;
   const zone=_zoneOf(b);
   const zd=_zoneDayMsg(b);
   const jn=String(b.notes||'').trim(), cn=_custNoteFor(b);
-  let tt=''; if(zd) tt+='⚠ WRONG DAY — '+zd+'\n'; if(jn) tt+='📝 '+jn+'\n'; if(cn) tt+='👤 CUSTOMER: '+cn+'\n'; tt+=(b.name||'')+(arch?' — Archived; tap for notes & photos':'');
+  const ow=_owedFor(b);
+  let tt=''; if(zd) tt+='⚠ WRONG DAY — '+zd+'\n'; if(ow) tt+='💸 OWES $'+ow.toFixed(0)+' from unpaid past visits\n'; if(jn) tt+='📝 '+jn+'\n'; if(cn) tt+='👤 CUSTOMER: '+cn+'\n'; tt+=(b.name||'')+(arch?' — Archived; tap for notes & photos':'');
   const click='onclick="openJobRef('+_jr(b)+')" title="'+esc(tt)+'"';
   return '<div class="disp-pill'+(done?' done':'')+(arch?' arch':'')+(zd?' zday':'')+'" style="--pc:'+_dispPC(b)+'" '+click
-    +'>'+(zd?'⚠ ':'')+(done?'✓ ':'')+_jobIcon(b)+' '+esc(b.name||'?')+((jn||cn)&&!done?' 📝':'')+' <span class="pp">'+(zone?zone+' · ':'')+(b.jobTime?esc(b.jobTime)+' · ':'')+esc(String(b.price||''))
+    +'>'+(zd?'⚠ ':'')+(ow?'💸 ':'')+(done?'✓ ':'')+_jobIcon(b)+' '+esc(b.name||'?')+((jn||cn)&&!done?' 📝':'')+' <span class="pp">'+(zone?zone+' · ':'')+(b.jobTime?esc(b.jobTime)+' · ':'')+esc(String(b.price||''))
     +(function(){ const ls=_lastSvcInfo(b); return ls?(' · <span style="color:'+(ls.off?'#f87171':'inherit')+';font-weight:'+(ls.off?'800':'inherit')+';">↩ '+ls.nice+' ('+ls.gap+'d'+(ls.off?' ⚠ plan says '+ls.expct+'d':'')+')</span>'):''; })()
     +'</span></div>';
 }
@@ -3055,10 +3196,11 @@ function _stBlockEv(b,stMin,enMin,top,proj){
   const _lsT=_lastSvcInfo(b);
   const zd=_zoneDayMsg(b);
   const jn=String(b.notes||'').trim(), en2=String(b.employeeNotes||'').trim(), cn=_custNoteFor(b);
-  const tip=(zd?'⚠ WRONG DAY FOR ZONE — '+esc(zd)+' · ':'')+(_bg?'📍 ADDRESS NOT FOUND — fix it and re-run Route All · ':'')+esc(b.name||'')+' · '+(proj?'projected ':'')+_t12(stMin)+'–'+_t12(enMin)+' ('+dur+' min expected)'+(b.price?' · '+esc(String(b.price)):'')+(_lsT?(' · last serviced '+_lsT.d+' ('+_lsT.gap+'d ago'+(_lsT.off?' — ⚠ plan says '+_lsT.expct+'d':'')+')'):'')+(jn?' · 📝 '+esc(jn):'')+(en2?' · 👷 '+esc(en2):'')+(cn?' · 👤 CUSTOMER: '+esc(cn):'')+(proj?' — no set time; drag to lock one in':'');
+  const ow=_owedFor(b);
+  const tip=(ow?'💸 OWES $'+ow.toFixed(0)+' from unpaid past visits · ':'')+(zd?'⚠ WRONG DAY FOR ZONE — '+esc(zd)+' · ':'')+(_bg?'📍 ADDRESS NOT FOUND — fix it and re-run Route All · ':'')+esc(b.name||'')+' · '+(proj?'projected ':'')+_t12(stMin)+'–'+_t12(enMin)+' ('+dur+' min expected)'+(b.price?' · '+esc(String(b.price)):'')+(_lsT?(' · last serviced '+_lsT.d+' ('+_lsT.gap+'d ago'+(_lsT.off?' — ⚠ plan says '+_lsT.expct+'d':'')+')'):'')+(jn?' · 📝 '+esc(jn):'')+(en2?' · 👷 '+esc(en2):'')+(cn?' · 👤 CUSTOMER: '+esc(cn):'')+(proj?' — no set time; drag to lock one in':'');
   return '<div class="st-block'+(done?' done':'')+(arch?' arch':'')+(proj?' proj':'')+'" style="--pc:'+_dispPC(b)+';left:'+left+'%;width:'+width+'%;top:'+top+'px;'+(left<92?'min-width:52px;':'')+(_bg?'border:2px solid #f87171;box-shadow:0 0 8px rgba(248,113,113,.5);':'')+(zd?'border:2px solid #f87171;box-shadow:0 0 9px rgba(248,113,113,.6);':'')+'" '
     +'onclick="openJobRef('+_jr(b)+')" title="'+tip+(arch?' — tap for notes & photos':'')+'"'
-    +'>'+(zd?'⚠ ':'')+(done?'✓ ':'')+_jobIcon(b)+' '+esc(b.name||'?')+'<span class="bt2">'+(zone?zone+' · ':'')+tRange+(b.price?' · '+esc(String(b.price)):'')+((jn||cn)&&!done?' · 📝':'')+'</span></div>';
+    +'>'+(zd?'⚠ ':'')+(ow?'💸 ':'')+(done?'✓ ':'')+_jobIcon(b)+' '+esc(b.name||'?')+'<span class="bt2">'+(zone?zone+' · ':'')+tRange+(b.price?' · '+esc(String(b.price)):'')+((jn||cn)&&!done?' · 📝':'')+'</span></div>';
 }
 
 /* ── drag & drop ── */
