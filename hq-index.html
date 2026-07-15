@@ -1283,6 +1283,7 @@ function openJobSheetFor(b){
     +'<button class="act" onclick="openEditDetails()"><span class="em">✏️</span> Edit details (name · email · address · price)</button>'
     +(/clean/i.test(String((_bizLoad()[(b._srcBiz||0)]||{}).n||''))?'<button class="act" onclick="hqEditEstimate()"><span class="em">🧮</span> Edit estimate (rooms · add-ons · deep · price)</button>':'')
     +'<button class="act" onclick="openNotesEdit()"><span class="em">📝</span> Edit job notes</button>'
+    +((_bizUrl(_bizLoad()[b._srcBiz||0]||{})===SCRIPT_URL)?(function(){ const cc=_custCcFor(b); return '<button class="act" onclick="hqSetCcEmail()"><span class="em">✉️</span> 2nd email (CC on everything)'+(cc?(' — <span style="color:#38bdf8;">'+esc(cc)+'</span>'):' — none')+'</button>'; })():'')
     +'<button class="act" onclick="openResched()"><span class="em">📅</span> Reschedule to another day</button>'
     +(done?'':'<button class="act" onclick="doMarkDone()"><span class="em">✓</span> Mark as done</button>')
     +'<a class="act" href="'+_hqNavUrl(b)+'" target="_blank"><span class="em">🧭</span> Navigate here</a>'
@@ -1555,7 +1556,7 @@ async function _loadCustSheets(){
       const ut=_bizUT(i);
       const d=await fetch(ut.u+'?'+new URLSearchParams({ action:'customers_list', adminToken:ut.t })).then(function(r){ return r.json(); });
       const arr=(d&&d.success)?(d.customers||d.list||d.rows||[]):[];
-      if(Array.isArray(arr)&&arr.length) _custSheets[i]=arr.map(function(c){ return { name:c.Name||c.name||'', email:String(c.Email||c.email||'').toLowerCase(), phone:c.Phone||c.phone||'', address:c.Address||c.address||'', zip:String(c.Zip||c.zip||''), services:String(c.Services||c.services||''), notes:String(c.Notes||c.notes||''), price:'', _fromSheet:1, _srcBiz:i }; });
+      if(Array.isArray(arr)&&arr.length) _custSheets[i]=arr.map(function(c){ return { name:c.Name||c.name||'', email:String(c.Email||c.email||'').toLowerCase(), phone:c.Phone||c.phone||'', address:c.Address||c.address||'', zip:String(c.Zip||c.zip||''), services:String(c.Services||c.services||''), notes:String(c.Notes||c.notes||''), cc:String(c['CC Email']||c.ccEmail||''), price:'', _fromSheet:1, _srcBiz:i }; });
     }catch(e){}
   }
   _custSheetsAt=Date.now(); _custSheetsLoading=false;
@@ -2143,6 +2144,26 @@ function _zdEnsure(){   // zone-day rules live in each business's schedule confi
   const biz=_bizLoad(); const ps=[];
   for(let i=0;i<biz.length;i++){ const z=biz[i]; if(i>0&&(!z.su||!_bizConnected(z))) continue; ps.push(_crLoad(i)); }
   if(ps.length) Promise.all(ps).then(function(){ try{ renderDispatch(); }catch(e){} });
+}
+function _custCcFor(b){
+  try{ const em=String(b.email||'').toLowerCase().trim(); if(!em) return ''; const arr=_custSheets[b._srcBiz||0]||[]; for(let i=0;i<arr.length;i++) if(arr[i].email===em) return String(arr[i].cc||'').trim(); }catch(e){}
+  return '';
+}
+async function hqSetCcEmail(){
+  const b=_jobCur; if(!b) return;
+  const em=String(b.email||'').toLowerCase().trim();
+  if(!em){ alert('This job has no customer email — add their main email first (Edit details).'); return; }
+  const cur=_custCcFor(b);
+  const cc=prompt('✉️ 2nd email for '+(b.name||'this customer')+'\n\nEvery email we send them (invoices, confirmations, reminders) also goes here. Leave blank to remove.',cur||'');
+  if(cc===null) return;
+  const ut=_bizUT(b._srcBiz||0);
+  try{
+    const d=await fetch(ut.u+'?'+new URLSearchParams({ action:'owner_set_cc_email', email:em, ccEmail:cc.trim(), adminToken:ut.t })).then(function(r){ return r.json(); });
+    if(!(d&&d.success)){ alert('⚠ '+((d&&d.error)||'Could not save')+(/Missing required fields|Unknown/i.test(String(d&&d.error||''))?'\n\nThat backend is running old code — re-paste + Deploy its Apps Script first.':'')); return; }
+    try{ (_custSheets[b._srcBiz||0]||[]).forEach(function(c){ if(c.email===em) c.cc=cc.trim(); }); }catch(e){}
+    toast(cc.trim()?('✉️ 2nd email saved — '+cc.trim()):'✉️ 2nd email removed');
+    openJobSheetFor(b);
+  }catch(e){ alert('⚠ Network error — nothing saved.'); }
 }
 function _custNoteFor(b){   // standing note from the Customers SHEET (job notes are per-booking; this follows the person)
   try{
