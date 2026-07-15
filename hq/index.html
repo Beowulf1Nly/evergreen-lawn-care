@@ -1279,13 +1279,19 @@ function openJobSheetFor(b){
     +(eNotes?'<div class="rs-note crew">👷 '+esc(eNotes)+'</div>':'')
     +(photos.length?'<div class="rs-photos">'+photos.map(function(u){return '<a href="'+esc(u)+'" target="_blank"><img class="rs-thumb" src="'+esc(_driveThumb(u))+'" onerror="this.replaceWith(document.createTextNode(String.fromCodePoint(0x1F4F7)))"></a>';}).join('')+'</div>':'')
     +'<div class="lbl">Assign crew</div><div class="crewpick" id="jobCrewPick"></div>'
-    +'<div class="lbl">Actions</div>'
+    +'<div class="lbl">Customer</div>'
     +'<button class="act" onclick="openEditDetails()"><span class="em">✏️</span> Edit details (name · email · address · price)</button>'
-    +(/clean/i.test(String((_bizLoad()[(b._srcBiz||0)]||{}).n||''))?'<button class="act" onclick="hqEditEstimate()"><span class="em">🧮</span> Edit estimate (rooms · add-ons · deep · price)</button>':'')
-    +'<button class="act" onclick="openNotesEdit()"><span class="em">📝</span> Edit job notes</button>'
     +((_bizUrl(_bizLoad()[b._srcBiz||0]||{})===SCRIPT_URL)?(function(){ const cc=_custCcFor(b); return '<button class="act" onclick="hqSetCcEmail()"><span class="em">✉️</span> 2nd email (CC on everything)'+(cc?(' — <span style="color:#38bdf8;">'+esc(cc)+'</span>'):' — none')+'</button>'; })():'')
+    +'<button class="act" onclick="openNotesEdit()"><span class="em">📝</span> Edit job notes</button>'
+    +(/clean/i.test(String((_bizLoad()[(b._srcBiz||0)]||{}).n||''))?'<button class="act" onclick="hqEditEstimate()"><span class="em">🧮</span> Edit estimate (rooms · add-ons · deep · price)</button>':'')
+    +'<div class="lbl">Schedule</div>'
+    +'<button class="act" onclick="hqScheduleAnother()"><span class="em">➕</span> Schedule another job for '+esc((b.name||'them').split(' ')[0])+'</button>'
     +'<button class="act" onclick="openResched()"><span class="em">📅</span> Reschedule to another day</button>'
     +(done?'':'<button class="act" onclick="doMarkDone()"><span class="em">✓</span> Mark as done</button>')
+    +'<div class="lbl">Money</div>'
+    +'<button class="act" onclick="hqInvoiceJob()"><span class="em">🧾</span> Send an invoice'+(b.email?'':' <span style="color:#f87171;font-size:11px;">(needs email)</span>')+'</button>'
+    +'<button class="act" onclick="cdOpenFor(_jobCur)"><span class="em">💳</span> Card desk — save card · autopay · phone charge</button>'
+    +'<div class="lbl">Contact</div>'
     +'<a class="act" href="'+_hqNavUrl(b)+'" target="_blank"><span class="em">🧭</span> Navigate here</a>'
     +(b.phone?('<a class="act" href="tel:'+esc(String(b.phone).replace(/[^0-9+]/g,''))+'"><span class="em">📞</span> Call '+esc((b.name||'').split(" ")[0])+'</a>'):'')
     +'<button class="act danger" onclick="openCancel()"><span class="em">🗑</span> Cancel this job</button>'
@@ -2164,6 +2170,49 @@ async function hqSetCcEmail(){
     toast(cc.trim()?('✉️ 2nd email saved — '+cc.trim()):'✉️ 2nd email removed');
     openJobSheetFor(b);
   }catch(e){ alert('⚠ Network error — nothing saved.'); }
+}
+function hqScheduleAnother(){   // Add Job pre-filled with this customer — pick the type/price/date there
+  const b=_jobCur; if(!b) return;
+  closeSheet('jobSheet');
+  openAddJob();
+  setTimeout(function(){ try{
+    if((b._srcBiz||0)>0){ const bb=document.querySelectorAll('#addBizPick button')[b._srcBiz]; if(bb&&!bb.disabled) bb.click(); }
+    document.getElementById('addName').value=b.name||'';
+    document.getElementById('addAddr').value=b.address||'';
+    document.getElementById('addZip').value=b.zip||'';
+    document.getElementById('addEmail').value=b.email||'';
+    document.getElementById('addPhone').value=b.phone||'';
+    document.getElementById('addSearch').value=b.name||'';
+    if(b.crew){ document.querySelectorAll('#addCrewPick button').forEach(function(bt){ if(bt.textContent.indexOf('Crew '+String(b.crew).toUpperCase())>=0) bt.click(); }); }
+  }catch(e){} },120);
+}
+async function hqInvoiceJob(){   // Stripe invoice for THIS job — same backend the staff portal uses
+  const b=_jobCur; if(!b) return;
+  const em=String(b.email||'').toLowerCase().trim();
+  if(!em||em.indexOf('@')<0){ alert('No email on this customer — add one via Edit details first.'); return; }
+  const def=String(b.price||'').replace(/[^0-9.]/g,'');
+  const amt=prompt('🧾 Invoice '+(b.name||'customer')+' — amount in $ (they get a Stripe invoice email with a Pay Now button):',def||'');
+  if(amt===null) return;
+  const n=parseFloat(String(amt).replace(/[^0-9.]/g,''));
+  if(!(n>=1)){ toast('Amount must be at least $1'); return; }
+  const svc=String(b.service||b.serviceType||'').trim()||'Lawn Service';
+  if(!confirm('Send a $'+n.toFixed(2)+' invoice to '+em+' for \u0022'+svc+' — '+(dateOf(b)||'')+'\u0022?')) return;
+  const ut=_bizUT(b._srcBiz||0);
+  try{
+    const d=await fetch(ut.u+'?'+new URLSearchParams({ action:'send_invoice', email:em, name:b.name||'', amount:String(n), description:svc+' — '+(dateOf(b)||''), rowIndex:String(_ri(b)||0), serviceDate:dateOf(b)||'', idemKey:'hqinv:'+em+':'+(dateOf(b)||'')+':'+Date.now(), adminToken:ut.t })).then(function(r){ return r.json(); });
+    if(d&&d.success) toast('🧾 Invoice sent to '+em);
+    else alert('⚠ '+((d&&d.error)||'Could not send the invoice'));
+  }catch(e){ alert('⚠ Network error — invoice not sent.'); }
+}
+function cdOpenFor(b){   // Card Desk pre-aimed at this customer
+  if(!b) return;
+  closeSheet('jobSheet');
+  _cdBiz=b._srcBiz||0;
+  cdOpen();
+  setTimeout(function(){ try{
+    document.getElementById('cdEmail').value=String(b.email||'').toLowerCase().trim();
+    if(b.email) cdLookup();
+  }catch(e){} },80);
 }
 function _custNoteFor(b){   // standing note from the Customers SHEET (job notes are per-booking; this follows the person)
   try{
