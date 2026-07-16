@@ -3215,7 +3215,9 @@ async function qtSend() {
         const parts = estNum.match(/^(.*-)(\d+)$/);
         if (parts) {
           const next = document.getElementById('qt-number');
-          if (next) next.value = parts[1] + (parseInt(parts[2]) + 1);
+          // Preserve leading-zero padding (EST-009 → EST-010, not EST-10) and use radix 10
+          const nextSeq = String(parseInt(parts[2], 10) + 1).padStart(parts[2].length, '0');
+          if (next) next.value = parts[1] + nextSeq;
         }
       }
     } else {
@@ -4355,7 +4357,7 @@ function custEditServices(custIdx) {
 function custChangePrice(custIdx, nextRow) {
   const c = (window._custsList || [])[custIdx];
   if (!c) return;
-  const current = c.bookingPrice ? String(Math.round(c.bookingPrice)) : '';
+  const current = c.bookingPrice ? String(c.bookingPrice) : '';   // don't round — $49.50 must stay 49.50, not become 50
   openCustEdit(
     '💰 Change Price — ' + c.name,
     'Updates their next upcoming mow.',
@@ -5692,7 +5694,7 @@ async function sendInvoice() {
     action:       'send_invoice',
     email:        invoiceEmail,
     name:         invoiceName,
-    amount:       total,
+    amount:       base,   // send BASE only — backend adds tipAmount as its own line item (was `total`, which double-charged the tip)
     description:  descParts.join(' — '),
     daysUntilDue: days,
     note:         note || '',
@@ -6304,9 +6306,10 @@ async function loadAnalytics() {
     const quoteOpens    = E['quote_opened'] || 0;
     const bookCompleted = (E['booking_completed'] || 0) + (E['booking_completed_legacy'] || 0);
     const convRate      = anPct(bookCompleted, quoteOpens);
-    // Use locally computed revenue from done bookings (more accurate than backend estimatedRev)
+    // Use locally computed revenue from PAID bookings (label is "Revenue Collected — from paid mows";
+    // isDone() only means the job was marked done, not that money was collected)
     const revenue = (allBookings || [])
-      .filter(bk => isDone(bk))
+      .filter(bk => isPaidDone(bk))
       .reduce((sum, bk) => sum + (parseFloat(String(bk.price||'').replace(/[^0-9.]/g,''))||0), 0);
 
     el.innerHTML = `

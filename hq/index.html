@@ -800,7 +800,13 @@ function amtOf(b){ let v=b.price; if(v==null||String(v).trim()===''||!parseFloat
 // never the word "quote" buried in notes ("Booked at quote visit" is a real job).
 function _hqIsQuote(b){ const f=String(b.frequency||'').toLowerCase(), sv=String(b.service||b.serviceType||'').toLowerCase(), pr=String(b.price||'').toLowerCase(), pm=String(b.payMethod||'').toLowerCase(), nt=String(b.notes||'').toLowerCase(); return f.indexOf('quote')>=0||sv.indexOf('quote')>=0||pr.indexOf('quote')>=0||pm==='quote'||nt.indexOf('[quote request]')>=0; }
 function durStr(fromIso){ if(!fromIso) return '—'; const ms=Date.now()-new Date(fromIso).getTime(); if(isNaN(ms)||ms<0) return '—'; const m=Math.floor(ms/60000); return Math.floor(m/60)+'h '+(m%60)+'m'; }
-function _ri(b){ const r=parseInt(b&&b._rowIndex,10); if(r&&r>=2) return r; const i=_bookings.indexOf(b); return i>=0?i+2:0; }
+// NEVER fabricate a sheet row. This used to fall back to (_bookings.indexOf(b)+2) — the job's
+// POSITION ON SCREEN — which has nothing to do with its real spreadsheet row. For a job with no
+// real _rowIndex (a phantom/stale entry that no longer exists in the sheet) that invented number
+// pointed at a DIFFERENT customer, and cancel/mark-done/set-time then hit THAT row. Cancelling a
+// ghost job was deleting innocent same-day jobs. 0 means "unknown" → the backend re-finds the row
+// by email + serviceDate, or fails visibly. A wrong-row write is never acceptable.
+function _ri(b){ const r=parseInt(b&&b._rowIndex,10); return (r&&r>=2)?r:0; }
 function initials(n){ const p=String(n||'').trim().split(/\s+/); return ((p[0]||'')[0]||'?').toUpperCase()+((p[1]||'')[0]||'').toUpperCase(); }
 function crewColor(cr){ return CREW_COLORS[String(cr||'').toUpperCase().split(/[^A-Z0-9]+/)[0]]||'#22c55e'; }
 let _tt=null; function toast(m){ const t=document.getElementById('toast'); if(!t) return; t.textContent=m; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(function(){t.classList.remove('show');},3200); }
@@ -1289,6 +1295,11 @@ function openJobSheetFor(b){
     +'<button class="act" onclick="openResched()"><span class="em">📅</span> Reschedule to another day</button>'
     +(done?'':'<button class="act" onclick="doMarkDone()"><span class="em">✓</span> Mark as done</button>')
     +'<div class="lbl">Money</div>'
+    +(function(){   // status + one-tap charge on the saved card (autopay customers especially)
+      const pb=payBadge(b), amt=amtOf(b);
+      return '<div class="rs-note" style="color:var(--dim);">Payment: <b style="color:'+pb.c+';">'+pb.t+'</b>'+(amt>0?(' · job total $'+amt.toFixed(2)):'')+(pb.t==='Paid'?' — already collected, don\'t charge again.':'')+'</div>'
+        +(amt>0?('<button class="act" onclick="cdOpenFor(_jobCur,'+amt.toFixed(2)+')"><span class="em">💳</span> Charge their card — $'+amt.toFixed(2)+' <span style="opacity:.6;font-size:11px;">(saved card · autopay)</span></button>'):'');
+    })()
     +'<button class="act" onclick="hqInvoiceJob()"><span class="em">🧾</span> Send an invoice'+(b.email?'':' <span style="color:#f87171;font-size:11px;">(needs email)</span>')+'</button>'
     +'<button class="act" onclick="cdOpenFor(_jobCur)"><span class="em">💳</span> Card desk — save card · autopay · phone charge</button>'
     +'<div class="lbl">Contact</div>'
@@ -1311,6 +1322,15 @@ function _openArchSheet(b,be){
     +(eNotes?'<div class="rs-note crew">👷 '+esc(eNotes)+'</div>':'')
     +(photos.length?'<div class="rs-photos">'+photos.map(function(u){return '<a href="'+esc(u)+'" target="_blank"><img class="rs-thumb" src="'+esc(_driveThumb(u))+'" onerror="this.replaceWith(document.createTextNode(String.fromCodePoint(0x1F4F7)))"></a>';}).join('')+'</div>'
       :'<div class="rs-note" style="color:var(--dim);">No photos on this job.</div>')
+    // Money on a FINISHED job — this sheet used to end at Close, so a completed job could never
+    // be charged or invoiced from HQ. Status is shown first so an already-paid job is obvious.
+    +(function(){
+      const pb=payBadge(b), amt=amtOf(b);
+      return '<div class="lbl">Money</div>'
+        +'<div class="rs-note" style="color:var(--dim);">Payment: <b style="color:'+pb.c+';">'+pb.t+'</b>'+(amt>0?(' · job total $'+amt.toFixed(2)):'')+(pb.t==='Paid'?' — already collected, don\'t charge again.':'')+'</div>'
+        +'<button class="act" onclick="cdOpenFor(_jobCur,'+(amt>0?amt.toFixed(2):0)+')"><span class="em">💳</span> Charge their card'+(amt>0?(' — $'+amt.toFixed(2)):'')+' <span style="opacity:.6;font-size:11px;">(saved card · autopay)</span></button>'
+        +'<button class="act" onclick="hqInvoiceJob()"><span class="em">🧾</span> Send an invoice'+(b.email?'':' <span style="color:#f87171;font-size:11px;">(needs email)</span>')+'</button>';
+    })()
     +'<button class="ghost" onclick="closeSheet(\'jobSheet\')">Close</button>';
   openSheet('jobSheet');
 }
@@ -1540,7 +1560,14 @@ async function doReschedule(){
 }
 function openCancel(){ const b=_jobCur; if(!b) return; document.getElementById('cancelSub').textContent=(b.name||'Customer')+' · '+(dateOf(b)||'no date'); document.getElementById('cancelReason').value=''; document.getElementById('cancelNotify').checked=true; closeSheet('jobSheet'); openSheet('cancelSheet'); }
 async function doCancel(){
-  const b=_jobCur; if(!b) return; const be=_jobBE(b); const btn=document.getElementById('cancelGo'); btn.disabled=true; btn.textContent='Cancelling…';
+  const b=_jobCur; if(!b) return; const be=_jobBE(b); const btn=document.getElementById('cancelGo');
+  // Never cancel "by position". A job with no sheet row AND no email can't be identified — guessing
+  // is what deleted innocent same-day jobs. Say what's wrong instead of firing a blind request.
+  if(!_ri(b) && !(String(b.email||'').trim() && dateOf(b))){
+    toast('⚠ Stale entry — this job has no row in the sheet, so it can\'t be cancelled. Hit 🔄 refresh; if it\'s still listed, clear the cached job list (Dev tab).');
+    return;
+  }
+  btn.disabled=true; btn.textContent='Cancelling…';
   try{ const p=new URLSearchParams({ action:'cancel_job', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), reason:document.getElementById('cancelReason').value.trim(), skipEmail:(document.getElementById('cancelNotify').checked?'false':'true'), adminToken:be.t });
     const d=await(await fetch(be.u+'?'+p)).json();
     if(d.success){ b.rowCancelled=true; toast('🗑 Job cancelled'); closeSheet('cancelSheet'); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings(); }
@@ -2105,9 +2132,12 @@ async function bizDiag(btn){
   btn.textContent='🧪 test';
   alert('🧪 '+name+' backend check\n\n'+verdict);
 }
-function bizSaveFromUI(){
+function _bizCollectFromUI(){
   const rows=[].slice.call(document.querySelectorAll('#bizList .biz-row'));
-  const list=rows.map(function(r){ return { e:r.querySelector('.bz-e').value.trim()||'🏢', n:r.querySelector('.bz-n').value.trim(), c:r.querySelector('.bz-c').value||'#38bdf8', kw:r.querySelector('.bz-k').value.trim(), su:(r.querySelector('.bz-u')?r.querySelector('.bz-u').value.trim():''), tk:(r.dataset.tk||'') }; }).filter(function(z){return z.n;});
+  return rows.map(function(r){ return { e:r.querySelector('.bz-e').value.trim()||'🏢', n:r.querySelector('.bz-n').value.trim(), c:r.querySelector('.bz-c').value||'#38bdf8', kw:r.querySelector('.bz-k').value.trim(), su:(r.querySelector('.bz-u')?r.querySelector('.bz-u').value.trim():''), tk:(r.dataset.tk||'') }; }).filter(function(z){return z.n;});
+}
+function bizSaveFromUI(){
+  const list=_bizCollectFromUI();
   if(!list.length){ toast('Keep at least one business'); return; }
   _bizSave(list); closeSheet('bizSheet');
   _bizExtraAt=0; _bizExtra={};                               // re-pull sister-business bookings with fresh connections
@@ -2198,19 +2228,27 @@ async function hqInvoiceJob(){   // Stripe invoice for THIS job — same backend
   const svc=String(b.service||b.serviceType||'').trim()||'Lawn Service';
   if(!confirm('Send a $'+n.toFixed(2)+' invoice to '+em+' for \u0022'+svc+' — '+(dateOf(b)||'')+'\u0022?')) return;
   const ut=_bizUT(b._srcBiz||0);
+  if(hqInvoiceJob._busy) return;   // re-entry guard: a second click after confirm() must not fire a second invoice
+  hqInvoiceJob._busy=true;
   try{
-    const d=await fetch(ut.u+'?'+new URLSearchParams({ action:'send_invoice', email:em, name:b.name||'', amount:String(n), description:svc+' — '+(dateOf(b)||''), rowIndex:String(_ri(b)||0), serviceDate:dateOf(b)||'', idemKey:'hqinv:'+em+':'+(dateOf(b)||'')+':'+Date.now(), adminToken:ut.t })).then(function(r){ return r.json(); });
+    // Stable idemKey (email+serviceDate+amount) — NOT Date.now() — so a retry can't create a second Stripe invoice.
+    const d=await fetch(ut.u+'?'+new URLSearchParams({ action:'send_invoice', email:em, name:b.name||'', amount:String(n), description:svc+' — '+(dateOf(b)||''), rowIndex:String(_ri(b)||0), serviceDate:dateOf(b)||'', idemKey:'hqinv:'+em+':'+(dateOf(b)||'')+':'+n, adminToken:ut.t })).then(function(r){ return r.json(); });
     if(d&&d.success) toast('🧾 Invoice sent to '+em);
     else alert('⚠ '+((d&&d.error)||'Could not send the invoice'));
   }catch(e){ alert('⚠ Network error — invoice not sent.'); }
+  finally{ hqInvoiceJob._busy=false; }
 }
-function cdOpenFor(b){   // Card Desk pre-aimed at this customer
+function cdOpenFor(b, amt){   // Card Desk pre-aimed at this customer (amt: optional prefill, e.g. charging a finished job)
   if(!b) return;
   closeSheet('jobSheet');
   _cdBiz=b._srcBiz||0;
   cdOpen();
   setTimeout(function(){ try{
     document.getElementById('cdEmail').value=String(b.email||'').toLowerCase().trim();
+    if(+amt>0){   // prefill amount + memo so charging a completed job is one tap; cdLookup() shows the real card/autopay state
+      const a=document.getElementById('cdAmt'); if(a) a.value=(+amt).toFixed(2);
+      const m=document.getElementById('cdMemo'); if(m) m.value=(String(b.service||b.frequency||'Service').trim()+' — '+(dateOf(b)||'')).trim();
+    }
     if(b.email) cdLookup();
   }catch(e){} },80);
 }
@@ -4219,18 +4257,56 @@ function _bizChips(elId,cur,onclickName,connectedOnly){
     return '<button data-c="'+i+'" class="'+(i===cur?'on':'')+'" onclick="'+onclickName+'('+i+')">'+esc(z.e)+' '+esc(z.n)+'</button>';
   }).join('');
 }
+/* Connect a sister backend (e.g. Cleaning) — INLINE, no prompt() dialogs.
+   The old flow called prompt() for the 6-digit code AFTER an `await fetch`, i.e. outside the
+   user-activation window: mobile Safari/Chrome suppress that dialog (and once Chrome's
+   "prevent additional dialogs" box is ticked it returns null forever), so the code box never
+   appeared, no token was issued, and Dispatch stayed stuck on "🔒 not connected". Real inputs
+   can't be suppressed. The token is also saved the moment it's issued — it used to live only
+   on row.dataset.tk and was lost unless you remembered to hit "Save businesses". */
 async function bizConnectRow(btn){
   const row=btn.closest('.biz-row');
   const url=(row.querySelector('.bz-u').value||'').trim();
   if(!url||url===SCRIPT_URL){ toast('Main backend — you\'re already signed in'); return; }
-  const em=prompt('Owner email for that business\'s backend:', myEmail||''); if(!em) return;
-  btn.textContent='…';
-  const d=await fetch(url+'?action=admin_request_code&email='+encodeURIComponent(em)).then(r=>r.json()).catch(()=>null);
-  if(!(d&&d.success)){ toast('⚠ '+((d&&d.error)||'Could not reach that backend')); btn.textContent='🔗'; return; }
-  const code=prompt('Enter the 6-digit code just emailed to '+em+':'); if(!code){ btn.textContent='🔗'; return; }
-  const v=await fetch(url+'?action=admin_verify_code&email='+encodeURIComponent(em)+'&code='+encodeURIComponent(code.trim())).then(r=>r.json()).catch(()=>null);
-  if(v&&v.success&&v.token){ row.dataset.tk=v.token; btn.textContent='✅'; toast('🔗 Connected! Hit “Save businesses” to keep it.'); }
-  else { toast('⚠ '+((v&&v.error)||'Bad code')); btn.textContent='🔗'; }
+  const open=row.querySelector('.bz-conn');
+  if(open){ open.remove(); return; }                     // tap again to close
+  const panel=document.createElement('div');
+  panel.className='bz-conn';
+  panel.style.cssText='flex:1 1 100%;display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;padding:8px;border:1px solid rgba(255,255,255,.14);border-radius:10px;';
+  panel.innerHTML='<input type="email" class="bz-em" inputmode="email" autocomplete="email" placeholder="Owner email for that backend" value="'+esc(myEmail||'')+'" style="flex:1 1 170px;min-width:0;">'
+    +'<button class="dev-btn bz-send" style="flex:0 0 auto;">✉️ Send code</button>'
+    +'<input type="text" class="bz-code" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" style="flex:0 1 118px;min-width:0;display:none;">'
+    +'<button class="dev-btn bz-ver" style="flex:0 0 auto;display:none;">✅ Verify</button>'
+    +'<div class="bz-msg" style="flex:1 1 100%;font-size:11.5px;opacity:.8;"></div>';
+  row.appendChild(panel);
+  const msg=panel.querySelector('.bz-msg');
+  panel.querySelector('.bz-send').onclick=async function(){
+    const em=(panel.querySelector('.bz-em').value||'').trim();
+    if(!em||em.indexOf('@')<1){ msg.textContent='⚠ Enter a valid owner email.'; return; }
+    this.disabled=true; this.textContent='…';
+    const d=await fetch(url+'?action=admin_request_code&email='+encodeURIComponent(em)).then(function(r){return r.json();}).catch(function(){return null;});
+    this.disabled=false; this.textContent='✉️ Resend';
+    if(!(d&&d.success)){ msg.textContent='⚠ '+((d&&d.error)||'Could not reach that backend'); return; }
+    msg.textContent='📧 Code sent to '+em+' — type it in and hit Verify.';
+    panel.querySelector('.bz-code').style.display='';
+    panel.querySelector('.bz-ver').style.display='';
+    try{ panel.querySelector('.bz-code').focus(); }catch(e){}
+  };
+  panel.querySelector('.bz-ver').onclick=async function(){
+    const em=(panel.querySelector('.bz-em').value||'').trim();
+    const code=(panel.querySelector('.bz-code').value||'').trim();
+    if(!code){ msg.textContent='⚠ Enter the 6-digit code.'; return; }
+    this.disabled=true; this.textContent='…';
+    const v=await fetch(url+'?action=admin_verify_code&email='+encodeURIComponent(em)+'&code='+encodeURIComponent(code)).then(function(r){return r.json();}).catch(function(){return null;});
+    this.disabled=false; this.textContent='✅ Verify';
+    if(v&&v.success&&v.token){
+      row.dataset.tk=v.token; btn.textContent='✅ connect';
+      try{ const l=_bizCollectFromUI(); if(l.length) _bizSave(l); }catch(e){}   // persist NOW — don't rely on "Save businesses"
+      msg.textContent='🔗 Connected & saved. Its jobs will show on Dispatch.';
+      toast('🔗 '+((row.querySelector('.bz-n')||{}).value||'Business')+' connected');
+      setTimeout(function(){ try{ panel.remove(); }catch(e){} },1200);
+    } else { msg.textContent='⚠ '+((v&&v.error)||'Bad code — check the email and try Resend.'); }
+  };
 }
 
 /* ═══════════════════ OPS — PMCS & checklists, all businesses ═══════════════════ */
@@ -5367,7 +5443,9 @@ async function cdCharge(){
   const btn=document.getElementById('cdChargeBtn'); btn.disabled=true; btn.textContent='Charging…';
   const out=document.getElementById('cdOut'); out.textContent='';
   try{
-    const d=await _cdApi({action:'hq_charge_card',custEmail:em,amount:String(amt),memo:memo,idemKey:'hqcc:'+em+':'+Date.now()});
+    // Stable idempotency key (email+amount+minute bucket) — NOT Date.now(). If the response times out and
+    // the owner re-confirms, the same key makes both withIdempotency_ AND Stripe treat it as ONE charge.
+    const d=await _cdApi({action:'hq_charge_card',custEmail:em,amount:String(amt),memo:memo,idemKey:'hqcc:'+em+':'+amt+':'+Math.floor(Date.now()/60000)});
     if(!d.success) throw new Error(d.error||'charge failed');
     out.innerHTML='✅ Charged $'+esc(d.amount)+' to ····'+esc(d.last4)+' — Stripe receipt emailed to the customer.';
     document.getElementById('cdAmt').value=''; document.getElementById('cdMemo').value='';

@@ -2,7 +2,7 @@
    Always serves the freshest version from the network when online, and falls
    back to the last cached copy only when offline. Takes over immediately so
    updates are never stuck behind a stale worker (the old bug). */
-const CACHE = 'evg-field-shell-v2';
+const CACHE = 'evg-field-shell-v3';
 
 self.addEventListener('install', function (e) { self.skipWaiting(); });
 
@@ -24,11 +24,20 @@ self.addEventListener('fetch', function (e) {
   if (url.origin !== self.location.origin) return;         // cross-origin (Stripe, Apps Script, maps) pass through
 
   e.respondWith((async function () {
+    // Bound the network wait: on a live-but-stalled cellular connection fetch() can hang
+    // for a very long time without rejecting, which would freeze the app on launch. Abort
+    // after 8s and fall back to the cached shell instead of spinning.
+    const ctrl = new AbortController();
+    const timer = setTimeout(function () { ctrl.abort(); }, 8000);
     try {
-      const fresh = await fetch(req);                      // network first → always up to date
-      try { const c = await caches.open(CACHE); c.put(req, fresh.clone()); } catch (_) {}
+      const fresh = await fetch(req, { signal: ctrl.signal });  // network first → always up to date
+      clearTimeout(timer);
+      if (fresh && fresh.ok) {                                  // only cache real 2xx — never a 404/5xx error body
+        try { const c = await caches.open(CACHE); c.put(req, fresh.clone()); } catch (_) {}
+      }
       return fresh;
-    } catch (err) {                                        // offline → last cached copy
+    } catch (err) {                                            // offline / aborted / stalled → last cached copy
+      clearTimeout(timer);
       const cached = await caches.match(req);
       return cached || new Response('Offline', { status: 503, statusText: 'Offline' });
     }

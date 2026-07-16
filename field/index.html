@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-08.67 */
+/* APP_VER:2026-07-16.68 */
 (function(){
-  var V='2026-07-08.67'; window.__APP_VER=V;
+  var V='2026-07-16.68'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -263,7 +263,7 @@
   <!-- JOB -->
   <div class="fm-screen" id="fmScreenJob">
     <div class="fm-top">
-      <button class="fm-top-exit" onclick="fmBackToStart()">‹ Route</button>
+      <div style="display:flex;align-items:center;gap:8px;"><button class="fm-top-exit" onclick="fmBackToStart()">‹ Route</button><button class="fm-top-exit" onclick="fmShowJobList()" title="All of today's jobs">📋 Jobs</button></div>
       <div style="display:flex;align-items:center;gap:8px;"><button class="fm-top-exit" onclick="pmcsOpenMenu()" title="PMCS / Maintenance">🔧 PMCS</button><button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button><div class="fm-top-timer" id="fmJobTimer" style="display:none;"><span class="fm-dot"></span><span id="fmJobTimerVal">0:00:00</span></div></div>
     </div>
     <div class="fm-progress-wrap">
@@ -1517,7 +1517,7 @@ async function _fmFlushQueue(){
     let _qi=0;
     while(_qi<q.length){
       const item=q[_qi];
-      const _base=(item.params?(String(item.params.email||'')+'|'+String(item.params.serviceDate||'')):'')||String(item.idemKey||'');
+      const _base=(function(){ var p=item.params||{}, em=String(p.email||'').trim(); if(em) return em+'|'+String(p.serviceDate||''); var ri=String(p.rowIndex||''); return ri?('row:'+ri+'|'+String(p.serviceDate||'')):('idem:'+String(item.idemKey||'')); })();   // no-email walk-ups must NOT all collapse to '|date' (one bad one would block every other walk-up)
       if(_blocked[_base]){ _qi++; continue; }
       try{
         // Always send with the CURRENT session token — queued items captured at enqueue
@@ -1530,7 +1530,9 @@ async function _fmFlushQueue(){
         if(item.method==='POST') res=await fetch(SCRIPT_URL,{ method:'POST', body:JSON.stringify(item.body) });
         else res=await fetch(SCRIPT_URL+'?'+new URLSearchParams(item.params).toString());
         if(!res.ok) throw new Error('HTTP '+res.status);
-        try{ const j=JSON.parse(await res.text()); if(j&&j.success===false) { item.lastErr=String(j.error||'rejected'); throw new Error('backend: '+item.lastErr); } }catch(pe){ if(String(pe.message||'').indexOf('backend:')===0) throw pe; }   // queue rejections show in the badge — they never log anyone out
+        let _j=null; try{ _j=JSON.parse(await res.text()); }catch(_pe){}   // non-JSON body tolerated as success (as before)
+        if(_j&&_j.success===false){ item.lastErr=String(_j.error||'rejected'); throw new Error('backend: '+item.lastErr); }   // queue rejections show in the badge — they never log anyone out
+        if(_j && item.kind==='done' && _j.charged===false){ try{ showToast('⚠️ Card declined for '+((item.params&&item.params.email)||'a completed job')+' — office emailed. Collect cash/invoice if you can.',9000); }catch(_te){} }   // field_complete returns success:true,charged:false on a decline — crew never heard about it before
         _fmMarkKeyDone(item.idemKey); q.splice(_qi,1); _fmQueueSave(q);
       }catch(netErr){
         const _isLogical=/^backend:|^HTTP \d/.test(String((netErr&&netErr.message)||''));
@@ -1673,7 +1675,7 @@ function _startTimers(){
     if(document.hidden || navigator.onLine===false || !adminToken) return;
     _fmPollTick++;
     if(_fmStarted && _fmPollTick%2===0) _fmHeartbeat();
-    if(_anySheetOpen()){ if(_fmPollTick%3===0) loadData(); return; }   // data still refreshes mid-interaction; only the re-render waits (removal alerts must land)
+    if(_anySheetOpen()){ if(!_fmcStop && _fmPollTick%3===0) loadData(); return; }   // refresh mid-interaction — but NEVER while the Complete sheet is open: loadData() replaces allBookings and would invalidate the captured row for this job
     if(_fmPollTick%3===0){ loadData(); return; }   // full refresh (~30s)
     _fmCheckRouteUpdate();                          // light route-order check (~10s)
   },10000);
@@ -1692,8 +1694,12 @@ function _autoClockOut(){
   _clockOutTime=new Date(); _clockedOut=true;
   const hours=Math.max(0,(_clockOutTime.getTime()-_clockInTime.getTime())/3600000);
   const _coKey='clockout:'+(_clockInTime?_clockInTime.toISOString():todayISOStr());
+  // Attribute the shift to the day the crew CLOCKED IN (local), not "today" — a route running past
+  // midnight, or an app left open overnight, must not stamp the hours to the wrong date.
+  const _ci=_clockInTime, _workDay=_ci?(_ci.getFullYear()+'-'+String(_ci.getMonth()+1).padStart(2,'0')+'-'+String(_ci.getDate()).padStart(2,'0')):todayISOStr();
+  if(hours>16){ try{ showToast('⚠️ '+hours.toFixed(1)+'h on the clock — looks like a missed clock-out. Logged to '+_workDay+'; have the office double-check.',9000); }catch(e){} }
   if(!(parseFloat(hours)>0)){ try{ showToast('⏱ 0 hours on the clock — nothing to log for today'); }catch(e){} } else
-  _fmEnqueue({ kind:'clockout', idemKey:_coKey, method:'GET', params:{ action:'employee_clock_out', hours:hours.toFixed(2), date:todayISOStr(), markedBy:adminName||'Crew', helpers:JSON.stringify((_helpers||[]).map(function(h){return (typeof h==='string')?{name:h}:{name:h&&h.name,hourlyRate:(h&&h.hourlyRate)||0};})), adminToken } });
+  _fmEnqueue({ kind:'clockout', idemKey:_coKey, method:'GET', params:{ action:'employee_clock_out', hours:hours.toFixed(2), date:_workDay, markedBy:adminName||'Crew', helpers:JSON.stringify((_helpers||[]).map(function(h){return (typeof h==='string')?{name:h}:{name:h&&h.name,hourlyRate:(h&&h.hourlyRate)||0};})), adminToken } });
   _fmSendClockedOut(); _fmFlushQueue(); _persist(); _stopGeo(); _releaseWake();
 }
 
@@ -1778,7 +1784,7 @@ function _fmOpenStops(){ return _fmStops().filter(s=>!_fmResolved(s)); }
 // stop is still open, so being on the last stop by position is NOT the finish.
 function _fmIsFinalOpenStop(){ return _fmOpenStops().length<=1; }
 function _fmShow(screen){ document.querySelectorAll('#fieldMode .fm-screen').forEach(s=>s.classList.remove('active')); const el=document.getElementById(screen); if(el) el.classList.add('active'); }
-function fmBackToStart(){ _fmShow('fmScreenStart'); _fmRenderStart(); }
+function fmBackToStart(){ window._fmListMode=false; _fmShow('fmScreenStart'); _fmRenderStart(); }
 /* ── EMPLOYEE HUB: My Schedule tab — counts/time/areas only, zero customer PII ── */
 let _fmSchedTab='weekly', _fmSchedWkSel=null;
 function fmOpenSched(){ _fmShow('fmScreenSched'); _fmRenderSched(); }
@@ -1907,16 +1913,74 @@ function _fmRender(){
     if(_homeBase&&!_fmAtBase&&!_clockedOut){ _fmRenderReturn(); return; }   // last yard → drive to home base first
     _fmRenderDone(stops); return;                                           // then drop-off PMCS + clock out
   }
+  // Day list is up → refresh it IN PLACE. A background poll must never yank the crew
+  // out of the list and back into a job.
+  if(window._fmListMode){ _fmRenderJobList(stops); return; }
   let idx=_fmViewIdx;
+  // Every "advance" path (finish, skip, start/end route) sets _fmViewIdx=null to mean
+  // "go to the next open stop" — so that's also the signal to drop any explicit pin.
+  if(idx==null) window._fmPinKey=null;
   // background merges can reorder the stops array — re-find the job we were
   // LOOKING AT by key so the screen never silently swaps to another customer
   if(window._fmViewKey!=null&&idx!=null){
     const ki=stops.findIndex(function(x){ return _stopKey(x.bk)===window._fmViewKey; });
     if(ki>=0) idx=ki;
   }
+  // A job the crew EXPLICITLY opened from the list STAYS PUT — even once it's done or
+  // skipped — so they can look back at the house they're on / just finished. This screen
+  // used to force-jump to the next open stop, which is how crews lost their place.
+  if(window._fmPinKey!=null){
+    const pi=stops.findIndex(function(x){ return _stopKey(x.bk)===window._fmPinKey; });
+    if(pi>=0){ _fmViewIdx=pi; _persist(); _fmRenderJob(stops,pi); return; }
+    window._fmPinKey=null;   // pinned job left the board
+  }
   if(idx==null||idx<0||idx>=total||_fmResolved(stops[idx])){ window._fmViewKey=null; idx=stops.findIndex(s=>!_fmResolved(s)); }
+  if(idx<0){ _fmRenderJobList(stops); return; }   // nothing open left to land on
   _fmViewIdx=idx; _persist(); _fmRenderJob(stops,idx);
 }
+
+/* ───────── Today's Jobs — the whole day at a glance ─────────
+   Crews kept losing the house they were on: the router force-jumped to the next open
+   stop and there was no way to browse back. This list shows every stop with its state,
+   badges the one the route says to do NEXT, and lets them tap into any of them. */
+function _fmRenderJobList(stops){
+  let scr=document.getElementById('fmScreenJobs');
+  if(!scr){
+    scr=document.createElement('div'); scr.className='fm-screen'; scr.id='fmScreenJobs';
+    scr.innerHTML='<div class="fm-top"><button class="fm-top-exit" onclick="fmBackToStart()">‹ Route</button><div style="font-weight:800;font-size:15px;color:#dcfce7;">Today\'s Jobs</div><div style="width:64px;"></div></div>'
+      +'<div id="fmJobListMeta" style="padding:10px 16px 2px;font-size:13px;font-weight:700;color:#9ed8b1;"></div>'
+      +'<div id="fmJobListBody" style="padding:8px 14px 24px;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch;"></div>';
+    document.getElementById('fieldMode').appendChild(scr);
+  }
+  window._fmListMode=true;
+  _fmShow('fmScreenJobs');
+  stops=stops||_fmStops();
+  const nextIdx=stops.findIndex(function(s){ return !_fmResolved(s); });   // route order → the stop to do next
+  const done=stops.filter(function(x){ return isDone(x.bk); }).length;
+  const skip=stops.filter(function(x){ return !isDone(x.bk)&&_fmIsSkipped(x.bk); }).length;
+  const togo=stops.length-done-skip;
+  const meta=document.getElementById('fmJobListMeta');
+  if(meta) meta.textContent=done+' of '+stops.length+' done'+(skip?(' · '+skip+' skipped'):'')+(togo>0?(' · '+togo+' to go'):' · all complete');
+  const body=document.getElementById('fmJobListBody');
+  if(!body) return;
+  const B='font-size:10.5px;font-weight:800;letter-spacing:.06em;border-radius:6px;padding:2px 8px;white-space:nowrap;';
+  body.innerHTML=stops.map(function(st,i){
+    const bk=st.bk, dn=isDone(bk), sk=!dn&&_fmIsSkipped(bk), nx=(i===nextIdx);
+    const badge = dn ? '<span style="'+B+'color:#15803d;background:#f0fdf4;border:1px solid #bbf7d0;">DONE</span>'
+                : sk ? '<span style="'+B+'color:#92400e;background:#fffbeb;border:1px solid #fde68a;">SKIPPED</span>'
+                : nx ? '<span style="'+B+'color:#166534;background:#dcfce7;border:1px solid #4ade80;">▶ NEXT</span>'
+                     : '<span style="'+B+'color:#334155;background:#f8fafc;border:1px solid #e2e8f0;">OPEN</span>';
+    const lockN=+((_stopLocks&&_stopLocks[_stopKey(bk)])||0);
+    const lock=lockN>0?('<div style="display:inline-block;margin-top:6px;background:#fefce8;border:1.5px solid #fde047;border-radius:8px;padding:2px 9px;font-size:11.5px;font-weight:800;color:#854d0e;">🔒 HQ locked #'+lockN+'</div>'):'';
+    return '<button onclick="fmOpenJob('+i+')" style="display:block;width:100%;text-align:left;background:'+(dn?'rgba(22,163,74,.10)':'#fff')+';border:'+(nx?'2.5px solid #22c55e':('1.5px solid '+(dn?'#bbf7d0':(sk?'#fde68a':'#dbe6ef'))))+';border-radius:14px;padding:13px 14px;margin-bottom:9px;font-family:inherit;cursor:pointer;'+(dn?'opacity:.75;':'')+(nx?'box-shadow:0 0 0 3px rgba(34,197,94,.18);':'')+'">'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;"><span style="font-size:16px;font-weight:800;color:#14532d;">'+(i+1)+'. '+esc(bk.name||'?')+'</span>'+badge+'</div>'
+      +'<div style="font-size:12.5px;color:#64748b;margin-top:3px;">'+esc(bk.address||'')+(_seeMoney(bk)&&bk.price?(' · '+esc(String(bk.price))):'')+'</div>'
+      +lock
+      +'</button>';
+  }).join('');
+}
+function fmOpenJob(i){ const s2=_fmStops(); if(!s2[i]) return; window._fmListMode=false; window._fmPinKey=_stopKey(s2[i].bk); _fmViewIdx=i; _persist(); _fmRenderJob(s2,i); }
+function fmShowJobList(){ window._fmPinKey=null; _fmRenderJobList(_fmStops()); }
 function _fmRenderStart(){
   _fmShow('fmScreenStart');
   const hr=new Date().getHours(); const greet=hr<12?'Good morning':hr<17?'Good afternoon':'Good evening';
@@ -2380,12 +2444,12 @@ function fmToggleCharge(){ _fmcChargeChosen=!_fmcChargeChosen; _fmcRenderPay(); 
 function fmToggleInvoice(){ _fmcInvoiceSent=!_fmcInvoiceSent; _fmcRenderPay(); }
 function _fmcRenderEndChk(){
   const wrap=document.getElementById('fmcChecklist'); const items=Object.keys(_fmcEndChk);
-  wrap.innerHTML=items.map(l=>'<button class="fm-check'+(_fmcEndChk[l]?' on':'')+'" onclick="fmToggleEndChk(\''+l.replace(/'/g,"\\'")+'\')"><span class="box">✓</span><span>'+esc(l)+'</span></button>').join('');
+  wrap.innerHTML=items.map(l=>'<button class="fm-check'+(_fmcEndChk[l]?' on':'')+'" onclick="fmToggleEndChk(\''+l.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;')+'\')"><span class="box">✓</span><span>'+esc(l)+'</span></button>').join('');
   const allChecked=items.every(l=>_fmcEndChk[l]);
   const st=document.getElementById('fmcCheckState'); if(st){ st.textContent=allChecked?'✓ done':'required'; st.className=allChecked?'ok':'req'; }
   _fmcUpdateSubmit();
 }
-function fmcCheckAll(){ Object.keys(_fmcEndChk).forEach(function(l){ _fmcEndChk[l]=true; }); _fmcRenderCheck(); _fmcRefreshSubmit(); }
+function fmcCheckAll(){ Object.keys(_fmcEndChk).forEach(function(l){ _fmcEndChk[l]=true; }); if('Collected cash' in _fmcEndChk){ _fmcCash=true; _fmcRenderPay(); } _fmcRenderEndChk(); }
 function fmToggleEndChk(label){ _fmcEndChk[label]=!_fmcEndChk[label]; if(label==='Collected cash') _fmcCash=_fmcEndChk[label], _fmcRenderPay(); _fmcRenderEndChk(); }
 function _fmcEndChkDone(){ return Object.keys(_fmcEndChk).every(l=>_fmcEndChk[l]); }
 function _fmcCanFinish(){ return _fmcPayResolved()&&_fmcEndChkDone(); }
@@ -2429,7 +2493,8 @@ async function fmSubmitComplete(){
   if(!bk){ fmCloseComplete(); return; }
   if(!_fmcCanFinish()){ errEl.textContent='Take payment and finish the checklist first.'; errEl.style.display='block'; return; }
   submitBtn.disabled=true; submitBtn.textContent='Saving…'; errEl.style.display='none';
-  const rowIndex=bk._rowIndex||((_fmcRowIdx>=0?_fmcRowIdx:0)+2), email=bk.email||'', svcDate=dateOf(bk), base=rowIndex+':'+svcDate;
+  const _liveIdx=(allBookings||[]).indexOf(bk);   // fresh, not the index captured when the sheet opened
+  const rowIndex=bk._rowIndex||((_liveIdx>=0?_liveIdx:(_fmcRowIdx>=0?_fmcRowIdx:0))+2), email=bk.email||'', svcDate=dateOf(bk), base=rowIndex+':'+svcDate;
   const selAddons=(_fmcAddons||[]).filter(a=>a.on&&a.price>0).map(a=>({name:a.name,price:a.price}));
   const grand=_fmcGrand(), ownerNote=String(document.getElementById('fmcOwnerNote').value||'').trim();
   // Done action: autopay uses field_complete (marks done + charges + emails owner on fail); others mark_done.
@@ -2455,15 +2520,21 @@ async function fmSubmitComplete(){
   delete _jobTimers[_jk]; try{ delete _fmDrivePhase[_jk]; localStorage.setItem('evg_fm_drive',JSON.stringify(_fmDrivePhase)); }catch(e){}
   _fmcPhotos.forEach((p,i)=>extra.push({ kind:'photo', idemKey:'photo:'+base+':'+_uuid(), method:'POST', body:{ action:'upload_job_photo', base64Data:p.b64, fileName:p.fileName, mimeType:p.mimeType, rowIndex, email, serviceDate:svcDate, jobLabel:(bk.name||'')+' - '+svcDate+(_fmcPhotos.length>1?' ('+(i+1)+')':''), markedBy:adminName||'Crew', adminToken } }));
 
-  const finish=(offline)=>{
+  const finish=(offline, chargeFailed)=>{
     _fmMarkSeq(bk);   // completion order — done list shows the day as driven
     // fresh anchor: re-solve the remaining stops from where the crew is standing
     setTimeout(function(){ try{ if(_fmStarted&&_fmOpenStops().length>2) _fmAutoRoute(); }catch(e){} },1500);
     const lbl=new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
-    if(_fmcRowIdx>=0){ allBookings[_fmcRowIdx].done='✓ Done — '+lbl; allBookings[_fmcRowIdx].markedBy=adminName; if(selAddons.length) allBookings[_fmcRowIdx].price='$'+grand.toFixed(0); } else bk.done='✓ Done — '+lbl;
+    // Re-resolve the row by IDENTITY, not the positional index captured when the sheet opened —
+    // if a refresh replaced allBookings, a stale index would mark the WRONG customer done (or be
+    // out of bounds and throw). Fall back to writing the captured bk object itself.
+    let _wi=(allBookings||[]).indexOf(bk);
+    if(_wi<0){ const _em=String(bk.email||'').toLowerCase().trim(), _dt=dateOf(bk); _wi=(allBookings||[]).findIndex(function(x){ return dateOf(x)===_dt && (_em?String(x.email||'').toLowerCase().trim()===_em:String(x.name||'')===String(bk.name||'')); }); }
+    const _tgt=(_wi>=0?allBookings[_wi]:bk);
+    _tgt.done='✓ Done — '+lbl; _tgt.markedBy=adminName; if(selAddons.length) _tgt.price='$'+grand.toFixed(0);
     _fmGhostMark(bk);
     if(_fmcPayType==='cash') _fmCashTotal+=grand;
-    _fmBilledTotal+=grand;
+    if(!chargeFailed) _fmBilledTotal+=grand;   // a declined autopay charge must not inflate "total billed today"
     try{ localStorage.setItem('evg_field_bookings', JSON.stringify(allBookings)); }catch(e){}
     fmCloseComplete(); showToast(offline?'📴 Saved — will sync when back online':'✅ '+(bk.name||'Job')+' done!');
     _fmViewIdx=null; _persist(); _fmRender();
@@ -2478,12 +2549,27 @@ async function fmSubmitComplete(){
       // field_complete reports success even when the CHARGE fails (owner is emailed) —
       // tell the crew too, so they can collect another way while still at the door.
       const _chargeWarn=(data && doneAction==='field_complete' && data.charged===false);
-      _fmMarkKeyDone(doneItem.idemKey); extra.forEach(_fmEnqueue); _fmFlushQueue(); finish(false);
+      _fmMarkKeyDone(doneItem.idemKey); extra.forEach(_fmEnqueue); _fmFlushQueue(); finish(false, _chargeWarn);
       if(_chargeWarn) setTimeout(function(){ showToast('⚠️ Card charge FAILED — office was emailed. Collect cash or invoice if you can.'); },1500);
       return;
     }catch(netErr){ /* offline fallback */ }
   }
-  _fmEnqueue(doneItem); extra.forEach(_fmEnqueue); _fmFlushQueue(); finish(true);
+  // OFFLINE fallback — but first confirm the work actually persisted to localStorage.
+  // If phone storage is full, _fmQueueSave() silently drops the items; showing "Saved"
+  // here would lose the job, payment, and photos. Verify each item landed, and if any
+  // didn't, keep the crew on this screen so they can free space / get online and retry.
+  const _allItems=[doneItem].concat(extra);
+  _allItems.forEach(_fmEnqueue);
+  const _qk=new Set(_fmQueueLoad().map(function(x){ return x.idemKey; })), _dk=_fmDoneKeys();
+  const _lost=_allItems.filter(function(it){ return !_qk.has(it.idemKey) && !_dk.has(it.idemKey); });
+  if(_lost.length){
+    errEl.textContent='⚠️ Phone storage is full — this job did NOT save ('+_lost.length+' item'+(_lost.length!==1?'s':'')+'). Free up space or get back online, then tap Complete again.';
+    errEl.style.display='block';
+    submitBtn.disabled=false; _fmcUpdateSubmit();
+    try{ showToast('⚠️ NOT saved — storage full. Don\'t leave; retry.',9000); }catch(e){}
+    return;
+  }
+  _fmFlushQueue(); finish(true);
 }
 
 /* ───────── Done ───────── */
@@ -2643,7 +2729,7 @@ function ncSubmit(){
   if(!isQuote&&parseFloat(price)>0){
     // crew sourced AND closed this one on the spot → 40% of the first job
     const _ncNames=[adminName||'Crew'].concat((_helpers||[]).map(function(h){ return (typeof h==='string')?h:((h&&h.name)||''); })).filter(Boolean);
-    _fmEnqueue({ kind:'comm', idemKey:'cm:nc:'+email+'|'+date, method:'GET', params:{ action:'log_commission', key:'cm:nc:'+email+'|'+date+'|'+name, date:todayISOStr(), names:_ncNames.join(', '), jobName:name, email:email, jobDate:date, base:String(parseFloat(price)), pct:'40', type:'lead + close (40%)', adminToken } });
+    _fmEnqueue({ kind:'comm', idemKey:'cm:nc:'+email+'|'+date+'|'+name, method:'GET', params:{ action:'log_commission', key:'cm:nc:'+email+'|'+date+'|'+name, date:todayISOStr(), names:_ncNames.join(', '), jobName:name, email:email, jobDate:date, base:String(parseFloat(price)), pct:'40', type:'lead + close (40%)', adminToken } });
   }
   _fmFlushQueue();
   if(date===todayISOStr()){

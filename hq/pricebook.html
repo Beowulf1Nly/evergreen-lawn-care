@@ -345,7 +345,14 @@ async function loadPricebook(z){
   setSync('saving','Loading…');
   try{
     const d=await fetch(bizUrl(z)+'?action=get_pricebook&bizKey='+encodeURIComponent(bizKeyOf(z))+'&adminToken='+encodeURIComponent(bizTok(z))).then(r=>r.json());
-    if(d&&d.success&&Array.isArray(d.items)){ _items=d.items.map(normalize); saveCache(z); setSync('ok','Synced'); render(); }
+    if(d&&d.success&&Array.isArray(d.items)){
+      if(d.items.length===0 && Array.isArray(cached) && cached.length>0){
+        // Server returned an empty catalog but we have a non-empty cached copy — most likely the
+        // business was renamed and its rows are orphaned under the old key. Do NOT overwrite the good
+        // local copy with nothing; keep it and warn instead of silently destroying the pricebook.
+        setSync('bad','Server empty — kept local'); toast('⚠ Server has no items for this business (renamed?). Keeping your local copy — check the business name before re-saving.'); render();
+      } else { _items=d.items.map(normalize); saveCache(z); setSync('ok','Synced'); render(); }
+    }
     else if(d&&d.error&&/unknown|not.*found|no such|invalid action/i.test(d.error)){ setSync('bad','Backend not updated'); toast('⚠ This backend needs the pricebook handler — see install note.'); render(); }
     else { setSync(cached?'ok':'bad', cached?'Offline (cached)':'Empty'); render(); }
   }catch(e){ setSync(cached?'ok':'bad', cached?'Offline (cached)':'No connection'); render(); }
@@ -366,9 +373,12 @@ async function pushSave(){
   try{
     const d=await fetch(bizUrl(z),{ method:'POST', body:JSON.stringify({ action:'save_pricebook', adminToken:bizTok(z), bizKey:bizKeyOf(z), items:_items }) }).then(r=>r.json());
     if(d&&d.success){ _dirty=false; setSync('ok','Synced'); return; }
-    // POST reached the backend but wasn't routed there (fork without JSON doPost) → GET fallback for small catalogs
-    if(payload.length<7000){
-      const g=await fetch(bizUrl(z)+'?action=save_pricebook&bizKey='+encodeURIComponent(bizKeyOf(z))+'&adminToken='+encodeURIComponent(bizTok(z))+'&items='+encodeURIComponent(payload)).then(r=>r.json());
+    // POST reached the backend but wasn't routed there (fork without JSON doPost) → GET fallback for small catalogs.
+    // Guard on the ACTUAL encoded URL length, not the raw payload — encodeURIComponent inflates it ~2-3x, and a
+    // URL that overruns Google's limit gets truncated, which the backend used to read as an empty (wiping) save.
+    const _getUrl=bizUrl(z)+'?action=save_pricebook&bizKey='+encodeURIComponent(bizKeyOf(z))+'&adminToken='+encodeURIComponent(bizTok(z))+'&items='+encodeURIComponent(payload);
+    if(_getUrl.length<7000){
+      const g=await fetch(_getUrl).then(r=>r.json());
       if(g&&g.success){ _dirty=false; setSync('ok','Synced'); return; }
     }
     setSync('bad','Save failed'); toast('⚠ '+((d&&d.error)||'Backend rejected the save.'));
@@ -448,7 +458,13 @@ function seedCleaning(){
   render(); queueSave();
   toast('✨ '+added+' price'+(added>1?'s':'')+' added — edit any $ and it changes HQ + the crew app.');
 }
-function selectBiz(i){ _bizIdx=i;
+function selectBiz(i){
+  // Flush any pending debounced save for the CURRENT business BEFORE switching. The timer used to
+  // fire after _bizIdx changed and _items was reset to [], POSTing an empty array under the NEW
+  // business's key — wiping it — while the current edit was never saved. pushSave() reads _bizIdx/_items
+  // synchronously, so calling it here (pre-switch) captures the correct business.
+  if(_saveTimer){ clearTimeout(_saveTimer); _saveTimer=null; if(_dirty){ try{ pushSave(); }catch(e){} } }
+  _bizIdx=i;
   try{ const z=bizLoad()[i]; const cln=/clean/i.test(String(z&&z.n||'')); const b=document.getElementById('seedBtn'); b.style.display=''; b.textContent=cln?'✨ Load cleaning catalog':'✨ Load lawn catalog'; b.onclick=cln?seedCleaning:seedLawn; }catch(e){} _type='all'; document.querySelectorAll('#typeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.t==='all')); document.getElementById('q').value=''; renderBizBar(); loadPricebook(bizLoad()[i]); }
 function setType(t){ _type=t; document.querySelectorAll('#typeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.t===t)); render(); }
 function setCat(c){ _cat=c; render(); }
