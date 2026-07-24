@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-16.68 */
+/* APP_VER:2026-07-16.69 */
 (function(){
-  var V='2026-07-16.68'; window.__APP_VER=V;
+  var V='2026-07-16.69'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -328,16 +328,10 @@
 <div id="fmCompleteSheet" onclick="if(event.target===this)fmCloseComplete()">
   <div class="fm-sheet">
     <div class="fm-sheet-title" id="fmcTitle">Finish job</div>
-    <div class="fm-sheet-sub">Take payment, snap a photo, run the checklist.</div>
+    <div class="fm-sheet-sub">Photo, checklist, then payment at the bottom → Complete.</div>
     <div class="fm-block" id="fmcAddonsBlock" style="display:none;">
       <div class="fm-block-label">Extra services done today?</div>
       <div id="fmcAddons" class="fm-addon-row"></div>
-    </div>
-    <div class="fm-block">
-      <div class="fm-block-label"><span>Payment</span><span id="fmcPayState" class="req">required</span></div>
-      <div class="fm-pay-amt" id="fmcAmt">$0</div>
-      <div class="fm-pay-method" id="fmcMethod"></div>
-      <div id="fmcPayControls"></div>
     </div>
     <div class="fm-block">
       <div class="fm-block-label"><span>Photo</span><span style="color:#94a3b8;">optional</span></div>
@@ -355,6 +349,12 @@
     <div class="fm-block">
       <div class="fm-block-label"><span>Before you leave</span><span style="display:flex;align-items:center;gap:8px;"><button onclick="fmcCheckAll()" style="background:#f0fdf4;border:1.5px solid #bbf7d0;color:#15803d;border-radius:9px;padding:4px 11px;font-family:inherit;font-weight:800;font-size:12px;cursor:pointer;">✓ Check all</button><span id="fmcCheckState" class="req">required</span></span></div>
       <div class="fm-checklist" id="fmcChecklist"></div>
+    </div>
+    <div class="fm-block" style="border-top:2px solid #e2e8f0;padding-top:12px;">
+      <div class="fm-block-label"><span>💵 Payment — last step</span><span id="fmcPayState" class="req">required</span></div>
+      <div class="fm-pay-amt" id="fmcAmt">$0</div>
+      <div class="fm-pay-method" id="fmcMethod"></div>
+      <div id="fmcPayControls"></div>
     </div>
     <div class="fm-err" id="fmcErr"></div>
     <button class="fm-btn fm-btn-xl fm-btn-done" id="fmcSubmitBtn" onclick="fmSubmitComplete()" disabled>Take payment to finish</button>
@@ -666,9 +666,13 @@ function _payType(bk){
   // HARD GATE: 'autopay' requires an actual card on file (cardLast4 from the
   // Customers sheet). A payMethod that merely says "auto"/"stripe" is NOT enough —
   // that's how a no-card customer got a charge button. No card → invoice.
-  const _card=String(bk.cardLast4||'').trim();
-  if(bk.portalAutopay===true && _card) return 'autopay';
-  if((s.includes('auto')||s.includes('stripe')) && !s.includes('not paid') && !s.includes('pending') && _card) return 'autopay';
+  // Card present = a Stripe payment method is on file (bk.hasCard from the backend), OR — for
+  // older backends that don't send hasCard yet — the display digits. Gating on cardLast4 alone
+  // wrongly blocked charging real autopay customers whose CardLast4 cell was blank but who had
+  // a chargeable payment method (that's the "on autopay but I can't charge them" bug).
+  const _hasCard=(bk.hasCard===true) || !!String(bk.cardLast4||'').trim();
+  if(bk.portalAutopay===true && _hasCard) return 'autopay';
+  if((s.includes('auto')||s.includes('stripe')) && !s.includes('not paid') && !s.includes('pending') && _hasCard) return 'autopay';
   return 'invoice';
 }
 function mowMinutes(bk){ const c=parseInt(String(bk.mowMinutes||bk.customMowMins||'')); if(c>0) return c; const n=String(bk.notes||'').toLowerCase(); if(_isQuoteJob(bk)) return 15; const m=n.match(/lot[:\s]+([\d.]+)\s*ac/i); if(m){ const a=parseFloat(m[1]); if(a>0) return Math.min(120,Math.max(25,Math.round(20+a*45))); } return 40; }
@@ -743,7 +747,7 @@ function _authGuard(d){
   return false;
 }
 function logout(){ try{ localStorage.removeItem(SESSION_KEY); }catch(e){} /* day state (clock-in, progress) is kept per-user — logging back in the same day resumes it */ if(_fmPollInt) clearInterval(_fmPollInt); _stopGeo(); _releaseWake(); adminToken=''; _fmStarted=false; _clockInTime=null; _clockedOut=false; document.getElementById('fieldMode').classList.remove('show'); const _ls=document.getElementById('loginScreen'); _ls.style.display='flex'; _ls.style.visibility='visible'; }
-function showApp(){ document.getElementById('loginScreen').style.display='none'; document.getElementById('fieldMode').classList.add('show'); _restoreState(); /* fresh login same day → resume clock/progress */ _startPoint=_loadStartPoint(); _crewSel=_loadCrewSel(); _startTimers(); _fmRender(); }
+function showApp(){ document.getElementById('loginScreen').style.display='none'; document.getElementById('fieldMode').classList.add('show'); _restoreState(); /* fresh login same day → resume clock/progress */ _startPoint=_loadStartPoint(); _crewSel=_loadCrewSel(); _startTimers(); try{ _startGeo(); }catch(e){}   /* warm GPS the instant the app opens so the route can optimize from the crew's real location the moment they Start — this is what stops the "wrong first house until I hit Re-route" problem */ _fmRender(); }
 
 /* ───────── State persistence (resume where left off) ───────── */
 function _persist(){
@@ -1288,7 +1292,18 @@ function fmNotesSave(){
   fmNotesClose(); _fmFlushQueue(); _fmRender(); showToast('💾 Notes saved — syncing everywhere');
 }
 // Auto-route at clock-in: silent GPS re-route — this is now THE routing model.
-function _fmAutoRoute(){ try{ _fmRerouteExec(true); }catch(e){} }
+// Auto-optimize the route from the crew's REAL location. On a cold start the GPS fix
+// isn't ready the instant the route begins — the old code fired once, got no fix, and
+// silently kept the stale/unoptimized order, so the crew opened onto the WRONG first
+// house until they manually tapped Re-route. Now we warm GPS and wait for a fix (up to
+// ~20s), then optimize — the order corrects itself with no tap needed.
+let _fmAutoRouteTimer=null;
+function _fmAutoRoute(){ if(_fmAutoRouteTimer){ clearTimeout(_fmAutoRouteTimer); _fmAutoRouteTimer=null; } _fmAutoRouteSoon(0); }
+function _fmAutoRouteSoon(n){
+  try{ _startGeo(); }catch(e){}
+  if((_lastPos&&_lastPos.lat!=null) || n>=8){ try{ _fmRerouteExec(true); }catch(e){} return; }   // have a fix (or gave up waiting) → optimize now
+  _fmAutoRouteTimer=setTimeout(function(){ _fmAutoRouteSoon(n+1); }, 2500);   // no fix yet → keep warming, retry
+}
 // 📍 Re-route from here: crew went off-plan (gas, lunch, emergency) — re-optimize
 // ONLY the remaining stops from their current GPS position and re-lock.
 let _rerouting=false;
@@ -2357,7 +2372,11 @@ function fmOpenComplete(){
   const stop=_fmStops()[_fmViewIdx]; if(!stop) return;
   const bk=stop.bk;
   _fmcStop=stop; _fmcRowIdx=(allBookings||[]).indexOf(bk); _fmcPayType=_payType(bk);
-  _fmcCash=false; _fmcInvoiceSent=false; _fmcChargeChosen=false; _fmcBase=_fmAmt(bk); _fmcPhotos=[];
+  // Autopay customers default to charging the card on file — pre-confirmed so the employee just
+  // does the checklist and taps Complete (still undoable if a card needs to be skipped). Cash/invoice
+  // still require an explicit tap.
+  _fmcChargeChosen=(_fmcPayType==='autopay');
+  _fmcCash=false; _fmcInvoiceSent=false; _fmcBase=_fmAmt(bk); _fmcPhotos=[];
   _fmcAddons=(customerServicesFor(bk.email)||[]).map(s=>({name:s.name,price:+s.price||0,on:false}));
   _fmcEndChk={}; END_CHECKLIST.forEach(l=>_fmcEndChk[l]=false);
   if(_fmcPayType==='cash') _fmcEndChk['Collected cash']=false;
@@ -2408,11 +2427,11 @@ function _fmcRenderPay(){
   const wrap=document.getElementById('fmcPayControls'); const grand=_fmcGrand();
   const state=document.getElementById('fmcPayState');
   const see=_isMoneyRole();
-  const bk=_fmcStop&&_fmcStop.bk; const _l4=bk?String(bk.cardLast4||'').trim():''; const hasCard=!!_l4;
+  const bk=_fmcStop&&_fmcStop.bk; const _l4=bk?String(bk.cardLast4||'').trim():''; const hasCard=(bk&&bk.hasCard===true)||!!_l4;
   // ── On-the-spot method switch — crew can change how THIS job is paid, right now ──
   const methods=[
     {k:'cash',   lbl:'💵 Cash'},
-    {k:'autopay',lbl:'💳 Card'+(hasCard?(' ••'+_l4.slice(-4)):''), dis:!hasCard, tip:'No card on file — collect cash or send an invoice'},
+    {k:'autopay',lbl:'💳 Card'+(_l4?(' ••'+_l4.slice(-4)):(hasCard?' on file':'')), dis:!hasCard, tip:'No card on file — collect cash or send an invoice'},
     {k:'invoice',lbl:'🧾 Invoice'}
   ];
   const bar='<div style="display:flex;gap:7px;margin-bottom:10px;">'+methods.map(function(m){ const on=_fmcPayType===m.k;

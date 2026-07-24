@@ -3522,7 +3522,9 @@ function _dayOrderPanel(c,iso,cell,zi){
   let h='<div style="padding:5px 2px 0;"><button class="dev-btn" style="font-size:11px;padding:5px 11px;" onclick="toggleDayOrder(\''+c+'\',\''+iso+'\')">'+(open?'▾':'▸')+' ↕ Reorder run ('+jobs.length+')</button>'
     +(c!=='un'?'<button class="dev-btn" style="font-size:11px;padding:5px 11px;margin-left:6px;" onclick="crewMapsRoute('+(zi||0)+',\''+c+'\')" title="Open this crew\'s day as Google Maps directions — long routes split into 10-stop legs">🗺 Route in Google Maps</button>'
     +'<button class="dev-btn" style="font-size:11px;padding:5px 11px;margin-left:6px;" onclick="hqPushCrewDay('+(zi||0)+',\''+c+'\')" title="Write the board\'s times to the sheet + Google Calendar and save the run order for the crew app">📅 Push to Google Calendar</button>'
-    +'<button class="dev-btn" style="font-size:11px;padding:5px 11px;margin-left:6px;" onclick="hqOptimizeRun(\''+c+'\',\''+iso+'\','+(zi||0)+')" title="Re-order this crew\'s open stops for the shortest drive — exact solve on real road times">⚡ Optimize run</button>':'');
+    +'<button class="dev-btn" style="font-size:11px;padding:5px 11px;margin-left:6px;" onclick="hqOptimizeRun(\''+c+'\',\''+iso+'\','+(zi||0)+')" title="Re-order this crew\'s open stops for the shortest drive — exact solve on real road times">⚡ Optimize run</button>'
+    +'<button class="dev-btn" style="font-size:11px;padding:5px 11px;margin-left:6px;" onclick="hqOptimizeFrom(\''+c+'\',\''+iso+'\','+(zi||0)+')" title="Optimize starting FROM a specific address you type — the shop, a hotel, wherever the truck starts today">📍 From a spot</button>':'')
+    +'<button class="dev-btn" style="font-size:11px;padding:5px 11px;margin-left:6px;background:#1e3a5f;" onclick="hqCopyRoute('+(zi||0)+',\''+c+'\',\''+iso+'\')" title="Copy this run — names, addresses, notes, cash flags — as text to paste into Discord as a backup if the crew app has issues">📋 Copy for Discord</button>';
   if(open){
     let st=480;
     h+='<div style="margin-top:5px;">'+jobs.map(function(b,i){
@@ -3838,7 +3840,7 @@ function _hqTspHeur(M){
   }
   return best;
 }
-async function hqOptimizeRun(c,iso,zi){
+async function hqOptimizeRun(c,iso,zi,startOverride){
   zi=zi||0;
   if(_hqOptBusy) return; _hqOptBusy=true;
   try{
@@ -3898,6 +3900,12 @@ async function hqOptimizeRun(c,iso,zi){
       if(_lco){ start=_lco; doubts.general=doubts.general.filter(function(x){ return x.indexOf('No live GPS')<0; }); }
       else doubts.general.push('Locked stop "'+(_lb.name||'?')+'" couldn\'t be located — the optimized part starts from crew GPS / first stop instead of from that yard.');
     }
+    // Owner picked an explicit start address ("📍 From a spot") — it wins over GPS/first-stop/locked.
+    if(startOverride&&startOverride.lat!=null){
+      start={lat:startOverride.lat,lon:startOverride.lon};
+      doubts.general=doubts.general.filter(function(x){ return x.indexOf('No live GPS')<0; });
+      doubts.general.push('Route optimized starting FROM "'+(startOverride.label||'your chosen spot')+'".');
+    }
     // ── REAL ROAD DISTANCES: one OSRM table call → full drive-time matrix
     const coords=[start].concat(ok.map(function(p){ return p.co; }));
     let M=null, road=false;
@@ -3943,6 +3951,86 @@ async function hqOptimizeRun(c,iso,zi){
     const nDoubt=Object.keys(doubts.stops).length+doubts.general.length;
     toast('⚡ '+(_locked.length?('🔒 '+_locked.length+' locked first · '):'')+(exact?'PROVABLY OPTIMAL':'Optimized')+(road?' on real roads':'')+' — '+fmtC(sol.cost)+' vs '+fmtC(before)+' before'+(nDoubt?' · 🔴 '+nDoubt+' warning'+(nDoubt>1?'s':'')+' on the lane':' · no doubts ✓'), 9000);
   } finally { _hqOptBusy=false; }
+}
+
+// 📍 Optimize starting FROM a typed address (shop / house / hotel — wherever the truck starts).
+// prompt() fires synchronously inside the click (before any await), so mobile never suppresses it.
+function hqOptimizeFrom(c,iso,zi){
+  const addr=prompt('Optimize the route starting FROM which address?\n\nType where the truck actually starts today — the shop, your house, a hotel, etc.');
+  if(!addr||!addr.trim()) return;
+  zi=zi||0;
+  toast('📍 Locating your start point…');
+  const q=addr.trim()+(/\bFL\b/i.test(addr)?'':', FL');
+  _hqGeocode(q).then(function(co){
+    if(!co){ toast('⚠ Couldn\'t find "'+addr.trim()+'" — add a city or ZIP and try again', 7000); return; }
+    hqOptimizeRun(c,iso,zi,{lat:co.lat,lon:co.lon,label:addr.trim()});
+  }).catch(function(){ toast('⚠ Location lookup failed — try again'); });
+}
+
+// 📋 Copy the day's run as plain text (names, addresses, notes, cash flags) for pasting into
+// Discord — a manual fallback the crew can follow if the app ever breaks.
+function hqCopyRoute(zi,c,iso){
+  zi=zi||0;
+  const jobs=_dayJobsInOrder(c,iso,zi);
+  if(!jobs.length){ toast('No open stops to copy for this crew/day'); return; }
+  const clean=function(s){ return String(s||'').replace(/\blot:\s*[\d.]+ac\b/gi,'').replace(/\s*\|\s*$/,'').trim(); };
+  const dstr=(function(){ const p=String(iso).split('-'); return new Date(+p[0],(+p[1])-1,+p[2]).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}); })();
+  const L=[];
+  L.push('🌿 ROUTE — '+dstr+((c&&c!=='un')?(' · Crew '+c):'')+' · '+jobs.length+' stop'+(jobs.length>1?'s':''));
+  L.push('');
+  jobs.forEach(function(b,i){
+    const pb=payBadge(b), amt=amtOf(b);
+    let pay;
+    if(pb.t==='Cash') pay='💵 COLLECT $'+amt.toFixed(0)+' CASH';
+    else if(pb.t==='Autopay') pay='💳 Autopay — $'+amt.toFixed(0)+' (card charges on complete)';
+    else if(pb.t==='Paid') pay='✅ Already paid';
+    else if(pb.t==='Invoiced') pay='🧾 Invoiced — $'+amt.toFixed(0);
+    else pay='🧾 $'+amt.toFixed(0)+' — invoice on complete';
+    const notes=clean(b.notes);
+    L.push((i+1)+'. '+(b.name||'?')+(b.phone?('  ☎ '+String(b.phone).trim()):''));
+    L.push('    📍 '+(b.address||'')+(b.zip?(', '+b.zip):''));
+    L.push('    '+pay+(b.frequency?('  ·  '+b.frequency):''));
+    if(notes) L.push('    📝 '+notes);
+    L.push('');
+  });
+  const cash=jobs.filter(function(b){ return payBadge(b).t==='Cash'; });
+  if(cash.length) L.push('💵 CASH TO COLLECT: '+cash.map(function(b){ return (b.name||'?')+' $'+amtOf(b).toFixed(0); }).join(', '));
+  _hqCopyText(L.join('\n'));
+}
+
+// Robust copy: shows the text in a selectable box (works even when the clipboard API is blocked),
+// auto-selects it, and a Copy button tries execCommand + navigator.clipboard.
+function _hqCopyText(text){
+  let ov=document.getElementById('hqCopyOv');
+  if(ov) ov.remove();
+  ov=document.createElement('div'); ov.id='hqCopyOv';
+  ov.style.cssText='position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  const box=document.createElement('div');
+  box.style.cssText='background:#0f2740;border:1px solid rgba(255,255,255,.14);border-radius:16px;width:100%;max-width:560px;max-height:86vh;display:flex;flex-direction:column;padding:16px;color:#e5eef5;';
+  const head=document.createElement('div');
+  head.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;';
+  head.innerHTML='<b>📋 Route — copy &amp; paste into Discord</b>';
+  const x=document.createElement('button');
+  x.textContent='×'; x.style.cssText='background:rgba(255,255,255,.1);border:none;color:inherit;border-radius:8px;padding:4px 12px;cursor:pointer;font-size:20px;line-height:1;';
+  x.onclick=function(){ ov.remove(); };
+  head.appendChild(x);
+  const ta=document.createElement('textarea');
+  ta.readOnly=true; ta.value=text;
+  ta.style.cssText='width:100%;flex:1;min-height:320px;background:#0b1c2e;color:#dbeafe;border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;line-height:1.5;resize:vertical;-webkit-user-select:text;user-select:text;';
+  const btn=document.createElement('button');
+  btn.textContent='📋 Copy to clipboard';
+  btn.style.cssText='margin-top:10px;background:#16a34a;border:none;color:#fff;border-radius:10px;padding:13px;font-weight:800;font-size:15px;cursor:pointer;font-family:inherit;';
+  btn.onclick=function(){
+    ta.focus(); ta.select(); try{ ta.setSelectionRange(0,999999); }catch(e){}
+    let ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(text).then(function(){},function(){}); ok=true; }
+    btn.textContent=ok?'✅ Copied! Paste it into Discord':'Select all in the box above, then copy';
+    btn.style.background=ok?'#15803d':'#b45309';
+  };
+  box.appendChild(head); box.appendChild(ta); box.appendChild(btn); ov.appendChild(box);
+  document.body.appendChild(ov);
+  setTimeout(function(){ try{ ta.focus(); ta.select(); }catch(e){} },60);
 }
 // Apply a full new order — identical persist path to a manual reorder.
 function _dayApplyOrder(c,iso,g,legMap,zi){
