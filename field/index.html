@@ -403,6 +403,9 @@
    Evergreen Field Mode — standalone PWA (Phase 2 hardening)
    ════════════════════════════════════════════════════════════════════ */
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
+// SANDBOX flag — TRUE only when the URL carries ?test=1. A normal launch (installed PWA,
+// bookmark, HQ link) never has it, so production behavior is completely unchanged.
+let _fmTestMode = /[?&]test=1(?:&|$)/.test(location.search);
 const SESSION_KEY = 'eg_staff_session';
 const STATE_KEY   = 'evg_field_state_v2';
 // State is PER USER: clock-in/out, route progress and skips belong to the person,
@@ -2997,8 +3000,33 @@ function qjRenderBuilder(){
   if(eb){ eb.textContent='✉️ Email estimate to customer'; }
 }
 
+/* 🧪 TEST SANDBOX — reached ONLY via field/index.html?test=1 (the "Test Field Mode" button on
+   /invoice). Fakes the login + a few fake customers and short-circuits EVERY backend call, so you
+   can walk the whole flow — route, complete sheet, autopay, checklist — and nothing is saved,
+   charged, or clocked. Zero effect on a normal launch (no ?test=1). */
+function _fmEnterTest(){
+  const _realFetch=window.fetch.bind(window);
+  window.fetch=function(u,o){
+    try{ const s=(typeof u==='string')?u:((u&&u.url)||''); if(s.indexOf('script.google.com')>=0) return Promise.resolve(new Response(JSON.stringify({success:true,test:true,bookings:[],jobs:[]}),{status:200,headers:{'Content-Type':'application/json'}})); }catch(e){}
+    return _realFetch(u,o);
+  };
+  // no writes to localStorage queue/state, and the poll can't wipe our fake jobs
+  _persist=function(){}; _fmEnqueue=function(){ return true; }; _fmFlushQueue=function(){}; _fmQueueSave=function(){}; _fmMarkKeyDone=function(){}; loadData=function(){ return Promise.resolve(); };
+  adminToken='TEST-SANDBOX'; adminName='Test Run'; adminEmail='test@evergreen.local'; adminRole='owner'; adminCrews='A';
+  const T=todayISOStr();
+  allBookings=[
+    {name:'TEST · Dusty Fields', email:'dusty@test.local', address:'202 Demo Dr', zip:'34442', phone:'3525550001', price:'$60', frequency:'Weekly', serviceDate:T, crew:'A', payMethod:'cash', calendarEvent:'cash', notes:'Cash on the porch', _rowIndex:2},
+    {name:'TEST · Ivy Green', email:'ivy@test.local', address:'14 Sample St', zip:'34450', phone:'3525550002', price:'$75', frequency:'Biweekly', serviceDate:T, crew:'A', portalAutopay:true, hasCard:true, cardLast4:'4242', payMethod:'', calendarEvent:'', notes:'Gate code 1234', _rowIndex:3},
+    {name:'TEST · Rocky Stone', email:'rocky@test.local', address:'900 Example Ave', zip:'34453', phone:'3525550003', price:'$90', frequency:'Weekly', serviceDate:T, crew:'A', payMethod:'', calendarEvent:'', notes:'Watch the sprinkler heads by the mailbox', _rowIndex:4}
+  ];
+  allCustomers=[];
+  const ls=document.getElementById('loginScreen'); if(ls) ls.style.display='none';
+  showApp();
+  setTimeout(function(){ try{ showToast('🧪 TEST MODE — fake customers · nothing is saved or charged',7000); }catch(e){} },400);
+}
 window.addEventListener('DOMContentLoaded', ()=>{
   if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').then(function(reg){ try{ reg.update(); }catch(e){} }).catch(()=>{}); }
+  if(_fmTestMode){ _fmEnterTest(); _fmUpdateSyncBadge(); return; }
   const saved=loadSavedSession();
   if(saved){ adminToken=saved.token; adminName=saved.name; adminEmail=saved.email; adminRole=saved.role||'employee'; adminCrews=saved.crews||''; try{ if(localStorage.getItem('evg_field_lastload_day')!==todayISOStr()) _fmShowVeil('Loading your day\u2026'); }catch(e){ _fmShowVeil('Loading your day\u2026'); } _hydrateFromCache(); _restoreState(); showApp(); loadData(); }
   else { const ls=document.getElementById('loginScreen'); ls.style.display='flex'; ls.style.visibility='visible'; }
