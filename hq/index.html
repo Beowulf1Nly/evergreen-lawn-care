@@ -493,6 +493,7 @@
   <div class="hqtabs">
     <button class="hqtab on" data-t="live" onclick="setTab('live')">🛰 Live <span class="k">1</span></button>
     <button class="hqtab" data-t="dispatch" onclick="setTab('dispatch')">📅 Dispatch <span class="k">2</span></button>
+    <button class="hqtab" data-t="customers" onclick="setTab('customers')">👥 Customers</button>
     <button class="hqtab" data-t="ops" onclick="setTab('ops')">🔧 Ops <span class="k">3</span></button>
     <button class="hqtab" data-t="stats" onclick="setTab('stats')">📊 Stats <span class="k">4</span></button>
     <button class="hqtab" data-t="outreach" onclick="setTab('outreach')">📨 Outreach <span class="k">5</span></button>
@@ -630,6 +631,7 @@
   </div>
 
   <!-- ═══ DEV — developer controls ═══ -->
+  <div class="hq-pane" id="pane-customers"></div>
   <div class="hq-pane" id="pane-pricebook" style="padding:0;">
   <iframe id="pbFrame" style="width:100%;height:calc(100vh - 118px);border:none;display:block;background:transparent;" title="Pricebook"></iframe>
 </div>
@@ -861,7 +863,7 @@ function enterApp(){
   if(window._dispTick) clearInterval(window._dispTick); window._dispTick=setInterval(function(){ if(_activeTab==='dispatch'&&_dispView==='day'&&!_dispDrag){ try{ renderDispatch(); }catch(e){} } },20000);
   loadCrewPay();                                   // roster names for crew cards
   let t0tab='live'; try{ t0tab=(location.hash||'').replace('#','')||localStorage.getItem('hq_tab')||'live'; }catch(e){}
-  setTab(['live','dispatch','ops','stats','outreach','sites','dev'].indexOf(t0tab)>=0?t0tab:'live');
+  setTab(['live','dispatch','customers','ops','stats','outreach','sites','pricebook','dev'].indexOf(t0tab)>=0?t0tab:'live');
 }
 
 /* ── Canonical route order (Routes sheet — the same record /field follows) ── */
@@ -2032,6 +2034,121 @@ function updateClocks(){
 
 /* ═══════════════════════ HQ SHELL — tabs ═══════════════════════ */
 let _activeTab='live';
+/* ═══════════════════ 👥 CUSTOMERS — full book, open anyone, do everything ═══════════════════ */
+let _custQuery='', _custSort='name';
+function _custAllJobs(){ let a=(_bookings||[]).concat(_completed||[]); try{ Object.keys(_bizExtra||{}).forEach(function(k){ a=a.concat(_bizExtra[k]||[]); }); }catch(e){} return a.filter(function(b){ return b && !b.rowCancelled; }); }
+function _custKey(b){ return (String(b.email||'').toLowerCase().trim())||('n:'+String(b.name||'').toLowerCase().trim()+'|'+String(b.address||'').toLowerCase().trim()); }
+function _custBuild(){
+  const map={};
+  try{ _uniqueCustomers().forEach(function(c){ const k=_custKey(c); if(!map[k]) map[k]={ key:k, name:c.name||'', email:String(c.email||'').toLowerCase(), phone:c.phone||'', address:c.address||'', zip:c.zip||'', notes:c.notes||'', srcBiz:c._srcBiz||0, jobs:[] }; }); }catch(e){}
+  _custAllJobs().forEach(function(b){ const k=_custKey(b); const m=map[k]||(map[k]={ key:k, name:b.name||'', email:String(b.email||'').toLowerCase(), phone:b.phone||'', address:b.address||'', zip:b.zip||'', notes:'', srcBiz:b._srcBiz||0, jobs:[] }); m.jobs.push(b); if(!m.name&&b.name) m.name=b.name; if(!m.phone&&b.phone) m.phone=b.phone; if(!m.address&&b.address) m.address=b.address; if(!m.zip&&b.zip) m.zip=b.zip; });
+  const today=todayISO();
+  const arr=Object.keys(map).map(function(k){ return map[k]; });
+  arr.forEach(function(m){
+    m.jobs.sort(function(a,b){ return String(dateOf(a)).localeCompare(String(dateOf(b))); });
+    let ltv=0, bal=0, done=0, autopay=false, card='', lastSvc='', next='', freq='';
+    m.jobs.forEach(function(b){
+      const pb=payBadge(b), amt=amtOf(b), d=dateOf(b);
+      if(isDone(b)||_isArch(b)){ done++; if(d>lastSvc) lastSvc=d; if(pb.t==='Paid') ltv+=amt; if(pb.t==='Unpaid'||pb.t==='Invoiced') bal+=amt; }
+      else if(d>=today){ if(!next||d<next) next=d; }
+      if(b.portalAutopay===true) autopay=true;
+      if(String(b.cardLast4||'').trim()) card=String(b.cardLast4).trim();
+      else if(b.hasCard===true&&!card) card='••••';
+      const f=String(b.frequency||'').trim(); if(f&&!/quote/i.test(f)) freq=f;
+    });
+    m.ltv=ltv; m.balance=bal; m.doneCount=done; m.autopay=autopay; m.card=card; m.lastSvc=lastSvc; m.next=next; m.freq=freq;
+    const up=m.jobs.filter(function(b){ return !isDone(b)&&!_isArch(b)&&dateOf(b)>=today; });
+    m.rep = up[0] || m.jobs[m.jobs.length-1] || { name:m.name, email:m.email, phone:m.phone, address:m.address, zip:m.zip, _srcBiz:m.srcBiz, frequency:m.freq };
+  });
+  return arr;
+}
+function _custMoney(n){ return '$'+(Math.round(n)||0); }
+function renderCustomers(){
+  try{ _loadCustSheets(); }catch(e){}
+  const pane=document.getElementById('pane-customers'); if(!pane) return;
+  if(!document.getElementById('custList')){
+    pane.innerHTML='<div style="padding:12px 14px 22px;max-width:1100px;margin:0 auto;">'
+      +'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">'
+      +'<input id="custSearch" type="search" placeholder="🔎 Search name, email, phone, address, zip" oninput="_custQuery=this.value;_custRenderList();" style="flex:1;min-width:220px;padding:11px 13px;border-radius:11px;border:1px solid var(--line2,#2a3942);background:var(--card,#0f2740);color:inherit;font-size:14px;">'
+      +'<select id="custSort" onchange="_custSort=this.value;_custRenderList();" style="padding:11px;border-radius:11px;background:var(--card,#0f2740);color:inherit;border:1px solid var(--line2,#2a3942);font-family:inherit;">'
+      +'<option value="name">A–Z</option><option value="recent">Most recent</option><option value="ltv">Top spenders</option><option value="balance">Owes money</option></select></div>'
+      +'<div id="custKpis" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;font-size:12.5px;font-weight:700;"></div>'
+      +'<div id="custList" style="display:flex;flex-direction:column;gap:8px;"></div></div>';
+  }
+  _custRenderList();
+}
+function _custRenderList(){
+  const listEl=document.getElementById('custList'); if(!listEl) return;
+  let all=_custBuild();
+  window._custCache={}; all.forEach(function(m){ window._custCache[m.key]=m; });
+  const total=all.length, ap=all.filter(function(m){return m.autopay;}).length, owed=all.reduce(function(s,m){return s+m.balance;},0);
+  const kp=document.getElementById('custKpis');
+  if(kp){ const chip='display:inline-block;padding:5px 11px;border-radius:999px;background:var(--card,#0f2740);border:1px solid var(--line2,#2a3942);';
+    kp.innerHTML='<span style="'+chip+'">👥 '+total+' customers</span><span style="'+chip+'">⚡ '+ap+' autopay</span>'+(owed>0?('<span style="'+chip+'color:#f87171;">🧾 '+_custMoney(owed)+' outstanding</span>'):''); }
+  const q=_custQuery.toLowerCase().trim();
+  let list=q?all.filter(function(m){ return (m.name+' '+m.email+' '+m.phone+' '+m.address+' '+m.zip).toLowerCase().indexOf(q)>=0; }):all;
+  list.sort(function(a,b){
+    if(_custSort==='ltv') return b.ltv-a.ltv;
+    if(_custSort==='recent') return String(b.lastSvc).localeCompare(String(a.lastSvc));
+    if(_custSort==='balance') return b.balance-a.balance;
+    return String(a.name).toLowerCase().localeCompare(String(b.name).toLowerCase());
+  });
+  if(!list.length){ listEl.innerHTML='<div style="opacity:.6;padding:20px;text-align:center;">No customers match &quot;'+esc(_custQuery)+'&quot;.</div>'; return; }
+  listEl.innerHTML=list.map(function(m){
+    const pay = m.autopay?('⚡ Autopay'+(m.card&&m.card!=='••••'?(' ••'+m.card.slice(-4)):'')):(m.card?'💳 Card on file':'🧾 Invoice');
+    return '<button onclick="openCustomer(\''+m.key.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')" style="text-align:left;background:var(--card,#0f2740);border:1px solid var(--line2,#2a3942);border-radius:13px;padding:12px 14px;cursor:pointer;font-family:inherit;color:inherit;display:flex;justify-content:space-between;gap:10px;align-items:center;">'
+      +'<div style="min-width:0;"><div style="font-weight:800;font-size:15px;">'+esc(m.name||'(no name)')+'</div>'
+      +'<div style="font-size:12px;color:var(--dim,#9fb2c0);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(m.address||'')+(m.zip?(', '+esc(m.zip)):'')+'</div>'
+      +'<div style="font-size:11.5px;color:var(--dim,#9fb2c0);margin-top:3px;">'+esc(pay)+(m.freq?(' · '+esc(m.freq)):'')+(m.doneCount?(' · '+m.doneCount+' visits'):'')+'</div></div>'
+      +'<div style="text-align:right;white-space:nowrap;"><div style="font-weight:800;color:#4ade80;">'+_custMoney(m.ltv)+'</div>'
+      +(m.balance>0?('<div style="font-size:11.5px;color:#f87171;margin-top:2px;">owes '+_custMoney(m.balance)+'</div>'):(m.next?('<div style="font-size:11.5px;color:var(--dim,#9fb2c0);margin-top:2px;">next '+esc(m.next)+'</div>'):''))
+      +'</div></button>';
+  }).join('');
+}
+function _custJob(key,idx){ const m=(window._custCache||{})[key]; return (m&&m.jobs[idx])||null; }
+function openCustomer(key){
+  const m=(window._custCache||{})[key]; if(!m) return;
+  _jobCur=m.rep; try{ _jobBi=_bookings.indexOf(m.rep); }catch(e){}
+  const today=todayISO();
+  const past=m.jobs.filter(function(b){ return isDone(b)||_isArch(b); }).slice().reverse();
+  const up=m.jobs.filter(function(b){ return !isDone(b)&&!_isArch(b)&&dateOf(b)>=today; });
+  const pay = m.autopay?('⚡ Autopay ON'+(m.card&&m.card!=='••••'?(' · ••'+m.card.slice(-4)):'')):(m.card?('💳 Card on file'+(m.card!=='••••'?(' ••'+m.card.slice(-4)):'')):'🧾 Invoice / pay-after');
+  const ph=String(m.phone||'').replace(/[^0-9+]/g,'');
+  const chip='display:inline-block;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--line2,#2a3942);font-size:12px;font-weight:700;';
+  let h='<h3>👤 '+esc(m.name||'Customer')+'</h3>';
+  h+='<div class="sub">'+esc(m.address||'')+(m.zip?(', '+esc(m.zip)):'')+(m.email?(' · '+esc(m.email)):'')+'</div>';
+  h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0;">'
+    +'<span style="'+chip+'">'+esc(pay)+'</span>'
+    +'<span style="'+chip+'color:#4ade80;">'+_custMoney(m.ltv)+' lifetime</span>'
+    +(m.balance>0?('<span style="'+chip+'color:#f87171;">owes '+_custMoney(m.balance)+'</span>'):'')
+    +'<span style="'+chip+'">'+m.doneCount+' visits</span>'
+    +(m.freq?('<span style="'+chip+'">'+esc(m.freq)+'</span>'):'')
+    +(m.lastSvc?('<span style="'+chip+'">last '+esc(m.lastSvc)+'</span>'):'')
+    +'</div>';
+  h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">'
+    +(ph?('<a class="act" style="flex:1;min-width:80px;text-align:center;" href="tel:'+esc(ph)+'">📞 Call</a><a class="act" style="flex:1;min-width:80px;text-align:center;" href="sms:'+esc(ph)+'">💬 Text</a>'):'')
+    +(m.email?('<a class="act" style="flex:1;min-width:80px;text-align:center;" href="mailto:'+esc(m.email)+'">✉️ Email</a>'):'')
+    +(m.rep&&m.address?('<a class="act" style="flex:1;min-width:80px;text-align:center;" href="'+_hqNavUrl(m.rep)+'" target="_blank">🧭 Map</a>'):'')
+    +'</div>';
+  h+='<div class="lbl">Money</div>'
+    +'<button class="act" onclick="cdOpenFor(_jobCur'+(m.balance>0?(','+m.balance.toFixed(2)):'')+')"><span class="em">💳</span> Charge card'+(m.balance>0?(' — owes $'+m.balance.toFixed(2)):'')+'</button>'
+    +'<button class="act" onclick="hqInvoiceJob()"><span class="em">🧾</span> Send an invoice'+(m.email?'':' <span style="color:#f87171;font-size:11px;">(needs email)</span>')+'</button>'
+    +'<button class="act" onclick="cdOpenFor(_jobCur)"><span class="em">⚡</span> Card desk — save card · autopay</button>';
+  h+='<div class="lbl">Schedule</div>'
+    +'<button class="act" onclick="hqScheduleAnother()"><span class="em">➕</span> Schedule a job</button>'
+    +(up.length?('<button class="act" onclick="openResched()"><span class="em">📅</span> Reschedule next visit ('+esc(dateOf(up[0]))+')</button>'):'');
+  h+='<div class="lbl">Details</div>'
+    +'<button class="act" onclick="openEditDetails()"><span class="em">✏️</span> Edit name · email · address · price</button>'
+    +'<button class="act" onclick="openNotesEdit()"><span class="em">📝</span> Edit notes</button>'
+    +'<button class="act" onclick="hqSetCcEmail()"><span class="em">✉️</span> 2nd email (CC on everything)</button>';
+  if(m.notes) h+='<div class="rs-note" style="margin-top:8px;">📝 '+esc(m.notes)+'</div>';
+  if(up.length){ h+='<div class="lbl">Upcoming ('+up.length+')</div>'; up.forEach(function(b){ h+='<button class="act" onclick="openJobSheetFor(_custJob(\''+key.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\','+m.jobs.indexOf(b)+'))"><span class="em">📅</span> '+esc(dateOf(b))+' · '+esc(String(b.frequency||b.service||'Visit'))+(amtOf(b)?(' · $'+amtOf(b).toFixed(0)):'')+'</button>'; }); }
+  if(past.length){ h+='<div class="lbl">History ('+past.length+' visits)</div>'; past.slice(0,15).forEach(function(b){ const pb=payBadge(b); h+='<div class="rs-note" style="display:flex;justify-content:space-between;gap:8px;"><span>'+esc(dateOf(b))+' · '+esc(String(b.service||b.frequency||'Mow'))+'</span><span style="color:'+pb.c+';white-space:nowrap;">'+esc(pb.t)+(amtOf(b)?(' $'+amtOf(b).toFixed(0)):'')+'</span></div>'; }); if(past.length>15) h+='<div class="rs-note" style="opacity:.6;">…and '+(past.length-15)+' older</div>'; }
+  h+='<div class="lbl">Danger</div><button class="act danger" onclick="openCancel()"><span class="em">🗑</span> Cancel a scheduled job</button>';
+  h+='<button class="ghost" onclick="closeSheet(\'jobSheet\')" style="margin-top:12px;">Close</button>';
+  document.getElementById('jobSheetBody').innerHTML=h;
+  openSheet('jobSheet');
+}
 function setTab(t){
   _activeTab=t;
   document.querySelectorAll('.hqtab').forEach(function(b){ b.classList.toggle('on', b.dataset.t===t); });
@@ -2044,6 +2161,7 @@ function setTab(t){
   if(t==='stats'){ renderStats(); }
   if(t==='outreach'){ renderOutreach(); }
   if(t==='sites'){ renderSites(); }
+  if(t==='customers'){ renderCustomers(); }
   if(t==='dev'){ renderDev(); }
   if(t==='pricebook'){
     const fr=document.getElementById('pbFrame');
