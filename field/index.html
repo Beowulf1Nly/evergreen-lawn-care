@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-16.69 */
+/* APP_VER:2026-07-16.70 */
 (function(){
-  var V='2026-07-16.69'; window.__APP_VER=V;
+  var V='2026-07-16.70'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -682,16 +682,18 @@ function mowMinutes(bk){ const c=parseInt(String(bk.mowMinutes||bk.customMowMins
 function parseServices(str){ return String(str||'').split(';').map(s=>s.trim()).filter(Boolean).map(s=>{ const m=s.match(/^(.*?):\s*\$?([\d.]+)\s*$/); return m?{name:m[1].trim(),price:parseFloat(m[2])||0}:null; }).filter(s=>s&&s.name&&s.price>0); }
 function customerServicesFor(email){ const em=String(email||'').toLowerCase().trim(); if(!em) return []; const c=(allCustomers||[]).find(x=>String(x.Email||'').toLowerCase().trim()===em); return parseServices(c?(c.Services||''):''); }
 function _fmMapsUrl(bk){
-  // Navigate to the EXACT coordinates the router resolved (Google-quality geocode).
-  // Address-string navigation let Maps "correct" house numbers it doesn't know
-  // (1923 → 1223) and sent the crew to the wrong house.
+  // Use a cached coordinate for navigation ONLY when it's a Google ROOFTOP-exact hit
+  // (c.exact) — that's the one case worth it (new-construction homes Google knows but the
+  // free geocoders miss). A Photon/Nominatim result can be STREET-level, and navigating to
+  // that coordinate drove the crew to the wrong house number. For anything not rooftop-exact,
+  // hand Google the full address STRING and let its own (better) geocoder find the house.
+  const city=(typeof ZIP_CITY!=='undefined'&&ZIP_CITY[bk.zip])?ZIP_CITY[bk.zip]:'';
+  const fullAddr=(bk.address||'')+(bk.zip?', '+bk.zip:'')+(city?', '+city:'')+', FL';
   try{
-    const city=(typeof ZIP_CITY!=='undefined'&&ZIP_CITY[bk.zip])?ZIP_CITY[bk.zip]:'';
-    const fullAddr=(bk.address||'')+(bk.zip?', '+bk.zip:'')+(city?', '+city:'')+', FL';
     const c=_geoCacheLoad()[fullAddr];
-    if(c&&c.lat!=null) return 'https://www.google.com/maps/dir/?api=1&destination='+c.lat.toFixed(6)+','+c.lon.toFixed(6);
+    if(c&&c.lat!=null&&c.exact===true) return 'https://www.google.com/maps/dir/?api=1&destination='+c.lat.toFixed(6)+','+c.lon.toFixed(6);
   }catch(e){}
-  return 'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent((bk.address||'')+(bk.zip?', '+bk.zip:'')+', FL');
+  return 'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(fullAddr);
 }
 let _toastT=null; function showToast(msg,ms){ const t=document.getElementById('toast'); if(!t) return; t.textContent=msg; t.classList.add('show'); clearTimeout(_toastT); _toastT=setTimeout(()=>t.classList.remove('show'),ms||3200); }
 function authParam(){ return 'adminToken='+encodeURIComponent(adminToken); }
@@ -1054,7 +1056,7 @@ async function _geocodeAddr(addr){
       // 'approx' means Google only found the TOWN — caching that centroid poisoned
       // routing AND sent Navigate to the wrong house. Only trust rooftop-quality hits;
       // Census/Nominatim below get their shot at the exact house otherwise.
-      const _gc={ lat:+_gr.lat, lon:+_gr.lon };
+      const _gc={ lat:+_gr.lat, lon:+_gr.lon, exact:true };   // Google rooftop-exact → safe to NAVIGATE to (see _fmMapsUrl)
       if(_gc.lat>=28.3&&_gc.lat<=29.75&&_gc.lon>=-83.05&&_gc.lon<=-81.7) return _gc;
     }
   }catch(e){}
