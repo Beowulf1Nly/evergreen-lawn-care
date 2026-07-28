@@ -2151,11 +2151,11 @@ function openCustomer(key){
   document.getElementById('jobSheetBody').innerHTML=h;
   openSheet('jobSheet');
 }
-/* ═══════════════════ 📐 ESTIMATES — the "quotes I still need to build" tracker ═══════════════════ */
+/* ═══════════════════ 📐 ESTIMATES — remind me → build it → email it ═══════════════════ */
 const _EST_KEY='hq_estimates_v1';
 const _EST_STAGES=[
-  {k:'build', lbl:'🔴 To build',      c:'#f87171'},
-  {k:'built', lbl:'🟡 Built — send it', c:'#fbbf24'},
+  {k:'todo',  lbl:'🔴 To build',      c:'#f87171'},
+  {k:'draft', lbl:'🟡 Draft saved',   c:'#fbbf24'},
   {k:'sent',  lbl:'🔵 Sent — waiting', c:'#38bdf8'},
   {k:'won',   lbl:'✅ Won',           c:'#4ade80'},
   {k:'lost',  lbl:'⚪ Passed',         c:'#94a3b8'}
@@ -2163,90 +2163,106 @@ const _EST_STAGES=[
 function _estStage(k){ return _EST_STAGES.find(function(s){ return s.k===k; })||_EST_STAGES[0]; }
 let _estShowDone=false;
 function _estStore(){ try{ return JSON.parse(localStorage.getItem(_EST_KEY)||'{}')||{}; }catch(e){ return {}; } }
-function _estSave(s){ try{ localStorage.setItem(_EST_KEY, JSON.stringify(s)); }catch(e){} }
-function _estKey(b){ const em=String(b.email||'').toLowerCase().trim(); return em?('q:'+em):('q:'+String(b.name||'').toLowerCase().trim()+'|'+String(b.address||'').toLowerCase().trim()); }
-function _estBuild(){
-  const store=_estStore(), map={};
-  let jobs=(_bookings||[]).concat(_completed||[]);
-  try{ Object.keys(_bizExtra||{}).forEach(function(k){ jobs=jobs.concat(_bizExtra[k]||[]); }); }catch(e){}
-  jobs.forEach(function(b){ if(!b||b.rowCancelled) return; let q=false; try{ q=_hqIsQuote(b); }catch(e){} if(!q) return;
-    const key=_estKey(b); const d=dateOf(b)||'';
-    if(!map[key]) map[key]={ key:key, name:b.name||'', address:b.address||'', zip:b.zip||'', phone:b.phone||'', email:String(b.email||'').toLowerCase(), requested:d, rep:b, manual:false };
-    else if(d>map[key].requested){ map[key].requested=d; map[key].rep=b; }
-  });
-  Object.keys(store).forEach(function(key){ const s=store[key]; if(s&&s.manual&&!map[key]) map[key]={ key:key, name:s.name||'', address:s.address||'', zip:s.zip||'', phone:s.phone||'', email:s.email||'', requested:s.requested||'', rep:{name:s.name,email:s.email,phone:s.phone,address:s.address,zip:s.zip}, manual:true }; });
-  const arr=Object.keys(map).map(function(k){ const m=map[k], s=store[k]||{}; m.status=s.status||'build'; m.note=s.note||''; m.ts=s.ts||0; return m; });
-  return arr;
-}
-function _estPatch(key, patch){ const s=_estStore(); s[key]=Object.assign({}, s[key]||{}, patch, {ts:Date.now()}); _estSave(s); }
-function estSetStatus(key, st){ _estPatch(key, {status:st}); const open=document.getElementById('estDetailKey'); if(open&&open.value===key) estOpen(key); _estRenderList(); }
-function estSetNote(key, v){ _estPatch(key, {note:v}); }
-function estDelete(key){ if(!confirm('Remove this estimate from the tracker?')) return; const s=_estStore(); delete s[key]; _estSave(s); closeSheet('jobSheet'); _estRenderList(); }
-function estAdd(){
-  const name=prompt('Customer / property name for this estimate:'); if(!name||!name.trim()) return;
-  const address=prompt('Address (optional):','')||'';
-  const phone=prompt('Phone (optional):','')||'';
-  const key='q:m:'+name.toLowerCase().trim()+'|'+address.toLowerCase().trim();
-  _estPatch(key, {manual:true, name:name.trim(), address:address.trim(), phone:phone.trim(), status:'build', requested:todayISO()});
-  _estRenderList();
-}
-function renderEstTab(){   /* renamed from renderEstimates — that name already exists (Outreach → Estimates pipeline) */
+function _estSaveAll(o){ try{ localStorage.setItem(_EST_KEY, JSON.stringify(o)); }catch(e){} }
+function _estGet(id){ return _estStore()[id]||null; }
+function _estPut(r){ const o=_estStore(); r.ts=Date.now(); o[r.id]=r; _estSaveAll(o); }
+function _estDel(id){ const o=_estStore(); delete o[id]; _estSaveAll(o); }
+function _estNewId(){ return 'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function _estTotal(r){ return (r.items||[]).reduce(function(s,i){ return s+(parseFloat(i.price)||0); },0); }
+function _estDefaultValid(){ const d=new Date(); d.setDate(d.getDate()+14); try{ return _iso(d); }catch(e){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); } }
+function renderEstTab(){
   const pane=document.getElementById('pane-estimates'); if(!pane) return;
   if(!document.getElementById('estList')){
     pane.innerHTML='<div style="padding:12px 14px 22px;max-width:1000px;margin:0 auto;">'
       +'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">'
       +'<div id="estKpis" style="flex:1;display:flex;gap:8px;flex-wrap:wrap;font-size:12.5px;font-weight:700;"></div>'
-      +'<button onclick="estAdd()" style="padding:10px 14px;border-radius:11px;border:none;background:#16a34a;color:#fff;font-weight:800;cursor:pointer;font-family:inherit;">➕ Add estimate</button>'
-      +'<button id="estDoneToggle" onclick="_estShowDone=!_estShowDone;this.textContent=_estShowDone?\'Hide won/passed\':\'Show won/passed\';_estRenderList();" style="padding:10px 14px;border-radius:11px;border:1px solid var(--line2,#2a3942);background:var(--card,#0f2740);color:inherit;cursor:pointer;font-family:inherit;">Show won/passed</button>'
+      +'<button onclick="estNew()" style="padding:10px 16px;border-radius:11px;border:none;background:#16a34a;color:#fff;font-weight:800;cursor:pointer;font-family:inherit;">➕ New estimate</button>'
+      +'<button id="estDoneToggle" onclick="_estShowDone=!_estShowDone;this.textContent=_estShowDone?\'Hide done\':\'Show won/passed\';_estRenderList();" style="padding:10px 14px;border-radius:11px;border:1px solid var(--line2,#2a3942);background:var(--card,#0f2740);color:inherit;cursor:pointer;font-family:inherit;">Show won/passed</button>'
       +'</div><div id="estList" style="display:flex;flex-direction:column;gap:8px;"></div></div>';
   }
   _estRenderList();
 }
 function _estRenderList(){
   const listEl=document.getElementById('estList'); if(!listEl) return;
-  const all=_estBuild();
-  window._estCache={}; all.forEach(function(m){ window._estCache[m.key]=m; });
-  const order={build:0,built:1,sent:2,won:3,lost:4};
+  const o=_estStore(), all=Object.keys(o).map(function(k){ return o[k]; });
+  const order={todo:0,draft:1,sent:2,won:3,lost:4};
   const kp=document.getElementById('estKpis');
   if(kp){ const chip='display:inline-block;padding:5px 11px;border-radius:999px;background:var(--card,#0f2740);border:1px solid var(--line2,#2a3942);';
-    const nb=all.filter(function(m){return m.status==='build';}).length, ns=all.filter(function(m){return m.status==='sent';}).length;
-    kp.innerHTML='<span style="'+chip+'color:#f87171;">🔴 '+nb+' to build</span><span style="'+chip+'color:#38bdf8;">🔵 '+ns+' sent · waiting</span><span style="'+chip+'">📐 '+all.length+' total</span>'; }
+    const nb=all.filter(function(m){return (m.status||'todo')==='todo';}).length, ns=all.filter(function(m){return m.status==='sent';}).length;
+    kp.innerHTML='<span style="'+chip+'color:#f87171;">🔴 '+nb+' to build</span><span style="'+chip+'color:#38bdf8;">🔵 '+ns+' sent</span><span style="'+chip+'">📐 '+all.length+' total</span>'; }
   let list=_estShowDone?all:all.filter(function(m){ return m.status!=='won'&&m.status!=='lost'; });
-  list.sort(function(a,b){ if(order[a.status]!==order[b.status]) return order[a.status]-order[b.status]; return String(b.requested).localeCompare(String(a.requested)); });
-  if(!list.length){ listEl.innerHTML='<div style="opacity:.6;padding:24px;text-align:center;">No estimates to build 🎉 — quote visits show up here automatically. Tap ➕ to add one.</div>'; return; }
+  list.sort(function(a,b){ const oa=order[a.status||'todo'], ob=order[b.status||'todo']; if(oa!==ob) return oa-ob; return (b.ts||0)-(a.ts||0); });
+  if(!list.length){ listEl.innerHTML='<div style="opacity:.6;padding:28px;text-align:center;line-height:1.6;">No estimates yet.<br>When a customer asks for one, tap <b>➕ New estimate</b> — jot who + what, build the lines, and email it when you\'re ready.</div>'; return; }
   listEl.innerHTML=list.map(function(m){
-    const st=_estStage(m.status);
-    return '<button onclick="estOpen(\''+m.key.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')" style="text-align:left;background:var(--card,#0f2740);border:1px solid var(--line2,#2a3942);border-left:4px solid '+st.c+';border-radius:13px;padding:12px 14px;cursor:pointer;font-family:inherit;color:inherit;display:flex;justify-content:space-between;gap:10px;align-items:center;">'
-      +'<div style="min-width:0;"><div style="font-weight:800;font-size:15px;">'+esc(m.name||'(no name)')+(m.manual?' <span style="font-size:10px;opacity:.6;">✍️ manual</span>':'')+'</div>'
-      +'<div style="font-size:12px;color:var(--dim,#9fb2c0);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(m.address||'')+(m.zip?(', '+esc(m.zip)):'')+'</div>'
-      +(m.note?('<div style="font-size:11.5px;color:var(--dim,#9fb2c0);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📝 '+esc(m.note)+'</div>'):'')+'</div>'
+    const st=_estStage(m.status||'todo'), tot=_estTotal(m);
+    return '<button onclick="estOpen(\''+m.id+'\')" style="text-align:left;background:var(--card,#0f2740);border:1px solid var(--line2,#2a3942);border-left:4px solid '+st.c+';border-radius:13px;padding:12px 14px;cursor:pointer;font-family:inherit;color:inherit;display:flex;justify-content:space-between;gap:10px;align-items:center;">'
+      +'<div style="min-width:0;"><div style="font-weight:800;font-size:15px;">'+esc(m.name||'(no name yet)')+'</div>'
+      +'<div style="font-size:12.5px;color:var(--dim,#9fb2c0);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(m.title||m.address||'—')+'</div></div>'
       +'<div style="text-align:right;white-space:nowrap;"><div style="font-weight:800;color:'+st.c+';font-size:12.5px;">'+st.lbl+'</div>'
-      +(m.requested?('<div style="font-size:11px;color:var(--dim,#9fb2c0);margin-top:3px;">'+esc(m.requested)+'</div>'):'')+'</div></button>';
+      +(tot>0?('<div style="font-size:11.5px;color:var(--dim,#9fb2c0);margin-top:3px;">$'+tot.toFixed(0)+'</div>'):'')+'</div></button>';
   }).join('');
 }
-function estOpen(key){
-  const m=(window._estCache||{})[key]; if(!m) return;
-  const ph=String(m.phone||'').replace(/[^0-9+]/g,'');
-  let h='<input type="hidden" id="estDetailKey" value="'+esc(key)+'">';
-  h+='<h3>📐 '+esc(m.name||'Estimate')+'</h3>';
-  h+='<div class="sub">'+esc(m.address||'')+(m.zip?(', '+esc(m.zip)):'')+(m.requested?(' · quoted '+esc(m.requested)):'')+'</div>';
+function estNew(){ const id=_estNewId(); _estPut({ id:id, name:'', email:'', phone:'', address:'', title:'', status:'todo', note:'', items:[{desc:'',price:''}], summary:'', message:'', validThru:_estDefaultValid(), created:Date.now() }); estOpen(id); }
+function _estField(id,f,v){ const r=_estGet(id); if(!r) return; r[f]=v; if(f!=='note'&&(r.status==='todo')&&(String(r.name||'').trim()||_estTotal(r)>0)) r.status='draft'; _estPut(r); }
+function estSetStatus(id,st){ const r=_estGet(id); if(!r) return; r.status=st; _estPut(r); estOpen(id); _estRenderList(); }
+function _estItemSet(id,i,f,v){ const r=_estGet(id); if(!r) return; r.items=r.items||[]; if(!r.items[i]) r.items[i]={desc:'',price:''}; r.items[i][f]=v; if(r.status==='todo') r.status='draft'; _estPut(r); const t=document.getElementById('estTotalBox'); if(t) t.textContent=_estTotal(r).toFixed(0); }
+function estAddLine(id){ const r=_estGet(id); if(!r) return; r.items=r.items||[]; r.items.push({desc:'',price:''}); _estPut(r); estOpen(id); }
+function estDelLine(id,i){ const r=_estGet(id); if(!r) return; r.items.splice(i,1); if(!r.items.length) r.items=[{desc:'',price:''}]; _estPut(r); estOpen(id); }
+function estDelete(id){ if(!confirm('Delete this estimate?')) return; _estDel(id); closeSheet('jobSheet'); _estRenderList(); }
+async function estEmail(id){
+  const r=_estGet(id); if(!r) return;
+  const name=(r.name||'').trim(), email=(r.email||'').trim();
+  if(!name||!email){ toast('Add the customer name + email first'); return; }
+  const items=(r.items||[]).filter(function(it){ return String(it.desc||'').trim(); }).map(function(it){ return {desc:String(it.desc).trim(), price:parseFloat(it.price)||0, included:'true'}; });
+  if(!items.length){ toast('Add at least one service line'); return; }
+  if(!confirm('Email this estimate ($'+_estTotal(r).toFixed(0)+') to '+email+'?')) return;
+  const st=document.getElementById('estSendStatus'); if(st) st.textContent='⏳ Sending…';
+  const z=_bizLoad()[0];   // lawn = the main backend
+  const owner=(typeof myRole!=='undefined'&&myRole==='owner');
+  const action=owner?'send_quote_email':'submit_estimate_for_approval';
+  try{
+    const d=await bizGet(z,{ action:action, submittedBy:((typeof myName!=='undefined'&&myName)||'Owner'), name:name, email:email,
+      phone:(r.phone||'').trim(), address:(r.address||'').trim(), summary:(r.summary||r.title||'').trim(), personalMessage:(r.message||'').trim(),
+      estimateDate:todayISO(), validThru:(r.validThru||''), items:JSON.stringify(items), notes:'[]' });
+    if(d&&d.success){ r.status='sent'; r.estimateNum=d.estimateNum||d.quoteNumber||r.estimateNum||''; _estPut(r); toast(owner?('📧 Estimate emailed to '+email):'📤 Submitted for approval'); estOpen(id); _estRenderList(); }
+    else { if(st) st.textContent='⚠ '+((d&&d.error)||'Failed — is the backend connected/redeployed?'); toast('⚠ '+((d&&d.error)||'Send failed')); }
+  }catch(e){ if(st) st.textContent='⚠ Network error'; toast('⚠ Network error'); }
+}
+function estOpen(id){
+  const r=_estGet(id); if(!r) return;
+  const ph=String(r.phone||'').replace(/[^0-9+]/g,''); const tot=_estTotal(r);
+  const inp='width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line2,#2a3942);background:var(--card,#0f2740);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box;';
+  let h='<h3>📐 '+esc(r.name||'New estimate')+'</h3>';
+  h+='<div class="sub">'+(r.status==='sent'?('✅ Sent'+(r.estimateNum?(' · '+esc(r.estimateNum)):'')+' — waiting on the customer'):'Who it\'s for, build the lines, then email it.')+'</div>';
   h+='<div class="lbl">Status</div><div style="display:flex;gap:6px;flex-wrap:wrap;">'
-    +_EST_STAGES.map(function(s){ const on=m.status===s.k; return '<button onclick="estSetStatus(\''+key.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\',\''+s.k+'\')" style="flex:1;min-width:96px;padding:9px 6px;border-radius:10px;border:2px solid '+(on?s.c:'#334155')+';background:'+(on?s.c+'22':'transparent')+';color:'+(on?s.c:'inherit')+';font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;">'+s.lbl+'</button>'; }).join('')+'</div>';
-  h+='<div class="lbl">Note</div><textarea id="estNote" oninput="estSetNote(\''+key.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\',this.value)" placeholder="What the estimate covers, lot size, add-ons, price you\'re thinking…" style="width:100%;min-height:80px;padding:11px;border-radius:11px;border:1px solid var(--line2,#2a3942);background:var(--card,#0f2740);color:inherit;font-family:inherit;font-size:13.5px;resize:vertical;">'+esc(m.note||'')+'</textarea>';
-  h+='<div class="lbl">Do it</div>';
-  h+='<button class="act" onclick="_estOpenCust(\''+key.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')"><span class="em">👤</span> Open customer profile</button>';
-  if(ph) h+='<a class="act" href="tel:'+esc(ph)+'"><span class="em">📞</span> Call '+esc((m.name||'').split(' ')[0])+'</a><a class="act" href="sms:'+esc(ph)+'"><span class="em">💬</span> Text</a>';
-  if(m.address) h+='<a class="act" href="'+_hqNavUrl(m.rep||m)+'" target="_blank"><span class="em">🧭</span> Map it</a>';
-  h+='<a class="act" href="/invoice.html" target="_blank"><span class="em">🧾</span> Open estimate builder (Staff Portal)</a>';
-  h+='<div class="lbl">Manage</div><button class="act danger" onclick="estDelete(\''+key.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')"><span class="em">🗑</span> Remove from tracker</button>';
-  h+='<button class="ghost" onclick="closeSheet(\'jobSheet\')" style="margin-top:12px;">Close</button>';
+    +_EST_STAGES.map(function(s){ const on=(r.status||'todo')===s.k; return '<button onclick="estSetStatus(\''+id+'\',\''+s.k+'\')" style="flex:1;min-width:90px;padding:8px 5px;border-radius:10px;border:2px solid '+(on?s.c:'#334155')+';background:'+(on?s.c+'22':'transparent')+';color:'+(on?s.c:'inherit')+';font-weight:800;font-size:11.5px;cursor:pointer;font-family:inherit;">'+s.lbl+'</button>'; }).join('')+'</div>';
+  h+='<div class="lbl">Customer</div>'
+    +'<input style="'+inp+'margin-bottom:7px;" placeholder="Name" value="'+esc(r.name||'')+'" oninput="_estField(\''+id+'\',\'name\',this.value)">'
+    +'<input style="'+inp+'margin-bottom:7px;" type="email" placeholder="Email (needed to send)" value="'+esc(r.email||'')+'" oninput="_estField(\''+id+'\',\'email\',this.value)">'
+    +'<div style="display:flex;gap:7px;margin-bottom:7px;"><input style="'+inp+'" placeholder="Phone" value="'+esc(r.phone||'')+'" oninput="_estField(\''+id+'\',\'phone\',this.value)"><input style="'+inp+'" placeholder="Address" value="'+esc(r.address||'')+'" oninput="_estField(\''+id+'\',\'address\',this.value)"></div>'
+    +'<input style="'+inp+'" placeholder="What they want (e.g. Mulch bed refresh — front + side)" value="'+esc(r.title||'')+'" oninput="_estField(\''+id+'\',\'title\',this.value)">';
+  h+='<div class="lbl">Estimate lines</div>';
+  (r.items&&r.items.length?r.items:[{desc:'',price:''}]).forEach(function(it,i){
+    h+='<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">'
+      +'<input style="'+inp+'flex:2.4;" placeholder="Service / description" value="'+esc(it.desc||'')+'" oninput="_estItemSet(\''+id+'\','+i+',\'desc\',this.value)">'
+      +'<input style="'+inp+'flex:.7;" inputmode="decimal" placeholder="$" value="'+esc(it.price||'')+'" oninput="_estItemSet(\''+id+'\','+i+',\'price\',this.value)">'
+      +(i>0?('<button onclick="estDelLine(\''+id+'\','+i+')" style="background:none;border:none;color:#f87171;font-size:18px;cursor:pointer;line-height:1;">✕</button>'):'<span style="width:16px;"></span>')
+      +'</div>';
+  });
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;"><button onclick="estAddLine(\''+id+'\')" style="background:none;border:1px dashed var(--line2,#2a3942);border-radius:9px;padding:8px 12px;color:inherit;cursor:pointer;font-family:inherit;font-weight:700;">＋ Add line</button><span style="font-weight:800;font-size:17px;">Total $<span id="estTotalBox">'+tot.toFixed(0)+'</span></span></div>';
+  h+='<div class="lbl">Message + validity</div>'
+    +'<input style="'+inp+'margin-bottom:7px;" placeholder="Summary at the top of the estimate (optional)" value="'+esc(r.summary||'')+'" oninput="_estField(\''+id+'\',\'summary\',this.value)">'
+    +'<input style="'+inp+'margin-bottom:7px;" placeholder="Personal note in the email (optional)" value="'+esc(r.message||'')+'" oninput="_estField(\''+id+'\',\'message\',this.value)">'
+    +'<input style="'+inp+'" type="date" title="Valid through" value="'+esc(r.validThru||'')+'" oninput="_estField(\''+id+'\',\'validThru\',this.value)">';
+  h+='<div class="lbl">Send</div>'
+    +'<button class="act" style="background:#1565c0;color:#fff;border-color:#1565c0;font-weight:800;" onclick="estEmail(\''+id+'\')"><span class="em">📧</span> '+((typeof myRole!=='undefined'&&myRole==='owner')?'Email estimate to customer':'Submit for owner approval')+'</button>'
+    +'<div id="estSendStatus" style="font-size:12px;color:var(--dim,#9fb2c0);margin:4px 2px;"></div>';
+  if(ph||r.address){ h+='<div class="lbl">Contact</div>'; if(ph) h+='<a class="act" href="tel:'+esc(ph)+'"><span class="em">📞</span> Call</a><a class="act" href="sms:'+esc(ph)+'"><span class="em">💬</span> Text</a>'; if(r.address) h+='<a class="act" href="https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(r.address+', FL')+'" target="_blank"><span class="em">🧭</span> Map</a>'; }
+  h+='<div class="lbl">Notes</div><textarea oninput="_estField(\''+id+'\',\'note\',this.value)" placeholder="Reminders to yourself…" style="'+inp+'min-height:60px;resize:vertical;">'+esc(r.note||'')+'</textarea>';
+  h+='<button class="act danger" style="margin-top:10px;" onclick="estDelete(\''+id+'\')"><span class="em">🗑</span> Delete estimate</button>';
+  h+='<button class="ghost" onclick="closeSheet(\'jobSheet\');_estRenderList();" style="margin-top:10px;">Done</button>';
   document.getElementById('jobSheetBody').innerHTML=h;
   openSheet('jobSheet');
-}
-function _estOpenCust(key){
-  const e=(window._estCache||{})[key]; if(!e||!e.rep) return;
-  try{ const all=_custBuild(); window._custCache={}; all.forEach(function(m){ window._custCache[m.key]=m; }); const ck=_custKey(e.rep); if(window._custCache[ck]){ openCustomer(ck); return; } }catch(x){}
-  try{ if(typeof openJobSheetFor==='function'&&e.rep&&e.rep._rowIndex) openJobSheetFor(e.rep); }catch(x){}
 }
 function setTab(t){
   _activeTab=t;
