@@ -11,9 +11,9 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-16.70 */
+/* APP_VER:2026-07-16.71 */
 (function(){
-  var V='2026-07-16.70'; window.__APP_VER=V;
+  var V='2026-07-16.71'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1718,8 +1718,15 @@ function _autoClockOut(){
   // midnight, or an app left open overnight, must not stamp the hours to the wrong date.
   const _ci=_clockInTime, _workDay=_ci?(_ci.getFullYear()+'-'+String(_ci.getMonth()+1).padStart(2,'0')+'-'+String(_ci.getDate()).padStart(2,'0')):todayISOStr();
   if(hours>16){ try{ showToast('⚠️ '+hours.toFixed(1)+'h on the clock — looks like a missed clock-out. Logged to '+_workDay+'; have the office double-check.',9000); }catch(e){} }
-  if(!(parseFloat(hours)>0)){ try{ showToast('⏱ 0 hours on the clock — nothing to log for today'); }catch(e){} } else
-  _fmEnqueue({ kind:'clockout', idemKey:_coKey, method:'GET', params:{ action:'employee_clock_out', hours:hours.toFixed(2), date:_workDay, markedBy:adminName||'Crew', helpers:JSON.stringify((_helpers||[]).map(function(h){return (typeof h==='string')?{name:h}:{name:h&&h.name,hourlyRate:(h&&h.hourlyRate)||0};})), adminToken } });
+  if(!(parseFloat(hours)>0)){ try{ showToast('⏱ 0 hours on the clock — nothing to log for today'); }catch(e){} }
+  else {
+    const _coParams={ action:'employee_clock_out', hours:hours.toFixed(2), date:_workDay, markedBy:adminName||'Crew', helpers:JSON.stringify((_helpers||[]).map(function(h){return (typeof h==='string')?{name:h}:{name:h&&h.name,hourlyRate:(h&&h.hourlyRate)||0};})), idemKey:_coKey, adminToken };
+    _fmEnqueue({ kind:'clockout', idemKey:_coKey, method:'GET', params:_coParams });   // offline-safe copy
+    // ALSO fire it directly with keepalive — the flush below is async and fmFinishRoute resets the
+    // day (and the crew may close the app) right after, which can cut the send off before it lands.
+    // keepalive lets this request finish even as the page unloads. Same idemKey → backend dedups.
+    if(navigator.onLine!==false){ try{ fetch(SCRIPT_URL+'?'+new URLSearchParams(_coParams).toString(),{keepalive:true}).catch(function(){}); }catch(e){} }
+  }
   _fmSendClockedOut(); _fmFlushQueue(); _persist(); _stopGeo(); _releaseWake();
 }
 
