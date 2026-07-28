@@ -1298,6 +1298,7 @@ function openJobSheetFor(b){
     +'<button class="act" onclick="hqScheduleAnother()"><span class="em">➕</span> Schedule another job for '+esc((b.name||'them').split(' ')[0])+'</button>'
     +'<button class="act" onclick="openResched()"><span class="em">📅</span> Reschedule to another day</button>'
     +(done?'':'<button class="act" onclick="doMarkDone()"><span class="em">✓</span> Mark as done</button>')
+    +(done?'':'<button class="act" onclick="doMarkCashDone()"><span class="em">💵</span> Done — collected cash <span style="opacity:.6;font-size:11px;">(marks paid + schedules next)</span></button>')
     +'<div class="lbl">Money</div>'
     +(function(){   // status + one-tap charge on the saved card (autopay customers especially)
       const pb=payBadge(b), amt=amtOf(b);
@@ -1470,6 +1471,26 @@ async function doMarkDone(){
     const d=await(await fetch(be.u+'?'+p)).json();
     if(d.success){ b.done='✓ Done'; _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{done:'✓ Done',ts:Date.now()}); _ghostAdd(b); toast('✅ Marked done'); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings(); closeSheet('jobSheet'); }
     else toast('Error: '+(d.error||'could not mark done'));
+  }catch(e){ toast('Network error'); }
+}
+// Employee collected cash but it never synced (job showed incomplete on HQ). This records the CASH
+// first, THEN marks done — so the backend sees the job as paid and auto-schedules the next visit
+// (mark_done alone only schedules when the row is already paid). Both calls send email+serviceDate,
+// so the backend finds the right row by identity even with no cached rowIndex.
+async function doMarkCashDone(){
+  const b=_jobCur; if(!b) return; const be=_jobBE(b);
+  if(!confirm('Mark '+(b.name||'this job')+' DONE and record CASH collected'+(amtOf(b)?(' ($'+amtOf(b).toFixed(2)+')'):'')+'?\n\nThis marks it paid and schedules their next visit.')) return;
+  toast('Completing (cash)…');
+  const base={ rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), adminToken:be.t };
+  try{
+    // 1) record the cash payment
+    const d1=await(await fetch(be.u+'?'+new URLSearchParams(Object.assign({ action:'mark_cash_paid', markedBy:myName||'Owner' }, base)))).json();
+    // 2) mark done — now the row is paid, so this schedules the next visit
+    const d2=await(await fetch(be.u+'?'+new URLSearchParams(Object.assign({ action:'mark_done', amount:amtOf(b).toFixed(2), markedBy:myName||'Owner' }, base)))).json();
+    if((d1&&d1.success)||(d2&&d2.success)){
+      b.done='✓ Done'; _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{done:'✓ Done',ts:Date.now()}); _ghostAdd(b);
+      toast('✅ Done + cash recorded — next visit scheduled'); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings(); closeSheet('jobSheet');
+    } else toast('⚠ '+((d2&&d2.error)||(d1&&d1.error)||'Could not complete — refresh and try again'));
   }catch(e){ toast('Network error'); }
 }
 async function sendReview(){
