@@ -2172,6 +2172,7 @@ function _estTotal(r){ return (r.items||[]).reduce(function(s,i){ return s+(pars
 function _estDefaultValid(){ const d=new Date(); d.setDate(d.getDate()+14); try{ return _iso(d); }catch(e){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); } }
 function renderEstTab(){
   const pane=document.getElementById('pane-estimates'); if(!pane) return;
+  try{ _loadCustSheets(); }catch(e){}   // pull the full customer book so the estimate builder can autofill
   if(!document.getElementById('estList')){
     pane.innerHTML='<div style="padding:12px 14px 22px;max-width:1000px;margin:0 auto;">'
       +'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">'
@@ -2228,6 +2229,22 @@ async function estEmail(id){
     else { if(st) st.textContent='⚠ '+((d&&d.error)||'Failed — is the backend connected/redeployed?'); toast('⚠ '+((d&&d.error)||'Send failed')); }
   }catch(e){ if(st) st.textContent='⚠ Network error'; toast('⚠ Network error'); }
 }
+function _estCustSearch(id,q){
+  const box=document.getElementById('estCustResults'); if(!box) return;
+  q=String(q||'').toLowerCase().trim();
+  if(!q){ box.style.display='none'; box.innerHTML=''; return; }
+  let list=[]; try{ list=_uniqueCustomers()||[]; }catch(e){}
+  const hits=list.filter(function(b){ return (String(b.name||'')+' '+String(b.address||'')+' '+String(b.email||'')+' '+String(b.phone||'')).toLowerCase().indexOf(q)>=0; }).slice(0,8);
+  window._estHits=hits; box.style.display='block';
+  box.innerHTML=hits.length?hits.map(function(b,i){ return '<div onclick="_estCustPick(\''+id+'\','+i+')" style="padding:10px 12px;border-bottom:1px solid var(--line2,#2a3942);cursor:pointer;"><b>'+esc(b.name||'Customer')+'</b><div style="font-size:11.5px;color:var(--dim,#9fb2c0);">'+esc(b.address||'')+(b.zip?(', '+esc(b.zip)):'')+(b.email?(' · '+esc(b.email)):'')+'</div></div>'; }).join('')
+    :'<div style="padding:10px 12px;opacity:.6;font-size:12.5px;">No match — just type the details below.</div>';
+}
+function _estCustPick(id,i){
+  const b=(window._estHits||[])[i]; if(!b) return; const r=_estGet(id); if(!r) return;
+  r.name=b.name||r.name; r.email=String(b.email||'').toLowerCase().trim()||r.email; r.phone=b.phone||r.phone; r.address=b.address||r.address; r.zip=b.zip||r.zip;
+  if((r.status||'todo')==='todo') r.status='draft';
+  _estPut(r); estOpen(id);
+}
 function estOpen(id){
   const r=_estGet(id); if(!r) return;
   const ph=String(r.phone||'').replace(/[^0-9+]/g,''); const tot=_estTotal(r);
@@ -2237,6 +2254,8 @@ function estOpen(id){
   h+='<div class="lbl">Status</div><div style="display:flex;gap:6px;flex-wrap:wrap;">'
     +_EST_STAGES.map(function(s){ const on=(r.status||'todo')===s.k; return '<button onclick="estSetStatus(\''+id+'\',\''+s.k+'\')" style="flex:1;min-width:90px;padding:8px 5px;border-radius:10px;border:2px solid '+(on?s.c:'#334155')+';background:'+(on?s.c+'22':'transparent')+';color:'+(on?s.c:'inherit')+';font-weight:800;font-size:11.5px;cursor:pointer;font-family:inherit;">'+s.lbl+'</button>'; }).join('')+'</div>';
   h+='<div class="lbl">Customer</div>'
+    +'<input style="'+inp+'margin-bottom:5px;" placeholder="🔎 Search your customers to autofill…" oninput="_estCustSearch(\''+id+'\',this.value)">'
+    +'<div id="estCustResults" style="display:none;background:var(--card,#0f2740);border:1px solid var(--line2,#2a3942);border-radius:10px;margin-bottom:7px;max-height:210px;overflow:auto;"></div>'
     +'<input style="'+inp+'margin-bottom:7px;" placeholder="Name" value="'+esc(r.name||'')+'" oninput="_estField(\''+id+'\',\'name\',this.value)">'
     +'<input style="'+inp+'margin-bottom:7px;" type="email" placeholder="Email (needed to send)" value="'+esc(r.email||'')+'" oninput="_estField(\''+id+'\',\'email\',this.value)">'
     +'<div style="display:flex;gap:7px;margin-bottom:7px;"><input style="'+inp+'" placeholder="Phone" value="'+esc(r.phone||'')+'" oninput="_estField(\''+id+'\',\'phone\',this.value)"><input style="'+inp+'" placeholder="Address" value="'+esc(r.address||'')+'" oninput="_estField(\''+id+'\',\'address\',this.value)"></div>'
