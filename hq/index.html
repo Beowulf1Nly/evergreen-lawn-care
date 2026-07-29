@@ -3189,8 +3189,9 @@ function _dispStats(rangeStart,rangeEnd){
   document.getElementById('dispStats').innerHTML=
     '<span>📋 <b>'+all.length+'</b> jobs</span><span>✅ <b>'+doneN+'</b> done</span><span>🕐 <b>'+(all.length-doneN)+'</b> open</span>'
     +'<span>💵 <b>$'+all.reduce(function(s,b){return s+amtOf(b);},0).toFixed(0)+'</b> booked</span>'
-    +'<span>⚠️ <b>'+all.filter(function(b){return !_isArch(b)&&!String(b.crew||'').trim();}).length+'</b> unassigned</span>'
-    +(function(){ const dbt={}; let t=0; all.forEach(function(b){ const o=_owedFor(b); if(o){ const em=String(b.email||'').toLowerCase(); if(!dbt[em]){ dbt[em]=1; t+=o; } } }); const n=Object.keys(dbt).length; return n?('<span style="color:#f87171;font-weight:800;">💸 <b>'+n+'</b> owe $'+t.toFixed(0)+' — collect at the door</span>'):''; })();
+    +'<span>⚠️ <b>'+all.filter(function(b){return !_isArch(b)&&!String(b.crew||'').trim();}).length+'</b> unassigned</span>';
+  // "💸 N owe $X — collect at the door" strip removed from the dispatch board per owner —
+  // the owed detail lives on Stats → Money → Who owes money (with ✕ write-off).
 }
 function _dispPill(b){
   const arch=_isArch(b), done=isDone(b)||arch;
