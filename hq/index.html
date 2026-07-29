@@ -1306,6 +1306,8 @@ function openJobSheetFor(b){
         +(amt>0?('<button class="act" onclick="cdOpenFor(_jobCur,'+amt.toFixed(2)+')"><span class="em">💳</span> Charge their card — $'+amt.toFixed(2)+' <span style="opacity:.6;font-size:11px;">(saved card · autopay)</span></button>'):'');
     })()
     +'<button class="act" onclick="hqInvoiceJob()"><span class="em">🧾</span> Send an invoice'+(b.email?'':' <span style="color:#f87171;font-size:11px;">(needs email)</span>')+'</button>'
+    +((payBadge(b).t!=='Paid'&&!_isWaived(b))?'<button class="act" onclick="hqWaiveJob(_jobCur)"><span class="em">✕</span> Not owed — write off <span style="opacity:.6;font-size:11px;">(duplicate · comp · junk row)</span></button>':'')
+    +(_isWaived(b)?'<div class="rs-note" style="color:#94a3b8;">✕ Written off — not counted as owed. <button onclick="_waiveRemove(_waiveKey(_jobCur));toast(\'↩ Restored\');closeSheet(\'jobSheet\');(_activeTab===\'stats\'?renderStats(false):renderDispatch());" style="background:none;border:none;color:#38bdf8;cursor:pointer;font-family:inherit;font-weight:800;text-decoration:underline;padding:0;">↩ Restore</button></div>':'')
     +'<button class="act" onclick="cdOpenFor(_jobCur)"><span class="em">💳</span> Card desk — save card · autopay · phone charge</button>'
     +'<div class="lbl">Contact</div>'
     +'<a class="act" href="'+_hqNavUrl(b)+'" target="_blank"><span class="em">🧭</span> Navigate here</a>'
@@ -1334,7 +1336,9 @@ function _openArchSheet(b,be){
       return '<div class="lbl">Money</div>'
         +'<div class="rs-note" style="color:var(--dim);">Payment: <b style="color:'+pb.c+';">'+pb.t+'</b>'+(amt>0?(' · job total $'+amt.toFixed(2)):'')+(pb.t==='Paid'?' — already collected, don\'t charge again.':'')+'</div>'
         +'<button class="act" onclick="cdOpenFor(_jobCur,'+(amt>0?amt.toFixed(2):0)+')"><span class="em">💳</span> Charge their card'+(amt>0?(' — $'+amt.toFixed(2)):'')+' <span style="opacity:.6;font-size:11px;">(saved card · autopay)</span></button>'
-        +'<button class="act" onclick="hqInvoiceJob()"><span class="em">🧾</span> Send an invoice'+(b.email?'':' <span style="color:#f87171;font-size:11px;">(needs email)</span>')+'</button>';
+        +'<button class="act" onclick="hqInvoiceJob()"><span class="em">🧾</span> Send an invoice'+(b.email?'':' <span style="color:#f87171;font-size:11px;">(needs email)</span>')+'</button>'
+        +((pb.t!=='Paid'&&!_isWaived(b))?'<button class="act" onclick="hqWaiveJob(_jobCur)"><span class="em">✕</span> Not owed — write off <span style="opacity:.6;font-size:11px;">(duplicate · comp · junk row)</span></button>':'')
+        +(_isWaived(b)?'<div class="rs-note" style="color:#94a3b8;">✕ Written off — not counted as owed. <button onclick="_waiveRemove(_waiveKey(_jobCur));toast(\'↩ Restored\');closeSheet(\'jobSheet\');(_activeTab===\'stats\'?renderStats(false):renderDispatch());" style="background:none;border:none;color:#38bdf8;cursor:pointer;font-family:inherit;font-weight:800;text-decoration:underline;padding:0;">↩ Restore</button></div>':'');
     })()
     +'<button class="ghost" onclick="closeSheet(\'jobSheet\')">Close</button>';
   openSheet('jobSheet');
@@ -2547,7 +2551,7 @@ let _owedEmailMap={}, _owedCleanMap={}, _owedCleanAt=0, _owedCleanLoading=false;
 function _owedAdd_(m,j){
   try{
     const a=amtOf(j); if(!a||j.rowCancelled) return;
-    if(_hqPaidJob(j)) return;
+    if(_hqPaidJob(j)||_isWaived(j)) return;
     const cut=new Date(Date.now()-90*864e5).toISOString().slice(0,10);
     const d=String(dateOf(j)||''); if(!d||d<cut) return;
     const em=String(j.email||'').toLowerCase().trim(); if(!em) return;
@@ -2573,6 +2577,32 @@ async function _owedCleanLoad(){   // cleaning archive isn't in _completed — p
 }
 function _owedFor(b){
   try{ if(isDone(b)||_isArch(b)) return 0; const em=String(b.email||'').toLowerCase().trim(); return em?(_owedEmailMap[em]||0):0; }catch(e){ return 0; }
+}
+/* ── ✕ WRITE-OFF / "not owed" — LOCAL-first, persistent, applies EVERYWHERE ──
+   The old ✕ only worked if the backend could match an archive row by email+date+
+   amount — so duplicate invoices, live rows, and cleaning-archive rows just errored
+   ("does not work at all"). This local set is the UI source of truth: a write-off
+   applies instantly and sticks across refreshes. We still fire the backend stamp
+   best-effort so it carries across devices, but the UI never depends on it. */
+let _waivedSet=(function(){ try{ return JSON.parse(localStorage.getItem('hq_waived_v1')||'{}')||{}; }catch(e){ return {}; } })();
+function _waivedSave(){ try{ localStorage.setItem('hq_waived_v1', JSON.stringify(_waivedSet)); }catch(e){} }
+function _waiveKey(b){ try{ const em=String(b.email||'').toLowerCase().trim(); return (em||String(b.name||'').toLowerCase().trim())+'|'+(dateOf(b)||'')+'|'+amtOf(b).toFixed(2); }catch(e){ return ''; } }
+function _isWaived(b){ try{ if(!b) return false; if(String(b.payMethod||'').toLowerCase().indexOf('waived')>=0) return true; return !!_waivedSet[_waiveKey(b)]; }catch(e){ return false; } }
+function _waiveAdd(b){ const kk=_waiveKey(b); if(!kk) return; _waivedSet[kk]={ n:b.name||'', a:amtOf(b), d:dateOf(b)||'', em:String(b.email||'').toLowerCase().trim(), zi:(b._srcBiz||0), ts:Date.now() }; _waivedSave(); }
+function _waiveRemove(key){ delete _waivedSet[key]; _waivedSave(); }
+// Fire the backend stamp best-effort (durability across devices) — never blocks the UI.
+function _waiveBackend(b){ try{ const be=_jobBE(b); fetch(be.u+'?'+new URLSearchParams({ action:'owner_waive_owed', email:String(b.email||'').toLowerCase().trim(), serviceDate:dateOf(b)||'', amount:String(amtOf(b)), adminToken:be.t })).catch(function(){}); }catch(e){} }
+// Waive ANY job/booking/invoice object — used from the job sheet, the unpaid panel,
+// and the money board. Local write-off is instant; backend is fire-and-forget.
+function hqWaiveJob(b, quiet){
+  if(!b) return;
+  if(!quiet && !confirm('✕ Mark '+(b.name||'this')+(amtOf(b)?(' ($'+amtOf(b).toFixed(0)+')'):'')+' as NOT owed?\n\nUse for duplicate invoices, comps, or junk rows. It stops counting as owed everywhere. Does NOT touch Stripe. You can restore it later from Stats → Money.')) return;
+  _waiveAdd(b); _waiveBackend(b);
+  try{ _owedRebuild(); }catch(e){}
+  try{ toast('✕ Written off — '+(b.name||'')+(amtOf(b)?(' '+_fmtMoney(amtOf(b))):'')); }catch(e){}
+  try{ if(_activeTab==='dispatch') renderDispatch(); }catch(e){}
+  try{ if(_activeTab==='stats') renderStats(false); }catch(e){}
+  try{ closeSheet('jobSheet'); }catch(e){}
 }
 /* ── 👻 projected next visits — recurring plans past their last scheduled row ── */
 function _ghostVisits(rangeStart,rangeEnd){
@@ -2804,7 +2834,7 @@ const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 function _hqStuckJobs(){
   try{
     return _dispJobs().filter(function(b){
-      return b && !b.rowCancelled && !_isArch(b) && isDone(b) && !_hqIsQuote(b) && payBadge(b).t!=='Paid';
+      return b && !b.rowCancelled && !_isArch(b) && isDone(b) && !_hqIsQuote(b) && payBadge(b).t!=='Paid' && !_isWaived(b);
     }).sort(function(a,b){ return String(dateOf(b)||'').localeCompare(String(dateOf(a)||'')); });
   }catch(e){ return []; }
 }
@@ -2825,6 +2855,7 @@ function _hqNeedsPayPanel(){
       +'</button>'
       +(amt>0?('<button onclick="_hqChargeStuck('+i+')" style="padding:8px 11px;border-radius:9px;border:none;background:#16a34a;color:#fff;font-weight:800;cursor:pointer;font-family:inherit;font-size:12.5px;white-space:nowrap;">💳 Charge $'+amt.toFixed(0)+'</button>'):'')
       +(isCash?('<button onclick="_hqCashStuck('+i+')" style="padding:8px 11px;border-radius:9px;border:1px solid #fbbf24;background:transparent;color:#fbbf24;font-weight:800;cursor:pointer;font-family:inherit;font-size:12.5px;white-space:nowrap;">💵 Cash paid</button>'):'')
+      +'<button onclick="_hqWaiveStuck('+i+')" title="Not owed — duplicate/comp/junk. Removes it everywhere; restore later from Stats → Money." style="padding:8px 10px;border-radius:9px;border:1px solid rgba(248,113,113,.4);background:rgba(248,113,113,.10);color:#f87171;font-weight:800;cursor:pointer;font-family:inherit;font-size:12.5px;white-space:nowrap;">✕ Not owed</button>'
       +'<button onclick="_hqOpenStuck('+i+')" style="padding:8px 11px;border-radius:9px;border:1px solid var(--line2,#2a3942);background:transparent;color:inherit;cursor:pointer;font-family:inherit;font-size:12.5px;white-space:nowrap;">Open ▸</button>'
       +'</div>';
   }).join('');
@@ -2834,6 +2865,7 @@ function _hqNeedsPayPanel(){
 function _hqOpenStuck(i){ const b=(window._needPayRefs||[])[i]; if(b) openJobSheetFor(b); }
 function _hqChargeStuck(i){ const b=(window._needPayRefs||[])[i]; if(!b) return; _jobCur=b; try{ _jobBi=_bookings.indexOf(b); }catch(e){} cdOpenFor(b, amtOf(b)); }
 function _hqCashStuck(i){ const b=(window._needPayRefs||[])[i]; if(!b) return; _jobCur=b; try{ _jobBi=_bookings.indexOf(b); }catch(e){} doMarkCashDone(); }
+function _hqWaiveStuck(i){ const b=(window._needPayRefs||[])[i]; if(b) hqWaiveJob(b); }
 function renderDispatch(){
   const board=document.getElementById('dispBoard'); if(!board) return;
   _zdEnsure(); try{ _loadCustSheets(); }catch(e){}   // zone-day rules + customer notes for the cards
@@ -5158,29 +5190,25 @@ function _revTipShow(ev,i){
 function _revTipHide(){ const t=document.querySelector('#revTip'); if(t) t.style.display='none'; }
 function _hqPaidJob(j){
   const s=(String(j.payMethod||'')+' '+String(j.calendarEvent||'')).toLowerCase();
+  if(s.indexOf('waived')>=0) return true;   // written off → settled, must be checked BEFORE the "not paid" short-circuit below (the stamp is appended to the old NOT-PAID text)
   if(s.indexOf('not paid')>=0||s.indexOf('unpaid')>=0||s.indexOf('pending')>=0) return false;
   return s.indexOf('✅')>=0||s.indexOf('autopay')>=0||s.indexOf('auto-pay')>=0||s.indexOf('cash')>=0||s.indexOf('paid')>=0;
 }
-// ✕ write-off: stamps the archive row waived (backend) + drops it locally
-async function hqWaiveOwed(oi){
+// ✕ write-off — LOCAL-first so it ALWAYS works (duplicate invoices, live rows, and
+// cleaning-archive rows the backend can't match). Backend stamp fires best-effort.
+function hqWaiveOwed(oi){
   const o=(window._owedReg||[])[oi]; if(!o) return;
-  if(!confirm('✕ Write off '+_fmtMoney(o.a)+' owed by '+(o.n||'?')+' ('+o.d+')?\n\nUse for duplicate invoices, comps, or junk rows — it stamps the archived job as waived so it stops counting as owed. This does NOT touch Stripe.')) return;
-  const ut=_bizUT(o.zi||0);
-  try{
-    const d=await fetch(ut.u+'?'+new URLSearchParams({ action:'owner_waive_owed', email:o.em||'', serviceDate:o.d, amount:String(o.a), adminToken:ut.t })).then(function(r){ return r.json(); });
-    if(!(d&&d.success)){
-      console.warn('waive failed:',d);
-      const msg=(d&&/Missing required fields/i.test(String(d.error||'')))
-        ?'That business\'s backend is running OLD code (no waive action yet) — re-paste + redeploy its Apps Script, then ✕ works.'
-        :((d&&d.error)||'Write-off failed');
-      alert('⚠ Could not write off '+(o.n||'')+'\n\n'+msg);
-      return;
-    }
-  }catch(e){ alert('⚠ Network error — nothing was written off. Try again.'); return; }
-  try{ if(o._j) o._j.payMethod=String(o._j.payMethod||'')+' · ✅ Waived'; }catch(e){}
+  if(!confirm('✕ Write off '+_fmtMoney(o.a)+' owed by '+(o.n||'?')+' ('+o.d+')?\n\nUse for duplicate invoices, comps, or junk rows — it stops counting as owed everywhere. Restore any time from the "Written off" list below. Does NOT touch Stripe.')) return;
+  const j=o._j||{ name:o.n, email:o.em, serviceDate:o.d, price:o.a, _srcBiz:(o.zi||0) };
+  _waiveAdd(j);
+  try{ const be=_bizUT(o.zi||0); fetch(be.u+'?'+new URLSearchParams({ action:'owner_waive_owed', email:o.em||'', serviceDate:o.d, amount:String(o.a), adminToken:be.t })).catch(function(){}); }catch(e){}
+  try{ _owedRebuild(); }catch(e){}
   toast('✕ Written off — '+(o.n||'')+' '+_fmtMoney(o.a));
   renderStats(false);
 }
+// ↩ restore a written-off entry
+function hqUnwaive(key){ _waiveRemove(key); try{ _owedRebuild(); }catch(e){} toast('↩ Restored — counts as owed again'); renderStats(false); }
+function hqUnwaiveIdx(i){ const k=(window._waivedReg||[])[i]; if(k) hqUnwaive(k); }
 function _hqMoneyBoard(results){
   const k=function(v,l,acc){ return '<div><div style="font-size:25px;font-family:var(--mono);font-weight:800;line-height:1;'+(acc||'')+'">'+v+'</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:700;margin-top:5px;">'+l+'</div></div>'; };
   let rowsB=[], owes=[], custAll=[];
@@ -5190,7 +5218,7 @@ function _hqMoneyBoard(results){
     const z=r.z;
     let coll=0,owed=0,owedN=0;
     const _owCut=new Date(Date.now()-90*864e5).toISOString().slice(0,10);   // debts older than 90d are archive noise, not AR
-    (r.jobs||[]).forEach(function(j){ const a=amtOf(j); if(!a||j.rowCancelled) return; if(_hqPaidJob(j)){ coll+=a; } else if(String(dateOf(j)||'')>=_owCut){ owed+=a; owedN++; owes.push({n:j.name||'?',a:a,d:String(dateOf(j)||''),z:z,zi:results.indexOf(r),em:String(j.email||'').toLowerCase().trim(),_j:j}); } });
+    (r.jobs||[]).forEach(function(j){ const a=amtOf(j); if(!a||j.rowCancelled) return; if(_isWaived(j)) return; if(_hqPaidJob(j)){ coll+=a; } else if(String(dateOf(j)||'')>=_owCut){ owed+=a; owedN++; owes.push({n:j.name||'?',a:a,d:String(dateOf(j)||''),z:z,zi:results.indexOf(r),em:String(j.email||'').toLowerCase().trim(),_j:j}); } });
     const plans=_hqActivePlans(r.books||[]);
     let mrr=0;
     plans.forEach(function(bk){ const mv=_hqPlanPrice(bk)*(30/_hqPlanInterval(String(bk.frequency||'').toLowerCase())); mrr+=mv; custAll.push({n:bk.name||'?',plan:bk.frequency||'',p:_hqPlanPrice(bk),m:mv,z:z}); });
@@ -5223,6 +5251,16 @@ function _hqMoneyBoard(results){
       +owes.slice(0,100).map(function(o,oi){ window._owedReg=window._owedReg||[]; window._owedReg[oi]=o; return '<tr><td>'+esc(o.n)+'</td><td>'+esc(o.z.e||'')+'</td><td>'+esc(o.d)+'</td><td style="text-align:right;color:#f87171;font-weight:800;">'+_fmtMoney(o.a)+'</td><td style="text-align:right;"><button onclick="hqWaiveOwed('+oi+')" title="Write this off — duplicate invoice, comp, bad row. Stamps the archive row as waived." style="background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.4);color:#f87171;border-radius:7px;padding:2px 8px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">✕</button></td></tr>'; }).join('')+'</table></div>')
       :'<div class="dev-row" style="color:#4ade80;">Everyone\'s paid up 🟢</div>')
     +'</div>';
+  h+=(function(){
+    const keys=Object.keys(_waivedSet||{}); if(!keys.length) return '';
+    keys.sort(function(a,b){ return (_waivedSet[b].ts||0)-(_waivedSet[a].ts||0); });
+    window._waivedReg=keys;
+    const tot=keys.reduce(function(s,k){ return s+(+_waivedSet[k].a||0); },0);
+    return '<div><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:6px;">✕ Written off — '+keys.length+' · '+_fmtMoney(tot)+' <span style="color:var(--dim);text-transform:none;letter-spacing:0;">(not counted as owed · tap ↩ to restore)</span></div>'
+      +'<div style="max-height:280px;overflow:auto;"><table class="dev-tbl"><tr><th>customer</th><th>date</th><th style="text-align:right;">amount</th><th></th></tr>'
+      +keys.map(function(k,ki){ const w=_waivedSet[k]; return '<tr><td>'+esc(w.n||'?')+'</td><td>'+esc(w.d||'')+'</td><td style="text-align:right;color:#94a3b8;">'+_fmtMoney(+w.a||0)+'</td><td style="text-align:right;"><button onclick="hqUnwaiveIdx('+ki+')" title="Restore — count as owed again" style="background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.4);color:#38bdf8;border-radius:7px;padding:2px 8px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">↩</button></td></tr>'; }).join('')
+      +'</table></div></div>';
+  })();
   h+='<div><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px;">👥 Active recurring customers — '+custAll.length+' · '+_fmtMoney(T.mrr)+'/mo</div>'
     +'<input class="dev-inp" placeholder="🔎 Search customers…" oninput="(function(v){document.querySelectorAll(\'#mnyCust tr[data-n]\').forEach(function(tr){tr.style.display=tr.dataset.n.indexOf(v)>=0?\'\':\'none\';});})(this.value.toLowerCase())" style="width:100%;margin-bottom:6px;box-sizing:border-box;">'
     +'<div style="max-height:280px;overflow:auto;"><table class="dev-tbl" id="mnyCust"><tr><th>customer</th><th>biz</th><th>plan</th><th style="text-align:right;">$/visit</th><th style="text-align:right;">$/mo</th></tr>'
