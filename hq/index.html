@@ -5217,6 +5217,18 @@ function hqWaiveOwed(oi){
 // ↩ restore a written-off entry
 function hqUnwaive(key){ _waiveRemove(key); try{ _owedRebuild(); }catch(e){} toast('↩ Restored — counts as owed again'); renderStats(false); }
 function hqUnwaiveIdx(i){ const k=(window._waivedReg||[])[i]; if(k) hqUnwaive(k); }
+// ↻ Ask Stripe directly for paid invoices the webhook dropped, and schedule them.
+async function hqReconcileStripe(){
+  if(!confirm('↻ Check Stripe for invoices that were PAID but never got scheduled (webhook missed them), and fix them?\n\nSafe to run anytime — it only touches jobs Stripe shows paid while the board still shows unpaid. Does not re-charge anyone.')) return;
+  toast('↻ Checking Stripe for missed payments…');
+  try{
+    const d=await fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'reconcile_stripe', days:'60', adminToken:token })).then(function(r){ return r.json(); });
+    if(d&&d.success){
+      toast('✅ Recovered '+(d.recovered||0)+' paid-but-unscheduled · '+(d.checked||0)+' invoices checked'+((d.errors)?(' · '+d.errors+' errors'):''));
+      if((d.recovered||0)>0) setTimeout(function(){ renderStats(true); },900);
+    } else toast('⚠ '+((d&&d.error)||'Reconcile failed — redeploy the backend first'));
+  }catch(e){ toast('Network error'); }
+}
 function _hqMoneyBoard(results){
   const k=function(v,l,acc){ return '<div><div style="font-size:25px;font-family:var(--mono);font-weight:800;line-height:1;'+(acc||'')+'">'+v+'</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:700;margin-top:5px;">'+l+'</div></div>'; };
   let rowsB=[], owes=[], custAll=[];
@@ -5237,7 +5249,7 @@ function _hqMoneyBoard(results){
   owes.sort(function(a,b){ return b.a-a.a; });
   custAll.sort(function(a,b){ return b.m-a.m; });
   const bar=function(v,color){ const w=Math.max(2,Math.round(v/Math.max(1,T.coll+T.owed)*100)); return '<div style="height:10px;border-radius:6px;width:'+w+'%;background:'+color+';box-shadow:0 0 12px '+color+'66;"></div>'; };
-  let h='<div class="dev-card" style="grid-column:1/-1;"><div class="dev-h">💰 Money — collected vs owed<span class="grow"></span><span class="ph-c">'+_fmtMoney(T.coll)+' in · '+_fmtMoney(T.owed)+' out</span></div><div class="dev-b">';
+  let h='<div class="dev-card" style="grid-column:1/-1;"><div class="dev-h">💰 Money — collected vs owed<span class="grow"></span><button onclick="hqReconcileStripe()" class="dev-btn" title="Ask Stripe for paid invoices that never got scheduled and fix them" style="margin-right:8px;">↻ Fix paid-but-unscheduled</button><span class="ph-c">'+_fmtMoney(T.coll)+' in · '+_fmtMoney(T.owed)+' out</span></div><div class="dev-b">';
   h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:14px;">'
     +k(_fmtMoney(T.coll),'Collected (archived jobs)','background:linear-gradient(180deg,#fff,#4ade80);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;')
     +k(_fmtMoney(T.owed),'Owed to you'+(T.owedN?(' · '+T.owedN+' jobs'):''),T.owed>0?'color:#f87171;':'')
