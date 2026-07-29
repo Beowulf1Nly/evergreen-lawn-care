@@ -2794,6 +2794,46 @@ const MO=['January','February','March','April','May','June','July','August','Sep
 const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 /* ── render ── */
+/* ═══════════ ⚠️ COMPLETED-BUT-UNPAID SAFETY NET ═══════════
+   A completed recurring visit only rolls forward to the NEXT visit once it's
+   PAID (cash recorded, card charged, or invoice paid). If a charge fails / cash
+   never gets recorded / the webhook is down, the job sits Done-but-unpaid on the
+   board and the next visit never schedules — silently. Paid jobs archive off the
+   board, so any Done + not-Paid row still on a live board IS a stuck one. This
+   surfaces every one of them with one-tap recovery so nothing falls through. */
+function _hqStuckJobs(){
+  try{
+    return _dispJobs().filter(function(b){
+      return b && !b.rowCancelled && !_isArch(b) && isDone(b) && !_hqIsQuote(b) && payBadge(b).t!=='Paid';
+    }).sort(function(a,b){ return String(dateOf(b)||'').localeCompare(String(dateOf(a)||'')); });
+  }catch(e){ return []; }
+}
+function _hqNeedsPayPanel(){
+  const list=_hqStuckJobs(); window._needPayRefs=list;
+  if(!list.length) return '';
+  const total=list.reduce(function(s,b){ return s+amtOf(b); },0);
+  let h='<div class="dev-card" style="grid-column:1/-1;border:1.5px solid #f87171;background:rgba(248,113,113,.07);margin-bottom:12px;">';
+  h+='<div class="dev-h" style="--bc:#f87171;color:#f87171;">⚠️ '+list.length+' completed '+(list.length===1?'job':'jobs')+' not paid'+(total>0?(' · '+_fmtMoney(total)+' uncollected'):'')+' — next visit is blocked until each is paid</div>';
+  h+='<div class="dev-b" style="display:flex;flex-direction:column;gap:7px;">';
+  h+=list.map(function(b,i){
+    const pb=payBadge(b), amt=amtOf(b), isCash=(pb.t==='Cash');
+    const bizN=(b._srcBiz?String((_bizLoad()[b._srcBiz]||{}).n||''):'');
+    return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--card,#0f2740);border:1px solid var(--line2,#2a3942);border-radius:11px;padding:9px 11px;">'
+      +'<button onclick="_hqOpenStuck('+i+')" style="flex:1;min-width:150px;text-align:left;background:none;border:none;color:inherit;cursor:pointer;font-family:inherit;padding:0;">'
+      +'<div style="font-weight:800;font-size:14px;">'+esc(b.name||'Customer')+' <span style="font-weight:700;color:'+pb.c+';font-size:11.5px;">· '+esc(pb.t)+'</span></div>'
+      +'<div style="font-size:11.5px;color:var(--dim,#9fb2c0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(b.address||'')+' · done '+esc(dateOf(b)||'')+(amt>0?(' · $'+amt.toFixed(0)):'')+(bizN?(' · '+esc(bizN)):'')+'</div>'
+      +'</button>'
+      +(amt>0?('<button onclick="_hqChargeStuck('+i+')" style="padding:8px 11px;border-radius:9px;border:none;background:#16a34a;color:#fff;font-weight:800;cursor:pointer;font-family:inherit;font-size:12.5px;white-space:nowrap;">💳 Charge $'+amt.toFixed(0)+'</button>'):'')
+      +(isCash?('<button onclick="_hqCashStuck('+i+')" style="padding:8px 11px;border-radius:9px;border:1px solid #fbbf24;background:transparent;color:#fbbf24;font-weight:800;cursor:pointer;font-family:inherit;font-size:12.5px;white-space:nowrap;">💵 Cash paid</button>'):'')
+      +'<button onclick="_hqOpenStuck('+i+')" style="padding:8px 11px;border-radius:9px;border:1px solid var(--line2,#2a3942);background:transparent;color:inherit;cursor:pointer;font-family:inherit;font-size:12.5px;white-space:nowrap;">Open ▸</button>'
+      +'</div>';
+  }).join('');
+  h+='</div></div>';
+  return h;
+}
+function _hqOpenStuck(i){ const b=(window._needPayRefs||[])[i]; if(b) openJobSheetFor(b); }
+function _hqChargeStuck(i){ const b=(window._needPayRefs||[])[i]; if(!b) return; _jobCur=b; try{ _jobBi=_bookings.indexOf(b); }catch(e){} cdOpenFor(b, amtOf(b)); }
+function _hqCashStuck(i){ const b=(window._needPayRefs||[])[i]; if(!b) return; _jobCur=b; try{ _jobBi=_bookings.indexOf(b); }catch(e){} doMarkCashDone(); }
 function renderDispatch(){
   const board=document.getElementById('dispBoard'); if(!board) return;
   _zdEnsure(); try{ _loadCustSheets(); }catch(e){}   // zone-day rules + customer notes for the cards
@@ -2804,7 +2844,7 @@ function renderDispatch(){
   ['dvMonth','dvWeek','dvDay'].forEach(function(id){ const el=document.getElementById(id); if(el) el.classList.toggle('on', id==='dv'+_dispView.charAt(0).toUpperCase()+_dispView.slice(1)); });
   document.querySelectorAll('#dispCrews button').forEach(function(b){ b.classList.toggle('on',b.dataset.c===_dispCrew); });
   const todayIso=todayISO();
-  let rangeStart, rangeEnd, h='';
+  let rangeStart, rangeEnd, h=_hqNeedsPayPanel();   // ⚠️ pinned: completed jobs not yet paid (next visit blocked)
   if(_dispView==='month'){
     const y=_dispAnchor.getFullYear(), mo=_dispAnchor.getMonth();
     document.getElementById('dispTitle').textContent=MO[mo]+' '+y;
