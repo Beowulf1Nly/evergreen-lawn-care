@@ -2187,11 +2187,35 @@ const _EST_STAGES=[
 ];
 function _estStage(k){ return _EST_STAGES.find(function(s){ return s.k===k; })||_EST_STAGES[0]; }
 let _estShowDone=false;
-function _estStore(){ try{ return JSON.parse(localStorage.getItem(_EST_KEY)||'{}')||{}; }catch(e){ return {}; } }
-function _estSaveAll(o){ try{ localStorage.setItem(_EST_KEY, JSON.stringify(o)); }catch(e){} }
+// Synced store: in-memory cache is the source of truth, mirrored to localStorage for
+// instant paint + offline, and pushed to the Estimates sheet (debounced) so every
+// device sees the same list. Remote load merges in on tab open.
+let _estCache=null, _estSaveTimers={}, _estLoadAt=0;
+function _estStore(){ if(_estCache) return _estCache; try{ _estCache=JSON.parse(localStorage.getItem(_EST_KEY)||'{}')||{}; }catch(e){ _estCache={}; } return _estCache; }
+function _estSaveAll(o){ _estCache=o||{}; try{ localStorage.setItem(_EST_KEY, JSON.stringify(_estCache)); }catch(e){} }
 function _estGet(id){ return _estStore()[id]||null; }
-function _estPut(r){ const o=_estStore(); r.ts=Date.now(); o[r.id]=r; _estSaveAll(o); }
-function _estDel(id){ const o=_estStore(); delete o[id]; _estSaveAll(o); }
+function _estPut(r){ const o=_estStore(); r.ts=Date.now(); o[r.id]=r; _estSaveAll(o); _estQueueSave(r.id); }
+function _estDel(id){ const o=_estStore(); delete o[id]; _estSaveAll(o); if(_estSaveTimers[id]){ clearTimeout(_estSaveTimers[id]); delete _estSaveTimers[id]; } try{ fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'estimate_delete', id:id, adminToken:token })).catch(function(){}); }catch(e){} }
+function _estQueueSave(id){ if(_estSaveTimers[id]) clearTimeout(_estSaveTimers[id]); _estSaveTimers[id]=setTimeout(function(){ _estFlush(id); },1000); }
+function _estFlush(id){ delete _estSaveTimers[id]; const r=_estGet(id); if(!r) return; try{ fetch(SCRIPT_URL,{ method:'POST', body:JSON.stringify({ action:'estimate_save', adminToken:token, data:JSON.stringify(r) }) }).catch(function(){}); }catch(e){} }
+async function _estLoadRemote(force){
+  if(!force && Date.now()-_estLoadAt<8000) return; _estLoadAt=Date.now();
+  try{
+    const d=await fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'estimates_list', adminToken:token })).then(function(r){ return r.json(); });
+    if(d&&d.success&&Array.isArray(d.estimates)){
+      const remote={}; d.estimates.forEach(function(r){ if(r&&r.id) remote[r.id]=r; });
+      const local=_estStore();
+      const merged=Object.assign({}, local, remote);   // remote wins where an id exists on both
+      // migrate any local-only estimate (created before cloud sync, or while offline) up to the sheet
+      Object.keys(local).forEach(function(lid){ if(!remote[lid]) _estQueueSave(lid); });
+      // never clobber an estimate with a save still in flight on THIS device
+      Object.keys(_estSaveTimers).forEach(function(pid){ if(local[pid]) merged[pid]=local[pid]; });
+      _estSaveAll(merged);
+      const _js=document.getElementById('jobSheet'); const _sheetOpen=!!(_js&&_js.classList.contains('show'));
+      if(_activeTab==='estimates'&&!_sheetOpen) _estRenderList();
+    }
+  }catch(e){}
+}
 function _estNewId(){ return 'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 function _estTotal(r){ return (r.items||[]).reduce(function(s,i){ return s+(parseFloat(i.price)||0); },0); }
 function _estDefaultValid(){ const d=new Date(); d.setDate(d.getDate()+14); try{ return _iso(d); }catch(e){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); } }
@@ -2207,6 +2231,7 @@ function renderEstTab(){
       +'</div><div id="estList" style="display:flex;flex-direction:column;gap:8px;"></div></div>';
   }
   _estRenderList();
+  _estLoadRemote();   // pull the shared list from the Estimates sheet so every device is in sync
 }
 function _estRenderList(){
   const listEl=document.getElementById('estList'); if(!listEl) return;
@@ -2270,6 +2295,41 @@ function _estCustPick(id,i){
   if((r.status||'todo')==='todo') r.status='draft';
   _estPut(r); estOpen(id);
 }
+function _estPhotoThumbs(r){
+  const ph=(r.photos||[]);
+  if(!ph.length) return '<div style="opacity:.55;font-size:12px;">No photos yet.</div>';
+  return ph.map(function(u,i){ return '<div style="position:relative;">'
+    +'<a href="'+esc(u)+'" target="_blank"><img src="'+esc(_driveThumb(u))+'" style="width:76px;height:76px;object-fit:cover;border-radius:9px;border:1px solid var(--line2,#2a3942);" onerror="this.replaceWith(document.createTextNode(String.fromCodePoint(0x1F5BC)))"></a>'
+    +'<button onclick="_estDelPhoto(\''+r.id+'\','+i+')" title="Remove photo" style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;line-height:1;">✕</button></div>'; }).join('');
+}
+function _estCompress(file){ return new Promise(function(resolve,reject){
+  const fr=new FileReader();
+  fr.onload=function(){ const img=new Image();
+    img.onload=function(){ const max=1400; let w=img.width,h=img.height;
+      if(w>max||h>max){ if(w>=h){ h=Math.round(h*max/w); w=max; } else { w=Math.round(w*max/h); h=max; } }
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h; cv.getContext('2d').drawImage(img,0,0,w,h);
+      try{ resolve({ data:cv.toDataURL('image/jpeg',0.82).split(',')[1], mime:'image/jpeg' }); }catch(e){ reject(e); } };
+    img.onerror=reject; img.src=fr.result; };
+  fr.onerror=reject; fr.readAsDataURL(file);
+}); }
+async function _estAddPhotos(id,files){
+  const r=_estGet(id); if(!r||!files||!files.length) return;
+  const stat=document.getElementById('estPhotoStatus'); r.photos=r.photos||[];
+  let done=0;
+  for(let i=0;i<files.length;i++){
+    const f=files[i]; if(!/^image\//.test(f.type||'')) continue;
+    if(stat) stat.textContent='⏳ Uploading '+(i+1)+' of '+files.length+'…';
+    try{
+      const b=await _estCompress(f);
+      const d=await fetch(SCRIPT_URL,{ method:'POST', body:JSON.stringify({ action:'upload_estimate_photo', adminToken:token, base64Data:b.data, mimeType:b.mime, fileName:'estimate-'+id+'-'+Date.now()+'-'+i+'.jpg' }) }).then(function(x){ return x.json(); });
+      if(d&&d.success&&d.url){ r.photos.push(d.url); _estPut(r); done++; }
+      else if(stat){ stat.textContent='⚠ '+((d&&d.error)||'Upload failed — is the backend redeployed?'); }
+    }catch(e){ if(stat) stat.textContent='⚠ Upload error — try a smaller photo'; }
+  }
+  if(stat&&done) stat.textContent='';
+  estOpen(id);
+}
+function _estDelPhoto(id,i){ const r=_estGet(id); if(!r||!r.photos) return; if(!confirm('Remove this photo?')) return; r.photos.splice(i,1); _estPut(r); estOpen(id); }
 function estOpen(id){
   const r=_estGet(id); if(!r) return;
   const ph=String(r.phone||'').replace(/[^0-9+]/g,''); const tot=_estTotal(r);
@@ -2294,6 +2354,10 @@ function estOpen(id){
       +'</div>';
   });
   h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;"><button onclick="estAddLine(\''+id+'\')" style="background:none;border:1px dashed var(--line2,#2a3942);border-radius:9px;padding:8px 12px;color:inherit;cursor:pointer;font-family:inherit;font-weight:700;">＋ Add line</button><span style="font-weight:800;font-size:17px;">Total $<span id="estTotalBox">'+tot.toFixed(0)+'</span></span></div>';
+  h+='<div class="lbl">Photos</div>'
+    +'<div id="estPhotos" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:7px;">'+_estPhotoThumbs(r)+'</div>'
+    +'<label class="act" style="cursor:pointer;"><span class="em">📷</span> Add photos <span style="opacity:.6;font-size:11px;">(the area · reference pics · before/after)</span><input type="file" accept="image/*" multiple style="display:none;" onchange="_estAddPhotos(\''+id+'\',this.files);this.value=\'\';"></label>'
+    +'<div id="estPhotoStatus" style="font-size:11.5px;color:var(--dim,#9fb2c0);margin:2px;"></div>';
   h+='<div class="lbl">Message + validity</div>'
     +'<input style="'+inp+'margin-bottom:7px;" placeholder="Summary at the top of the estimate (optional)" value="'+esc(r.summary||'')+'" oninput="_estField(\''+id+'\',\'summary\',this.value)">'
     +'<input style="'+inp+'margin-bottom:7px;" placeholder="Personal note in the email (optional)" value="'+esc(r.message||'')+'" oninput="_estField(\''+id+'\',\'message\',this.value)">'
