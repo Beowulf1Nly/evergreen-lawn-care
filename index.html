@@ -4269,18 +4269,16 @@ if (window.QUOTE_ONLY_MODE) document.addEventListener('DOMContentLoaded', functi
   window.submitLawnQuoteSingle=function(){
     var g=function(id){ var el=document.getElementById(id); return el? (el.value||'').trim() : ''; };
     var name=g('lq-name'), email=g('lq-email'), phone=g('lq-phone'), address=g('q-address'), zip=g('q-zip');
-    var date=(typeof qState!=='undefined' && qState.startDate)?qState.startDate:'';
     if(!address){ showErr('Please enter your property address.'); return; }
     if(!/^\d{5}$/.test(zip)){ showErr('Please enter your 5-digit zip code.'); return; }
     try{ if(typeof VALID_ZIPS!=='undefined' && VALID_ZIPS.size && !VALID_ZIPS.has(zip)){ showErr("That zip isn't in our service area yet. Call (352) 462-0627 \u2014 we may still be able to help!"); return; } }catch(e){}
     if(!name || !email){ showErr('Please enter your name and email.'); return; }
-    if(!date){ showErr('Please choose a preferred date.'); return; }
-    var dd=new Date(date+'T12:00:00'), w=dd.getDay(); if(w===0||w===6){ showErr('Please choose a weekday (no weekends).'); return; }
     var er=document.getElementById('q-step1-error'); if(er) er.style.display='none';
-    try{ qState.address=address; qState.zip=zip; qState.name=name; qState.email=email; qState.phone=phone; qState.startDate=date; }catch(e){}
-    var btn=document.getElementById('lqSubmitBtn'); if(btn){ btn.disabled=true; btn.textContent='Scheduling\u2026'; }
-    var dateFmt=new Date(date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-    try{ var params=new URLSearchParams({action:'xl_quote_visit',name:name,email:email,phone:phone,address:address,zip:zip,quoteDateRaw:date,quoteDate:dateFmt}); fetch(SHEETS_SCRIPT_URL+'?'+params.toString(),{method:'GET',mode:'no-cors',keepalive:true}).catch(function(){}); }catch(e){}
+    // No date is collected \u2014 the backend puts this on dispatch as a "Quote Call" the next business
+    // day and emails the customer that we'll be in contact ASAP.
+    try{ qState.address=address; qState.zip=zip; qState.name=name; qState.email=email; qState.phone=phone; }catch(e){}
+    var btn=document.getElementById('lqSubmitBtn'); if(btn){ btn.disabled=true; btn.textContent='Sending\u2026'; }
+    try{ var params=new URLSearchParams({action:'xl_quote_visit',name:name,email:email,phone:phone,address:address,zip:zip}); fetch(SHEETS_SCRIPT_URL+'?'+params.toString(),{method:'GET',mode:'no-cors',keepalive:true}).catch(function(){}); }catch(e){}
     // Redirect to the thank-you page — it fires the Google Ads "Submit lead form" conversion on load (page-load conversion). keepalive above lets the lead request finish during navigation.
     window.location.href='/success';
   };
@@ -4289,11 +4287,11 @@ if (window.QUOTE_ONLY_MODE) document.addEventListener('DOMContentLoaded', functi
     if(typeof _open==='function') _open(p);
     var bar=document.getElementById('quoteStepsBar'); if(bar) bar.style.display='none';
     var ex=document.getElementById('lqExtra'); if(ex) ex.style.display='block';
-    try{ var _g=document.getElementById('qCalGrid'); var _cal=_g?_g.closest('.cal-widget'):null; var _m=document.getElementById('lqCalMount'); if(_cal&&_m&&_cal.parentElement!==_m){ _m.appendChild(_cal); } if(typeof initQCal==='function') initQCal(); }catch(e){}
-    var sb=document.getElementById('lqSubmitBtn'); if(sb){ sb.style.display='block'; sb.disabled=false; sb.textContent='Book My Free Estimate \u2192'; }
+    var dr=document.getElementById('lqDateRow'); if(dr) dr.style.display='none';   // no preferred-date picker \u2014 we contact them ASAP
+    var sb=document.getElementById('lqSubmitBtn'); if(sb){ sb.style.display='block'; sb.disabled=false; sb.textContent='Get My Free Estimate \u2192'; }
     var ob=document.getElementById('lqOrigBtn'); if(ob) ob.style.display='none';
     ['lq-name','lq-email','lq-phone'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
-    var sub=document.getElementById('lqStep1Sub'); if(sub) sub.textContent="Pick your address and a day that works, and we'll give you a free on-site estimate \u2014 no cost, no obligation.";
+    var sub=document.getElementById('lqStep1Sub'); if(sub) sub.textContent="Enter your address and info and we'll reach out ASAP with your free, no-obligation estimate.";
     var note=document.getElementById('lqStep1Note'); if(note) note.textContent="\u2705 100% free \u00b7 No obligation \u00b7 Licensed & insured";
   };
 })();
