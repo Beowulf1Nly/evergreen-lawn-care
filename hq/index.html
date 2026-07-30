@@ -5392,16 +5392,36 @@ function _hqProjRev(books,days){
   return tot;
 }
 function _hqProjLine(books,label){
-  const n=_hqActivePlans(books).length;
+  const plans=_hqActivePlans(books); const n=plans.length;
+  window._planListReg=window._planListReg||[]; const _pid=window._planListReg.length;
+  window._planListReg.push({ label:(label||'Active plans'), rows:plans.slice().sort(function(a,b){ return String(a.name||'').toLowerCase().localeCompare(String(b.name||'').toLowerCase()); }) });
   const box=function(v,l){ return '<div style="background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:10px;padding:8px 10px;"><div style="font-size:16px;font-family:var(--mono);font-weight:800;color:#4ade80;white-space:nowrap;">'+v+'</div><div style="font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-top:3px;">'+l+'</div></div>'; };
   return '<div style="margin:10px 0 8px;">'
-    +'<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:7px;"><span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);">📈 '+(label||'Projected recurring')+'</span><span style="font-size:11px;color:var(--dim);">'+n+' active plan'+(n!==1?'s':'')+'</span></div>'
+    +'<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:7px;"><span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);">📈 '+(label||'Projected recurring')+'</span><span onclick="_hqShowPlanList('+_pid+')" style="font-size:11px;color:#38bdf8;cursor:pointer;text-decoration:underline;font-weight:700;" title="Tap to see exactly which customers these are">'+n+' active plan'+(n!==1?'s':'')+' ▸</span></div>'
     +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;">'
     +box(_fmtMoney(_hqProjRev(books,null)),'Rest of month')
     +box(_fmtMoney(_hqProjRev(books,7)),'Next 7 days')
     +box(_fmtMoney(_hqProjRev(books,30)),'Next 30 days')
     +box(_fmtMoney(_hqProjRev(books,365)),'Next 12 months')
     +'</div></div>';
+}
+// Tap the "N active plans" count → see exactly who's counted, so the number is verifiable.
+function _hqShowPlanList(pid){
+  const reg=(window._planListReg||[])[pid]; if(!reg) return;
+  const rows=reg.rows||[];
+  let h='<h3>📈 '+esc(reg.label)+' — '+rows.length+' counted</h3>';
+  h+='<div class="sub">Every customer counted as an active plan (recent visit or upcoming, minus cancelled/inactive). Spot anyone who shouldn\'t be here.</div>';
+  h+='<input class="dev-inp" placeholder="🔎 Search…" oninput="(function(v){document.querySelectorAll(\'#planL li\').forEach(function(li){li.style.display=li.dataset.n.indexOf(v)>=0?\'\':\'none\';});})(this.value.toLowerCase())" style="width:100%;margin:8px 0;box-sizing:border-box;">';
+  h+='<ol id="planL" style="margin:0;padding-left:24px;display:flex;flex-direction:column;gap:5px;max-height:62vh;overflow:auto;">'
+    +rows.map(function(b){
+      const done=(function(){ try{ return isDone(b)?String(b.done||'done').replace(/^✓\s*/,''):''; }catch(e){ return ''; } })();
+      const d=(function(){ try{ return dateOf(b)||''; }catch(e){ return ''; } })();
+      return '<li data-n="'+esc(String(b.name||'').toLowerCase())+'" style="line-height:1.35;"><b>'+esc(b.name||'(no name)')+'</b> <span style="color:var(--dim);font-size:12px;">· '+esc(b.frequency||'')+(b.email?(' · '+esc(b.email)):' · (no email)')+(d?(' · '+esc(d)+(done?' ✓':'')):'')+'</span></li>';
+    }).join('')
+    +'</ol>';
+  h+='<button class="ghost" onclick="closeSheet(\'jobSheet\')" style="margin-top:12px;">Close</button>';
+  document.getElementById('jobSheetBody').innerHTML=h;
+  openSheet('jobSheet');
 }
 async function renderStats(force){
   const grid=document.getElementById('statsGrid'); if(!grid) return;
