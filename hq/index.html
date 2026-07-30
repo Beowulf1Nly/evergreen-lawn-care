@@ -5096,11 +5096,14 @@ function _fmtMoney(n){ return '$'+(+n||0).toLocaleString('en-US',{maximumFractio
    is live but hasn't paid yet still projects forward. One entry per customer;
    promo/following-price customers project at their real recurring price. */
 function _hqActivePlans(books){
+  // Counts a customer as an active plan if they have ANY non-cancelled recurring row on the
+  // board — a recent (Done) visit OR an upcoming one. Board Done rows only persist ~11 days, so
+  // "recently serviced" ≈ still active. This is deliberately NOT forward-looking-only: a customer
+  // you mowed 3 days ago whose next visit isn't booked yet (payment/scheduling backlog) is still
+  // an active account, and excluding Done rows wrongly dropped ~11 of them. Matches the true base.
   const seen={}, out=[];
   (books||[]).forEach(function(bk){
     if(bk.rowCancelled) return;
-    if(isDone(bk)) return;   // a COMPLETED/past visit is not an active plan — this was inflating the count
-                             // by ~1 per customer whose only recurring row was a done, not-yet-rescheduled job.
     const f=String(bk.frequency||'').toLowerCase();
     if(!f||f.indexOf('one')>=0||f.indexOf('free')>=0||f.indexOf('quote')>=0) return;
     const k=String(bk.email||'').toLowerCase().trim()||(String(bk.name||'')+String(bk.address||''));
