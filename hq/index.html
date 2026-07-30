@@ -3048,6 +3048,16 @@ function renderDispatch(){
     })();
     h+='<div class="st-hourshead"><div></div><div class="st-hours">'+(function(){ let x=''; const h0=Math.ceil(_tlA/60), h1=Math.floor(_tlB/60); const step=(h1-h0)>14?2:1; for(let hh=h0;hh<=h1;hh+=step){ x+='<span style="left:'+_tlX(hh*60).toFixed(2)+'%">'+(hh%12||12)+(hh<12?'a':(hh===12?'p':'p'))+'</span>'; } return x; })()+'</div></div>';
   }
+  // 👻 DAY view: recurring customers DUE today by their plan but with NO booking — the "missing
+  // people" the pay-gated scheduler dropped (mowed, unpaid, next visit never created). Tap to book.
+  if(_dispView==='day'){
+    const _dayG=_ghostVisits(rangeStart,rangeStart);
+    if(_dayG.length){
+      h+='<div style="margin:8px 0 10px;padding:9px 12px;border:1px dashed #a78bfa;border-radius:11px;background:rgba(167,139,250,.09);">'
+        +'<div style="font-size:12px;font-weight:800;color:#a78bfa;margin-bottom:6px;">👻 Due today by their plan — NOT booked ('+_dayG.length+') · tap to schedule</div>'
+        +'<div style="display:flex;flex-wrap:wrap;gap:6px;">'+_dayG.map(function(g){ return _ghostPill(g); }).join('')+'</div></div>';
+    }
+  }
   // sections
   biz.forEach(function(z,zi){
     const bjobs=jobs.filter(function(b){ return _bizOf(b,biz)===zi; });
