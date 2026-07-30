@@ -5099,6 +5099,8 @@ function _hqActivePlans(books){
   const seen={}, out=[];
   (books||[]).forEach(function(bk){
     if(bk.rowCancelled) return;
+    if(isDone(bk)) return;   // a COMPLETED/past visit is not an active plan — this was inflating the count
+                             // by ~1 per customer whose only recurring row was a done, not-yet-rescheduled job.
     const f=String(bk.frequency||'').toLowerCase();
     if(!f||f.indexOf('one')>=0||f.indexOf('free')>=0||f.indexOf('quote')>=0) return;
     const k=String(bk.email||'').toLowerCase().trim()||(String(bk.name||'')+String(bk.address||''));
