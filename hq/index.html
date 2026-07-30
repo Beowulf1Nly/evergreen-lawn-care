@@ -1618,12 +1618,22 @@ async function _loadCustSheets(){
       const ut=_bizUT(i);
       const d=await fetch(ut.u+'?'+new URLSearchParams({ action:'customers_list', adminToken:ut.t })).then(function(r){ return r.json(); });
       const arr=(d&&d.success)?(d.customers||d.list||d.rows||[]):[];
-      if(Array.isArray(arr)&&arr.length) _custSheets[i]=arr.map(function(c){ return { name:c.Name||c.name||'', email:String(c.Email||c.email||'').toLowerCase(), phone:c.Phone||c.phone||'', address:c.Address||c.address||'', zip:String(c.Zip||c.zip||''), services:String(c.Services||c.services||''), notes:String(c.Notes||c.notes||''), cc:String(c['CC Email']||c.ccEmail||''), price:'', _fromSheet:1, _srcBiz:i }; });
+      if(Array.isArray(arr)&&arr.length) _custSheets[i]=arr.map(function(c){ return { name:c.Name||c.name||'', email:String(c.Email||c.email||'').toLowerCase(), phone:c.Phone||c.phone||'', address:c.Address||c.address||'', zip:String(c.Zip||c.zip||''), services:String(c.Services||c.services||''), notes:String(c.Notes||c.notes||''), cc:String(c['CC Email']||c.ccEmail||''), status:String(c.Status||c.status||''), price:'', _fromSheet:1, _srcBiz:i }; });
     }catch(e){}
   }
-  _custSheetsAt=Date.now(); _custSheetsLoading=false;
+  _custSheetsAt=Date.now(); _custSheetsLoading=false; _custInactiveCache=null;   // rebuild status set next time
   try{ const q=document.getElementById('addSearch'); if(q&&q.value) renderAddSearch(q.value); }catch(e){}
   try{ const db=document.getElementById('dispBoard'); if(db&&db.innerHTML) renderDispatch(); }catch(e){}   // customer notes just arrived — repaint the cards
+  try{ if(_activeTab==='stats') renderStats(false); }catch(e){}   // recount active plans once statuses are in
+}
+// Read-only: set of lowercased emails whose Customers-sheet Status is inactive/cancelled.
+// Used ONLY to exclude them from counts/ghosts — never deletes or changes any data.
+let _custInactiveCache=null;
+function _custInactiveEmails(){
+  if(_custInactiveCache) return _custInactiveCache;
+  const s={};
+  try{ Object.keys(_custSheets||{}).forEach(function(k){ (_custSheets[k]||[]).forEach(function(c){ const em=String(c.email||'').toLowerCase().trim(); if(em && /inactive|cancel/i.test(String(c.status||''))) s[em]=1; }); }); }catch(e){}
+  _custInactiveCache=s; return s;
 }
 function _uniqueCustomers(){
   const seen={}, out=[];
@@ -2682,9 +2692,10 @@ function _ghostVisits(rangeStart,rangeEnd){
       r.dates[d]=1;
       if(d>r.last){ r.last=d; r.b=b; }
     });
+    const _inact=_custInactiveEmails();
     Object.keys(byEm).forEach(function(em){
       const r=byEm[em], b=r.b; if(!b) return;
-      if(b.customerInactive) return;   // no ghost cards for inactive/cancelled customers
+      if(b.customerInactive || _inact[em]) return;   // no ghost cards for inactive/cancelled customers
       const f=String(b.frequency||'').toLowerCase();
       if(!/week|month|every/.test(f)||/one|quote/.test(f)) return;   // recurring plans only
       const iv=_hqPlanInterval(f); if(!(iv>0)) return;
@@ -5112,10 +5123,11 @@ function _hqActivePlans(books){
   // "recently serviced" ≈ still active. This is deliberately NOT forward-looking-only: a customer
   // you mowed 3 days ago whose next visit isn't booked yet (payment/scheduling backlog) is still
   // an active account, and excluding Done rows wrongly dropped ~11 of them. Matches the true base.
-  const seen={}, out=[];
+  const seen={}, out=[], inact=_custInactiveEmails();
   (books||[]).forEach(function(bk){
     if(bk.rowCancelled) return;
-    if(bk.customerInactive) return;   // don't count customers marked inactive/cancelled in the Customers sheet
+    const em0=String(bk.email||'').toLowerCase().trim();
+    if(bk.customerInactive || (em0 && inact[em0])) return;   // skip inactive/cancelled (backend flag OR Customers-sheet status)
     const f=String(bk.frequency||'').toLowerCase();
     if(!f||f.indexOf('one')>=0||f.indexOf('free')>=0||f.indexOf('quote')>=0) return;
     const k=String(bk.email||'').toLowerCase().trim()||(String(bk.name||'')+String(bk.address||''));
@@ -5393,6 +5405,7 @@ function _hqProjLine(books,label){
 }
 async function renderStats(force){
   const grid=document.getElementById('statsGrid'); if(!grid) return;
+  try{ _loadCustSheets(); }catch(e){}   // pull customer statuses so active-plan count can skip inactive/cancelled
   const biz=_bizLoad();
   if(!Object.keys(_statsCache).length||force) grid.innerHTML='<div class="empty">⏳ Pulling numbers from every business…</div>';
   const results=await Promise.all(biz.map(async function(z,i){
