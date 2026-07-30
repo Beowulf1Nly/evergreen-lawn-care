@@ -13,7 +13,7 @@
 <script>
 /* APP_VER:2026-07-16.71 */
 (function(){
-  var V='2026-07-16.71'; window.__APP_VER=V;
+  var V='2026-07-30.72'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1756,7 +1756,8 @@ function _fmAddLocalSameDay(nb,anchorKey){
   }catch(e){}
 }
 
-function _fmTodayRawJobs(){ const ds=todayISOStr(); return (allBookings||[]).filter(b=>!b.rowCancelled&&dateOf(b)===ds&&_crewMatch(b)); } // completed jobs stay so progress counts them as done
+function _isQuoteCall(b){ return /quote call/i.test(String((b&&(b.service||b.serviceType))||'')); } // office phone lead — not a crew stop
+function _fmTodayRawJobs(){ const ds=todayISOStr(); return (allBookings||[]).filter(b=>!b.rowCancelled&&!_isQuoteCall(b)&&dateOf(b)===ds&&_crewMatch(b)); } // completed jobs stay so progress counts them as done; Quote Calls are office tasks, hidden from the crew
 function _fmStops(){
   const jobs=_fmTodayRawJobs().map(bk=>({bk}));
   const order=(_fmStarted&&_routeLock&&_routeLock.length)?_routeLock              // mid-route: FROZEN order — nothing reshuffles a route in progress
