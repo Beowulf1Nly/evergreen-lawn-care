@@ -2684,6 +2684,7 @@ function _ghostVisits(rangeStart,rangeEnd){
     });
     Object.keys(byEm).forEach(function(em){
       const r=byEm[em], b=r.b; if(!b) return;
+      if(b.customerInactive) return;   // no ghost cards for inactive/cancelled customers
       const f=String(b.frequency||'').toLowerCase();
       if(!/week|month|every/.test(f)||/one|quote/.test(f)) return;   // recurring plans only
       const iv=_hqPlanInterval(f); if(!(iv>0)) return;
@@ -5114,6 +5115,7 @@ function _hqActivePlans(books){
   const seen={}, out=[];
   (books||[]).forEach(function(bk){
     if(bk.rowCancelled) return;
+    if(bk.customerInactive) return;   // don't count customers marked inactive/cancelled in the Customers sheet
     const f=String(bk.frequency||'').toLowerCase();
     if(!f||f.indexOf('one')>=0||f.indexOf('free')>=0||f.indexOf('quote')>=0) return;
     const k=String(bk.email||'').toLowerCase().trim()||(String(bk.name||'')+String(bk.address||''));
