@@ -3212,6 +3212,22 @@ function renderDispatch(){
               _pe=Math.max(_pe,ev.en);
             });
           })();
+          // 🗓 END OF DAY: crew clocked out but the done blocks bunch into far less than the real
+          // shift (HQ wasn't left open to capture each flip, so they got estimate-stacked from the
+          // morning). Spread them evenly across the actual worked span so the finished board reflects
+          // the real day instead of a compressed, overlapping cluster. Only when clearly bunched.
+          if(_coCap!=null){
+            const _dn=evs.filter(function(ev){ return isDone(ev.b); }).sort(function(a,b2){ return a.st-b2.st||a.en-b2.en; });
+            if(_dn.length>=2 && (_coCap-_dn[_dn.length-1].en)>60){
+              const _first=_dn[0].st, _span=_coCap-_first, _tot=_dn.reduce(function(s,ev){ return s+(ev.en-ev.st); },0);
+              if(_span>_tot){
+                const _gap=(_span-_tot)/(_dn.length-1);
+                let _cur=_first;
+                _dn.forEach(function(ev){ const _d=ev.en-ev.st; ev.st=Math.round(_cur); ev.en=ev.st+_d; _cur=ev.en+_gap; _pins[_svKey(ev.b)]={s:ev.st,e:ev.en}; });
+                try{ localStorage.setItem('hq_dp5_'+iso,JSON.stringify(_pins)); }catch(e){}
+              }
+            }
+          }
           evs.forEach(function(ev){ if(!isDone(ev.b)) _seenOpen[_svKey(ev.b)]=1; });
           try{
             localStorage.setItem('hq_dp5_'+iso,JSON.stringify(_pins));
