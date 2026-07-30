@@ -3322,6 +3322,7 @@ function _rebuildLearnedMins(){
 }
 function _learnedFor(b){ return _learnedMins[String(b&&b.email||'').toLowerCase().trim()]||0; }
 function _jobMins(b){
+  const pin=_yardPinFor(b); if(pin>0) return pin;   // your ⏱ HQ edit — wins so it survives the 90s refresh even if the sheet didn't save
   const custom=parseInt(String(b.mowMinutes||b.customMowMins||'')); if(custom>0) return custom;
   const n=String(b.notes||'').toLowerCase(), freq=String(b.frequency||'').toLowerCase(), svc=String(b.service||b.serviceType||'').toLowerCase();
   if(freq.includes('quote')||svc.includes('quote')) return 15;
@@ -3465,8 +3466,8 @@ function showSvcHistory(em,nm){
 let _yardMinsPin={}; try{ _yardMinsPin=JSON.parse(localStorage.getItem('hq_yardmins')||'{}'); }catch(e){}
 function _yardPinFor(b){ return parseInt(_yardMinsPin[String(b&&b.email||'').toLowerCase().trim()])||0; }
 function _hqMins(b,zi,c){
+  const pin=_yardPinFor(b); if(pin>0) return Math.max(10,pin);   // your ⏱ edit wins — survives refresh + polls even before the sheet carries it
   const custom=parseInt(String(b.mowMinutes||b.customMowMins||'')); if(custom>0) return Math.max(10,custom);
-  const pin=_yardPinFor(b); if(pin>0) return Math.max(10,pin);   // your ⏱ edit, pinned on this device — survives refresh + polls until the sheet carries it
   return Math.max(10,Math.round(_jobMins(b)*_crewSizeFactor(zi,c)));
 }
 function _crewRate(c,zi){
