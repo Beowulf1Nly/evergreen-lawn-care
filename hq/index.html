@@ -2192,6 +2192,7 @@ const _EST_STAGES=[
   {k:'todo',  lbl:'🔴 To build',      c:'#f87171'},
   {k:'draft', lbl:'🟡 Draft saved',   c:'#fbbf24'},
   {k:'sent',  lbl:'🔵 Sent — waiting', c:'#38bdf8'},
+  {k:'accepted', lbl:'🟢 Accepted — book a day', c:'#22c55e'},
   {k:'won',   lbl:'✅ Won',           c:'#4ade80'},
   {k:'lost',  lbl:'⚪ Passed',         c:'#94a3b8'}
 ];
@@ -2246,7 +2247,7 @@ function renderEstTab(){
 function _estRenderList(){
   const listEl=document.getElementById('estList'); if(!listEl) return;
   const o=_estStore(), all=Object.keys(o).map(function(k){ return o[k]; });
-  const order={todo:0,draft:1,sent:2,won:3,lost:4};
+  const order={todo:0,draft:1,sent:2,accepted:3,won:4,lost:5};
   const kp=document.getElementById('estKpis');
   if(kp){ const chip='display:inline-block;padding:5px 11px;border-radius:999px;background:var(--card,#0f2740);border:1px solid var(--line2,#2a3942);';
     const nb=all.filter(function(m){return (m.status||'todo')==='todo';}).length, ns=all.filter(function(m){return m.status==='sent';}).length;
@@ -2283,7 +2284,7 @@ async function estEmail(id){
   const action=owner?'send_quote_email':'submit_estimate_for_approval';
   // POST (not GET) — a long estimate + photos overruns the URL length limit and throws the
   // "Network error" you saw. The body has no such limit and carries the image URLs too.
-  const payload={ action:action, adminToken:_bizTok(z), submittedBy:((typeof myName!=='undefined'&&myName)||'Owner'), name:name, email:email,
+  const payload={ action:action, estimateId:id, adminToken:_bizTok(z), submittedBy:((typeof myName!=='undefined'&&myName)||'Owner'), name:name, email:email,
     phone:String(r.phone||'').trim(), address:String(r.address||'').trim(), summary:String(r.summary||r.title||'').trim(), personalMessage:String(r.message||'').trim(),
     estimateDate:todayISO(), validThru:String(r.validThru||''), items:JSON.stringify(items), notes:'[]' };
   const _si=document.getElementById('estSendImages');
