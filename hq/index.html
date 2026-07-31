@@ -2896,7 +2896,9 @@ function _jobSort(a,b){
    adding a "D" row to the Crew Pay tab makes Crew D appear everywhere automatically. */
 function _allCrews(zi){
   zi=zi||0; const s={};
-  try{ const rp=(_crewPay&&_crewPay[zi])||{}; Object.keys(rp).forEach(function(c){ const k=String(c).toUpperCase().trim(); if(k&&_crewPayFor(zi,k)) s[k]=1; }); }catch(e){}
+  // Roster PRESENCE is what makes a crew exist — not its pay. _crewPayFor() requires rate>0||pct>0,
+  // so a $0 / commission-only / owner-run crew was invisible everywhere. Anyone on the sheet counts.
+  try{ const rp=(_crewPay&&_crewPay[zi])||{}; Object.keys(rp).forEach(function(c){ const k=String(c).toUpperCase().trim(); const e=rp[c]; if(k&&e&&((e.who&&e.who.length)||e.rate>0||e.pct>0)) s[k]=1; }); }catch(e){}
   try{ Object.keys(_crewBases(zi)||{}).forEach(function(c){ const k=String(c).toUpperCase().trim(); if(k) s[k]=1; }); }catch(e){}
   try{ _dispJobs().forEach(function(b){ if((b._srcBiz||0)!==zi) return; const k=String(b.crew||'').toUpperCase().trim(); if(k) s[k]=1; }); }catch(e){}
   const arr=Object.keys(s).sort();
@@ -3127,8 +3129,7 @@ function renderDispatch(){
     // Thursday?" is answered by the lane simply not existing, and there's nowhere to drop work onto.
     // Sources: jobs on the board + the Crew Pay roster + any crew with a home base set.
     const _bcs={}; bjobs.forEach(function(b){ const cw=String(b.crew||'').toUpperCase().trim(); if(cw) _bcs[cw]=1; });
-    try{ const _rp=(_crewPay&&_crewPay[zi])||{}; Object.keys(_rp).forEach(function(cw){ const k=String(cw).toUpperCase().trim(); if(k&&_crewPayFor(zi,k)) _bcs[k]=1; }); }catch(e){}
-    try{ Object.keys(_crewBases(zi)||{}).forEach(function(cw){ const k=String(cw).toUpperCase().trim(); if(k) _bcs[k]=1; }); }catch(e){}
+    try{ _allCrews(zi).forEach(function(cw){ _bcs[cw]=1; }); }catch(e){}
     const bizCrews=Object.keys(_bcs).sort();
     const crewRows=(_dispCrew==='all')?bizCrews.concat(['un']):[_dispCrew==='un'?'un':_dispCrew];
     h+='<div class="st-section"><div class="st-bizhead" style="--bc:'+esc(z.c||'#22c55e')+';cursor:pointer;" onclick="bizToggle(\''+esc(z.n)+'\')" title="Click to '+(_colB?'expand':'collapse')+'">'
@@ -3470,9 +3471,12 @@ function _t12(mins){ const h=Math.floor(mins/60), m=mins%60; return ((h%12)||12)
 const CREWRATE_KEY='hq_crewrate_v1', DRIVE_BUF=12;   // est. minutes between stops
 /* Crew Pay sheet: who's in each crew + hourly/salary — the real labor cost.
    Backend action get_crew_pay reads the 'Crew Pay' tab (Name|Crew|Type|Rate|Active). */
-let _crewPay=null, _crewPayTried=false;
+let _crewPay=null, _crewPayTried=false, _crewPayAt=0;
 async function loadCrewPay(force){
-  if(_crewPayTried&&!force) return; _crewPayTried=true;
+  // Re-check every 3 min instead of once per session — otherwise a crew you add to the Crew Pay
+  // sheet mid-session never shows up until a full page reload.
+  if(!force&&_crewPayTried&&(Date.now()-_crewPayAt)<180000) return;
+  _crewPayTried=true; _crewPayAt=Date.now();
   // Crew A (Lawn) and Crew A (Cleaning) are different people — every business's
   // backend has its OWN 'Crew Pay' tab, and rates are keyed business+crew.
   const biz=_bizLoad();
@@ -3503,15 +3507,21 @@ const BIZCOL_KEY='hq_bizcol_v1';
 function _bizCol(){ try{ return JSON.parse(localStorage.getItem(BIZCOL_KEY)||'{}'); }catch(e){ return {}; } }
 function bizToggle(n){ const c=_bizCol(); c[n]=!c[n]; try{ localStorage.setItem(BIZCOL_KEY,JSON.stringify(c)); }catch(e){} renderDispatch(); }
 function _crewPayFor(zi,c){ const cp=_crewPay&&_crewPay[zi]&&_crewPay[zi][c]; return (cp&&(cp.rate>0||cp.pct>0))?cp:null; }
+/* Who is ON the crew, regardless of pay. _crewPayFor() is a COST lookup (needs rate>0||pct>0);
+   using it to answer "does this crew exist / who's on it" hid every unpaid or $0-rate crew. */
+function _crewRoster(zi,c){
+  try{ const e=_crewPay&&_crewPay[zi||0]&&_crewPay[zi||0][String(c||'').toUpperCase().trim()];
+    return (e&&e.who&&e.who.length)?e:null; }catch(err){ return null; }
+}
 function _crewRosterNames(zi,c){
-  const cp=_crewPayFor(zi,c); if(!cp||!cp.who||!cp.who.length) return '';
+  const cp=_crewRoster(zi,c); if(!cp) return '';
   return cp.who.map(function(w){ return String(w).split(' (')[0]; }).join(' & ');
 }
 // Crew size changes how long a job takes. Durations are calibrated for a 2-person
 // crew: a 1-man crew runs ~40% longer, 3+ a touch faster. Size comes from that
 // business's Crew Pay roster (the source of truth HQ already reads).
 function _crewSizeFactor(zi,c){
-  const cp=_crewPayFor(zi,c);
+  const cp=_crewRoster(zi,c);   // presence, not pay — a $0-rate crew still has a real headcount
   const n=(cp&&cp.who&&cp.who.length)?cp.who.length:2;
   return n<=1?1.4:(n>=3?0.85:1);
 }
