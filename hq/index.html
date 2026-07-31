@@ -2281,13 +2281,18 @@ async function estEmail(id){
   const z=_bizLoad()[0];   // lawn = the main backend
   const owner=(typeof myRole!=='undefined'&&myRole==='owner');
   const action=owner?'send_quote_email':'submit_estimate_for_approval';
+  // POST (not GET) — a long estimate + photos overruns the URL length limit and throws the
+  // "Network error" you saw. The body has no such limit and carries the image URLs too.
+  const payload={ action:action, adminToken:_bizTok(z), submittedBy:((typeof myName!=='undefined'&&myName)||'Owner'), name:name, email:email,
+    phone:(r.phone||'').trim(), address:(r.address||'').trim(), summary:(r.summary||r.title||'').trim(), personalMessage:(r.message||'').trim(),
+    estimateDate:todayISO(), validThru:(r.validThru||''), items:JSON.stringify(items), notes:'[]' };
+  const _si=document.getElementById('estSendImages');
+  if(r.photos&&r.photos.length&&(!_si||_si.checked)) payload.photos=JSON.stringify(r.photos);
   try{
-    const d=await bizGet(z,{ action:action, submittedBy:((typeof myName!=='undefined'&&myName)||'Owner'), name:name, email:email,
-      phone:(r.phone||'').trim(), address:(r.address||'').trim(), summary:(r.summary||r.title||'').trim(), personalMessage:(r.message||'').trim(),
-      estimateDate:todayISO(), validThru:(r.validThru||''), items:JSON.stringify(items), notes:'[]' });
+    const d=await fetch(_bizUrl(z),{ method:'POST', body:JSON.stringify(payload) }).then(function(x){ return x.json(); });
     if(d&&d.success){ r.status='sent'; r.estimateNum=d.estimateNum||d.quoteNumber||r.estimateNum||''; _estPut(r); toast(owner?('📧 Estimate emailed to '+email):'📤 Submitted for approval'); estOpen(id); _estRenderList(); }
-    else { if(st) st.textContent='⚠ '+((d&&d.error)||'Failed — is the backend connected/redeployed?'); toast('⚠ '+((d&&d.error)||'Send failed')); }
-  }catch(e){ if(st) st.textContent='⚠ Network error'; toast('⚠ Network error'); }
+    else { if(st) st.textContent='⚠ '+((d&&d.error)||'Failed — redeploy the backend, then retry'); toast('⚠ '+((d&&d.error)||'Send failed')); }
+  }catch(e){ if(st) st.textContent='⚠ Network error — check connection and retry'; toast('⚠ Network error'); }
 }
 function _estCustSearch(id,q){
   const box=document.getElementById('estCustResults'); if(!box) return;
@@ -2373,6 +2378,7 @@ function estOpen(id){
     +'<input style="'+inp+'margin-bottom:7px;" placeholder="Personal note in the email (optional)" value="'+esc(r.message||'')+'" oninput="_estField(\''+id+'\',\'message\',this.value)">'
     +'<input style="'+inp+'" type="date" title="Valid through" value="'+esc(r.validThru||'')+'" oninput="_estField(\''+id+'\',\'validThru\',this.value)">';
   h+='<div class="lbl">Send</div>'
+    +((r.photos&&r.photos.length)?('<label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:2px 2px 9px;cursor:pointer;"><input type="checkbox" id="estSendImages" checked style="width:16px;height:16px;"> 📷 Include the '+r.photos.length+' photo'+(r.photos.length>1?'s':'')+' in the email</label>'):'')
     +'<button class="act" style="background:#1565c0;color:#fff;border-color:#1565c0;font-weight:800;" onclick="estEmail(\''+id+'\')"><span class="em">📧</span> '+((typeof myRole!=='undefined'&&myRole==='owner')?'Email estimate to customer':'Submit for owner approval')+'</button>'
     +'<div id="estSendStatus" style="font-size:12px;color:var(--dim,#9fb2c0);margin:4px 2px;"></div>';
   if(ph||r.address){ h+='<div class="lbl">Contact</div>'; if(ph) h+='<a class="act" href="tel:'+esc(ph)+'"><span class="em">📞</span> Call</a><a class="act" href="sms:'+esc(ph)+'"><span class="em">💬</span> Text</a>'; if(r.address) h+='<a class="act" href="https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(r.address+', FL')+'" target="_blank"><span class="em">🧭</span> Map</a>'; }
