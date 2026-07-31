@@ -2886,7 +2886,11 @@ function _iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'
 function _isArch(b){ return !!b.rowCompleted; }
 function _dispPC(b){ return _isArch(b)?'#2e7d32':(isDone(b)?'#64748b':(String(b.crew||'').trim()?crewColor(b.crew):'#f87171')); }
 function _jobSort(a,b){
-  const ord=_savedOrderFor(String(a.crew||''));
+  // Only rank by a crew's saved run order when BOTH jobs belong to that crew. Deriving the order
+  // from a's crew alone made the comparator asymmetric (sort(a,b) and sort(b,a) could both say
+  // "me first"), which let the same list order differently on each render — pills visibly shuffled.
+  const _ca=String(a.crew||'').toUpperCase().trim(), _cb=String(b.crew||'').toUpperCase().trim();
+  const ord=(_ca===_cb)?_savedOrderFor(_ca):[];
   if(ord.length){ let pa=ord.indexOf(_svKey(a)), pb=ord.indexOf(_svKey(b)); pa=pa<0?9999:pa; pb=pb<0?9999:pb; if(pa!==pb) return pa-pb; }
   const x=a.jobTime||'99:99', y=b.jobTime||'99:99'; if(x!==y) return x<y?-1:1;
   // deterministic final tiebreaker — equal-key jobs must never swap between renders
@@ -2974,6 +2978,10 @@ function renderDispatch(){
   const ae=document.activeElement;
   if(ae&&ae.classList&&ae.classList.contains('st-rate')) return;   // mid-edit — the 20s auto-refresh was wiping the input before your change saved
   _jobRefs=[];
+  // "Was the board actually open and watching?" — ONE value for the whole render, shared by every
+  // crew lane. Per-lane computation made lanes 2+ always think they were watching (see below).
+  window._dispWatched=(Date.now()-(window._dispWatchTs||0))<180000;
+  window._dispWatchTs=Date.now();
   ['dvMonth','dvWeek','dvDay'].forEach(function(id){ const el=document.getElementById(id); if(el) el.classList.toggle('on', id==='dv'+_dispView.charAt(0).toUpperCase()+_dispView.slice(1)); });
   document.querySelectorAll('#dispCrews button').forEach(function(b){ b.classList.toggle('on',b.dataset.c===_dispCrew); });
   const todayIso=todayISO();
@@ -3192,8 +3200,10 @@ function renderDispatch(){
           // v3 pins: a flip only pins "ended right now" if the board was actually
           // WATCHING (rendered <3 min ago). Reopening HQ at 4 PM used to make every
           // job finished since morning look like it ran 7:09→4:26, all overlapping.
-          let _watched=(Date.now()-(window._dispWatchTs||0))<180000;
-          window._dispWatchTs=Date.now();
+          // Computed ONCE per render (see renderDispatch). It used to be computed here, inside the
+          // per-crew lane loop, and stamped _dispWatchTs each time — so every crew after the first
+          // always saw "watched", and their finished jobs got pinned as one giant block ending now.
+          let _watched=!!window._dispWatched;
           // a flip seen AFTER the crew clocked out isn't live work being watched —
           // someone toggled a checkbox later. Place those by estimate, not "now".
           if(_coCap!=null&&_nowM>_coCap+5) _watched=false;
@@ -3256,6 +3266,11 @@ function renderDispatch(){
           evs.forEach(function(ev){
             if(isDone(ev.b)) return;
             const _d=ev.en-ev.st, _dv2=_drv(ev.b), _st=_liveCur+(_anyPlaced?_dv2:0);
+            // ⏰ A job with a REAL set time stays exactly where you put it. The cascade below is only
+            // for stops with no time yet (dashed/projected). Previously EVERY open stop was re-placed
+            // from "now" on every render — so a time you set was visually thrown away, and the whole
+            // board shuffled every 20s as the clock moved.
+            if(!ev.proj){ _liveCur=Math.max(_liveCur,ev.en); _anyPlaced=true; _firstOpen=false; return; }
             if(_firstOpen){
               const _k3=_svKey(ev.b);
               // ON DECK: starts a REAL drive-leg after the last yard ended — the crew is
@@ -3930,9 +3945,19 @@ function crewMapsRoute(zi,c){
    keeps them first and solves the rest starting from the LAST locked stop's location. ── */
 let _dayLockStore={}; try{ _dayLockStore=JSON.parse(localStorage.getItem('hq_locks3')||'{}'); }catch(e){}
 // migrate v2 (array = lock-to-front) → v3 (map key→position)
+// migrate v2 → v3. v2 held EITHER an array (lock-to-front) or, after a later change, an object
+// map — the old code assumed arrays, so it threw on objects and the migration silently never ran,
+// leaving every lock stranded in hq_locks2 while the store read hq_locks3. Handle both shapes.
 try{ const _v2=JSON.parse(localStorage.getItem('hq_locks2')||'null');
-  if(_v2&&!localStorage.getItem('hq_locks3')){ Object.keys(_v2).forEach(function(kk){ const m={}; (_v2[kk]||[]).forEach(function(k2,i2){ if(k2&&k2.charAt(0)!=='|') m[k2]=i2+1; }); if(Object.keys(m).length) _dayLockStore[kk]=m; });
-    localStorage.setItem('hq_locks3',JSON.stringify(_dayLockStore)); localStorage.removeItem('hq_locks2'); }
+  if(_v2&&typeof _v2==='object'){
+    Object.keys(_v2).forEach(function(kk){
+      const src=_v2[kk]; const m={};
+      if(Array.isArray(src)) src.forEach(function(k2,i2){ if(k2&&k2.charAt(0)!=='|') m[k2]=i2+1; });
+      else if(src&&typeof src==='object') Object.keys(src).forEach(function(k2){ const n=parseInt(src[k2]); if(k2&&n>0) m[k2]=n; });
+      if(Object.keys(m).length&&!_dayLockStore[kk]) _dayLockStore[kk]=m;   // never clobber a v3 lock
+    });
+    localStorage.setItem('hq_locks3',JSON.stringify(_dayLockStore)); localStorage.removeItem('hq_locks2');
+  }
 }catch(e){}
 function _dayLockMap(iso,zi,c){ const v=_dayLockStore[iso+'|'+_recKey(zi,c)]; return (v&&!Array.isArray(v))?v:{}; }
 function _dayLocks(iso,zi,c){ const m=_dayLockMap(iso,zi,c); return Object.keys(m).sort(function(a,b){ return m[a]-m[b]; }); }   // keys in position order (back-compat)
@@ -3948,7 +3973,7 @@ function dayLockToggle(ref,c,iso,zi){
   else { m[k]=n; toast('🔒 '+(b.name||'stop')+' anchored as stop #'+n+' — the crew\'s phone keeps it there through every re-route',6000); }
   _dayLockStore[kk]=m;
   const _tod=todayISO(); Object.keys(_dayLockStore).forEach(function(x){ if(x.slice(0,10)<_tod) delete _dayLockStore[x]; });   // old days auto-purge
-  try{ localStorage.setItem('hq_locks2',JSON.stringify(_dayLockStore)); }catch(e){}
+  try{ localStorage.setItem('hq_locks3',JSON.stringify(_dayLockStore)); }catch(e){}   // v3 — same key the store LOADS from (was saving to v2, so every lock died on reload)
   // push the lock to the crew's phone NOW — locking is usually the LAST tap, and
   // the flag only travels inside a route push. Existing measured drive legs are kept.
   try{
@@ -3962,14 +3987,21 @@ function dayLockToggle(ref,c,iso,zi){
 // 📡 push today's/future locks to the phones, independent of which tab set them.
 let _lkPushed={};
 async function _lockReassert(){
-  let st={}; try{ st=JSON.parse(localStorage.getItem('hq_locks2')||'{}'); }catch(e){ return; }
-  // migrate v1 name-keys ('n:name|date') to v2 ('n:name~address|date')
+  let st={}; try{ st=JSON.parse(localStorage.getItem('hq_locks3')||'{}'); }catch(e){ return; }
+  // migrate v1 name-keys ('n:name|date') to 'n:name~address|date'. Values are position MAPS now;
+  // the old code called .map() on them (array-only), which threw and killed this migration.
   try{
     let mig=false;
     const legacy={};
     _dispJobs().forEach(function(b){ if(!String(b.email||'').trim()) legacy['n:'+_nkNorm(b.name)+'|'+dateOf(b)]=_svKey(b); });
-    Object.keys(st).forEach(function(kk){ st[kk]=(st[kk]||[]).map(function(k){ if(/^n:/.test(k)&&k.indexOf('~')<0&&legacy[k]){ mig=true; return legacy[k]; } return k; }); });
-    if(mig){ localStorage.setItem('hq_locks2',JSON.stringify(st)); _lkPushed={}; }
+    Object.keys(st).forEach(function(kk){
+      const src=st[kk];
+      if(Array.isArray(src)){ st[kk]=src.map(function(k){ if(/^n:/.test(k)&&k.indexOf('~')<0&&legacy[k]){ mig=true; return legacy[k]; } return k; }); return; }
+      if(!src||typeof src!=='object') return;
+      const m={}; Object.keys(src).forEach(function(k){ if(/^n:/.test(k)&&k.indexOf('~')<0&&legacy[k]){ mig=true; m[legacy[k]]=src[k]; } else m[k]=src[k]; });
+      st[kk]=m;
+    });
+    if(mig){ localStorage.setItem('hq_locks3',JSON.stringify(st)); _lkPushed={}; }
   }catch(e){}
   _dayLockStore=st;   // adopt cross-tab edits
   const tod=todayISO();
@@ -4325,13 +4357,22 @@ function _hqHav(a,b){ const R=3959,dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lon-a.
 function _crewLockAll(){ try{ return JSON.parse(localStorage.getItem('hq_crewlock')||'{}')||{}; }catch(e){ return {}; } }
 function _crewLockSave(o){ try{ localStorage.setItem('hq_crewlock',JSON.stringify(o)); }catch(e){} }
 function _crewLockKey(b){ const em=String(b&&b.email||'').toLowerCase().trim(); return em||(String(b&&b.name||'').toLowerCase().trim()+'|'+String(b&&b.address||'').toLowerCase().trim()); }
-function _crewLockFor(b){ const k=_crewLockKey(b); return k?(_crewLockAll()[k]||''):''; }
+function _crewLockFor(b){ const k=_crewLockKey(b); return k?String(_crewLockAll()[k]||'').toUpperCase().trim():''; }
 function _crewLockSet(b,crew){ const k=_crewLockKey(b); if(!k) return; const o=_crewLockAll(); if(crew) o[k]=String(crew).toUpperCase(); else delete o[k]; _crewLockSave(o); }
 function hqToggleCrewLock(){
   const b=_jobCur; if(!b) return;
   const cur=_crewLockFor(b), cw=String(b.crew||'').toUpperCase().trim();
   if(cur){ _crewLockSet(b,''); toast('🔓 Unlocked — the splitter can move '+(b.name||'this job')+' again'); }
-  else { if(!cw){ toast('Assign a crew first, then lock it'); return; } _crewLockSet(b,cw); toast('🔒 '+(b.name||'Job')+' locked to Crew '+cw+' — splitter won\'t move it'); }
+  else {
+    let tgt=cw;
+    if(!tgt){   // no crew assigned yet — ask which one to pin them to instead of refusing
+      const v=prompt('🔒 Lock '+(b.name||'this job')+' to which crew? (A, B or C)','A');
+      if(v===null) return; tgt=String(v).toUpperCase().trim().replace(/[^A-Z]/g,'');
+      if(!tgt){ toast('Enter a crew letter'); return; }
+      try{ doAssign(tgt); }catch(e){}   // actually put them on that crew too
+    }
+    _crewLockSet(b,tgt); toast('🔒 '+(b.name||'Job')+' locked to Crew '+tgt+' — splitter won\'t move them');
+  }
   try{ openJobSheetFor(b); }catch(e){} try{ renderDispatch(); }catch(e){}
 }
 const _SPLIT_BAL={ tight:{mi:4,lbl:'Tightest areas'}, balanced:{mi:8,lbl:'Balanced'}, even:{mi:20,lbl:'Even workload'} };
@@ -4408,7 +4449,8 @@ async function hqSplitCrews(iso,zi){
   //    seeds to its nearest participating base.
   pts.forEach(function(p){
     const lk=_crewLockFor(p.b);
-    if(lk && crews.indexOf(lk)>=0){ p.crew=lk; p.locked=true; return; }
+    // A lock is absolute: the job stays on that crew even if that crew isn't part of this split.
+    if(lk){ p.crew=lk; p.locked=true; return; }
     let best=crews[0],bd=Infinity; crews.forEach(function(c){ const d=_hqHav(p.co,bases[c]); if(d<bd){bd=d;best=c;} }); p.crew=best;
   });
   // 2) balance mow-time across ANY number of crews: repeatedly move the cheapest-to-move job from
