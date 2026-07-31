@@ -3013,7 +3013,8 @@ function renderDispatch(){
       const d=new Date(start); d.setDate(start.getDate()+i); const iso=_iso(d);
       if(i===41) rangeEnd=iso;
       const jobs=byDate[iso]||[]; const amt=jobs.reduce(function(s,b){return s+amtOf(b);},0); const MAXP=4;
-      h+='<div class="disp-cell'+(d.getMonth()!==mo?' dim':'')+(iso===todayIso?' today':'')+'">'
+      // month cell = a DAY drop target (crew untouched — null crewKey opens the reschedule sheet)
+      h+='<div class="disp-cell'+(d.getMonth()!==mo?' dim':'')+(iso===todayIso?' today':'')+'" ondragover="dispOver(event,this)" ondragleave="this.classList.remove(\'dragover\')" ondrop="this.classList.remove(\'dragover\');dispDropCell(event,null,\''+iso+'\')">'
         +'<div class="dnum" onclick="dispGotoDay(\''+iso+'\')" title="Open day board">'+d.getDate()+(jobs.length?'<span class="dsum">'+jobs.length+' · $'+amt.toFixed(0)+'</span>':'')+'</div>';
       jobs.slice(0,MAXP).forEach(function(b){ h+=_dispPill(b); });
       if(jobs.length>MAXP) h+='<div class="disp-more" onclick="dispGotoDay(\''+iso+'\')">+'+(jobs.length-MAXP)+' more…</div>';
@@ -3100,7 +3101,12 @@ function renderDispatch(){
     if(!bjobs.length && biz.length>1 && zi!==0 && !(idx[zi])){ /* still render as drop target? only if it has crews */ }
     const amt=bjobs.reduce(function(s,b){return s+amtOf(b);},0);
     const _colB=!!_bizCol()[z.n];
+    // A crew you EMPLOY should have a lane even on a day it has no jobs — otherwise "is Crew B free
+    // Thursday?" is answered by the lane simply not existing, and there's nowhere to drop work onto.
+    // Sources: jobs on the board + the Crew Pay roster + any crew with a home base set.
     const _bcs={}; bjobs.forEach(function(b){ const cw=String(b.crew||'').toUpperCase().trim(); if(cw) _bcs[cw]=1; });
+    try{ const _rp=(_crewPay&&_crewPay[zi])||{}; Object.keys(_rp).forEach(function(cw){ const k=String(cw).toUpperCase().trim(); if(k&&_crewPayFor(zi,k)) _bcs[k]=1; }); }catch(e){}
+    try{ Object.keys(_crewBases(zi)||{}).forEach(function(cw){ const k=String(cw).toUpperCase().trim(); if(k) _bcs[k]=1; }); }catch(e){}
     const bizCrews=Object.keys(_bcs).sort();
     const crewRows=(_dispCrew==='all')?bizCrews.concat(['un']):[_dispCrew==='un'?'un':_dispCrew];
     h+='<div class="st-section"><div class="st-bizhead" style="--bc:'+esc(z.c||'#22c55e')+';cursor:pointer;" onclick="bizToggle(\''+esc(z.n)+'\')" title="Click to '+(_colB?'expand':'collapse')+'">'
@@ -3118,7 +3124,8 @@ function renderDispatch(){
       if(_dispView==='week'){
         h+='<div class="st-grid">'+lab+days.map(function(d){
           const iso=_iso(d); const cell=(rowJobsAll[iso]||[]).slice().sort(_jobSort);
-          return '<div class="st-cell'+(iso===todayIso?' today':'')+'">'
+          // drop target: dropping here sets BOTH the crew (this lane) and the day (this column)
+          return '<div class="st-cell'+(iso===todayIso?' today':'')+'" ondragover="dispOver(event,this)" ondragleave="this.classList.remove(\'dragover\')" ondrop="this.classList.remove(\'dragover\');dispDropCell(event,\''+c+'\',\''+iso+'\')">'
             +cell.map(function(b){ return _dispPill(b); }).join('')
             +(((gIdx[zi]||{})[c]||{})[iso]||[]).map(_ghostPill).join('')+'</div>';
         }).join('')+'</div>';
@@ -3302,7 +3309,7 @@ function renderDispatch(){
         window._dayEvsCache[zi+'|'+c]={ evs:evs.slice(), pmcsSt:_pmcsSt, pmcsEn:_pmcsEn, baseSt:baseSt, baseEn:baseEn, isClean:_isCleanTL, iso:iso, crew:c, zn:(z.e||'')+' '+(z.n||''), col:col };
         const labDay=lab.replace('class="st-rowlab"','class="st-rowlab" onclick="openCrewDay('+zi+',\''+c+'\')" style="cursor:pointer;" title="Tap to open this crew\'s day full-screen"');
         h+='<div class="st-grid day">'+labDay
-          +'<div><div class="st-tl" style="height:'+tlH+'px;">'
+          +'<div><div class="st-tl" style="height:'+tlH+'px;" ondragover="dispOver(event,this)" ondragleave="this.classList.remove(\'dragover\')" ondrop="this.classList.remove(\'dragover\');dispDropTL(event,\''+c+'\',\''+iso+'\')">'
           +now+(_aux?(_stAuxBlock(_isCleanTL?'🧰 Load-up':'🧰 PMCS · Load',_pmcsSt,_pmcsEn,7)+_stAuxBlock('⛽ Gas',_pmcsEn,_gasEn,7)):'')
           +evs.map(function(ev){ return _stBlockEv(ev.b,ev.st,ev.en,7+(ev.lane+(_aux?1:0))*42,ev.proj); }).join('')
           +(_aux?_stAuxBlock('🏠 Base & unload',baseSt,baseEn,7):'')+'</div>'
@@ -3331,9 +3338,25 @@ function _dispStats(rangeStart,rangeEnd){
   document.getElementById('dispStats').innerHTML=
     '<span>📋 <b>'+all.length+'</b> jobs</span><span>✅ <b>'+doneN+'</b> done</span><span>🕐 <b>'+(all.length-doneN)+'</b> open</span>'
     +'<span>💵 <b>$'+all.reduce(function(s,b){return s+amtOf(b);},0).toFixed(0)+'</b> booked</span>'
-    +'<span>⚠️ <b>'+all.filter(function(b){return !_isArch(b)&&!String(b.crew||'').trim();}).length+'</b> unassigned</span>';
-  // "💸 N owe $X — collect at the door" strip removed from the dispatch board per owner —
-  // the owed detail lives on Stats → Money → Who owes money (with ✕ write-off).
+    +'<span>⚠️ <b>'+all.filter(function(b){return !_isArch(b)&&!String(b.crew||'').trim();}).length+'</b> unassigned</span>'
+    // ⚖️ Crew-vs-crew at a glance — the whole point of running two trucks. Per-crew numbers used to
+    // exist only inside each lane, separated by a full timeline, so A vs B was impossible to compare.
+    +(function(){
+      const by={};
+      all.forEach(function(b){
+        if(_isArch(b)) return;
+        const cw=String(b.crew||'').toUpperCase().trim(); if(!cw) return;
+        const r=by[cw]=by[cw]||{n:0,m:0,$:0,done:0};
+        r.n++; r.$+=amtOf(b);
+        try{ r.m+=_hqMins(b,(b._srcBiz||0),cw); }catch(e){}
+        if(isDone(b)) r.done++;
+      });
+      const ks=Object.keys(by).sort(); if(ks.length<2) return '';
+      return ks.map(function(cw){ const r=by[cw];
+        return '<span style="white-space:nowrap;"><b style="color:'+crewColor(cw)+';">'+esc(cw)+'</b> '
+          +r.n+'j'+(r.done?(' ('+r.done+'✓)'):'')+' · '+(Math.round(r.m/60*10)/10)+'h · $'+Math.round(r.$)+'</span>';
+      }).join('');
+    })();
 }
 function _dispPill(b){
   const arch=_isArch(b), done=isDone(b)||arch;
@@ -3342,8 +3365,11 @@ function _dispPill(b){
   const jn=String(b.notes||'').trim(), cn=_custNoteFor(b);
   const ow=_owedFor(b);
   let tt=''; if(zd) tt+='⚠ WRONG DAY — '+zd+'\n'; if(ow) tt+='💸 OWES $'+ow.toFixed(0)+' from unpaid past visits\n'; if(jn) tt+='📝 '+jn+'\n'; if(cn) tt+='👤 CUSTOMER: '+cn+'\n'; tt+=(b.name||'')+(arch?' — Archived; tap for notes & photos':'');
-  const click='onclick="openJobRef('+_jr(b)+')" title="'+esc(tt)+'"';
-  return '<div class="disp-pill'+(done?' done':'')+(arch?' arch':'')+(zd?' zday':'')+'" style="--pc:'+_dispPC(b)+'" '+click
+  const _ref=_jr(b);
+  const click='onclick="openJobRef('+_ref+')" title="'+esc(tt)+(done?'':'\n\n✋ Drag me to another crew or day')+'"';
+  // Finished jobs stay put; open ones can be dragged to another crew lane / day cell.
+  const drag=done?'':' draggable="true" ondragstart="dispDragStart(event,'+_ref+')" ondragend="dispDragEnd(event)"';
+  return '<div class="disp-pill'+(done?' done':'')+(arch?' arch':'')+(zd?' zday':'')+'" style="--pc:'+_dispPC(b)+'"'+drag+' '+click
     +'>'+(zd?'⚠ ':'')+(ow?'💸 ':'')+(done?'✓ ':'')+(_crewLockFor(b)?'🔒':'')+_jobIcon(b)+' '+esc(b.name||'?')+((jn||cn)&&!done?' 📝':'')+' <span class="pp">'+(zone?zone+' · ':'')+(b.jobTime?esc(b.jobTime)+' · ':'')+esc(String(b.price||''))
     +(function(){ const ls=_lastSvcInfo(b); return ls?(' · <span style="color:'+(ls.off?'#f87171':'inherit')+';font-weight:'+(ls.off?'800':'inherit')+';">↩ '+ls.nice+' ('+ls.gap+'d'+(ls.off?' ⚠ plan says '+ls.expct+'d':'')+')</span>'):''; })()
     +'</span></div>';
@@ -3800,6 +3826,7 @@ function _stBlockEv(b,stMin,enMin,top,proj){
   const ow=_owedFor(b);
   const tip=(ow?'💸 OWES $'+ow.toFixed(0)+' from unpaid past visits · ':'')+(zd?'⚠ WRONG DAY FOR ZONE — '+esc(zd)+' · ':'')+(_bg?'📍 ADDRESS NOT FOUND — fix it and re-run Route All · ':'')+esc(b.name||'')+' · '+(proj?'projected ':'')+_t12(stMin)+'–'+_t12(enMin)+' ('+dur+' min expected)'+(b.price?' · '+esc(String(b.price)):'')+(_lsT?(' · last serviced '+_lsT.d+' ('+_lsT.gap+'d ago'+(_lsT.off?' — ⚠ plan says '+_lsT.expct+'d':'')+')'):'')+(jn?' · 📝 '+esc(jn):'')+(en2?' · 👷 '+esc(en2):'')+(cn?' · 👤 CUSTOMER: '+esc(cn):'')+(proj?' — no set time; drag to lock one in':'');
   return '<div class="st-block'+(done?' done':'')+(arch?' arch':'')+(proj?' proj':'')+'" style="--pc:'+_dispPC(b)+';left:'+left+'%;width:'+width+'%;top:'+top+'px;'+(left<92?'min-width:52px;':'')+(_bg?'border:2px solid #f87171;box-shadow:0 0 8px rgba(248,113,113,.5);':'')+(zd?'border:2px solid #f87171;box-shadow:0 0 9px rgba(248,113,113,.6);':'')+'" '
+    +(function(){ if(done) return ''; const _r=_jr(b); return ' draggable="true" ondragstart="dispDragStart(event,'+_r+')" ondragend="dispDragEnd(event)"'; })()
     +'onclick="openJobRef('+_jr(b)+')" title="'+tip+(arch?' — tap for notes & photos':'')+'"'
     +'>'+(zd?'⚠ ':'')+(ow?'💸 ':'')+(done?'✓ ':'')+(_crewLockFor(b)?'🔒':'')+_jobIcon(b)+' '+esc(b.name||'?')+'<span class="bt2">'+(zone?zone+' · ':'')+tRange+(b.price?' · '+esc(String(b.price)):'')+((jn||cn)&&!done?' · 📝':'')+'</span></div>';
 }
@@ -3807,9 +3834,11 @@ function _stBlockEv(b,stMin,enMin,top,proj){
 /* ── drag & drop ── */
 let _dragX=0,_dragGrabOff=0,_dragFromCrew=null;
 function dispDragStart(ev,bi){
+  // bi indexes _jobRefs (what the pills are built from) — NOT _bookings. The old dead code used
+  // _bookings[bi], which excluded archived + sister-business jobs and drifted on every refresh.
   _dispDrag=bi; _dragX=ev.clientX;
   try{ _dragGrabOff=ev.clientX-ev.currentTarget.getBoundingClientRect().left; }catch(e){ _dragGrabOff=0; }
-  const b=_bookings[bi]; _dragFromCrew=b?String(b.crew||'').toUpperCase().trim()||'un':null;
+  const b=_jobRefs[bi]; _dragFromCrew=b?String(b.crew||'').toUpperCase().trim()||'un':null;
   ev.currentTarget.classList.add('dragging'); ev.dataTransfer.effectAllowed='move'; try{ev.dataTransfer.setData('text/plain','');}catch(e){}
 }
 function dispDragEnd(ev){ ev.currentTarget.classList.remove('dragging'); document.querySelectorAll('.dragover').forEach(function(el){el.classList.remove('dragover');}); _dispDrag=null; }
@@ -3822,14 +3851,15 @@ function _applyCrew(b,crewKey){
   const prev=b.crew; b.crew=target;
   _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{crew:target,ts:Date.now()});   // survive a mid-write background refresh
   _onCrewMoved(b,cur,target);
-  fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'set_crew', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), crew:target, adminToken:token}))
+  const _be=_jobBE(b);   // sister-business jobs must write to THEIR backend, not the lawn one
+  fetch(_be.u+'?'+new URLSearchParams({action:'set_crew', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), crew:target, adminToken:_be.t}))
     .then(r=>r.json()).then(function(d){ if(!(d&&d.success)){ b.crew=prev; if(_pendingLocal[_svKey(b)]) _pendingLocal[_svKey(b)].crew=prev; toast('⚠ Crew change didn\'t save'); render(); } }).catch(function(){});
   return true;
 }
 function dispDropCell(ev,crewKey,iso){
   ev.preventDefault();
   if(_dispDrag==null) return;
-  const b=_bookings[_dispDrag]; _dispDrag=null;
+  const b=_jobRefs[_dispDrag]; _dispDrag=null;
   if(!b) return;
   const crewChanged=_applyCrew(b,crewKey);
   if(iso&&dateOf(b)!==iso){
@@ -3848,7 +3878,7 @@ function dispDropCell(ev,crewKey,iso){
 function dispDropTL(ev,crewKey,iso){
   ev.preventDefault();
   if(_dispDrag==null) return;
-  const b=_bookings[_dispDrag]; _dispDrag=null;
+  const b=_jobRefs[_dispDrag]; _dispDrag=null;
   if(!b) return;
   const sameRow=(_dragFromCrew===(crewKey==='un'?'un':crewKey));
   // Accidental grab-and-release (barely moved, same row) → do nothing at all.
@@ -3856,9 +3886,12 @@ function dispDropTL(ev,crewKey,iso){
   const prevTime=b.jobTime||'', prevCrew=String(b.crew||'').toUpperCase().trim();
   const crewChanged=_applyCrew(b,crewKey);
   // Land the block where its LEFT EDGE is, not where the cursor is (grab-point compensation).
+  // Invert _tlX against the CURRENT scale (_tlA.._tlB). This used to assume a fixed 7a–7p window,
+  // so on any other scale the block landed at the wrong time.
   const r=ev.currentTarget.getBoundingClientRect();
-  let mins=420+Math.round(((ev.clientX-_dragGrabOff-r.left)/r.width)*720/15)*15;
-  mins=Math.max(420,Math.min(1125,mins));
+  const _span=Math.max(1,_tlB-_tlA);
+  let mins=_tlA+Math.round((((ev.clientX-_dragGrabOff-r.left)/Math.max(1,r.width))*_span)/15)*15;
+  mins=Math.max(_tlA,Math.min(_tlB-15,mins));
   const hh=String(Math.floor(mins/60)).padStart(2,'0'), mm=String(mins%60).padStart(2,'0');
   const newTime=hh+':'+mm;
   b.jobTime=newTime;
