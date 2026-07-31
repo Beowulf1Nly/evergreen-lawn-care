@@ -1291,6 +1291,7 @@ function openJobSheetFor(b){
     +'<button class="act" onclick="openNotesEdit()"><span class="em">📝</span> Edit job notes</button>'
     +(/clean/i.test(String((_bizLoad()[(b._srcBiz||0)]||{}).n||''))?'<button class="act" onclick="hqEditEstimate()"><span class="em">🧮</span> Edit estimate (rooms · add-ons · deep · price)</button>':'')
     +'<div class="lbl">Schedule</div>'
+    +((_hqIsQuote(b)&&!done)?'<button class="act" style="background:#16a34a;color:#fff;border-color:#16a34a;font-weight:800;" onclick="hqConvertQuote()"><span class="em">✅</span> Turn into a real job <span style="opacity:.75;font-size:11px;">(books it &amp; closes this quote)</span></button>':'')
     +'<button class="act" onclick="hqScheduleAnother()"><span class="em">➕</span> Schedule another job for '+esc((b.name||'them').split(' ')[0])+'</button>'
     +'<button class="act" onclick="openResched()"><span class="em">📅</span> Reschedule to another day</button>'
     +(done?'':'<button class="act" onclick="doMarkDone()"><span class="em">✓</span> Mark as done</button>')
@@ -1900,6 +1901,7 @@ async function hqEESave(){
 }
 function openAddJob(){
   _addBiz=0;
+  _convertingQuote=null;   // plain Add Job — not converting a quote (hqConvertQuote re-sets this after)
   try{ _loadCustSheets(); }catch(e){}
   _ajC={bed:1,bath:1,extra:0,deepAll:0,firstOnly:0,addons:{}};
   _ajL={size:'',extras:{}};
@@ -1941,6 +1943,7 @@ async function doAddJob(){
     if(d.success){
       const _zn=_bizLoad()[_addBiz]||_bizLoad()[0];
       toast('✅ Job booked on '+_zn.e+' '+_zn.n+' for '+date); closeSheet('addSheet');
+      try{ await _closeConvertedQuote(); }catch(e){}   // came from a Quote Call → close that row out
       if(_bizUrl(_zn)===SCRIPT_URL){ await refreshBookings();
         if(_addCrew){ const nb=(_bookings||[]).find(function(b){ return dateOf(b)===date && String(b.address||'').toLowerCase()===addr.toLowerCase() && !String(b.crew||'').trim(); }); if(nb){ try{ await fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'set_crew',rowIndex:_ri(nb),email:nb.email||'',serviceDate:date,crew:_addCrew,adminToken:token})); nb.crew=_addCrew; render(); }catch(e){} } }
       } else if(_addCrew){ try{ const bl=await bizGet(_zn,{action:'bookings'}); const nb=(bl&&bl.bookings||[]).find(function(b){ return dateOf(b)===date && String(b.address||'').toLowerCase()===addr.toLowerCase(); }); if(nb) await bizGet(_zn,{action:'set_crew',rowIndex:(nb._rowIndex||0),email:nb.email||'',serviceDate:date,crew:_addCrew}); }catch(e){} }
@@ -2562,6 +2565,26 @@ async function hqSetCcEmail(){
     toast(cc.trim()?('✉️ 2nd email saved — '+cc.trim()):'✉️ 2nd email removed');
     openJobSheetFor(b);
   }catch(e){ alert('⚠ Network error — nothing saved.'); }
+}
+/* 📞/📋 → real work. Converting a Quote Call (or quote visit) opens Add Job pre-filled with the
+   customer; once the job is booked, the quote row is closed out automatically so it stops sitting
+   on the board. _convertingQuote carries the source row across the Add Job sheet. */
+let _convertingQuote=null;
+function hqConvertQuote(){
+  const b=_jobCur; if(!b) return;
+  hqScheduleAnother();
+  _convertingQuote=b;   // set AFTER openAddJob, which clears any stale conversion
+  setTimeout(function(){ try{ toast('📋 Booking for '+(b.name||'them')+' — the quote closes itself once you schedule',6000); }catch(e){} },300);
+}
+async function _closeConvertedQuote(){
+  const b=_convertingQuote; _convertingQuote=null; if(!b) return;
+  try{
+    const be=_jobBE(b);
+    const d=await(await fetch(be.u+'?'+new URLSearchParams({ action:'mark_done', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), amount:'0', markedBy:myName||'Owner', adminToken:be.t }))).json();
+    if(d&&d.success){ b.done='✓ Done'; _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{done:'✓ Done',ts:Date.now()}); _ghostAdd(b); toast('✅ Booked — quote for '+(b.name||'')+' closed out'); }
+    else toast('⚠ Job booked, but the quote row stayed open — close it manually');
+  }catch(e){ toast('⚠ Job booked, but the quote row stayed open — close it manually'); }
+  try{ renderDispatch(); }catch(e){}
 }
 function hqScheduleAnother(){   // Add Job pre-filled with this customer — pick the type/price/date there
   const b=_jobCur; if(!b) return;
