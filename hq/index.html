@@ -1289,6 +1289,7 @@ function openJobSheetFor(b){
     +(eNotes?'<div class="rs-note crew">👷 '+esc(eNotes)+'</div>':'')
     +(photos.length?'<div class="rs-photos">'+photos.map(function(u){return '<a href="'+esc(u)+'" target="_blank"><img class="rs-thumb" src="'+esc(_driveThumb(u))+'" onerror="this.replaceWith(document.createTextNode(String.fromCodePoint(0x1F4F7)))"></a>';}).join('')+'</div>':'')
     +'<div class="lbl">Assign crew</div><div class="crewpick" id="jobCrewPick"></div>'
+    +(function(){ const lk=_crewLockFor(b); return '<button class="act" onclick="hqToggleCrewLock()"><span class="em">'+(lk?'🔒':'🔓')+'</span> '+(lk?('Locked to Crew '+esc(lk)+' — tap to unlock'):'Lock to crew <span style="opacity:.6;font-size:11px;">(splitter won\'t move them)</span>')+'</button>'; })()
     +'<div class="lbl">Customer</div>'
     +'<button class="act" onclick="openEditDetails()"><span class="em">✏️</span> Edit details (name · email · address · price)</button>'
     +((_bizUrl(_bizLoad()[b._srcBiz||0]||{})===SCRIPT_URL)?(function(){ const cc=_custCcFor(b); return '<button class="act" onclick="hqSetCcEmail()"><span class="em">✉️</span> 2nd email (CC on everything)'+(cc?(' — <span style="color:#38bdf8;">'+esc(cc)+'</span>'):' — none')+'</button>'; })():'')
@@ -3328,7 +3329,7 @@ function _dispPill(b){
   let tt=''; if(zd) tt+='⚠ WRONG DAY — '+zd+'\n'; if(ow) tt+='💸 OWES $'+ow.toFixed(0)+' from unpaid past visits\n'; if(jn) tt+='📝 '+jn+'\n'; if(cn) tt+='👤 CUSTOMER: '+cn+'\n'; tt+=(b.name||'')+(arch?' — Archived; tap for notes & photos':'');
   const click='onclick="openJobRef('+_jr(b)+')" title="'+esc(tt)+'"';
   return '<div class="disp-pill'+(done?' done':'')+(arch?' arch':'')+(zd?' zday':'')+'" style="--pc:'+_dispPC(b)+'" '+click
-    +'>'+(zd?'⚠ ':'')+(ow?'💸 ':'')+(done?'✓ ':'')+_jobIcon(b)+' '+esc(b.name||'?')+((jn||cn)&&!done?' 📝':'')+' <span class="pp">'+(zone?zone+' · ':'')+(b.jobTime?esc(b.jobTime)+' · ':'')+esc(String(b.price||''))
+    +'>'+(zd?'⚠ ':'')+(ow?'💸 ':'')+(done?'✓ ':'')+(_crewLockFor(b)?'🔒':'')+_jobIcon(b)+' '+esc(b.name||'?')+((jn||cn)&&!done?' 📝':'')+' <span class="pp">'+(zone?zone+' · ':'')+(b.jobTime?esc(b.jobTime)+' · ':'')+esc(String(b.price||''))
     +(function(){ const ls=_lastSvcInfo(b); return ls?(' · <span style="color:'+(ls.off?'#f87171':'inherit')+';font-weight:'+(ls.off?'800':'inherit')+';">↩ '+ls.nice+' ('+ls.gap+'d'+(ls.off?' ⚠ plan says '+ls.expct+'d':'')+')</span>'):''; })()
     +'</span></div>';
 }
@@ -3782,7 +3783,7 @@ function _stBlockEv(b,stMin,enMin,top,proj){
   const tip=(ow?'💸 OWES $'+ow.toFixed(0)+' from unpaid past visits · ':'')+(zd?'⚠ WRONG DAY FOR ZONE — '+esc(zd)+' · ':'')+(_bg?'📍 ADDRESS NOT FOUND — fix it and re-run Route All · ':'')+esc(b.name||'')+' · '+(proj?'projected ':'')+_t12(stMin)+'–'+_t12(enMin)+' ('+dur+' min expected)'+(b.price?' · '+esc(String(b.price)):'')+(_lsT?(' · last serviced '+_lsT.d+' ('+_lsT.gap+'d ago'+(_lsT.off?' — ⚠ plan says '+_lsT.expct+'d':'')+')'):'')+(jn?' · 📝 '+esc(jn):'')+(en2?' · 👷 '+esc(en2):'')+(cn?' · 👤 CUSTOMER: '+esc(cn):'')+(proj?' — no set time; drag to lock one in':'');
   return '<div class="st-block'+(done?' done':'')+(arch?' arch':'')+(proj?' proj':'')+'" style="--pc:'+_dispPC(b)+';left:'+left+'%;width:'+width+'%;top:'+top+'px;'+(left<92?'min-width:52px;':'')+(_bg?'border:2px solid #f87171;box-shadow:0 0 8px rgba(248,113,113,.5);':'')+(zd?'border:2px solid #f87171;box-shadow:0 0 9px rgba(248,113,113,.6);':'')+'" '
     +'onclick="openJobRef('+_jr(b)+')" title="'+tip+(arch?' — tap for notes & photos':'')+'"'
-    +'>'+(zd?'⚠ ':'')+(ow?'💸 ':'')+(done?'✓ ':'')+_jobIcon(b)+' '+esc(b.name||'?')+'<span class="bt2">'+(zone?zone+' · ':'')+tRange+(b.price?' · '+esc(String(b.price)):'')+((jn||cn)&&!done?' · 📝':'')+'</span></div>';
+    +'>'+(zd?'⚠ ':'')+(ow?'💸 ':'')+(done?'✓ ':'')+(_crewLockFor(b)?'🔒':'')+_jobIcon(b)+' '+esc(b.name||'?')+'<span class="bt2">'+(zone?zone+' · ':'')+tRange+(b.price?' · '+esc(String(b.price)):'')+((jn||cn)&&!done?' · 📝':'')+'</span></div>';
 }
 
 /* ── drag & drop ── */
@@ -4314,26 +4315,62 @@ function _hqTspHeur(M){
   }
   return best;
 }
-/* ═══════ 🚚 TWO-CREW DAY SPLITTER — manual: balance the day by geography + mow-time ═══════ */
+/* ═══════ 🚚 CREW DAY SPLITTER — manual. Pick which crews split the day, lock jobs to a crew,
+   then balance the rest by geography + mow-time and route each crew from its own home base. ═══ */
 function _crewBasesAll(){ try{ return JSON.parse(localStorage.getItem('hq_crewbase')||'{}')||{}; }catch(e){ return {}; } }
 function _crewBases(zi){ const all=_crewBasesAll(); return all[zi]||{}; }
 function _hqHav(a,b){ const R=3959,dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lon-a.lon)*Math.PI/180,la1=a.lat*Math.PI/180,la2=b.lat*Math.PI/180; const x=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)*Math.sin(dLon/2); return 2*R*Math.asin(Math.min(1,Math.sqrt(x))); }
+/* 🔒 CREW LOCKS — "this customer is always Crew B". The splitter never moves a locked job;
+   its time still counts toward that crew's load so the balance stays honest. */
+function _crewLockAll(){ try{ return JSON.parse(localStorage.getItem('hq_crewlock')||'{}')||{}; }catch(e){ return {}; } }
+function _crewLockSave(o){ try{ localStorage.setItem('hq_crewlock',JSON.stringify(o)); }catch(e){} }
+function _crewLockKey(b){ const em=String(b&&b.email||'').toLowerCase().trim(); return em||(String(b&&b.name||'').toLowerCase().trim()+'|'+String(b&&b.address||'').toLowerCase().trim()); }
+function _crewLockFor(b){ const k=_crewLockKey(b); return k?(_crewLockAll()[k]||''):''; }
+function _crewLockSet(b,crew){ const k=_crewLockKey(b); if(!k) return; const o=_crewLockAll(); if(crew) o[k]=String(crew).toUpperCase(); else delete o[k]; _crewLockSave(o); }
+function hqToggleCrewLock(){
+  const b=_jobCur; if(!b) return;
+  const cur=_crewLockFor(b), cw=String(b.crew||'').toUpperCase().trim();
+  if(cur){ _crewLockSet(b,''); toast('🔓 Unlocked — the splitter can move '+(b.name||'this job')+' again'); }
+  else { if(!cw){ toast('Assign a crew first, then lock it'); return; } _crewLockSet(b,cw); toast('🔒 '+(b.name||'Job')+' locked to Crew '+cw+' — splitter won\'t move it'); }
+  try{ openJobSheetFor(b); }catch(e){} try{ renderDispatch(); }catch(e){}
+}
+const _SPLIT_BAL={ tight:{mi:4,lbl:'Tightest areas'}, balanced:{mi:8,lbl:'Balanced'}, even:{mi:20,lbl:'Even workload'} };
+function _splitPref(){ try{ return localStorage.getItem('hq_splitbal')||'balanced'; }catch(e){ return 'balanced'; } }
+function _splitSel(zi){ try{ const o=JSON.parse(localStorage.getItem('hq_splitsel')||'{}'); return (o&&o[zi])||null; }catch(e){ return null; } }
+function _splitSelSave(zi,arr){ try{ const o=JSON.parse(localStorage.getItem('hq_splitsel')||'{}')||{}; o[zi]=arr; localStorage.setItem('hq_splitsel',JSON.stringify(o)); }catch(e){} }
 let _hqSplitZi=0;
-function hqCrewSplitOpen(){ _hqSplitZi=(_dispView!=='month'&&_bizLoad().length>1)?_hqSplitZi:0; _hqCrewSplitRender(); openSheet('jobSheet'); }
+function hqCrewSplitOpen(){ _hqSplitZi=0; _hqCrewSplitRender(); openSheet('jobSheet'); }
+function hqSplitTogglePick(c){ const zi=_hqSplitZi; let sel=_splitSel(zi)||_hqSplitDefaultSel(zi); sel=sel.indexOf(c)>=0?sel.filter(function(x){return x!==c;}):sel.concat([c]).sort(); _splitSelSave(zi,sel); _hqCrewSplitRender(); }
+function hqSplitSetBal(k){ try{ localStorage.setItem('hq_splitbal',k); }catch(e){} _hqCrewSplitRender(); }
+function _hqSplitDefaultSel(zi){ const bs=_crewBases(zi); return ['A','B','C'].filter(function(c){ return bs[c]&&bs[c].lat!=null; }); }
+function _hqSplitDay(){ return (_dispView==='day')?_iso(_dispAnchor):todayISO(); }
+function _hqSplitJobs(iso,zi){ return _dispJobs().filter(function(b){ return b&&!b.rowCancelled&&!_isArch(b)&&!isDone(b)&&!_hqIsQuote(b)&&(b._srcBiz||0)===zi&&dateOf(b)===iso&&String(b.address||'').trim(); }); }
 function _hqCrewSplitRender(){
-  const zi=_hqSplitZi, bases=_crewBases(zi);
-  const iso=(_dispView==='day')?_iso(_dispAnchor):todayISO();
-  let h='<h3>🚚 Split the day between crews</h3><div class="sub">Set each crew\'s home base, then split &amp; optimize '+esc(iso)+'. Balances ~50/50 by mow-time and keeps each crew tight around its base.</div>';
-  h+='<div class="lbl">Crew home bases</div>';
-  ['A','B','C'].forEach(function(c){ const bs=bases[c]; h+='<button class="act" onclick="hqSetCrewBase('+zi+',\''+c+'\')"><span class="em">🏠</span> Crew '+c+' base — '+((bs&&bs.label)?esc(bs.label):'<span style="color:#f87171;">not set — tap to add</span>')+'</button>'; });
-  const nSet=['A','B','C'].filter(function(c){ return bases[c]&&bases[c].lat!=null; }).length;
+  const zi=_hqSplitZi, bases=_crewBases(zi), iso=_hqSplitDay();
+  const sel=_splitSel(zi)||_hqSplitDefaultSel(zi), pref=_splitPref();
+  const jobs=_hqSplitJobs(iso,zi);
+  const locked=jobs.filter(function(b){ return _crewLockFor(b); });
+  let h='<h3>🚚 Split '+esc(iso)+' between crews</h3><div class="sub">'+jobs.length+' open job'+(jobs.length===1?'':'s')+' to divide. Locked jobs stay put; the rest get split by area and balanced by mow-time.</div>';
+  h+='<div class="lbl">Which crews are working this day?</div><div style="display:flex;gap:7px;flex-wrap:wrap;">'
+    +['A','B','C'].map(function(c){ const on=sel.indexOf(c)>=0, hasB=!!(bases[c]&&bases[c].lat!=null);
+      return '<button onclick="hqSplitTogglePick(\''+c+'\')" style="flex:1;min-width:88px;padding:11px 6px;border-radius:11px;border:2px solid '+(on?crewColor(c):'#334155')+';background:'+(on?crewColor(c)+'22':'transparent')+';color:'+(on?crewColor(c):'inherit')+';font-weight:800;cursor:pointer;font-family:inherit;font-size:13px;">'+(on?'✓ ':'')+'Crew '+c+(hasB?'':'<div style="font-size:9.5px;font-weight:700;color:#f87171;">no base</div>')+'</button>'; }).join('')+'</div>';
+  h+='<div class="lbl">Home base — where each crew starts</div>';
+  sel.forEach(function(c){ const bs=bases[c]; h+='<button class="act" onclick="hqSetCrewBase('+zi+',\''+c+'\')"><span class="em">🏠</span> Crew '+c+' — '+((bs&&bs.label)?esc(bs.label):'<span style="color:#f87171;">set a start address</span>')+'</button>'; });
+  h+='<div class="lbl">Balance vs. tight routes</div><div style="display:flex;gap:6px;">'
+    +Object.keys(_SPLIT_BAL).map(function(k){ const on=pref===k; return '<button onclick="hqSplitSetBal(\''+k+'\')" style="flex:1;padding:9px 5px;border-radius:10px;border:2px solid '+(on?'#38bdf8':'#334155')+';background:'+(on?'#38bdf822':'transparent')+';color:'+(on?'#38bdf8':'inherit')+';font-weight:800;font-size:11.5px;cursor:pointer;font-family:inherit;">'+_SPLIT_BAL[k].lbl+'</button>'; }).join('')+'</div>'
+    +'<div class="rs-note" style="color:var(--dim);font-size:11.5px;">'+(pref==='tight'?'Keeps each crew in the smallest area — accepts an uneven day.':pref==='even'?'Pushes hard for a 50/50 day — will send a truck further to even it out.':'Aims for ~50/50 but won\'t add more than ~8 miles of detour to get there.')+'</div>';
+  h+='<div class="lbl">🔒 Locked to a crew ('+locked.length+')</div>';
+  if(locked.length){ window._lockRefs=locked; h+=locked.map(function(b,i){ return '<div style="display:flex;align-items:center;gap:8px;background:var(--card,#0f2740);border:1px solid var(--line2,#2a3942);border-radius:10px;padding:8px 11px;margin-bottom:5px;"><span style="flex:1;font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(b.name||'?')+'</span><span style="font-weight:800;color:'+crewColor(_crewLockFor(b))+';font-size:12.5px;">Crew '+esc(_crewLockFor(b))+'</span><button onclick="hqUnlockRef('+i+')" style="background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.4);color:#f87171;border-radius:7px;padding:3px 9px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">🔓</button></div>'; }).join(''); }
+  else h+='<div class="rs-note" style="color:var(--dim);">None. Open any job → <b>🔒 Lock to crew</b> to pin a customer to one crew permanently.</div>';
   h+='<div class="lbl">Go</div>';
-  if(nSet>=2) h+='<button class="act" style="background:#16a34a;color:#fff;border-color:#16a34a;font-weight:800;" onclick="hqSplitCrews(\''+esc(iso)+'\','+zi+')"><span class="em">⚡</span> Split &amp; optimize '+esc(iso)+'</button>';
-  else h+='<div class="rs-note" style="color:#f87171;">Set a home base for at least 2 crews to split.</div>';
-  h+='<div class="rs-note" style="color:var(--dim);">Runs only when you tap Split — it assigns crews + reorders each route. Review after; drag anything you want to tweak.</div>';
+  const ready=sel.filter(function(c){ return bases[c]&&bases[c].lat!=null; });
+  if(ready.length>=2&&jobs.length>=2) h+='<button class="act" style="background:#16a34a;color:#fff;border-color:#16a34a;font-weight:800;" onclick="hqSplitCrews(\''+esc(iso)+'\','+zi+')"><span class="em">⚡</span> Split &amp; optimize — Crew '+ready.join(' + ')+'</button>';
+  else h+='<div class="rs-note" style="color:#f87171;">Pick at least 2 crews with a home base'+(jobs.length<2?' (and have 2+ open jobs on this day)':'')+'.</div>';
+  h+='<div class="rs-note" style="color:var(--dim);">Only runs when you tap. Review after — drag anything to fine-tune.</div>';
   h+='<button class="ghost" onclick="closeSheet(\'jobSheet\')" style="margin-top:10px;">Close</button>';
   document.getElementById('jobSheetBody').innerHTML=h;
 }
+function hqUnlockRef(i){ const b=(window._lockRefs||[])[i]; if(!b) return; _crewLockSet(b,''); toast('🔓 Unlocked '+(b.name||'')); _hqCrewSplitRender(); try{ renderDispatch(); }catch(e){} }
 async function hqSetCrewBase(zi,crew){
   const cur=(_crewBases(zi)[crew]||{});
   const addr=prompt('🏠 Home base for Crew '+crew+' — the address (or ZIP) where they START the day.\n\nLeave blank to clear.', cur.label||'');
@@ -4348,11 +4385,17 @@ async function hqSetCrewBase(zi,crew){
 }
 async function hqSplitCrews(iso,zi){
   zi=zi||0; if(_hqOptBusy){ toast('Optimizer busy — one sec'); return; }
-  const bases=_crewBases(zi); const crews=Object.keys(bases).filter(function(k){ return bases[k]&&bases[k].lat!=null; }).sort();
-  if(crews.length<2){ toast('Set a Home base for at least 2 crews first'); return; }
-  let jobs=_dispJobs().filter(function(b){ return b&&!b.rowCancelled&&!_isArch(b)&&!isDone(b)&&!_hqIsQuote(b)&&(b._srcBiz||0)===zi&&dateOf(b)===iso&&String(b.address||'').trim(); });
-  if(jobs.length<crews.length){ toast('Not enough open jobs on '+iso+' to split'); return; }
-  if(!confirm('⚡ Split '+jobs.length+' jobs on '+iso+' across Crew '+crews.join(' & Crew ')+', balance the workload, and optimize each route?')) return;
+  const bases=_crewBases(zi);
+  // Only the crews YOU ticked in the panel (and that have a home base) take part in this split.
+  const picked=_splitSel(zi)||_hqSplitDefaultSel(zi);
+  const crews=picked.filter(function(k){ return bases[k]&&bases[k].lat!=null; }).sort();
+  if(crews.length<2){ toast('Pick at least 2 crews that have a home base'); return; }
+  let jobs=_hqSplitJobs(iso,zi);
+  if(jobs.length<2){ toast('Not enough open jobs on '+iso+' to split'); return; }
+  const _nLk=jobs.filter(function(b){ const l=_crewLockFor(b); return l&&crews.indexOf(l)>=0; }).length;
+  if(!confirm('⚡ Split '+jobs.length+' jobs on '+iso+' across Crew '+crews.join(' & Crew ')+'?\n\n'
+    +(_nLk?('🔒 '+_nLk+' locked job'+(_nLk>1?'s':'')+' stay with their crew.\n'):'')
+    +'Balance: '+(_SPLIT_BAL[_splitPref()]||_SPLIT_BAL.balanced).lbl+'\n\nThis reassigns crews and reorders each route.')) return;
   closeSheet('jobSheet'); toast('🧭 Locating '+jobs.length+' stops…');
   const pts=[];
   for(const b of jobs){
@@ -4360,24 +4403,31 @@ async function hqSplitCrews(iso,zi){
     const co=await _hqGeocode(a);
     if(co) pts.push({ b:b, co:co, mins:Math.max(10,_jobMins(b)) });
   }
-  if(pts.length<crews.length){ toast('Couldn\'t locate enough addresses — fix the red-flagged ones and retry'); return; }
-  // 1) seed: each job to its nearest crew base
-  pts.forEach(function(p){ let best=crews[0],bd=Infinity; crews.forEach(function(c){ const d=_hqHav(p.co,bases[c]); if(d<bd){bd=d;best=c;} }); p.crew=best; });
-  // 2) balance mow-time (two-crew): move the cheapest-to-move boundary job from heavy→light until within
-  //    ~25 min OR the move would add >8 mi of detour (respects "don't sacrifice a lot of time for balance").
-  if(crews.length===2){
-    const A=crews[0],B=crews[1];
-    const hrs=function(c){ return pts.filter(function(p){return p.crew===c;}).reduce(function(s,p){return s+p.mins;},0); };
-    for(let it=0; it<pts.length*2; it++){
-      const hA=hrs(A),hB=hrs(B), diff=Math.abs(hA-hB); if(diff<=25) break;
-      const heavy=hA>hB?A:B, light=hA>hB?B:A;
-      const cands=pts.filter(function(p){return p.crew===heavy;}).map(function(p){ return {p:p, pen:_hqHav(p.co,bases[light])-_hqHav(p.co,bases[heavy])}; }).sort(function(x,y){return x.pen-y.pen;});
-      if(!cands.length) break;
-      const mv=cands[0];
-      if(mv.pen>8) break;                                                   // >8 mi detour to rebalance — not worth it
-      if(Math.abs((hrs(heavy)-mv.p.mins)-(hrs(light)+mv.p.mins))>=diff) break; // no improvement
-      mv.p.crew=light;
-    }
+  if(pts.length<2){ toast('Couldn\'t locate enough addresses — fix the red-flagged ones and retry'); return; }
+  // 1) LOCKED jobs keep their crew (and still count toward that crew's load). Everything else
+  //    seeds to its nearest participating base.
+  pts.forEach(function(p){
+    const lk=_crewLockFor(p.b);
+    if(lk && crews.indexOf(lk)>=0){ p.crew=lk; p.locked=true; return; }
+    let best=crews[0],bd=Infinity; crews.forEach(function(c){ const d=_hqHav(p.co,bases[c]); if(d<bd){bd=d;best=c;} }); p.crew=best;
+  });
+  // 2) balance mow-time across ANY number of crews: repeatedly move the cheapest-to-move job from
+  //    the heaviest crew to the lightest, until they're within ~25 min or the move costs more
+  //    detour than the owner's balance preference allows. Locked jobs never move.
+  const MAXMI=(_SPLIT_BAL[_splitPref()]||_SPLIT_BAL.balanced).mi;
+  const load=function(c){ return pts.filter(function(p){return p.crew===c;}).reduce(function(s,p){return s+p.mins;},0); };
+  for(let it=0; it<pts.length*3; it++){
+    let heavy=null,light=null,hv=-1,lv=Infinity;
+    crews.forEach(function(c){ const h=load(c); if(h>hv){hv=h;heavy=c;} if(h<lv){lv=h;light=c;} });
+    const diff=hv-lv; if(diff<=25) break;
+    const cands=pts.filter(function(p){ return p.crew===heavy&&!p.locked; })
+      .map(function(p){ return {p:p, pen:_hqHav(p.co,bases[light])-_hqHav(p.co,bases[heavy])}; })
+      .sort(function(x,y){return x.pen-y.pen;});
+    if(!cands.length) break;
+    const mv=cands[0];
+    if(mv.pen>MAXMI) break;                                               // costs more driving than you allowed
+    if(Math.abs((hv-mv.p.mins)-(lv+mv.p.mins))>=diff) break;              // wouldn't actually improve balance
+    mv.p.crew=light;
   }
   // 3) push crew assignments (only where changed)
   toast('👷 Assigning crews…'); let ok=0,fail=0;
@@ -4388,8 +4438,8 @@ async function hqSplitCrews(iso,zi){
   try{ renderDispatch(); }catch(e){}
   // 4) optimize each crew's route FROM its home base
   for(const c of crews){ try{ await hqOptimizeRun(c, iso, zi, {lat:bases[c].lat,lon:bases[c].lon,label:'Crew '+c+' base'}); }catch(e){} }
-  const load=crews.map(function(c){ const grp=pts.filter(function(p){return p.crew===c;}); return 'Crew '+c+': '+grp.length+' jobs · ~'+(Math.round(grp.reduce(function(s,p){return s+p.mins;},0)/60*10)/10)+'h'; }).join('   ');
-  toast('✅ Day split & routed — '+load+(fail?(' · '+fail+' assign failed'):''), 10000);
+  const _summary=crews.map(function(c){ const grp=pts.filter(function(p){return p.crew===c;}); return 'Crew '+c+': '+grp.length+' jobs · ~'+(Math.round(grp.reduce(function(s,p){return s+p.mins;},0)/60*10)/10)+'h'; }).join('   ');
+  toast('✅ Day split & routed — '+_summary+(fail?(' · '+fail+' assign failed'):''), 10000);
 }
 async function hqOptimizeRun(c,iso,zi,startOverride){
   zi=zi||0;
