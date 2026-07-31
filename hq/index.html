@@ -3522,12 +3522,15 @@ function _crewRate(c,zi){
   if(cp) return Math.round(cp.rate*100)/100;                         // that business's Crew Pay sheet wins (0 = commission-only crew)
   try{
     const r=JSON.parse(localStorage.getItem(CREWRATE_KEY)||'{}');
-    if(+r[zi+'|'+c]>0) return +r[zi+'|'+c];
-    if(zi===0&&+r[c]>0) return +r[c];                                 // legacy plain-letter keys (main business)
+    // Accept 0 — a commission-only / owner-run crew has no hourly cost. Testing ">0" treated a
+    // saved 0 as "unset" and silently fell through to the $50 default.
+    const _ok=function(v){ return v!=null&&v!==''&&isFinite(+v)&&+v>=0; };
+    if(_ok(r[zi+'|'+c])) return +r[zi+'|'+c];
+    if(zi===0&&_ok(r[c])) return +r[c];                               // legacy plain-letter keys (main business)
   }catch(e){}
   return 50;
 }
-function setCrewRate(zi,c,v){ try{ const r=JSON.parse(localStorage.getItem(CREWRATE_KEY)||'{}'); r[zi+'|'+c]=Math.max(1,parseFloat(v)||50); localStorage.setItem(CREWRATE_KEY,JSON.stringify(r)); }catch(e){} try{ if(document.activeElement) document.activeElement.blur(); }catch(e){} renderDispatch(); toast('💲 '+((_bizLoad()[zi]||{}).n||'')+' Crew '+c+' rate saved'); }
+function setCrewRate(zi,c,v){ try{ const r=JSON.parse(localStorage.getItem(CREWRATE_KEY)||'{}'); const _n=parseFloat(v); r[zi+'|'+c]=(isFinite(_n)&&_n>=0)?_n:50; /* 0 allowed — commission-only / owner-run crew */ localStorage.setItem(CREWRATE_KEY,JSON.stringify(r)); }catch(e){} try{ if(document.activeElement) document.activeElement.blur(); }catch(e){} renderDispatch(); toast('💲 '+((_bizLoad()[zi]||{}).n||'')+' Crew '+c+' rate saved'); }
 function _crewShift(c){
   // Actual shift bracket for a crew, TODAY ONLY: earliest clock-in; clock-out only once the whole
   // crew is off AND it's after the clock-in. Ignores stale/previous-day entries.
@@ -3771,7 +3774,7 @@ function _econStrip(c,jobs,iso,labelHtml,zi){
     +(function(){ const cp=_crewPayFor(zi,c);
       return cp
       ?('<b>'+(p.rate>0?'$'+p.rate+'/hr':'')+(p.rate>0&&p.pctC>0?' + ':'')+(p.pctC>0?p.pctC+'%/job':'')+'</b> <span class="dev-pill" style="background:rgba(56,189,248,.13);color:#7dd3fc;cursor:help;" title="'+esc(cp.who.join(' + '))+' — edit the Crew Pay tab in that business\'s Google Sheet">👥 '+cp.who.length+' on crew</span>')
-      :('$<input class="st-rate" type="number" min="1" value="'+p.rate+'" onchange="setCrewRate('+zi+',\''+c+'\',this.value)" onkeydown="if(event.key===\'Enter\')this.blur()" title="What this crew costs you per hour — or fill that business\'s Crew Pay sheet and this fills itself">/hr'); })()
+      :('$<input class="st-rate" type="number" min="0" value="'+p.rate+'" onchange="setCrewRate('+zi+',\''+c+'\',this.value)" onkeydown="if(event.key===\'Enter\')this.blur()" title="What this crew costs you per hour — or fill that business\'s Crew Pay sheet and this fills itself">/hr'); })()
     +live+'</div>';
 }
 
