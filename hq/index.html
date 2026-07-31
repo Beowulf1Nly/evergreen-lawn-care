@@ -566,13 +566,8 @@
           <button onclick="dispToday()" style="font-weight:800;">Today</button>
           <input type="date" onchange="dispPickDate(this.value)" title="Jump to date">
         </div>
-        <div class="disp-chips" id="dispCrews">
-          <button data-c="all" class="on" onclick="setDispCrew('all')">👥 All</button>
-          <button data-c="A" onclick="setDispCrew('A')">Crew A</button>
-          <button data-c="B" onclick="setDispCrew('B')">Crew B</button>
-          <button data-c="C" onclick="setDispCrew('C')">Crew C</button>
-          <button data-c="un" onclick="setDispCrew('un')">⬜ Unassigned</button>
-        </div>
+        <!-- built in renderDispatch from the Crew Pay roster; day view only -->
+        <div class="disp-chips" id="dispCrews"></div>
         <button class="dev-btn" style="border-radius:999px;padding:8px 14px;" onclick="openBizEditor()">🏢 Businesses</button>
         <div class="disp-legend">
           <span><i style="background:#22c55e"></i>Crew A</span><span><i style="background:#38bdf8"></i>Crew B</span>
@@ -1317,7 +1312,7 @@ function openJobSheetFor(b){
     +((done && myRole==='owner')?('<div class="lbl">Ask for a review</div><div class="rv-send">'+(b.phone?'<label><input type="checkbox" id="rvText" checked> 💬 Text</label>':'<label style="opacity:.45"><input type="checkbox" id="rvText" disabled> 💬 Text</label>')+(b.email?'<label><input type="checkbox" id="rvEmail" checked> ✉️ Email</label>':'<label style="opacity:.45"><input type="checkbox" id="rvEmail" disabled> ✉️ Email</label>')+'</div><button class="act" onclick="sendReview()"><span class="em">⭐</span> Send review request</button>'):'')
     +'<button class="ghost" onclick="closeSheet(\'jobSheet\')">Close</button>';
   const cur=String(b.crew||'').toUpperCase().trim();
-  document.getElementById('jobCrewPick').innerHTML=['A','B','C','—'].map(function(cw){ const val=cw==='—'?'':cw; const on=(val===cur); return '<button class="'+(on?'on':'')+'" onclick="doAssign(\''+val+'\')">'+(cw==='—'?'Unassign':('Crew '+cw))+'</button>'; }).join('');
+  document.getElementById('jobCrewPick').innerHTML=_allCrews(b._srcBiz||0).concat(['—']).map(function(cw){ const val=cw==='—'?'':cw; const on=(val===cur); return '<button class="'+(on?'on':'')+'" onclick="doAssign(\''+val+'\')">'+(cw==='—'?'Unassign':('Crew '+esc(cw)))+'</button>'; }).join('');
   openSheet('jobSheet');
 }
 function _openArchSheet(b,be){
@@ -1918,7 +1913,7 @@ function openAddJob(){
   document.getElementById('addSearch').value='';
   ['addName','addAddr','addZip','addPhone','addEmail','addPrice','addNotes'].forEach(function(id){ document.getElementById(id).value=''; });
   document.getElementById('addDate').value=todayISO(); document.getElementById('addResults').style.display='none'; _addCrew='';
-  document.getElementById('addCrewPick').innerHTML=['A','B','C','—'].map(function(cw){ const val=cw==='—'?'':cw; return '<button onclick="pickAddCrew(this,\''+val+'\')">'+(cw==='—'?'Unassigned':('Crew '+cw))+'</button>'; }).join('');
+  document.getElementById('addCrewPick').innerHTML=_allCrewsAny().concat(['—']).map(function(cw){ const val=cw==='—'?'':cw; return '<button onclick="pickAddCrew(this,\''+val+'\')">'+(cw==='—'?'Unassigned':('Crew '+esc(cw)))+'</button>'; }).join('');
   openSheet('addSheet');
 }
 function pickAddCrew(el,val){ _addCrew=val; document.querySelectorAll('#addCrewPick button').forEach(function(b){b.classList.remove('on');}); el.classList.add('on'); }
@@ -2896,6 +2891,21 @@ function _jobSort(a,b){
   // deterministic final tiebreaker — equal-key jobs must never swap between renders
   const ka=_svKey(a), kb=_svKey(b); return ka<kb?-1:ka>kb?1:0;
 }
+/* Every crew that actually EXISTS for a business — from the Crew Pay sheet (source of truth),
+   plus any crew with a home base or jobs on the board. Replaces the hardcoded A/B/C lists, so
+   adding a "D" row to the Crew Pay tab makes Crew D appear everywhere automatically. */
+function _allCrews(zi){
+  zi=zi||0; const s={};
+  try{ const rp=(_crewPay&&_crewPay[zi])||{}; Object.keys(rp).forEach(function(c){ const k=String(c).toUpperCase().trim(); if(k&&_crewPayFor(zi,k)) s[k]=1; }); }catch(e){}
+  try{ Object.keys(_crewBases(zi)||{}).forEach(function(c){ const k=String(c).toUpperCase().trim(); if(k) s[k]=1; }); }catch(e){}
+  try{ _dispJobs().forEach(function(b){ if((b._srcBiz||0)!==zi) return; const k=String(b.crew||'').toUpperCase().trim(); if(k) s[k]=1; }); }catch(e){}
+  const arr=Object.keys(s).sort();
+  return arr.length?arr:['A','B'];
+}
+function _allCrewsAny(){   // union across every business — for the global crew filter
+  const s={}; try{ _bizLoad().forEach(function(z,i){ _allCrews(i).forEach(function(c){ s[c]=1; }); }); }catch(e){ return _allCrews(0); }
+  const arr=Object.keys(s).sort(); return arr.length?arr:['A','B'];
+}
 function _activeCrews(rangeJobs){
   const s={}; (rangeJobs||_dispJobs()).forEach(function(b){ const c=String(b.crew||'').toUpperCase().trim(); if(c) s[c]=1; });
   const arr=Object.keys(s).sort(); return arr.length?arr:['A'];
@@ -2983,7 +2993,19 @@ function renderDispatch(){
   window._dispWatched=(Date.now()-(window._dispWatchTs||0))<180000;
   window._dispWatchTs=Date.now();
   ['dvMonth','dvWeek','dvDay'].forEach(function(id){ const el=document.getElementById(id); if(el) el.classList.toggle('on', id==='dv'+_dispView.charAt(0).toUpperCase()+_dispView.slice(1)); });
-  document.querySelectorAll('#dispCrews button').forEach(function(b){ b.classList.toggle('on',b.dataset.c===_dispCrew); });
+  // Crew filter: DAY view only (on week/month you want to see every crew side by side), and the
+  // buttons come from the Crew Pay roster so a new crew shows up without a code change.
+  (function(){
+    const box=document.getElementById('dispCrews'); if(!box) return;
+    if(_dispView!=='day'){ box.style.display='none'; if(_dispCrew!=='all') _dispCrew='all'; box.innerHTML=''; return; }
+    box.style.display='';
+    const cs=_allCrewsAny();
+    box.innerHTML='<button data-c="all" onclick="setDispCrew(\'all\')">👥 All</button>'
+      +cs.map(function(c){ return '<button data-c="'+esc(c)+'" onclick="setDispCrew(\''+esc(c)+'\')">Crew '+esc(c)+'</button>'; }).join('')
+      +'<button data-c="un" onclick="setDispCrew(\'un\')">⬜ Unassigned</button>';
+    if(_dispCrew!=='all'&&_dispCrew!=='un'&&cs.indexOf(_dispCrew)<0) _dispCrew='all';   // filtered crew vanished
+    box.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on',b.dataset.c===_dispCrew); });
+  })();
   const todayIso=todayISO();
   let rangeStart, rangeEnd, h=_hqNeedsPayPanel();   // ⚠️ pinned: completed jobs not yet paid (next visit blocked)
   if(_dispView==='month'){
@@ -4419,7 +4441,7 @@ let _hqSplitZi=0;
 function hqCrewSplitOpen(){ _hqSplitZi=0; _hqCrewSplitRender(); openSheet('jobSheet'); }
 function hqSplitTogglePick(c){ const zi=_hqSplitZi; let sel=_splitSel(zi)||_hqSplitDefaultSel(zi); sel=sel.indexOf(c)>=0?sel.filter(function(x){return x!==c;}):sel.concat([c]).sort(); _splitSelSave(zi,sel); _hqCrewSplitRender(); }
 function hqSplitSetBal(k){ try{ localStorage.setItem('hq_splitbal',k); }catch(e){} _hqCrewSplitRender(); }
-function _hqSplitDefaultSel(zi){ const bs=_crewBases(zi); return ['A','B','C'].filter(function(c){ return bs[c]&&bs[c].lat!=null; }); }
+function _hqSplitDefaultSel(zi){ const bs=_crewBases(zi); return _allCrews(zi).filter(function(c){ return bs[c]&&bs[c].lat!=null; }); }
 function _hqSplitDay(){ return (_dispView==='day')?_iso(_dispAnchor):todayISO(); }
 function _hqSplitJobs(iso,zi){ return _dispJobs().filter(function(b){ return b&&!b.rowCancelled&&!_isArch(b)&&!isDone(b)&&!_hqIsQuote(b)&&(b._srcBiz||0)===zi&&dateOf(b)===iso&&String(b.address||'').trim(); }); }
 function _hqCrewSplitRender(){
@@ -4429,7 +4451,7 @@ function _hqCrewSplitRender(){
   const locked=jobs.filter(function(b){ return _crewLockFor(b); });
   let h='<h3>🚚 Split '+esc(iso)+' between crews</h3><div class="sub">'+jobs.length+' open job'+(jobs.length===1?'':'s')+' to divide. Locked jobs stay put; the rest get split by area and balanced by mow-time.</div>';
   h+='<div class="lbl">Which crews are working this day?</div><div style="display:flex;gap:7px;flex-wrap:wrap;">'
-    +['A','B','C'].map(function(c){ const on=sel.indexOf(c)>=0, hasB=!!(bases[c]&&bases[c].lat!=null);
+    +_allCrews(zi).map(function(c){ const on=sel.indexOf(c)>=0, hasB=!!(bases[c]&&bases[c].lat!=null);
       return '<button onclick="hqSplitTogglePick(\''+c+'\')" style="flex:1;min-width:88px;padding:11px 6px;border-radius:11px;border:2px solid '+(on?crewColor(c):'#334155')+';background:'+(on?crewColor(c)+'22':'transparent')+';color:'+(on?crewColor(c):'inherit')+';font-weight:800;cursor:pointer;font-family:inherit;font-size:13px;">'+(on?'✓ ':'')+'Crew '+c+(hasB?'':'<div style="font-size:9.5px;font-weight:700;color:#f87171;">no base</div>')+'</button>'; }).join('')+'</div>';
   h+='<div class="lbl">Home base — where each crew starts</div>';
   sel.forEach(function(c){ const bs=bases[c]; h+='<button class="act" onclick="hqSetCrewBase('+zi+',\''+c+'\')"><span class="em">🏠</span> Crew '+c+' — '+((bs&&bs.label)?esc(bs.label):'<span style="color:#f87171;">set a start address</span>')+'</button>'; });
