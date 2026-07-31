@@ -558,7 +558,7 @@
     <div class="disp-wrap">
       <div class="disp-controls">
         <div class="seg"><button id="dvMonth" onclick="setDispView('month')">Month</button><button id="dvWeek" class="on" onclick="setDispView('week')">Week</button><button id="dvDay" onclick="setDispView('day')">Day</button></div>
-        <div class="seg"><button onclick="autoAssign()" style="font-weight:800;">⚡ Auto-assign</button><button onclick="crOpen()">🤖 Crew rules</button></div>
+        <div class="seg"><button onclick="autoAssign()" style="font-weight:800;">⚡ Auto-assign</button><button onclick="hqCrewSplitOpen()" style="font-weight:800;">🚚 Split crews</button><button onclick="crOpen()">🤖 Crew rules</button></div>
         <div class="disp-nav">
           <button onclick="dispShift(-1)">◀</button>
           <span class="disp-title" id="dispTitle"></span>
@@ -4313,6 +4313,83 @@ function _hqTspHeur(M){
     if(!best||cst<best.cost) best={ order:ord.slice(), cost:cst };
   }
   return best;
+}
+/* ═══════ 🚚 TWO-CREW DAY SPLITTER — manual: balance the day by geography + mow-time ═══════ */
+function _crewBasesAll(){ try{ return JSON.parse(localStorage.getItem('hq_crewbase')||'{}')||{}; }catch(e){ return {}; } }
+function _crewBases(zi){ const all=_crewBasesAll(); return all[zi]||{}; }
+function _hqHav(a,b){ const R=3959,dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lon-a.lon)*Math.PI/180,la1=a.lat*Math.PI/180,la2=b.lat*Math.PI/180; const x=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)*Math.sin(dLon/2); return 2*R*Math.asin(Math.min(1,Math.sqrt(x))); }
+let _hqSplitZi=0;
+function hqCrewSplitOpen(){ _hqSplitZi=(_dispView!=='month'&&_bizLoad().length>1)?_hqSplitZi:0; _hqCrewSplitRender(); openSheet('jobSheet'); }
+function _hqCrewSplitRender(){
+  const zi=_hqSplitZi, bases=_crewBases(zi);
+  const iso=(_dispView==='day')?_iso(_dispAnchor):todayISO();
+  let h='<h3>🚚 Split the day between crews</h3><div class="sub">Set each crew\'s home base, then split &amp; optimize '+esc(iso)+'. Balances ~50/50 by mow-time and keeps each crew tight around its base.</div>';
+  h+='<div class="lbl">Crew home bases</div>';
+  ['A','B','C'].forEach(function(c){ const bs=bases[c]; h+='<button class="act" onclick="hqSetCrewBase('+zi+',\''+c+'\')"><span class="em">🏠</span> Crew '+c+' base — '+((bs&&bs.label)?esc(bs.label):'<span style="color:#f87171;">not set — tap to add</span>')+'</button>'; });
+  const nSet=['A','B','C'].filter(function(c){ return bases[c]&&bases[c].lat!=null; }).length;
+  h+='<div class="lbl">Go</div>';
+  if(nSet>=2) h+='<button class="act" style="background:#16a34a;color:#fff;border-color:#16a34a;font-weight:800;" onclick="hqSplitCrews(\''+esc(iso)+'\','+zi+')"><span class="em">⚡</span> Split &amp; optimize '+esc(iso)+'</button>';
+  else h+='<div class="rs-note" style="color:#f87171;">Set a home base for at least 2 crews to split.</div>';
+  h+='<div class="rs-note" style="color:var(--dim);">Runs only when you tap Split — it assigns crews + reorders each route. Review after; drag anything you want to tweak.</div>';
+  h+='<button class="ghost" onclick="closeSheet(\'jobSheet\')" style="margin-top:10px;">Close</button>';
+  document.getElementById('jobSheetBody').innerHTML=h;
+}
+async function hqSetCrewBase(zi,crew){
+  const cur=(_crewBases(zi)[crew]||{});
+  const addr=prompt('🏠 Home base for Crew '+crew+' — the address (or ZIP) where they START the day.\n\nLeave blank to clear.', cur.label||'');
+  if(addr===null) return;
+  const a=String(addr).trim(); const all=_crewBasesAll(); all[zi]=all[zi]||{};
+  if(!a){ delete all[zi][crew]; try{ localStorage.setItem('hq_crewbase',JSON.stringify(all)); }catch(e){} _hqCrewSplitRender(); return; }
+  toast('🧭 Locating…');
+  const co=await _hqGeocode(/\bFL\b/i.test(a)?a:(a+', FL'));
+  if(!co){ toast('⚠ Couldn\'t find that — add a city or ZIP'); return; }
+  all[zi][crew]={lat:co.lat,lon:co.lon,label:a}; try{ localStorage.setItem('hq_crewbase',JSON.stringify(all)); }catch(e){}
+  toast('🏠 Crew '+crew+' base set'); _hqCrewSplitRender();
+}
+async function hqSplitCrews(iso,zi){
+  zi=zi||0; if(_hqOptBusy){ toast('Optimizer busy — one sec'); return; }
+  const bases=_crewBases(zi); const crews=Object.keys(bases).filter(function(k){ return bases[k]&&bases[k].lat!=null; }).sort();
+  if(crews.length<2){ toast('Set a Home base for at least 2 crews first'); return; }
+  let jobs=_dispJobs().filter(function(b){ return b&&!b.rowCancelled&&!_isArch(b)&&!isDone(b)&&!_hqIsQuote(b)&&(b._srcBiz||0)===zi&&dateOf(b)===iso&&String(b.address||'').trim(); });
+  if(jobs.length<crews.length){ toast('Not enough open jobs on '+iso+' to split'); return; }
+  if(!confirm('⚡ Split '+jobs.length+' jobs on '+iso+' across Crew '+crews.join(' & Crew ')+', balance the workload, and optimize each route?')) return;
+  closeSheet('jobSheet'); toast('🧭 Locating '+jobs.length+' stops…');
+  const pts=[];
+  for(const b of jobs){
+    let a=String(b.address||'').trim(); const z=String(b.zip||'').trim(); if(z&&a.indexOf(z)<0)a+=', '+z; if(!/\bFL\b/i.test(a))a+=', FL';
+    const co=await _hqGeocode(a);
+    if(co) pts.push({ b:b, co:co, mins:Math.max(10,_jobMins(b)) });
+  }
+  if(pts.length<crews.length){ toast('Couldn\'t locate enough addresses — fix the red-flagged ones and retry'); return; }
+  // 1) seed: each job to its nearest crew base
+  pts.forEach(function(p){ let best=crews[0],bd=Infinity; crews.forEach(function(c){ const d=_hqHav(p.co,bases[c]); if(d<bd){bd=d;best=c;} }); p.crew=best; });
+  // 2) balance mow-time (two-crew): move the cheapest-to-move boundary job from heavy→light until within
+  //    ~25 min OR the move would add >8 mi of detour (respects "don't sacrifice a lot of time for balance").
+  if(crews.length===2){
+    const A=crews[0],B=crews[1];
+    const hrs=function(c){ return pts.filter(function(p){return p.crew===c;}).reduce(function(s,p){return s+p.mins;},0); };
+    for(let it=0; it<pts.length*2; it++){
+      const hA=hrs(A),hB=hrs(B), diff=Math.abs(hA-hB); if(diff<=25) break;
+      const heavy=hA>hB?A:B, light=hA>hB?B:A;
+      const cands=pts.filter(function(p){return p.crew===heavy;}).map(function(p){ return {p:p, pen:_hqHav(p.co,bases[light])-_hqHav(p.co,bases[heavy])}; }).sort(function(x,y){return x.pen-y.pen;});
+      if(!cands.length) break;
+      const mv=cands[0];
+      if(mv.pen>8) break;                                                   // >8 mi detour to rebalance — not worth it
+      if(Math.abs((hrs(heavy)-mv.p.mins)-(hrs(light)+mv.p.mins))>=diff) break; // no improvement
+      mv.p.crew=light;
+    }
+  }
+  // 3) push crew assignments (only where changed)
+  toast('👷 Assigning crews…'); let ok=0,fail=0;
+  for(const p of pts){ const cur=String(p.b.crew||'').toUpperCase().trim(); if(cur===p.crew) continue; const be=_jobBE(p.b);
+    try{ const d=await(await fetch(be.u+'?'+new URLSearchParams({action:'set_crew',rowIndex:_ri(p.b),email:p.b.email||'',serviceDate:iso,crew:p.crew,adminToken:be.t}))).json();
+      if(d&&d.success){ ok++; p.b.crew=p.crew; _pendingLocal[_svKey(p.b)]=Object.assign(_pendingLocal[_svKey(p.b)]||{},{crew:p.crew,ts:Date.now()}); } else fail++;
+    }catch(e){ fail++; } }
+  try{ renderDispatch(); }catch(e){}
+  // 4) optimize each crew's route FROM its home base
+  for(const c of crews){ try{ await hqOptimizeRun(c, iso, zi, {lat:bases[c].lat,lon:bases[c].lon,label:'Crew '+c+' base'}); }catch(e){} }
+  const load=crews.map(function(c){ const grp=pts.filter(function(p){return p.crew===c;}); return 'Crew '+c+': '+grp.length+' jobs · ~'+(Math.round(grp.reduce(function(s,p){return s+p.mins;},0)/60*10)/10)+'h'; }).join('   ');
+  toast('✅ Day split & routed — '+load+(fail?(' · '+fail+' assign failed'):''), 10000);
 }
 async function hqOptimizeRun(c,iso,zi,startOverride){
   zi=zi||0;
