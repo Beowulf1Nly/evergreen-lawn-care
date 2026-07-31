@@ -2274,7 +2274,7 @@ async function estEmail(id){
   const r=_estGet(id); if(!r) return;
   const name=String(r.name||'').trim(), email=String(r.email||'').trim();
   if(!name||!email){ toast('Add the customer name + email first'); return; }
-  const items=(r.items||[]).filter(function(it){ return String(it.desc||'').trim(); }).map(function(it){ return {desc:String(it.desc).trim(), price:parseFloat(it.price)||0, included:'true'}; });
+  const items=(r.items||[]).filter(function(it){ return String(it.desc||'').trim(); }).map(function(it){ const _p=parseFloat(String(it.price||'').replace(/[^0-9.]/g,''))||0; return {desc:String(it.desc).trim(), price:_p, included:(_p>0?'false':'true')}; });   // priced line → show the price & count it; $0 line → "Included"
   if(!items.length){ toast('Add at least one service line'); return; }
   if(!confirm('Email this estimate ($'+_estTotal(r).toFixed(0)+') to '+email+'?')) return;
   const st=document.getElementById('estSendStatus'); if(st) st.textContent='⏳ Sending…';
