@@ -2346,6 +2346,12 @@ async function _estAddPhotos(id,files){
   estOpen(id);
 }
 function _estDelPhoto(id,i){ const r=_estGet(id); if(!r||!r.photos) return; if(!confirm('Remove this photo?')) return; r.photos.splice(i,1); _estPut(r); estOpen(id); }
+function estBook(id){
+  const r=_estGet(id); if(!r) return;
+  // Reuse the Add Job flow, pre-filled with this estimate's customer — owner picks day/service/price there.
+  _jobCur={ name:String(r.name||''), email:String(r.email||''), phone:String(r.phone||''), address:String(r.address||''), zip:String(r.zip||''), _srcBiz:0 };
+  try{ hqScheduleAnother(); }catch(e){ toast('Could not open the scheduler'); }
+}
 function estOpen(id){
   const r=_estGet(id); if(!r) return;
   const ph=String(r.phone||'').replace(/[^0-9+]/g,''); const tot=_estTotal(r);
@@ -2354,6 +2360,7 @@ function estOpen(id){
   h+='<div class="sub">'+(r.status==='sent'?('✅ Sent'+(r.estimateNum?(' · '+esc(r.estimateNum)):'')+' — waiting on the customer'):'Who it\'s for, build the lines, then email it.')+'</div>';
   h+='<div class="lbl">Status</div><div style="display:flex;gap:6px;flex-wrap:wrap;">'
     +_EST_STAGES.map(function(s){ const on=(r.status||'todo')===s.k; return '<button onclick="estSetStatus(\''+id+'\',\''+s.k+'\')" style="flex:1;min-width:90px;padding:8px 5px;border-radius:10px;border:2px solid '+(on?s.c:'#334155')+';background:'+(on?s.c+'22':'transparent')+';color:'+(on?s.c:'inherit')+';font-weight:800;font-size:11.5px;cursor:pointer;font-family:inherit;">'+s.lbl+'</button>'; }).join('')+'</div>';
+  if(r.status==='accepted'||r.status==='won') h+='<button class="act" style="background:#16a34a;color:#fff;border-color:#16a34a;font-weight:800;margin-top:9px;" onclick="estBook(\''+id+'\')"><span class="em">📅</span> Book this customer — pick day &amp; service</button>';
   h+='<div class="lbl">Customer</div>'
     +'<input style="'+inp+'margin-bottom:5px;" placeholder="🔎 Search your customers to autofill…" oninput="_estCustSearch(\''+id+'\',this.value)">'
     +'<div id="estCustResults" style="display:none;background:var(--card,#0f2740);border:1px solid var(--line2,#2a3942);border-radius:10px;margin-bottom:7px;max-height:210px;overflow:auto;"></div>'
