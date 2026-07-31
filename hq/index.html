@@ -2272,7 +2272,7 @@ function estDelLine(id,i){ const r=_estGet(id); if(!r) return; r.items.splice(i,
 function estDelete(id){ if(!confirm('Delete this estimate?')) return; _estDel(id); closeSheet('jobSheet'); _estRenderList(); }
 async function estEmail(id){
   const r=_estGet(id); if(!r) return;
-  const name=(r.name||'').trim(), email=(r.email||'').trim();
+  const name=String(r.name||'').trim(), email=String(r.email||'').trim();
   if(!name||!email){ toast('Add the customer name + email first'); return; }
   const items=(r.items||[]).filter(function(it){ return String(it.desc||'').trim(); }).map(function(it){ return {desc:String(it.desc).trim(), price:parseFloat(it.price)||0, included:'true'}; });
   if(!items.length){ toast('Add at least one service line'); return; }
@@ -2284,8 +2284,8 @@ async function estEmail(id){
   // POST (not GET) — a long estimate + photos overruns the URL length limit and throws the
   // "Network error" you saw. The body has no such limit and carries the image URLs too.
   const payload={ action:action, adminToken:_bizTok(z), submittedBy:((typeof myName!=='undefined'&&myName)||'Owner'), name:name, email:email,
-    phone:(r.phone||'').trim(), address:(r.address||'').trim(), summary:(r.summary||r.title||'').trim(), personalMessage:(r.message||'').trim(),
-    estimateDate:todayISO(), validThru:(r.validThru||''), items:JSON.stringify(items), notes:'[]' };
+    phone:String(r.phone||'').trim(), address:String(r.address||'').trim(), summary:String(r.summary||r.title||'').trim(), personalMessage:String(r.message||'').trim(),
+    estimateDate:todayISO(), validThru:String(r.validThru||''), items:JSON.stringify(items), notes:'[]' };
   const _si=document.getElementById('estSendImages');
   if(r.photos&&r.photos.length&&(!_si||_si.checked)) payload.photos=JSON.stringify(r.photos);
   try{
