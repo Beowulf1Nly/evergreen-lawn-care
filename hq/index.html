@@ -992,6 +992,7 @@ function routeFor(crewStr){
 function todaysJobs(){ const t=todayISO(); return (_bookings||[]).filter(function(b){ return !b.rowCancelled && dateOf(b)===t; }); }
 
 function render(){
+  _cnGen++; _jmGen++;   // route order / customer-note / duration caches are per-render
   const todays=todaysJobs();
   _renderUnpaidAlert(todays);
   const doneN=todays.filter(isDone).length;
@@ -2637,11 +2638,22 @@ function cdOpenFor(b, amt){   // Card Desk pre-aimed at this customer (amt: opti
     if(b.email) cdLookup();
   }catch(e){} },80);
 }
+/* Was a LINEAR SCAN of the customer sheet for every rendered card — 100 jobs × a 500-row sheet =
+   50k comparisons per repaint, twice over (pills + timeline blocks). Now an email→note index built
+   once per render generation. */
+let _cnIdx=null, _cnIdxGen=-1, _cnGen=0;
 function _custNoteFor(b){   // standing note from the Customers SHEET (job notes are per-booking; this follows the person)
   try{
     const em=String(b.email||'').toLowerCase().trim(); if(!em) return '';
-    const arr=_custSheets[b._srcBiz||0]||[];
-    for(let i=0;i<arr.length;i++) if(arr[i].email===em) return String(arr[i].notes||'').trim();
+    if(_cnIdxGen!==_cnGen){
+      _cnIdx={};
+      Object.keys(_custSheets||{}).forEach(function(zi){
+        const m=_cnIdx[zi]={};
+        (_custSheets[zi]||[]).forEach(function(c){ const e=String(c.email||'').toLowerCase().trim(); if(e&&!(e in m)) m[e]=String(c.notes||'').trim(); });
+      });
+      _cnIdxGen=_cnGen;
+    }
+    const g=_cnIdx[b._srcBiz||0]; return (g&&g[em])||'';
   }catch(e){}
   return '';
 }
@@ -2908,11 +2920,21 @@ function _jobSort(a,b){
   // from a's crew alone made the comparator asymmetric (sort(a,b) and sort(b,a) could both say
   // "me first"), which let the same list order differently on each render — pills visibly shuffled.
   const _ca=String(a.crew||'').toUpperCase().trim(), _cb=String(b.crew||'').toUpperCase().trim();
-  const ord=(_ca===_cb)?_savedOrderFor(_ca):[];
-  if(ord.length){ let pa=ord.indexOf(_svKey(a)), pb=ord.indexOf(_svKey(b)); pa=pa<0?9999:pa; pb=pb<0?9999:pb; if(pa!==pb) return pa-pb; }
+  const ka=_svKey(a), kb=_svKey(b);                     // built once, reused by the tiebreaker below
+  if(_ca===_cb){ const pa=_ordPos(_ca,ka), pb=_ordPos(_cb,kb); if(pa!==pb) return pa-pb; }
   const x=a.jobTime||'99:99', y=b.jobTime||'99:99'; if(x!==y) return x<y?-1:1;
   // deterministic final tiebreaker — equal-key jobs must never swap between renders
-  const ka=_svKey(a), kb=_svKey(b); return ka<kb?-1:ka>kb?1:0;
+  return ka<kb?-1:ka>kb?1:0;
+}
+/* Position lookup for a crew's saved run order. _savedOrderFor() rebuilds an array (split, concat)
+   on every call, and the comparator then ran indexOf (O(n)) on it — twice per comparison, ~700
+   comparisons at 100 jobs. Built once per render as a key→index map instead. */
+let _ordIdxCache={}, _ordIdxGen=-1;
+function _ordPos(crew,key){
+  if(_ordIdxGen!==_cnGen){ _ordIdxCache={}; _ordIdxGen=_cnGen; }
+  let m=_ordIdxCache[crew];
+  if(!m){ m={}; const arr=_savedOrderFor(crew)||[]; for(let i=0;i<arr.length;i++) if(!(arr[i] in m)) m[arr[i]]=i; _ordIdxCache[crew]=m; }
+  return (key in m)?m[key]:9999;
 }
 /* Every crew that actually EXISTS for a business — from the Crew Pay sheet (source of truth),
    plus any crew with a home base or jobs on the board. Replaces the hardcoded A/B/C lists, so
@@ -3011,12 +3033,16 @@ function renderDispatch(){
   _zdEnsure(); try{ _loadCustSheets(); }catch(e){}   // zone-day rules + customer notes for the cards
   try{ _owedRebuild(); _owedCleanLoad(); }catch(e){}   // 💸 unpaid-balance flags
   const ae=document.activeElement;
-  if(ae&&ae.classList&&ae.classList.contains('st-rate')) return;   // mid-edit — the 20s auto-refresh was wiping the input before your change saved
+  // mid-edit: don't yank the input out from under you. Only the AUTO refresh defers — an explicit
+  // action (assign, optimize, drag) still repaints, so the board can't look frozen while you work.
+  if(ae&&ae.classList&&ae.classList.contains('st-rate')&&!window._dispForce){ window._dispPendingRepaint=1; return; }
+  window._dispForce=0; window._dispPendingRepaint=0;
   _jobRefs=[];
   // "Was the board actually open and watching?" — ONE value for the whole render, shared by every
   // crew lane. Per-lane computation made lanes 2+ always think they were watching (see below).
   window._dispWatched=(Date.now()-(window._dispWatchTs||0))<180000;
   window._dispWatchTs=Date.now();
+  _jmGen++; _cnGen++;   // invalidate the per-render duration / customer-note caches
   ['dvMonth','dvWeek','dvDay'].forEach(function(id){ const el=document.getElementById(id); if(el) el.classList.toggle('on', id==='dv'+_dispView.charAt(0).toUpperCase()+_dispView.slice(1)); });
   // Crew filter: DAY view only (on week/month you want to see every crew side by side), and the
   // buttons come from the Crew Pay roster so a new crew shows up without a code change.
@@ -3311,7 +3337,13 @@ function renderDispatch(){
             localStorage.setItem('hq_dp5_'+iso,JSON.stringify(_pins));
             localStorage.setItem('hq_ds5_'+iso,JSON.stringify(_seenOpen));
             localStorage.setItem('hq_dc5_'+iso,JSON.stringify(_curT));
-            for(let _li=localStorage.length-1;_li>=0;_li--){ const _lk=localStorage.key(_li); if(!_lk) continue; if(/^hq_dpins_|^hq_dseen_|^hq_dp2_|^hq_ds2_|^hq_dc2_|^hq_dp3_|^hq_ds3_|^hq_dc3_|^hq_dp4_|^hq_ds4_|^hq_dc4_/.test(_lk)){ localStorage.removeItem(_lk); continue; } if(/^hq_dp5_|^hq_ds5_|^hq_dc5_/.test(_lk)&&_lk.indexOf(iso)<0) localStorage.removeItem(_lk); }
+            // Purge old day-pin keys ONCE per day, not once per crew lane per render. This was a
+            // full localStorage scan with 12 regex tests per key running 2 businesses × 3 crews ×
+            // every 20s repaint.
+            if(window._dpPurgeDay!==iso){
+              window._dpPurgeDay=iso;
+              for(let _li=localStorage.length-1;_li>=0;_li--){ const _lk=localStorage.key(_li); if(!_lk) continue; if(/^hq_dpins_|^hq_dseen_|^hq_dp2_|^hq_ds2_|^hq_dc2_|^hq_dp3_|^hq_ds3_|^hq_dc3_|^hq_dp4_|^hq_ds4_|^hq_dc4_/.test(_lk)){ localStorage.removeItem(_lk); continue; } if(/^hq_dp5_|^hq_ds5_|^hq_dc5_/.test(_lk)&&_lk.indexOf(iso)<0) localStorage.removeItem(_lk); }
+            }
           }catch(e){}
           // Current stop is IN PROGRESS: starts where the crew got to, end stretches through 'now'
           // when running long (no fake gap). Everything after cascades forward, never before 'now'.
@@ -3439,7 +3471,19 @@ function _rebuildLearnedMins(){
   });
 }
 function _learnedFor(b){ return _learnedMins[String(b&&b.email||'').toLowerCase().trim()]||0; }
+/* _jobMinsRaw runs ~20 regexes and used to be called 5–8× per job on EVERY render (window sizing,
+   each _hqMins, the econ strip, the reorder panel, the chain writers). At ~100 jobs that's roughly
+   10k regex evaluations per repaint — a big chunk of why the board felt sluggish and janky.
+   Memoized per render generation (bumped in renderDispatch), so each job computes once. */
+let _jmCache=new WeakMap(), _jmGen=0;
 function _jobMins(b){
+  if(!b||typeof b!=='object') return _jobMinsRaw(b);
+  try{ const c=_jmCache.get(b); if(c&&c.g===_jmGen) return c.v; }catch(e){}
+  const v=_jobMinsRaw(b);
+  try{ _jmCache.set(b,{g:_jmGen,v:v}); }catch(e){}
+  return v;
+}
+function _jobMinsRaw(b){
   const pin=_yardPinFor(b); if(pin>0) return pin;   // your ⏱ HQ edit — wins so it survives the 90s refresh even if the sheet didn't save
   const custom=parseInt(String(b.mowMinutes||b.customMowMins||'')); if(custom>0) return custom;
   const n=String(b.notes||'').toLowerCase(), freq=String(b.frequency||'').toLowerCase(), svc=String(b.service||b.serviceType||'').toLowerCase();
@@ -4010,10 +4054,14 @@ async function hqPushCrewDay(zi,c){
 function crewMapsRoute(zi,c){
   const rec=(window._dayEvsCache||{})[zi+'|'+c];
   if(!rec||!rec.evs||!rec.evs.length){ toast('No stops on this crew\'s board'); return; }
+  // ONLY stops still to do. This used to include finished ones, so mid-afternoon the Maps link
+  // routed the truck back through every yard already mowed (while 📋 Copy for Discord, which does
+  // filter, showed the correct remaining run — two buttons giving contradictory routes).
   const addrs=rec.evs.slice().sort(function(a,b){ return a.st-b.st; })
+    .filter(function(ev){ return !isDone(ev.b)&&!_isArch(ev.b); })
     .map(function(ev){ const b=ev.b; return (b.address||'')+(b.zip?', '+b.zip:'')+', FL'; })
     .filter(function(a){ return a.replace(/[,\sFL]/g,'').length>3; });
-  if(!addrs.length){ toast('No addresses to route'); return; }
+  if(!addrs.length){ toast('No stops left to route — day\'s done 🎉'); return; }
   const CHUNK=10, legs=[]; let i=0, prev='';
   while(i<addrs.length){
     const originParts=prev?[prev]:[];
