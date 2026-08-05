@@ -2803,7 +2803,17 @@ function _jobBE(b){
 }
 
 /* ── data ── */
-let _bizExtra={}, _bizExtraAt=0, _bizExtraLoading=false;
+let _bizExtra={}, _bizExtraAt=0, _bizExtraLoading=false, _bizFail={};
+/* Loud banner when a configured business can't load — its jobs are MISSING from the board, and
+   that used to happen with no indication at all ("none of my cleaning jobs are showing up"). */
+function _hqBizFailBanner(){
+  const ks=Object.keys(_bizFail||{}); if(!ks.length) return '';
+  return '<div class="dev-card" style="grid-column:1/-1;border:1.5px solid #f87171;background:rgba(248,113,113,.10);margin-bottom:10px;">'
+    +'<div style="padding:10px 12px;font-size:13px;color:#f87171;font-weight:800;">⚠️ '+ks.length+' business isn\'t loading — its jobs are NOT on this board</div>'
+    +ks.map(function(k){ const f=_bizFail[k];
+      return '<div style="padding:0 12px 9px;font-size:12.5px;color:var(--dim,#9fb2c0);"><b style="color:inherit;">'+esc(f.n||'Business')+'</b> — '+esc(f.why||'unknown')+'</div>'; }).join('')
+    +'<div style="padding:0 12px 11px;"><button class="dev-btn" onclick="openBizEditor()">🏢 Fix it in Businesses</button></div></div>';
+}
 function initDispatch(){ renderDispatch(); if(!_completedLoaded){ _completedLoaded=true; loadCompleted(); } if(Date.now()-_bizExtraAt>60000) loadBizBookings(); loadCrewPay(); }
 async function loadBizBookings(){
   // Sister-business bookings used to load ONCE per session — sheet edits never
@@ -2813,14 +2823,20 @@ async function loadBizBookings(){
   const biz=_bizLoad();
   for(let i=0;i<biz.length;i++){
     const z=biz[i];
-    if(!z.su||_bizUrl(z)===SCRIPT_URL||!_bizConnected(z)) continue;
+    if(!z.su||_bizUrl(z)===SCRIPT_URL) continue;
+    // A sister business that can't load used to fail SILENTLY — its jobs just weren't on the board
+    // and nothing said why. Record the reason so the board can surface it.
+    if(!_bizConnected(z)){ _bizFail[i]={n:(z.e||'')+' '+(z.n||''),why:'not connected — reconnect it in 🏢 Businesses'}; continue; }
     try{
       const d=await bizGet(z,{action:'bookings',includeCompleted:'false'});
       if(d&&d.success&&Array.isArray(d.bookings)){
         d.bookings.forEach(function(b){ b._srcBiz=i; });
         _bizExtra[i]=_applyPending(_fixTimes(d.bookings.filter(function(b){ return !b.rowCancelled; })));
+        delete _bizFail[i];
+      } else {
+        _bizFail[i]={n:(z.e||'')+' '+(z.n||''),why:((d&&d.error)||'backend didn\'t answer — check its deploy / reconnect')};
       }
-    }catch(e){}
+    }catch(e){ _bizFail[i]={n:(z.e||'')+' '+(z.n||''),why:'network error reaching its backend'}; }
   }
   _bizExtraAt=Date.now(); _bizExtraLoading=false;
   if(_activeTab==='dispatch') renderDispatch();
@@ -3058,7 +3074,7 @@ function renderDispatch(){
     box.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on',b.dataset.c===_dispCrew); });
   })();
   const todayIso=todayISO();
-  let rangeStart, rangeEnd, h=_hqNeedsPayPanel();   // ⚠️ pinned: completed jobs not yet paid (next visit blocked)
+  let rangeStart, rangeEnd, h=_hqBizFailBanner()+_hqNeedsPayPanel();   // ⚠️ a business that can't load + completed jobs not yet paid
   if(_dispView==='month'){
     const y=_dispAnchor.getFullYear(), mo=_dispAnchor.getMonth();
     document.getElementById('dispTitle').textContent=MO[mo]+' '+y;
