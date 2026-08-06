@@ -1638,7 +1638,8 @@ function _uniqueCustomers(){
   let all=(_bookings||[]).concat(_completed||[]);
   Object.keys(_bizExtra||{}).forEach(function(k){ all=all.concat(_bizExtra[k]||[]); });
   Object.keys(_custSheets||{}).forEach(function(k){ all=all.concat(_custSheets[k]||[]); });
-  all.forEach(function(b){ const k=(String(b.email||'').toLowerCase())||(String(b.name||'').toLowerCase().trim()+'|'+String(b.address||'').toLowerCase().trim()); if(!k||k==='|'||seen[k]) return; seen[k]=1; out.push(b); });
+  // per-PROPERTY, so a multi-address account lists each site instead of collapsing to one row
+  all.forEach(function(b){ const k=_custKey(b); if(!k||k==='|'||k==='n:|'||seen[k]) return; seen[k]=1; out.push(b); });
   return out;
 }
 let _addBiz=0;
@@ -1944,7 +1945,8 @@ async function doAddJob(){
     if(d.success){
       const _zn=_bizLoad()[_addBiz]||_bizLoad()[0];
       toast('✅ Job booked on '+_zn.e+' '+_zn.n+' for '+date); closeSheet('addSheet');
-      try{ await _closeConvertedQuote(); }catch(e){}   // came from a Quote Call → close that row out
+      _convertingQuote=null;   // quote is already closed up-front by hqConvertQuote (closing it
+                               // AFTER booking could resolve onto the new job and complete it)
       if(_bizUrl(_zn)===SCRIPT_URL){ await refreshBookings();
         if(_addCrew){ const nb=(_bookings||[]).find(function(b){ return dateOf(b)===date && String(b.address||'').toLowerCase()===addr.toLowerCase() && !String(b.crew||'').trim(); }); if(nb){ try{ await fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'set_crew',rowIndex:_ri(nb),email:nb.email||'',serviceDate:date,crew:_addCrew,adminToken:token})); nb.crew=_addCrew; render(); }catch(e){} } }
       } else if(_addCrew){ try{ const bl=await bizGet(_zn,{action:'bookings'}); const nb=(bl&&bl.bookings||[]).find(function(b){ return dateOf(b)===date && String(b.address||'').toLowerCase()===addr.toLowerCase(); }); if(nb) await bizGet(_zn,{action:'set_crew',rowIndex:(nb._rowIndex||0),email:nb.email||'',serviceDate:date,crew:_addCrew}); }catch(e){} }
@@ -2074,7 +2076,25 @@ let _activeTab='live';
 /* ═══════════════════ 👥 CUSTOMERS — full book, open anyone, do everything ═══════════════════ */
 let _custQuery='', _custSort='name';
 function _custAllJobs(){ let a=(_bookings||[]).concat(_completed||[]); try{ Object.keys(_bizExtra||{}).forEach(function(k){ a=a.concat(_bizExtra[k]||[]); }); }catch(e){} return a.filter(function(b){ return b && !b.rowCancelled; }); }
-function _custKey(b){ return (String(b.email||'').toLowerCase().trim())||('n:'+String(b.name||'').toLowerCase().trim()+'|'+String(b.address||'').toLowerCase().trim()); }
+/* Normalize a street line so "123 Main St" / "123 Main Street" / "123 Main St, Ocala FL 34474"
+   are ONE property, while genuinely different addresses stay separate. Mirrors _normAddr_ in the
+   backend so both sides agree. */
+function _hqNormAddr(a){
+  var s=String(a==null?'':a).toLowerCase().trim();
+  var c=s.indexOf(','); if(c>=0) s=s.slice(0,c);              // identity is the street line
+  s=s.replace(/[.#]/g,' ').replace(/\b\d{5}(?:-\d{4})?\b/g,' ').replace(/\b(fl|florida|usa|us|apt|unit|ste|suite)\b/g,' ');
+  var SUF={street:'st',str:'st',avenue:'ave',av:'ave',drive:'dr',road:'rd',lane:'ln',court:'ct',circle:'cir',boulevard:'blvd',place:'pl',terrace:'ter',terr:'ter',trail:'trl',parkway:'pkwy',highway:'hwy',square:'sq',point:'pt',crossing:'xing',heights:'hts',landing:'lndg',manor:'mnr',ridge:'rdg',loop:'loop'};
+  var DIR={north:'n',south:'s',east:'e',west:'w',northeast:'ne',northwest:'nw',southeast:'se',southwest:'sw'};
+  s=s.replace(/[a-z]+/g,function(w){ return SUF[w]||DIR[w]||w; });
+  return s.replace(/\s+/g,' ').trim();
+}
+/* One record PER PROPERTY. Keying on email alone merged commercial accounts (e.g. BBG Development)
+   that share one email across many addresses into a single tangled customer. */
+function _custKey(b){
+  const em=String(b.email||'').toLowerCase().trim(), ad=_hqNormAddr(b&&b.address);
+  if(em) return ad?(em+'|'+ad):em;
+  return 'n:'+String(b&&b.name||'').toLowerCase().trim()+'|'+ad;
+}
 function _custBuild(){
   const map={};
   try{ _uniqueCustomers().forEach(function(c){ const k=_custKey(c); if(!map[k]) map[k]={ key:k, name:c.name||'', email:String(c.email||'').toLowerCase(), phone:c.phone||'', address:c.address||'', zip:c.zip||'', notes:c.notes||'', srcBiz:c._srcBiz||0, jobs:[] }; }); }catch(e){}
@@ -2571,14 +2591,17 @@ async function hqSetCcEmail(){
    customer; once the job is booked, the quote row is closed out automatically so it stops sitting
    on the board. _convertingQuote carries the source row across the Add Job sheet. */
 let _convertingQuote=null;
-function hqConvertQuote(){
+async function hqConvertQuote(){
   const b=_jobCur; if(!b) return;
+  if(!confirm('Turn '+(b.name||'this')+'\'s quote into a real job?\n\nThe quote closes now, then you pick the service, price and day.')) return;
+  // ⚠️ Close the quote BEFORE booking. Booking inserts a row at the TOP of the sheet and the
+  // backend re-resolves mark_done by email — so closing afterwards could land on the JUST-CREATED
+  // job and complete it instead (quote and real job "tied together").
+  await _closeConvertedQuote(b);
   hqScheduleAnother();
-  _convertingQuote=b;   // set AFTER openAddJob, which clears any stale conversion
-  setTimeout(function(){ try{ toast('📋 Booking for '+(b.name||'them')+' — the quote closes itself once you schedule',6000); }catch(e){} },300);
 }
-async function _closeConvertedQuote(){
-  const b=_convertingQuote; _convertingQuote=null; if(!b) return;
+async function _closeConvertedQuote(src){
+  const b=src||_convertingQuote; _convertingQuote=null; if(!b) return;
   try{
     const be=_jobBE(b);
     const d=await(await fetch(be.u+'?'+new URLSearchParams({ action:'mark_done', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), amount:'0', markedBy:myName||'Owner', adminToken:be.t }))).json();
