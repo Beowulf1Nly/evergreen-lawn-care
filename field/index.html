@@ -13,7 +13,7 @@
 <script>
 /* APP_VER:2026-07-16.71 */
 (function(){
-  var V='2026-07-31.74'; window.__APP_VER=V;
+  var V='2026-07-31.75'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -191,6 +191,7 @@
   #toast{ position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom)); transform:translateX(-50%); background:#14361f; color:#fff; padding:13px 20px; border-radius:12px; font-size:14px; font-weight:600; z-index:5000; opacity:0; transition:opacity .25s; pointer-events:none; max-width:90vw; text-align:center; box-shadow:0 8px 30px rgba(0,0,0,.4); }
   #toast.show{ opacity:1; }
 </style>
+<script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
 <div id="netBanner"></div>
@@ -2315,7 +2316,7 @@ function _fmRenderJob(stops,idx){
     '<div class="fm-card" style="'+(done?'opacity:.5;filter:grayscale(.6);':'')+'"><div class="fm-card-stopno">'+(idx+1)+'</div><div class="fm-card-name">'+esc(bk.name||'Customer')+'</div>'+
     '<div class="fm-card-addr">📍 '+esc(bk.address||'—')+(bk.zip?', '+esc(bk.zip):'')+'</div>'+(_isQuoteJob(bk)&&!done&&!skipped?'<div style="margin:10px 0;padding:13px 14px;border-radius:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;"><div style="font-size:16px;font-weight:900;letter-spacing:.02em;">\ud83d\udccb QUOTE VISIT \u2014 DO NOT MOW</div><div style="font-size:12.5px;font-weight:700;opacity:.92;margin-top:3px;">No equipment. Walk it with the customer, then tap \u201cBuild Estimate\u201d and Book / Email / Declined.</div></div>':'')+'<div class="fm-pills">'+pills+'</div>'+noteHtml+
     '<div class="fm-card-actions">'+_navBtn+
-    '<div class="fm-secondary-row">'+phoneRow+(_isQuoteJob(bk)&&isDone(bk)&&_qjBookedStore[_stopKey(bk)]?'<button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#fdba74;color:#9a3412;" onclick="fmQuoteCloser(window._fmCurBk)">✏️ Edit booked plan</button>':'')+(_fmIsBoss()?'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmEditNotes()">✏️ Notes</button><button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmRemainingMap()">🗺 Remaining</button>':'')+'</div></div></div>'+
+    '<div class="fm-secondary-row">'+phoneRow+'<button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#60a5fa;color:#1d4ed8;" onclick="fmCardOpen(window._fmCurBk)">💳 Card on file</button>'+(_isQuoteJob(bk)&&isDone(bk)&&_qjBookedStore[_stopKey(bk)]?'<button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#fdba74;color:#9a3412;" onclick="fmQuoteCloser(window._fmCurBk)">✏️ Edit booked plan</button>':'')+(_fmIsBoss()?'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmEditNotes()">✏️ Notes</button><button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmRemainingMap()">🗺 Remaining</button>':'')+'</div></div></div>'+
     '<div class="fm-jobnav"><button onclick="fmPrevStop()" '+(idx===0?'disabled':'')+'>‹ Prev</button>'
     +'<button onclick="fmRerouteFromHere()" title="Re-optimize remaining stops from where you are now">📍 Re-route</button>'
     +(_fmIsOwner()?'<button onclick="fmLockStop()" title="Pin this stop to an exact position — the optimizer routes around it">'+((_stopLocks&&_stopLocks[_stopKey(bk)])?('🔒 #'+_stopLocks[_stopKey(bk)]):'🔓 Lock')+'</button>':'')
@@ -2819,6 +2820,60 @@ function _qjLogCommission(base,firstPrice,bk,date){
 }
 
 function _qjBookedSave(){ try{ localStorage.setItem('evg_qj_booked',JSON.stringify(_qjBookedStore)); }catch(e){} }
+/* 💳 CARD ON FILE, collected at the door. Uses the SAME staff-authed backend actions as HQ's Card
+   Desk (hq_setup_card → hq_save_card), so this needs no backend redeploy.
+   PCI: the card number goes from the customer's fingers straight to Stripe via Stripe.js — it never
+   touches this page's JS, our backend, or the sheet. We only ever store Stripe's payment-method
+   token, which is exactly what autopay already charges. Never add a plain card-number input. */
+const FM_STRIPE_PK='pk_live_51TLrat4J18msjfgfYqm9zvDa2pkr5ZPv6s10bl5UwMIYnAqpJbXEU14YXFlS6sEA3H0VgsLPTxHuPWD6YutUy1J000mzhTGL1N';
+let _fmStripe=null,_fmCardEl=null,_fmCardBk=null;
+function fmCardOpen(bk){
+  bk=bk||window._fmCurBk; if(!bk){ showToast('Open a stop first'); return; }
+  const em=String(bk.email||'').trim();
+  if(!em||em.indexOf('@')<1){ showToast('No email on this customer — the office needs to add one first',6000); return; }
+  _fmCardBk=bk;
+  const old=document.getElementById('fmCardOv'); if(old) old.remove();
+  const ov=document.createElement('div'); ov.id='fmCardOv';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:99999;display:flex;align-items:flex-end;justify-content:center;';
+  ov.innerHTML='<div style="background:#fff;width:100%;max-width:540px;border-radius:18px 18px 0 0;padding:18px 16px 24px;max-height:94vh;overflow:auto;">'
+    +'<div style="font-size:17.5px;font-weight:800;color:#0f172a;">💳 Save card — '+esc(bk.name||'Customer')+'</div>'
+    +'<div style="font-size:12.5px;color:#64748b;margin:4px 0 14px;">Turns on autopay so future visits charge automatically. Nothing is charged right now.</div>'
+    +'<div id="fmCardEl" style="border:1.5px solid #cbd5e1;border-radius:12px;padding:14px;"></div>'
+    +'<label style="display:flex;gap:10px;align-items:flex-start;margin:14px 2px;font-size:12.5px;color:#334155;cursor:pointer;line-height:1.45;"><input type="checkbox" id="fmCardConsent" style="width:19px;height:19px;flex-shrink:0;margin-top:1px;"><span>Customer agrees to keep this card on file and be charged automatically for future services.</span></label>'
+    +'<div id="fmCardMsg" style="font-size:12.5px;color:#dc2626;margin:2px;min-height:17px;"></div>'
+    +'<button id="fmCardSaveBtn" onclick="fmCardSave()" style="width:100%;padding:16px;border:none;border-radius:13px;background:#16a34a;color:#fff;font-size:15.5px;font-weight:800;font-family:inherit;cursor:pointer;">Save card &amp; turn on autopay</button>'
+    +'<button onclick="var o=document.getElementById(\'fmCardOv\');if(o)o.remove();" style="width:100%;padding:13px;margin-top:9px;border:1px solid #cbd5e1;border-radius:13px;background:#fff;color:#334155;font-weight:700;font-family:inherit;cursor:pointer;">Cancel</button>'
+    +'</div>';
+  document.body.appendChild(ov);
+  try{
+    if(typeof Stripe!=='function') throw new Error('Stripe.js not loaded — check the connection');
+    if(!_fmStripe) _fmStripe=Stripe(FM_STRIPE_PK);
+    _fmCardEl=_fmStripe.elements().create('card',{hidePostalCode:false});
+    _fmCardEl.mount('#fmCardEl');
+  }catch(e){ const m=document.getElementById('fmCardMsg'); if(m) m.textContent='⚠ '+e.message; }
+}
+async function fmCardSave(){
+  const bk=_fmCardBk; if(!bk) return;
+  const msg=document.getElementById('fmCardMsg'), btn=document.getElementById('fmCardSaveBtn');
+  if(!document.getElementById('fmCardConsent').checked){ msg.textContent='Tick the consent box with the customer present.'; return; }
+  msg.style.color='#dc2626'; msg.textContent=''; btn.disabled=true; btn.textContent='Saving…';
+  const em=String(bk.email||'').trim().toLowerCase();
+  try{
+    const si=await fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'hq_setup_card',custEmail:em,adminToken:adminToken})).then(function(r){ return r.json(); });
+    if(!si||!si.success||!si.clientSecret) throw new Error((si&&si.error)||'Could not start card setup');
+    const res=await _fmStripe.confirmCardSetup(si.clientSecret,{ payment_method:{ card:_fmCardEl, billing_details:{ name:bk.name||'', email:em } } });
+    if(res.error) throw new Error(res.error.message);
+    const pmId=res.setupIntent.payment_method;
+    const sv=await fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'hq_save_card',custEmail:em,paymentMethodId:pmId,enableAutopay:'true',adminToken:adminToken})).then(function(r){ return r.json(); });
+    if(!sv||!sv.success) throw new Error((sv&&sv.error)||'Card saved at Stripe but not linked — tell the office');
+    const o=document.getElementById('fmCardOv'); if(o) o.remove();
+    showToast('💳 Card saved — autopay is ON for '+(bk.name||'them'),7000);
+    try{ bk.hasCard=true; bk.portalAutopay=true; localStorage.setItem('evg_field_bookings',JSON.stringify(allBookings)); _fmRender(); }catch(e){}
+  }catch(e){
+    msg.textContent='⚠ '+(e&&e.message?e.message:'Could not save the card');
+    btn.disabled=false; btn.textContent='Save card & turn on autopay';
+  }
+}
 function fmQuoteCloser(bk){
   _qjBk=bk;
   if(!document.getElementById('qjOverlay')){
