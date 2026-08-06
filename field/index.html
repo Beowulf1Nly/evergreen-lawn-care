@@ -13,7 +13,7 @@
 <script>
 /* APP_VER:2026-07-16.71 */
 (function(){
-  var V='2026-07-31.75'; window.__APP_VER=V;
+  var V='2026-07-31.76'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -2316,7 +2316,7 @@ function _fmRenderJob(stops,idx){
     '<div class="fm-card" style="'+(done?'opacity:.5;filter:grayscale(.6);':'')+'"><div class="fm-card-stopno">'+(idx+1)+'</div><div class="fm-card-name">'+esc(bk.name||'Customer')+'</div>'+
     '<div class="fm-card-addr">📍 '+esc(bk.address||'—')+(bk.zip?', '+esc(bk.zip):'')+'</div>'+(_isQuoteJob(bk)&&!done&&!skipped?'<div style="margin:10px 0;padding:13px 14px;border-radius:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;"><div style="font-size:16px;font-weight:900;letter-spacing:.02em;">\ud83d\udccb QUOTE VISIT \u2014 DO NOT MOW</div><div style="font-size:12.5px;font-weight:700;opacity:.92;margin-top:3px;">No equipment. Walk it with the customer, then tap \u201cBuild Estimate\u201d and Book / Email / Declined.</div></div>':'')+'<div class="fm-pills">'+pills+'</div>'+noteHtml+
     '<div class="fm-card-actions">'+_navBtn+
-    '<div class="fm-secondary-row">'+phoneRow+'<button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#60a5fa;color:#1d4ed8;" onclick="fmCardOpen(window._fmCurBk)">💳 Card on file</button>'+(_isQuoteJob(bk)&&isDone(bk)&&_qjBookedStore[_stopKey(bk)]?'<button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#fdba74;color:#9a3412;" onclick="fmQuoteCloser(window._fmCurBk)">✏️ Edit booked plan</button>':'')+(_fmIsBoss()?'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmEditNotes()">✏️ Notes</button><button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmRemainingMap()">🗺 Remaining</button>':'')+'</div></div></div>'+
+    '<div class="fm-secondary-row">'+phoneRow+'<button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#635bff;color:#4f46e5;" onclick="fmTapToPay(window._fmCurBk)">📲 Tap to Pay</button><button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#60a5fa;color:#1d4ed8;" onclick="fmCardOpen(window._fmCurBk)">💳 Card on file</button>'+(_isQuoteJob(bk)&&isDone(bk)&&_qjBookedStore[_stopKey(bk)]?'<button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#fdba74;color:#9a3412;" onclick="fmQuoteCloser(window._fmCurBk)">✏️ Edit booked plan</button>':'')+(_fmIsBoss()?'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmEditNotes()">✏️ Notes</button><button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmRemainingMap()">🗺 Remaining</button>':'')+'</div></div></div>'+
     '<div class="fm-jobnav"><button onclick="fmPrevStop()" '+(idx===0?'disabled':'')+'>‹ Prev</button>'
     +'<button onclick="fmRerouteFromHere()" title="Re-optimize remaining stops from where you are now">📍 Re-route</button>'
     +(_fmIsOwner()?'<button onclick="fmLockStop()" title="Pin this stop to an exact position — the optimizer routes around it">'+((_stopLocks&&_stopLocks[_stopKey(bk)])?('🔒 #'+_stopLocks[_stopKey(bk)]):'🔓 Lock')+'</button>':'')
@@ -2820,6 +2820,29 @@ function _qjLogCommission(base,firstPrice,bk,date){
 }
 
 function _qjBookedSave(){ try{ localStorage.setItem('evg_qj_booked',JSON.stringify(_qjBookedStore)); }catch(e){} }
+/* 📲 TAP TO PAY hand-off. Stripe publishes NO documented deep link that prefills the Dashboard
+   app's Tap to Pay screen with an amount/customer, so we do the honest next best thing: put the
+   exact amount on the clipboard, show it big, and open the app — one paste, no typing the figure
+   from memory. (Real prefill + auto-linking to the customer needs a native app using the Stripe
+   Terminal SDK; a web page cannot reach the NFC reader at all.) */
+function fmTapToPay(bk){
+  bk=bk||window._fmCurBk; if(!bk){ showToast('Open a stop first'); return; }
+  let amt=0; try{ amt=_fmAmt(bk)||0; }catch(e){}
+  const amtStr=amt>0?amt.toFixed(2):'';
+  try{ if(amtStr&&navigator.clipboard) navigator.clipboard.writeText(amtStr).catch(function(){}); }catch(e){}
+  const old=document.getElementById('fmTapOv'); if(old) old.remove();
+  const ov=document.createElement('div'); ov.id='fmTapOv';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:99999;display:flex;align-items:flex-end;justify-content:center;';
+  ov.innerHTML='<div style="background:#fff;width:100%;max-width:540px;border-radius:18px 18px 0 0;padding:20px 16px 24px;">'
+    +'<div style="font-size:17.5px;font-weight:800;color:#0f172a;">📲 Tap to Pay — '+esc(bk.name||'Customer')+'</div>'
+    +(amtStr?('<div style="text-align:center;margin:16px 0 6px;"><div style="font-size:40px;font-weight:900;color:#16a34a;letter-spacing:-1px;">$'+esc(amtStr)+'</div><div style="font-size:12px;color:#16a34a;font-weight:700;">copied — paste it in Stripe</div></div>')
+      :'<div style="margin:14px 0;font-size:13px;color:#b45309;">No price on this job — type the amount in Stripe.</div>')
+    +'<div style="font-size:12.5px;color:#64748b;line-height:1.55;margin-bottom:14px;">Opens the Stripe app. Choose <b>Tap to Pay</b>, paste the amount, tap their card or phone.<br>To also keep the card for autopay, use <b>💳 Card on file</b> instead — Stripe\'s app can\'t save it to this customer.</div>'
+    +'<button onclick="try{window.location.href=\'stripe://\';}catch(e){};setTimeout(function(){window.open(\'https://dashboard.stripe.com/payments\',\'_blank\');},1200);" style="width:100%;padding:16px;border:none;border-radius:13px;background:#635bff;color:#fff;font-size:15.5px;font-weight:800;font-family:inherit;cursor:pointer;">Open Stripe app →</button>'
+    +'<button onclick="var o=document.getElementById(\'fmTapOv\');if(o)o.remove();" style="width:100%;padding:13px;margin-top:9px;border:1px solid #cbd5e1;border-radius:13px;background:#fff;color:#334155;font-weight:700;font-family:inherit;cursor:pointer;">Close</button>'
+    +'</div>';
+  document.body.appendChild(ov);
+}
 /* 💳 CARD ON FILE, collected at the door. Uses the SAME staff-authed backend actions as HQ's Card
    Desk (hq_setup_card → hq_save_card), so this needs no backend redeploy.
    PCI: the card number goes from the customer's fingers straight to Stripe via Stripe.js — it never
