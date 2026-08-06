@@ -13,7 +13,7 @@
 <script>
 /* APP_VER:2026-07-16.71 */
 (function(){
-  var V='2026-07-30.73'; window.__APP_VER=V;
+  var V='2026-07-31.74'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -705,6 +705,16 @@ function _uuid(){ try{ if(crypto&&crypto.randomUUID) return crypto.randomUUID();
 /* ───────── Crew assignment filter ───────── */
 function _assignedCrews(){ const set=new Set(String(adminCrews||'').toUpperCase().split(/[^A-Z0-9]+/).map(s=>s.trim()).filter(Boolean)); return set; }
 function _crewOk(bk){ const set=_assignedCrews(); if(set.size===0) return true; const c=String(bk.crew||'').toUpperCase().trim(); if(!c) return true; /* unassigned visible to all */ return set.has(c); }
+/* The crew a job created ON THE TRUCK should belong to: the explicit crew picker if set, else this
+   person's assigned crew. Without this, every job added from /field was written with NO crew and
+   landed in Unassigned — it never showed on the crew's own board. */
+function _fmMyCrew(){
+  try{
+    if(_crewSel&&_crewSel!=='ALL'&&_crewSel!=='UNASSIGNED') return String(_crewSel).toUpperCase().trim();
+    const a=Array.from(_assignedCrews()).sort();
+    return a.length===1?a[0]:'';   // ambiguous when they're on several crews — leave it for HQ
+  }catch(e){ return ''; }
+}
 
 /* ───────── Session ───────── */
 function loadSavedSession(){ try{ const raw=localStorage.getItem(SESSION_KEY); if(!raw) return null; const s=JSON.parse(raw); const exp=s.expiry||s.exp; if(!s.token||!exp) return null; if(new Date()>new Date(exp)){ localStorage.removeItem(SESSION_KEY); return null; } return {...s,expiry:exp}; }catch(e){ return null; } }
@@ -725,7 +735,7 @@ async function verifyCode(){
   const code=document.getElementById('codeInput').value.trim(); if(code.length!==6){ showLoginError('Enter the full 6-digit code.'); return; }
   const btn=document.getElementById('verifyBtn'); btn.disabled=true; btn.textContent='Checking…'; showLoginError('');
   try{ const res=await fetch(SCRIPT_URL+'?action=admin_verify_code&email='+encodeURIComponent(adminEmail)+'&code='+encodeURIComponent(code)); const data=await res.json();
-    if(data.success){ adminToken=data.token; adminName=data.name; adminRole=data.role||'employee'; adminCrews=data.crews||''; saveSession(adminToken,adminName,adminEmail,adminRole,adminRole==='owner'?30:7); showApp(); loadData(); }
+    if(data.success){ adminToken=data.token; adminName=data.name; adminRole=data.role||'employee'; adminCrews=data.crews||''; saveSession(adminToken,adminName,adminEmail,adminRole,adminRole==='owner'?30:30); showApp(); loadData(); }
     else { showLoginError(data.error||'Invalid code. Try again.'); document.getElementById('codeInput').value=''; document.getElementById('codeInput').focus(); }
   }catch(e){ showLoginError('Network error — try again.'); }
   finally{ btn.disabled=false; btn.textContent='Sign In →'; }
@@ -851,7 +861,7 @@ async function _loadDataInner(refreshToast){
       if(typeof bRes.role==='string' && bRes.role) adminRole=String(bRes.role).toLowerCase().trim();
       if(typeof bRes.crews==='string') adminCrews=bRes.crews;
       if(prevRole&&adminRole!==prevRole) showToast('👤 Role updated: '+adminRole.replace(/_/g,' ')+' — view adjusted');
-      saveSession(adminToken,adminName,adminEmail,adminRole, adminRole==='owner'?30:7);
+      saveSession(adminToken,adminName,adminEmail,adminRole, adminRole==='owner'?30:30);
     }
     if(cRes&&cRes.success&&Array.isArray(cRes.customers)){ allCustomers=cRes.customers; _custFetchedAt=Date.now(); try{ localStorage.setItem('evg_field_customers', JSON.stringify(allCustomers)); }catch(e){} }
     if(rRes&&rRes.success===true) _fmTakeSavedOrder(_extractRouteKeys(rRes));   // ignore transient fetch failures — never wipe a good route
@@ -2757,7 +2767,7 @@ function ncSubmit(){
   if(!isQuote&&pay==='card'&&!email){ showToast('Card customers need an email (or switch to Cash)'); return; }
   if(!isQuote&&!price){ showToast('Set a price — or pick Quote Visit'); return; }
   if(!_tapConfirm('ncSubmitBtn','Tap again — add '+name)) return;
-  _fmEnqueue({ kind:'newcust', idemKey:'nc:'+_uuid(), method:'GET', params:{ action:'manual_schedule', name:name, email:email, phone:phone, address:addr, zip:zip, frequency:freq, price:price, serviceDate:date, notes:(notes?notes+' — ':'')+'Added on route by '+(adminName||'crew'), payMethod:pay||'card', adminToken:adminToken } });
+  _fmEnqueue({ kind:'newcust', idemKey:'nc:'+_uuid(), method:'GET', params:{ action:'manual_schedule', name:name, email:email, phone:phone, address:addr, zip:zip, frequency:freq, price:price, serviceDate:date, notes:(notes?notes+' — ':'')+'Added on route by '+(adminName||'crew'), payMethod:pay||'card', crew:_fmMyCrew(), adminToken:adminToken } });
   if(!isQuote&&parseFloat(price)>0){
     // crew sourced AND closed this one on the spot → 40% of the first job
     const _ncNames=[adminName||'Crew'].concat((_helpers||[]).map(function(h){ return (typeof h==='string')?h:((h&&h.name)||''); })).filter(Boolean);
@@ -2902,7 +2912,7 @@ async function qjOutcome(kind){
       _fmEnqueue({ kind:'quotenote', idemKey:'qn:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), note:_noteWon, markedBy:adminName||'Crew', adminToken } });
       _fmEnqueue({ kind:'quotedone', idemKey:'qd:'+base, method:'GET', params:{ action:'mark_done', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), amount:'0', markedBy:adminName||'Crew', adminToken } });
     })();
-    _fmEnqueue({ kind:'quotebook', idemKey:'qb:'+base, method:'GET', params:{ action:'manual_schedule', name:bk.name||'', email:bk.email||'', phone:String(bk.phone||''), address:bk.address||'', zip:String(bk.zip||''), frequency:_qjFreqLabel(), price:String(promo?price:firstPrice), firstMowPromo:(promo?'true':''), firstMowPrice:(promo?String(promoPrice):''), serviceDate:date, notes:'Booked at quote visit — '+desc+ogNote+((og&&ogFee>0&&_qj.freq!=='onetime')?(' · First mow: $'+firstPrice+'. Following: $'+price):'')+(_qjNote()?(' | 📝 '+_qjNote()):'')+' — by '+(adminName||'crew'), payMethod:'card', adminToken } });
+    _fmEnqueue({ kind:'quotebook', idemKey:'qb:'+base, method:'GET', params:{ action:'manual_schedule', name:bk.name||'', email:bk.email||'', phone:String(bk.phone||''), address:bk.address||'', zip:String(bk.zip||''), frequency:_qjFreqLabel(), price:String(promo?price:firstPrice), firstMowPromo:(promo?'true':''), firstMowPrice:(promo?String(promoPrice):''), serviceDate:date, notes:'Booked at quote visit — '+desc+ogNote+((og&&ogFee>0&&_qj.freq!=='onetime')?(' · First mow: $'+firstPrice+'. Following: $'+price):'')+(_qjNote()?(' | 📝 '+_qjNote()):'')+' — by '+(adminName||'crew'), payMethod:'card', crew:_fmMyCrew(), adminToken } });
     _qjLogCommission(base,firstPrice,bk,date);
     try{ _qjBookedStore[base]={ date:date, email:String(bk.email||'').toLowerCase().trim(), name:bk.name||'', freq:_qjFreqLabel(), price:String(firstPrice), qj:JSON.parse(JSON.stringify(_qj)), override:String((document.getElementById('qjPriceOverride')||{}).value||'') }; _qjBookedSave(); }catch(e){}
     if(date===todayISOStr()){
