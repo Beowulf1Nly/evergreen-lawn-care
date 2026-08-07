@@ -2548,6 +2548,19 @@ const ZIP_ZONE={
 function _zoneOf(b){ return ZIP_ZONE[String(b.zip||'').trim().slice(0,5)]||null; }
 /* ── zone service days — a job sitting on a day its zone doesn't run gets flagged RED on Dispatch ── */
 const _ZD_NAMES=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+/* Which zones are SUPPOSED to run on this weekday, per the zone→day rules. Shown on the day
+   headers so the plan is visible on the board, not just enforced by red flags. */
+function _zonesForDow(zi,dow){
+  try{
+    const r=_crewRulesCache[zi||0]; const days=(r&&r.days)||{}; const out=[];
+    Object.keys(days).forEach(function(z){ const d=days[z]; if(Array.isArray(d)&&d.length&&d.length<7&&d.indexOf(dow)>=0) out.push(z); });
+    return out.sort();
+  }catch(e){ return []; }
+}
+function _zoneTag(zi,dow){
+  const z=_zonesForDow(zi,dow); if(!z.length) return '';
+  return '<span style="display:block;font-size:9px;font-weight:800;color:#38bdf8;letter-spacing:.03em;" title="'+esc(z.map(function(x){ return x+' = '+(ZONE_LABELS[x]||x); }).join(' · '))+'">'+esc(z.join(' '))+'</span>';
+}
 function _zoneDayMsg(b){
   try{
     if(isDone(b)||_isArch(b)) return '';
@@ -3147,7 +3160,9 @@ function renderDispatch(){
     document.getElementById('dispTitle').textContent=MO[start.getMonth()].slice(0,3)+' '+start.getDate()+' – '+MO[end.getMonth()].slice(0,3)+' '+end.getDate()+', '+end.getFullYear();
   } else {
     days=[new Date(_dispAnchor)];
-    document.getElementById('dispTitle').textContent=DOW[days[0].getDay()]+', '+MO[days[0].getMonth()].slice(0,3)+' '+days[0].getDate()+' '+days[0].getFullYear();
+    (function(){ const _z=_zonesForDow(0,days[0].getDay());
+      document.getElementById('dispTitle').innerHTML=esc(DOW[days[0].getDay()]+', '+MO[days[0].getMonth()].slice(0,3)+' '+days[0].getDate()+' '+days[0].getFullYear())
+        +(_z.length?(' <span style="font-size:11.5px;font-weight:800;color:#38bdf8;" title="'+esc(_z.map(function(x){ return x+' = '+(ZONE_LABELS[x]||x); }).join(' · '))+'">· '+esc(_z.join(' '))+'</span>'):''); })();
   }
   rangeStart=_iso(days[0]); rangeEnd=_iso(days[days.length-1]);
   const biz=_bizLoad();
@@ -3166,7 +3181,7 @@ function renderDispatch(){
   });
   // headers
   if(_dispView==='week'){
-    h+='<div class="st-dowhead"><div></div>'+days.map(function(d){ const iso=_iso(d); return '<div class="'+(iso===todayIso?'today':'')+'" style="cursor:pointer;" onclick="dispGotoDay(\''+iso+'\')">'+DOW[d.getDay()]+' '+(d.getMonth()+1)+'/'+d.getDate()+'</div>'; }).join('')+'</div>';
+    h+='<div class="st-dowhead"><div></div>'+days.map(function(d){ const iso=_iso(d); return '<div class="'+(iso===todayIso?'today':'')+'" style="cursor:pointer;" onclick="dispGotoDay(\''+iso+'\')">'+DOW[d.getDay()]+' '+(d.getMonth()+1)+'/'+d.getDate()+_zoneTag(0,d.getDay())+'</div>'; }).join('')+'</div>';
   } else {
     // size the day window to the actual day: earliest start/clock-in → latest end/now
     (function(){
