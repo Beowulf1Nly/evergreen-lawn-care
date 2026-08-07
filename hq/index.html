@@ -2557,9 +2557,10 @@ function _zonesForDow(zi,dow){
     return out.sort();
   }catch(e){ return []; }
 }
+function _zoneWords(z){ return z.map(function(x){ return 'Zone '+String(x).replace(/^Z/,''); }).join(' + '); }
 function _zoneTag(zi,dow){
   const z=_zonesForDow(zi,dow); if(!z.length) return '';
-  return '<span style="display:block;font-size:9px;font-weight:800;color:#38bdf8;letter-spacing:.03em;" title="'+esc(z.map(function(x){ return x+' = '+(ZONE_LABELS[x]||x); }).join(' · '))+'">'+esc(z.join(' '))+'</span>';
+  return '<span style="display:block;font-size:9px;font-weight:800;color:#38bdf8;letter-spacing:.03em;" title="'+esc(z.map(function(x){ return x+' = '+(ZONE_LABELS[x]||x); }).join(' · '))+'">'+esc(_zoneWords(z))+'</span>';
 }
 function _zoneDayMsg(b){
   try{
@@ -3162,7 +3163,7 @@ function renderDispatch(){
     days=[new Date(_dispAnchor)];
     (function(){ const _z=_zonesForDow(0,days[0].getDay());
       document.getElementById('dispTitle').innerHTML=esc(DOW[days[0].getDay()]+', '+MO[days[0].getMonth()].slice(0,3)+' '+days[0].getDate()+' '+days[0].getFullYear())
-        +(_z.length?(' <span style="font-size:11.5px;font-weight:800;color:#38bdf8;" title="'+esc(_z.map(function(x){ return x+' = '+(ZONE_LABELS[x]||x); }).join(' · '))+'">· '+esc(_z.join(' '))+'</span>'):''); })();
+        +(_z.length?(' <span style="font-size:11.5px;font-weight:800;color:#38bdf8;" title="'+esc(_z.map(function(x){ return x+' = '+(ZONE_LABELS[x]||x); }).join(' · '))+'">· '+esc(_zoneWords(_z))+'</span>'):''); })();
   }
   rangeStart=_iso(days[0]); rangeEnd=_iso(days[days.length-1]);
   const biz=_bizLoad();
@@ -3246,7 +3247,10 @@ function renderDispatch(){
       if(c==='un'&&!rowCount&&_dispCrew==='all'&&biz.length>1&&zi>0){} // keep unassigned row everywhere as a drop target
       const col=(c==='un')?'#f87171':crewColor(c);
       const _rn=(c==='un')?'':_crewRosterNames(zi,c);
-      const lab='<div class="st-rowlab" '+(_rn?'title="'+esc(_rn)+'"':'')+'><span class="cdot" style="background:'+col+';color:'+col+'"></span><span style="min-width:0;overflow:hidden;"><span style="display:block;">'+(c==='un'?'⬜ Unassigned':'Crew '+esc(c))+'</span>'+(_rn?'<span style="display:block;font-size:9px;font-weight:600;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(_rn)+'</span>':'')+'</span><span class="cnt">'+rowCount+'</span></div>';
+      // Day view: state the zone this day is FOR, right on the lane, so "is this job even supposed
+      // to be here?" is answerable without opening anything.
+      const _zLab=(_dispView==='day')?_zoneTag(zi,days[0].getDay()):'';
+      const lab='<div class="st-rowlab" '+(_rn?'title="'+esc(_rn)+'"':'')+'><span class="cdot" style="background:'+col+';color:'+col+'"></span><span style="min-width:0;overflow:hidden;"><span style="display:block;">'+(c==='un'?'⬜ Unassigned':'Crew '+esc(c))+'</span>'+_zLab+(_rn?'<span style="display:block;font-size:9px;font-weight:600;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(_rn)+'</span>':'')+'</span><span class="cnt">'+rowCount+'</span></div>';
       if(_dispView==='week'){
         h+='<div class="st-grid">'+lab+days.map(function(d){
           const iso=_iso(d); const cell=(rowJobsAll[iso]||[]).slice().sort(_jobSort);
