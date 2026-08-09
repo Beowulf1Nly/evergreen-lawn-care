@@ -2636,6 +2636,20 @@ function _zoneDayMsg(b){
     return zone+' '+(ZONE_LABELS[zone]||'')+' runs '+days.map(function(d){ return _ZD_NAMES[d]; }).join('/')+' — this job sits on a '+_ZD_NAMES[dow];
   }catch(e){ return ''; }
 }
+/* Where an off-zone job BELONGS — "Z6→Mon". Knowing the zone isn't enough when you're trying to
+   clear reds; you want the destination day without opening anything. '' when it's already right. */
+function _zoneMoveTag(b){
+  try{
+    if(isDone(b)||_isArch(b)) return '';
+    const zone=_zoneOf(b); if(!zone) return '';
+    const days=_zoneDaysFor(b._srcBiz||0)[zone];
+    if(!Array.isArray(days)||!days.length||days.length>=7) return '';
+    const iso=String(dateOf(b)||''); const p=iso.split('-'); if(p.length<3) return '';
+    const dow=new Date(+p[0],+p[1]-1,+p[2]).getDay();
+    if(days.indexOf(dow)>=0) return '';
+    return zone+'→'+days.map(function(d){ return _ZDC[d]; }).join('/');
+  }catch(e){ return ''; }
+}
 let _zdAt=0;
 function _zdEnsure(){   // zone-day rules live in each business's schedule config — pull them for the board (re-pull every 10 min)
   if(Date.now()-_zdAt<600000) return; _zdAt=Date.now();
@@ -3577,7 +3591,7 @@ function _dispPill(b){
   // Finished jobs stay put; open ones can be dragged to another crew lane / day cell.
   const drag=done?'':' draggable="true" ondragstart="dispDragStart(event,'+_ref+')" ondragend="dispDragEnd(event)"';
   return '<div class="disp-pill'+(done?' done':'')+(arch?' arch':'')+(zd?' zday':'')+'" style="--pc:'+_dispPC(b)+'"'+drag+' '+click
-    +'>'+(zd?'⚠ ':'')+(ow?'💸 ':'')+(done?'✓ ':'')+(_crewLockFor(b)?'🔒':'')+_jobIcon(b)+' '+esc(b.name||'?')+((jn||cn)&&!done?' 📝':'')+' <span class="pp">'+(zone?zone+' · ':'')+(b.jobTime?esc(b.jobTime)+' · ':'')+esc(String(b.price||''))
+    +'>'+(zd?'⚠ ':'')+(ow?'💸 ':'')+(done?'✓ ':'')+(_crewLockFor(b)?'🔒':'')+_jobIcon(b)+' '+esc(b.name||'?')+((jn||cn)&&!done?' 📝':'')+' <span class="pp">'+(zone?((function(){ const _mv=_zoneMoveTag(b); return _mv?('<b style="color:#f87171;">'+esc(_mv)+'</b>'):esc(zone); })()+' · '):'')+(b.jobTime?esc(b.jobTime)+' · ':'')+esc(String(b.price||''))
     +(function(){ const ls=_lastSvcInfo(b); return ls?(' · <span style="color:'+(ls.off?'#f87171':'inherit')+';font-weight:'+(ls.off?'800':'inherit')+';">↩ '+ls.nice+' ('+ls.gap+'d'+(ls.off?' ⚠ plan says '+ls.expct+'d':'')+')</span>'):''; })()
     +'</span></div>';
 }
@@ -4056,7 +4070,7 @@ function _stBlockEv(b,stMin,enMin,top,proj){
   return '<div class="st-block'+(done?' done':'')+(arch?' arch':'')+(proj?' proj':'')+'" style="--pc:'+_dispPC(b)+';left:'+left+'%;width:'+width+'%;top:'+top+'px;'+(left<92?'min-width:52px;':'')+(_bg?'border:2px solid #f87171;box-shadow:0 0 8px rgba(248,113,113,.5);':'')+(zd?'border:2px solid #f87171;box-shadow:0 0 9px rgba(248,113,113,.6);':'')+'" '
     +(function(){ if(done) return ''; const _r=_jr(b); return ' draggable="true" ondragstart="dispDragStart(event,'+_r+')" ondragend="dispDragEnd(event)"'; })()
     +'onclick="openJobRef('+_jr(b)+')" title="'+tip+(arch?' — tap for notes & photos':'')+'"'
-    +'>'+(zd?'⚠ ':'')+(ow?'💸 ':'')+(done?'✓ ':'')+(_crewLockFor(b)?'🔒':'')+_jobIcon(b)+' '+esc(b.name||'?')+'<span class="bt2">'+(zone?zone+' · ':'')+tRange+(b.price?' · '+esc(String(b.price)):'')+((jn||cn)&&!done?' · 📝':'')+'</span></div>';
+    +'>'+(zd?'⚠ ':'')+(ow?'💸 ':'')+(done?'✓ ':'')+(_crewLockFor(b)?'🔒':'')+_jobIcon(b)+' '+esc(b.name||'?')+'<span class="bt2">'+(zone?((function(){ const _mv=_zoneMoveTag(b); return _mv?('<b style="color:#f87171;">'+esc(_mv)+'</b>'):esc(zone); })()+' · '):'')+tRange+(b.price?' · '+esc(String(b.price)):'')+((jn||cn)&&!done?' · 📝':'')+'</span></div>';
 }
 
 /* ── drag & drop ── */
