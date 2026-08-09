@@ -2558,6 +2558,20 @@ function _zonesForDow(zi,dow){
   }catch(e){ return []; }
 }
 function _zoneWords(z){ return z.map(function(x){ return 'Zone '+String(x).replace(/^Z/,''); }).join(' + '); }
+/* Zones actually PRESENT on a date — so the board shows its zoning immediately, before any
+   zone→day rules exist. With rules set we show the planned zone (blue); without, the real one (grey). */
+function _zonesOnDay(list,iso){
+  const s={}; (list||[]).forEach(function(b){ if(dateOf(b)!==iso) return; const z=_zoneOf(b); if(z) s[z]=1; });
+  return Object.keys(s).sort();
+}
+function _zoneHead(zi,dow,list,iso){
+  const exp=_zonesForDow(zi,dow);
+  if(exp.length) return _zoneTag(zi,dow);                     // planned zone from the rules
+  const act=_zonesOnDay(list,iso);
+  if(!act.length) return '';
+  const more=act.length>2?(' +'+(act.length-2)):'';
+  return '<span style="display:block;font-size:9px;font-weight:700;color:var(--dim);" title="'+esc(act.map(function(x){ return x+' = '+(ZONE_LABELS[x]||x); }).join(' · '))+'">'+esc(_zoneWords(act.slice(0,2)))+more+'</span>';
+}
 function _zoneTag(zi,dow){
   const z=_zonesForDow(zi,dow); if(!z.length) return '';
   return '<span style="display:block;font-size:9px;font-weight:800;color:#38bdf8;letter-spacing:.03em;" title="'+esc(z.map(function(x){ return x+' = '+(ZONE_LABELS[x]||x); }).join(' · '))+'">'+esc(_zoneWords(z))+'</span>';
@@ -3161,7 +3175,7 @@ function renderDispatch(){
     document.getElementById('dispTitle').textContent=MO[start.getMonth()].slice(0,3)+' '+start.getDate()+' – '+MO[end.getMonth()].slice(0,3)+' '+end.getDate()+', '+end.getFullYear();
   } else {
     days=[new Date(_dispAnchor)];
-    (function(){ const _z=_zonesForDow(0,days[0].getDay());
+    (function(){ let _z=_zonesForDow(0,days[0].getDay()); if(!_z.length) _z=_zonesOnDay(_dispFilter(_dispJobs()),_iso(days[0]));
       document.getElementById('dispTitle').innerHTML=esc(DOW[days[0].getDay()]+', '+MO[days[0].getMonth()].slice(0,3)+' '+days[0].getDate()+' '+days[0].getFullYear())
         +(_z.length?(' <span style="font-size:11.5px;font-weight:800;color:#38bdf8;" title="'+esc(_z.map(function(x){ return x+' = '+(ZONE_LABELS[x]||x); }).join(' · '))+'">· '+esc(_zoneWords(_z))+'</span>'):''); })();
   }
@@ -3182,7 +3196,7 @@ function renderDispatch(){
   });
   // headers
   if(_dispView==='week'){
-    h+='<div class="st-dowhead"><div></div>'+days.map(function(d){ const iso=_iso(d); return '<div class="'+(iso===todayIso?'today':'')+'" style="cursor:pointer;" onclick="dispGotoDay(\''+iso+'\')">'+DOW[d.getDay()]+' '+(d.getMonth()+1)+'/'+d.getDate()+_zoneTag(0,d.getDay())+'</div>'; }).join('')+'</div>';
+    h+='<div class="st-dowhead"><div></div>'+days.map(function(d){ const iso=_iso(d); return '<div class="'+(iso===todayIso?'today':'')+'" style="cursor:pointer;" onclick="dispGotoDay(\''+iso+'\')">'+DOW[d.getDay()]+' '+(d.getMonth()+1)+'/'+d.getDate()+_zoneHead(0,d.getDay(),jobs,iso)+'</div>'; }).join('')+'</div>';
   } else {
     // size the day window to the actual day: earliest start/clock-in → latest end/now
     (function(){
@@ -3249,7 +3263,7 @@ function renderDispatch(){
       const _rn=(c==='un')?'':_crewRosterNames(zi,c);
       // Day view: state the zone this day is FOR, right on the lane, so "is this job even supposed
       // to be here?" is answerable without opening anything.
-      const _zLab=(_dispView==='day')?_zoneTag(zi,days[0].getDay()):'';
+      const _zLab=(_dispView==='day')?_zoneHead(zi,days[0].getDay(),bjobs,rangeStart):'';
       const lab='<div class="st-rowlab" '+(_rn?'title="'+esc(_rn)+'"':'')+'><span class="cdot" style="background:'+col+';color:'+col+'"></span><span style="min-width:0;overflow:hidden;"><span style="display:block;">'+(c==='un'?'⬜ Unassigned':'Crew '+esc(c))+'</span>'+_zLab+(_rn?'<span style="display:block;font-size:9px;font-weight:600;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(_rn)+'</span>':'')+'</span><span class="cnt">'+rowCount+'</span></div>';
       if(_dispView==='week'){
         h+='<div class="st-grid">'+lab+days.map(function(d){
