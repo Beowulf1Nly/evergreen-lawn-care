@@ -2565,12 +2565,9 @@ function _zonesOnDay(list,iso){
   return Object.keys(s).sort();
 }
 function _zoneHead(zi,dow,list,iso){
-  const exp=_zonesForDow(zi,dow);
-  if(exp.length) return _zoneTag(zi,dow);                     // planned zone from the rules
-  const act=_zonesOnDay(list,iso);
-  if(!act.length) return '';
-  const more=act.length>2?(' +'+(act.length-2)):'';
-  return '<span style="display:block;font-size:9px;font-weight:700;color:var(--dim);" title="'+esc(act.map(function(x){ return x+' = '+(ZONE_LABELS[x]||x); }).join(' · '))+'">'+esc(_zoneWords(act.slice(0,2)))+more+'</span>';
+  // ONLY the planned zone from the rules. Listing the zones actually present just reported the
+  // mess back ("Zone 1 + Zone 2 +4") — per-crew chips in each cell carry that far better.
+  return _zoneTag(zi,dow);
 }
 function _zoneTag(zi,dow){
   const z=_zonesForDow(zi,dow); if(!z.length) return '';
@@ -3269,7 +3266,11 @@ function renderDispatch(){
         h+='<div class="st-grid">'+lab+days.map(function(d){
           const iso=_iso(d); const cell=(rowJobsAll[iso]||[]).slice().sort(_jobSort);
           // drop target: dropping here sets BOTH the crew (this lane) and the day (this column)
-          return '<div class="st-cell'+(iso===todayIso?' today':'')+'" ondragover="dispOver(event,this)" ondragleave="this.classList.remove(\'dragover\')" ondrop="this.classList.remove(\'dragover\');dispDropCell(event,\''+c+'\',\''+iso+'\')">'
+          // Zone chip for THIS crew on THIS day — a day-level zone is meaningless when two crews
+          // are in different places. Green = one clean zone, amber = this crew is split across zones.
+          const _cz=(function(){ const s={}; cell.forEach(function(b){ const z=_zoneOf(b); if(z) s[z]=1; }); return Object.keys(s).sort(); })();
+          const _czTag=_cz.length?('<div style="font-size:8.5px;font-weight:800;letter-spacing:.02em;margin:0 0 3px;color:'+(_cz.length===1?'#4ade80':'#fbbf24')+';" title="'+esc(_cz.map(function(x){ return x+' = '+(ZONE_LABELS[x]||x); }).join(' · '))+'">'+esc(_cz.map(function(x){ return x.replace(/^Z/,'Z'); }).join(' '))+(_cz.length>1?(' · '+_cz.length+' zones'):'')+'</div>'):'';
+          return '<div class="st-cell'+(iso===todayIso?' today':'')+'" ondragover="dispOver(event,this)" ondragleave="this.classList.remove(\'dragover\')" ondrop="this.classList.remove(\'dragover\');dispDropCell(event,\''+c+'\',\''+iso+'\')">'+_czTag
             +cell.map(function(b){ return _dispPill(b); }).join('')
             +(((gIdx[zi]||{})[c]||{})[iso]||[]).map(_ghostPill).join('')+'</div>';
         }).join('')+'</div>';
