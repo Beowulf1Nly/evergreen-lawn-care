@@ -1367,6 +1367,8 @@ async function crOpen(){
       +'<div style="font-size:12px;opacity:.7;margin-bottom:12px;">New bookings get their crew stamped automatically from these rules (after you redeploy the backends), and ⚡ Auto-assign uses them for anything already unassigned. Leave a zone blank to keep it manual.</div>'
       +'<div id="crBizChips" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;"></div>'
       +'<div id="crBody"></div>'
+      +'<button onclick="crSuggestDays()" style="width:100%;margin-top:14px;padding:12px;border:1.5px solid #38bdf8;border-radius:12px;background:rgba(56,189,248,.12);color:#38bdf8;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;">🎯 Suggest days from my current schedule</button>'
+      +'<div style="font-size:11.5px;color:var(--dim);margin:6px 2px 0;line-height:1.5;">Fills each zone with the weekday(s) most of its visits already use — so turning this on doesn\'t move anybody. Whatever falls outside then shows red for you to fix by hand.</div>'
       +'<button onclick="crSave()" style="width:100%;margin-top:14px;padding:13px;border:none;border-radius:12px;background:#16a34a;color:#fff;font-weight:800;font-size:15px;cursor:pointer;font-family:inherit;">💾 Save rules</button></div>';
     document.body.appendChild(o);
   }
@@ -1399,6 +1401,38 @@ function crRender(){
     +'<span style="font-size:12px;opacity:.7;">Crew</span>'
     +'<input id="cr-default" maxlength="3" value="'+esc(String(r.default||''))+'" placeholder="—" style="width:52px;padding:9px;border-radius:9px;border:1.5px solid rgba(255,255,255,.25);background:transparent;color:inherit;font-weight:800;text-align:center;font-size:15px;text-transform:uppercase;font-family:inherit;">'
     +'</div>';
+}
+/* 🎯 Derive zone→day rules from where jobs ALREADY land, so turning this on doesn't upend anyone's
+   routine. For each zone we take the weekday(s) that already cover most of its visits — enough days
+   to hold ~80% of them (max 2). Everything outside that shows red, which is exactly the small pile
+   you'd want to hand-move. */
+function crSuggestDays(){
+  const zi=_crBiz||0, cnt={};
+  try{
+    _dispJobs().forEach(function(b){
+      if(!b||b.rowCancelled||_isArch(b)) return;
+      if((b._srcBiz||0)!==zi) return;
+      try{ if(_hqIsQuote(b)) return; }catch(e){}
+      const z=_zoneOf(b); if(!z) return;
+      const iso=String(dateOf(b)||''); const p=iso.split('-'); if(p.length<3) return;
+      const dow=new Date(+p[0],+p[1]-1,+p[2]).getDay();
+      if(dow===0||dow===6) return;                      // ignore stray weekend rows
+      (cnt[z]=cnt[z]||{})[dow]=((cnt[z]||{})[dow]||0)+1;
+    });
+  }catch(e){}
+  const zs=Object.keys(cnt); if(!zs.length){ toast('No zoned jobs on the board to learn from'); return; }
+  const next={}, lines=[];
+  zs.sort().forEach(function(z){
+    const days=Object.keys(cnt[z]).map(Number).sort(function(a,b){ return cnt[z][b]-cnt[z][a]; });
+    const tot=days.reduce(function(s,d){ return s+cnt[z][d]; },0);
+    const keep=[]; let acc=0;
+    for(const d of days){ keep.push(d); acc+=cnt[z][d]; if(acc/tot>=0.8||keep.length>=2) break; }
+    keep.sort(); next[z]=keep;
+    lines.push('  '+z+' ('+(ZONE_LABELS[z]||z)+') → '+keep.map(function(d){ return _ZDC[d]; }).join(' + ')+'   ['+acc+'/'+tot+' jobs already there]');
+  });
+  if(!confirm('🎯 Suggested zone days, learned from where your jobs already are:\n\n'+lines.join('\n')
+    +'\n\nThis keeps most visits exactly where they are — anything outside its zone day turns red so you can move it by hand.\n\nApply these? (You can still tweak each zone before saving.)')) return;
+  _crDaysState=next; crOpen(); toast('🎯 Suggested days filled in — review, then Save');
 }
 function crDayTog(zone,d){
   const a=_crDaysState[zone]=(_crDaysState[zone]||[]);
