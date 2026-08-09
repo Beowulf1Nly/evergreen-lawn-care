@@ -1345,7 +1345,20 @@ function _openArchSheet(b,be){
    Rules live in each business's schedule config (same store as home base), so
    the BACKEND can stamp crews onto brand-new bookings the second they come in,
    and HQ's ⚡ Auto-assign sweeps anything that slipped through. */
-const ZONE_LABELS={ Z1:'Crystal River', Z2:'Inverness', Z3:'Lecanto · Beverly Hills', Z4:'Citrus Springs', Z5:'Ocala · Marion County', Z6:'Dunnellon', Z7:'Homosassa', Z8:'Hernando · Floral City' };
+const ZONE_LABELS={ Z1:'Crystal River (retired)', Z2:'Inverness · Floral City', Z3:'Lecanto · Beverly Hills', Z4:'Citrus Springs', Z5:'Ocala · Marion County', Z6:'Dunnellon', Z7:'Homosassa', Z8:'Hernando' };
+/* 🎯 DEFAULT zone→weekday plan — applies until you save your own in 🤖 Crew rules.
+   Built to match where the work already sits, on a Mon–Thu week:
+     MON  Citrus Springs + Dunnellon      (north-west block)
+     TUE  Citrus Springs                  (the big cluster gets two days)
+     WED  Beverly Hills/Lecanto + Homosassa (central → coast sweep)
+     THU  Inverness/Floral City + Hernando  (east run)
+   Z1 Crystal River is retired and Z5 Ocala is ad-hoc — both intentionally have no day, so
+   nothing there is ever flagged. */
+const DEFAULT_ZONE_DAYS={ Z4:[1,2], Z6:[1], Z3:[3], Z7:[3], Z2:[4], Z8:[4] };
+function _zoneDaysFor(zi){
+  const r=_crewRulesCache[zi||0], d=(r&&r.days&&typeof r.days==='object')?r.days:null;
+  return (d&&Object.keys(d).length)?d:DEFAULT_ZONE_DAYS;   // your saved rules win once you save any
+}
 let _crewRulesCache={}, _crBiz=0, _crDaysState={};
 async function _crLoad(zi){
   const z=_bizLoad()[zi]; if(!z) return {default:'',zones:{},days:{}};
@@ -1382,7 +1395,9 @@ function crRender(){
     return '<button onclick="crSetBiz('+i+')" style="padding:8px 13px;border-radius:999px;border:1.5px solid '+(i===_crBiz?'#38bdf8':'rgba(255,255,255,.2)')+';background:'+(i===_crBiz?'rgba(56,189,248,.15)':'transparent')+';color:inherit;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">'+esc((z.e||'')+' '+(z.n||''))+'</button>';
   }).join('');
   const r=_crewRulesCache[_crBiz]||{default:'',zones:{},days:{}};
-  _crDaysState=JSON.parse(JSON.stringify((r.days&&typeof r.days==='object')?r.days:{}));
+  // Seed the editor with your saved rules, or the built-in default plan if you've never saved —
+  // so the settings screen shows the live behaviour instead of looking empty.
+  _crDaysState=JSON.parse(JSON.stringify((r.days&&typeof r.days==='object'&&Object.keys(r.days).length)?r.days:DEFAULT_ZONE_DAYS));
   const _ZDC=['Su','Mo','Tu','We','Th','Fr','Sa'];
   const row=function(zone){
     const chips=[0,1,2,3,4,5,6].map(function(d){ const on=(_crDaysState[zone]||[]).indexOf(d)>=0; return '<button id="crd-'+zone+'-'+d+'" onclick="crDayTog(\''+zone+'\','+d+')" style="padding:6px 0;width:34px;border-radius:8px;border:1.5px solid '+(on?'#38bdf8':'rgba(255,255,255,.18)')+';background:'+(on?'rgba(56,189,248,.2)':'transparent')+';color:inherit;font-weight:800;font-size:11px;cursor:pointer;font-family:inherit;">'+_ZDC[d]+'</button>'; }).join('');
@@ -2569,7 +2584,7 @@ function bizSaveFromUI(){
 /* ── zones + job-type icons ── */
 const ZIP_ZONE={
   '34428':'Z1','34429':'Z1','34423':'Z1',
-  '34450':'Z2','34451':'Z2','34452':'Z2','34453':'Z2',
+  '34450':'Z2','34451':'Z2','34452':'Z2','34453':'Z2','34436':'Z2',   // Floral City runs with Inverness
   '34460':'Z3','34461':'Z3','34464':'Z3','34465':'Z3',
   '34433':'Z4','34434':'Z4',
   '34470':'Z5','34471':'Z5','34472':'Z5','34473':'Z5','34474':'Z5',
@@ -2577,7 +2592,7 @@ const ZIP_ZONE={
   '34482':'Z5','34491':'Z5','34488':'Z5','34489':'Z5',
   '34431':'Z6','34432':'Z6',
   '34446':'Z7','34447':'Z7','34448':'Z7',
-  '34436':'Z8','34442':'Z8'
+  '34442':'Z8'                                                        // Hernando on its own (Floral City moved to Z2)
 };
 function _zoneOf(b){ return ZIP_ZONE[String(b.zip||'').trim().slice(0,5)]||null; }
 /* ── zone service days — a job sitting on a day its zone doesn't run gets flagged RED on Dispatch ── */
@@ -2586,7 +2601,7 @@ const _ZD_NAMES=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
    headers so the plan is visible on the board, not just enforced by red flags. */
 function _zonesForDow(zi,dow){
   try{
-    const r=_crewRulesCache[zi||0]; const days=(r&&r.days)||{}; const out=[];
+    const days=_zoneDaysFor(zi); const out=[];
     Object.keys(days).forEach(function(z){ const d=days[z]; if(Array.isArray(d)&&d.length&&d.length<7&&d.indexOf(dow)>=0) out.push(z); });
     return out.sort();
   }catch(e){ return []; }
@@ -2613,7 +2628,7 @@ function _zoneDayMsg(b){
   try{
     if(isDone(b)||_isArch(b)) return '';
     const zone=_zoneOf(b); if(!zone) return '';
-    const r=_crewRulesCache[b._srcBiz||0]; const days=r&&r.days&&r.days[zone];
+    const days=_zoneDaysFor(b._srcBiz||0)[zone];
     if(!Array.isArray(days)||!days.length||days.length>=7) return '';
     const iso=String(dateOf(b)||''); const p=iso.split('-'); if(p.length<3) return '';
     const dow=new Date(+p[0],+p[1]-1,+p[2]).getDay();
