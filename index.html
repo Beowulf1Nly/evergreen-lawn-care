@@ -1918,7 +1918,7 @@
       <div id="lqExtra" style="display:none;">
         <div class="form-row"><label>Full Name</label><input type="text" id="lq-name" placeholder="Jane Smith" autocomplete="name"/></div>
         <div class="form-row"><label>Email Address</label><input type="email" id="lq-email" placeholder="you@email.com" autocomplete="email"/></div>
-        <div class="form-row"><label>Phone Number <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label><input type="tel" id="lq-phone" placeholder="(352) 555-0123" autocomplete="tel"/></div>
+        <div class="form-row"><label>Phone Number</label><input type="tel" id="lq-phone" placeholder="(352) 555-0123" autocomplete="tel" required/></div>
         <div class="form-row" id="lqDateRow"><label>Preferred Date</label><div id="lqCalMount" style="margin-top:4px;"></div></div>
       </div>
       <div id="q-step1-error" style="color:#e53e3e;font-size:13px;margin-bottom:12px;display:none;"></div>
@@ -4273,6 +4273,8 @@ if (window.QUOTE_ONLY_MODE) document.addEventListener('DOMContentLoaded', functi
     if(!/^\d{5}$/.test(zip)){ showErr('Please enter your 5-digit zip code.'); return; }
     try{ if(typeof VALID_ZIPS!=='undefined' && VALID_ZIPS.size && !VALID_ZIPS.has(zip)){ showErr("That zip isn't in our service area yet. Call (352) 462-0627 \u2014 we may still be able to help!"); return; } }catch(e){}
     if(!name || !email){ showErr('Please enter your name and email.'); return; }
+    // Phone is required — the estimate flow is a callback, so a lead with no number is unusable.
+    if(!phone || phone.replace(/[^0-9]/g,'').length<10){ showErr('Please enter a phone number so we can reach you.'); return; }
     var er=document.getElementById('q-step1-error'); if(er) er.style.display='none';
     // No date is collected \u2014 the backend puts this on dispatch as a "Quote Call" the next business
     // day and emails the customer that we'll be in contact ASAP.
