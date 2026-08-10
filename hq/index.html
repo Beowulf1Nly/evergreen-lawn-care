@@ -687,6 +687,7 @@
     <h3>🗑 Cancel job</h3><div class="sub" id="cancelSub"></div>
     <div class="lbl">Reason (optional)</div><input type="text" id="cancelReason" class="field" placeholder="e.g. customer requested">
     <div class="toggle-row"><input type="checkbox" id="cancelNotify" checked><label for="cancelNotify">Email the customer</label></div>
+    <div class="toggle-row"><input type="checkbox" id="cancelEndPlan"><label for="cancelEndPlan">🚫 They're done — end the recurring plan <span style="opacity:.6;font-size:11px;">(drops them from active plans &amp; projected revenue)</span></label></div>
     <button class="primary red" id="cancelGo" onclick="doCancel()">Cancel this job</button>
     <button class="ghost" onclick="closeSheet('cancelSheet')">Keep it</button>
   </div>
@@ -1310,6 +1311,7 @@ function openJobSheetFor(b){
     +'<div class="lbl">Contact</div>'
     +'<a class="act" href="'+_hqNavUrl(b)+'" target="_blank"><span class="em">🧭</span> Navigate here</a>'
     +(b.phone?('<a class="act" href="tel:'+esc(String(b.phone).replace(/[^0-9+]/g,''))+'"><span class="em">📞</span> Call '+esc((b.name||'').split(" ")[0])+'</a>'):'')
+    +(_planEnded(b)?'<div class="rs-note" style="border:1.5px solid #94a3b8;color:#94a3b8;">🚫 Plan ended — not counted in active plans. <button onclick="hqReopenPlan()" style="background:none;border:none;color:#38bdf8;cursor:pointer;font-family:inherit;font-weight:800;text-decoration:underline;padding:0;">↩ Reactivate</button></div>':'')
     +'<button class="act danger" onclick="openCancel()"><span class="em">🗑</span> Cancel this job</button>'
     +((done && myRole==='owner')?('<div class="lbl">Ask for a review</div><div class="rv-send">'+(b.phone?'<label><input type="checkbox" id="rvText" checked> 💬 Text</label>':'<label style="opacity:.45"><input type="checkbox" id="rvText" disabled> 💬 Text</label>')+(b.email?'<label><input type="checkbox" id="rvEmail" checked> ✉️ Email</label>':'<label style="opacity:.45"><input type="checkbox" id="rvEmail" disabled> ✉️ Email</label>')+'</div><button class="act" onclick="sendReview()"><span class="em">⭐</span> Send review request</button>'):'')
     +'<button class="ghost" onclick="closeSheet(\'jobSheet\')">Close</button>';
@@ -1634,7 +1636,7 @@ async function doReschedule(){
   }catch(e){ toast('Network error'); }
   btn.disabled=false; btn.textContent='Move job';
 }
-function openCancel(){ const b=_jobCur; if(!b) return; document.getElementById('cancelSub').textContent=(b.name||'Customer')+' · '+(dateOf(b)||'no date'); document.getElementById('cancelReason').value=''; document.getElementById('cancelNotify').checked=true; closeSheet('jobSheet'); openSheet('cancelSheet'); }
+function openCancel(){ const b=_jobCur; if(!b) return; document.getElementById('cancelSub').textContent=(b.name||'Customer')+' · '+(dateOf(b)||'no date'); document.getElementById('cancelReason').value=''; document.getElementById('cancelNotify').checked=true; try{ document.getElementById('cancelEndPlan').checked=false; }catch(e){} closeSheet('jobSheet'); openSheet('cancelSheet'); }
 async function doCancel(){
   const b=_jobCur; if(!b) return; const be=_jobBE(b); const btn=document.getElementById('cancelGo');
   // Never cancel "by position". A job with no sheet row AND no email can't be identified — guessing
@@ -1646,7 +1648,13 @@ async function doCancel(){
   btn.disabled=true; btn.textContent='Cancelling…';
   try{ const p=new URLSearchParams({ action:'cancel_job', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), reason:document.getElementById('cancelReason').value.trim(), skipEmail:(document.getElementById('cancelNotify').checked?'false':'true'), adminToken:be.t });
     const d=await(await fetch(be.u+'?'+p)).json();
-    if(d.success){ b.rowCancelled=true; toast('🗑 Job cancelled'); closeSheet('cancelSheet'); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings(); }
+    if(d.success){
+      b.rowCancelled=true;
+      const _endIt=!!(document.getElementById('cancelEndPlan')&&document.getElementById('cancelEndPlan').checked);
+      if(_endIt) _endPlan(b,true);   // cancelling a visit alone never ended the subscription
+      toast(_endIt?('🚫 Cancelled — '+(b.name||'they')+'\'s plan ended'):'🗑 Job cancelled');
+      closeSheet('cancelSheet'); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings();
+    }
     else toast('Error: '+(d.error||'could not cancel'));
   }catch(e){ toast('Network error'); }
   btn.disabled=false; btn.textContent='Cancel this job';
@@ -5601,6 +5609,15 @@ function _fmtMoney(n){ return '$'+(+n||0).toLocaleString('en-US',{maximumFractio
    Counts EVERY active plan regardless of payment status — a customer whose plan
    is live but hasn't paid yet still projects forward. One entry per customer;
    promo/following-price customers project at their real recurring price. */
+/* 🚫 ENDED PLANS — cancelling a visit only kills that visit; the customer stayed an "active plan"
+   in Stats forever. This records "they're done" per customer so the plan counts and MRR drop them.
+   Local (like the ✕ write-off set) so it works without a backend redeploy; reversible below. */
+let _endedPlans=(function(){ try{ return JSON.parse(localStorage.getItem('hq_endedplans')||'{}')||{}; }catch(e){ return {}; } })();
+function _endedSave(){ try{ localStorage.setItem('hq_endedplans',JSON.stringify(_endedPlans)); }catch(e){} }
+function _planEndKey(b){ const em=String(b&&b.email||'').toLowerCase().trim(); return em||('n:'+String(b&&b.name||'').toLowerCase().trim()); }
+function _planEnded(b){ const k=_planEndKey(b); return !!(k&&_endedPlans[k]); }
+function _endPlan(b,on){ const k=_planEndKey(b); if(!k) return; if(on) _endedPlans[k]={n:b.name||'',ts:Date.now()}; else delete _endedPlans[k]; _endedSave(); }
+function hqReopenPlan(){ const b=_jobCur; if(!b) return; _endPlan(b,false); toast('↩ '+(b.name||'They')+' counts as an active plan again'); try{ openJobSheetFor(b); }catch(e){} try{ renderDispatch(); }catch(e){} }
 function _hqActivePlans(books){
   // Counts a customer as an active plan if they have ANY non-cancelled recurring row on the
   // board — a recent (Done) visit OR an upcoming one. Board Done rows only persist ~11 days, so
@@ -5611,7 +5628,7 @@ function _hqActivePlans(books){
   (books||[]).forEach(function(bk){
     if(bk.rowCancelled) return;
     const em0=String(bk.email||'').toLowerCase().trim();
-    if(bk.customerInactive || (em0 && inact[em0])) return;   // skip inactive/cancelled (backend flag OR Customers-sheet status)
+    if(bk.customerInactive || (em0 && inact[em0]) || _planEnded(bk)) return;   // inactive, cancelled, or you ended their plan
     const f=String(bk.frequency||'').toLowerCase();
     if(!f||f.indexOf('one')>=0||f.indexOf('free')>=0||f.indexOf('quote')>=0) return;
     const k=String(bk.email||'').toLowerCase().trim()||(String(bk.name||'')+String(bk.address||''));
