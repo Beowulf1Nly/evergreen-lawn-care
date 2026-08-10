@@ -2021,8 +2021,8 @@
         <input type="email" id="q-email" placeholder="you@email.com" autocomplete="email"/>
       </div>
       <div class="form-row">
-        <label>Phone Number <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-        <input type="tel" id="q-phone" placeholder="(352) 555-0123" autocomplete="tel"/>
+        <label>Phone Number</label>
+        <input type="tel" id="q-phone" placeholder="(352) 555-0123" autocomplete="tel" required/>
       </div>
       <div id="q-contact-error" style="color:#e53e3e;font-size:13px;margin-bottom:12px;display:none;"></div>
 
@@ -3714,6 +3714,11 @@ async function submitXLQuoteVisit() {
   const errEl = document.getElementById('q-contact-error');
   if (!name || !email) {
     if (errEl) { errEl.textContent = 'Please enter your name and email to continue.'; errEl.style.display = 'block'; }
+    return;
+  }
+  // Phone required — we call every lead to confirm, so one without a number is a dead end.
+  if (!phone || phone.replace(/[^0-9]/g, '').length < 10) {
+    if (errEl) { errEl.textContent = 'Please enter a phone number so we can reach you.'; errEl.style.display = 'block'; }
     return;
   }
   if (errEl) errEl.style.display = 'none';
