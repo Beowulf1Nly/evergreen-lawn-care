@@ -2192,6 +2192,84 @@ function _custMoney(n){ return '$'+(Math.round(n)||0); }
 let _custMap=null, _custPinLayer=null, _custHeatLayer=null, _custMapPins=[];
 let _custMapMode='both', _custMapRun=0, _custMapBusy=false;
 try{ _custMapMode=localStorage.getItem('hq_custmap_mode')||'both'; }catch(e){}
+/* ── Route-zone borders. Colours deliberately skip green: the pins are green, so
+   a zone outline can never be mistaken for a customer. Boundaries come from the
+   Census ZCTA layer (TIGERweb, no key), fetched once for the zips in ZIP_ZONE
+   and cached — the signature is the zip list, so editing ZIP_ZONE refetches. ── */
+const ZONE_COLORS={ Z1:'#38bdf8', Z2:'#a78bfa', Z3:'#f472b6', Z4:'#fbbf24', Z5:'#fb7185', Z6:'#fb923c', Z7:'#22d3ee', Z8:'#e879f9' };
+const _ZCTA_URL='https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_Current/MapServer/2/query';
+let _custZoneLayer=null, _custZoneCounts={}, _zctaGeo=null, _custZonesOn=true;
+try{ _custZonesOn=(localStorage.getItem('hq_custmap_zones')!=='0'); }catch(e){}
+async function _zctaLoad(){
+  if(_zctaGeo) return _zctaGeo;
+  const zips=Object.keys(ZIP_ZONE).sort(), sig=zips.join(',');
+  try{ const c=JSON.parse(localStorage.getItem('hq_zcta_v1')||'null'); if(c&&c.sig===sig&&c.geo&&c.geo.features){ _zctaGeo=c.geo; return _zctaGeo; } }catch(e){}
+  const q=_ZCTA_URL+'?'+new URLSearchParams({
+    where:"ZCTA5 IN ('"+zips.join("','")+"')", outFields:'ZCTA5', returnGeometry:'true',
+    geometryPrecision:'5', maxAllowableOffset:'0.0007',   // ~70m simplification — 34 zips ≈ 70KB instead of megabytes
+    outSR:'4326', f:'geojson' });
+  const g=await fetch(q).then(function(r){ return r.json(); });
+  if(!g||!Array.isArray(g.features)) throw new Error('zcta');
+  _zctaGeo=g;
+  try{ localStorage.setItem('hq_zcta_v1',JSON.stringify({ sig:sig, geo:g })); }catch(e){}
+  return g;
+}
+function _custZoneKey(){
+  const el=document.getElementById('custZoneKey'); if(!el) return;
+  if(!_custZonesOn){ el.innerHTML=''; return; }
+  const chip='display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;background:var(--card,#0f2740);border:1px solid var(--line2,#2a3942);';
+  el.innerHTML=Object.keys(ZONE_COLORS).sort().map(function(z){
+    const n=Object.keys(ZIP_ZONE).reduce(function(s,k){ return s+(ZIP_ZONE[k]===z?(_custZoneCounts[k]||0):0); },0);
+    return '<span style="'+chip+(n?'':'opacity:.4;')+'">'
+      +'<span style="width:11px;height:11px;border-radius:3px;background:'+ZONE_COLORS[z]+'2b;border:2px solid '+ZONE_COLORS[z]+';"></span>'
+      +'<b>'+z+'</b><span style="opacity:.75;">'+esc(ZONE_LABELS[z]||'')+'</span><b style="color:#e2e8f0;">'+n+'</b></span>';
+  }).join('');
+}
+async function _custZonesDraw(){
+  if(!_custMap) return;
+  let g=null; try{ g=await _zctaLoad(); }catch(e){ return; }                        // offline / Census down → pins still work
+  if(!_custMap) return;
+  if(_custZoneLayer){ try{ _custMap.removeLayer(_custZoneLayer); }catch(e){} }
+  _custZoneLayer=L.geoJSON(g,{
+    // thin bright outline, barely-there fill — the border is the point, and a
+    // heavy fill would drown the heat layer it has to sit under.
+    style:function(f){ const c=ZONE_COLORS[ZIP_ZONE[f.properties.ZCTA5]]||'#64748b';
+      return { color:c, weight:2, opacity:.8, fillColor:c, fillOpacity:.06 }; },
+    onEachFeature:function(f,ly){
+      const zip=f.properties.ZCTA5, z=ZIP_ZONE[zip]||'', n=_custZoneCounts[zip]||0;
+      ly.bindTooltip('<b>'+esc(zip)+'</b>'+(z?(' · '+esc(z)+(ZONE_LABELS[z]?(' — '+esc(ZONE_LABELS[z])):'')):' · unzoned')
+        +'<br>'+n+' active plan'+(n===1?'':'s'),{ sticky:true });
+    }
+  });
+  if(_custZonesOn) _custZoneLayer.addTo(_custMap);
+  try{ _custZoneLayer.bringToBack(); }catch(e){}                                    // never on top of the pins
+  _custZoneKey();
+}
+function _custMapZones(on){
+  _custZonesOn=(on==null)?!_custZonesOn:!!on;
+  try{ localStorage.setItem('hq_custmap_zones',_custZonesOn?'1':'0'); }catch(e){}
+  const b=document.getElementById('custZoneBtn');
+  if(b){ b.style.background=_custZonesOn?'#0c2d48':'var(--card,#0f2740)'; b.style.borderColor=_custZonesOn?'#38bdf8':'var(--line2,#2a3942)'; b.style.opacity=_custZonesOn?'1':'.7'; }
+  if(_custMap&&_custZoneLayer){ try{ if(_custZonesOn){ _custZoneLayer.addTo(_custMap); _custZoneLayer.bringToBack(); } else _custMap.removeLayer(_custZoneLayer); }catch(e){} }
+  _custZoneKey();
+}
+/* The map plots ACTIVE RECURRING PLANS, not the whole customer book — the same
+   rows Stats counts, through the same _hqActivePlans() gate (drops one-offs,
+   quotes, free jobs, cancelled rows, inactive customers and ended plans), run
+   per business over the same bookings payload so the totals agree exactly. */
+async function _custMapPlanRows(){
+  const biz=_bizLoad(), out=[];
+  for(let i=0;i<biz.length;i++){
+    const z=biz[i]; if(!_bizConnected(z)) continue;
+    let books=null;
+    try{ if(_statsCache[i]&&Array.isArray(_statsCache[i].books)) books=_statsCache[i].books; }catch(e){}   // Stats already paid for this
+    if(!books){ try{ const r=await bizGet(z,{ action:'bookings', includeCompleted:'false' }); books=(r&&r.success&&Array.isArray(r.bookings))?r.bookings:[]; }catch(e){ books=[]; } }
+    _hqActivePlans(books).forEach(function(bk){
+      out.push({ name:bk.name||'', address:bk.address||'', zip:String(bk.zip||'').trim(), freq:bk.frequency||'', key:_custKey(bk) });
+    });
+  }
+  return out;
+}
 const _CUST_MAP_BTN='padding:7px 12px;border-radius:999px;border:1px solid var(--line2,#2a3942);background:var(--card,#0f2740);color:inherit;font-family:inherit;font-size:12.5px;font-weight:800;cursor:pointer;';
 function _custMapShell(){
   return '<div style="margin-bottom:12px;">'
@@ -2201,9 +2279,11 @@ function _custMapShell(){
     +'<button data-m="heat" onclick="_custMapSetMode(\'heat\')" style="'+_CUST_MAP_BTN+'">🔥 Heatmap</button>'
     +'<button data-m="both" onclick="_custMapSetMode(\'both\')" style="'+_CUST_MAP_BTN+'">◉ Both</button>'
     +'</div>'
+    +'<button id="custZoneBtn" onclick="_custMapZones()" style="'+_CUST_MAP_BTN+'">🗺 Zones</button>'
     +'<button onclick="_custMapLoad(true)" style="'+_CUST_MAP_BTN+'margin-left:auto;opacity:.8;">↻ Refresh</button>'
     +'</div>'
     +'<div id="custMap" style="height:clamp(260px,42vh,430px);border-radius:14px;border:1px solid var(--line2,#2a3942);overflow:hidden;background:var(--card,#0f2740);"></div>'
+    +'<div id="custZoneKey" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;font-size:11.5px;font-weight:700;"></div>'
     +'<div id="custMapNote" style="font-size:12px;color:var(--dim,#9fb2c0);margin-top:7px;line-height:1.5;"></div>'
     +'</div>';
 }
@@ -2234,7 +2314,15 @@ function _custMapEnsure(){
   _custPinLayer=L.layerGroup();
   return _custMap;
 }
-function _custMapOpen(i){ const m=_custMapPins[i]; if(m&&m.key) try{ openCustomer(m.key); }catch(e){} }
+function _custMapOpen(i){
+  const m=_custMapPins[i]; if(!m) return;
+  if(m.key&&(window._custCache||{})[m.key]){ try{ openCustomer(m.key); return; }catch(e){} }
+  // Plans come from the bookings feed, the list from the customer book — a second
+  // business's rows can be on the map before its book is loaded. Rather than a
+  // dead button, put their name in the search box so the row is one glance away.
+  const q=document.getElementById('custSearch');
+  if(q){ q.value=m.name||''; _custQuery=q.value; try{ _custRenderList(); }catch(e){} try{ q.scrollIntoView({ block:'center' }); }catch(e){} }
+}
 function _custMapPin(m,co){
   const exact=(co.q==='exact');
   const i=_custMapPins.push(m)-1;
@@ -2263,14 +2351,20 @@ async function _custMapLoad(force){
     _custMapPins=[]; _custPinLayer.clearLayers();
     if(_custHeatLayer){ try{ _custMap.removeLayer(_custHeatLayer); }catch(e){} _custHeatLayer=null; }
 
-    const inact=_custInactiveEmails();
-    const rows=_custBuild().filter(function(m){
-      if(String(m.address||'').trim().length<4) return false;                       // no address = nothing to place
-      const em=String(m.email||'').toLowerCase().trim();
-      return !(em&&inact[em]);                                                      // inactive / cancelled sit this out
-    });
+    const plans=await _custMapPlanRows();
+    if(run!==_custMapRun) return;
+    const rows=plans.filter(function(m){ return String(m.address||'').trim().length>=4; });
+    const noAddr=plans.length-rows.length;                                          // on a plan, but nothing to place
     const total=rows.length;
-    if(!total){ setNote('No active customers with an address yet.'); return; }
+
+    // zone counts drive both the polygon tooltips and the colour key
+    _custZoneCounts={}; let unzoned=0;
+    plans.forEach(function(m){ const z5=String(m.zip||'').trim().slice(0,5); if(!z5) return;
+      _custZoneCounts[z5]=(_custZoneCounts[z5]||0)+1; if(!ZIP_ZONE[z5]) unzoned++; });
+    _custZoneKey();
+    _custZonesDraw();                                                               // not awaited — pins shouldn't wait on Census
+
+    if(!total){ setNote('No active recurring plans with an address yet.'); return; }
 
     const pts=[], failed=[];
     let scanned=0, approx=0;
@@ -2280,9 +2374,11 @@ async function _custMapLoad(force){
       _custMapLayers();
       if(fit&&pts.length){ try{ _custMap.fitBounds(L.latLngBounds(pts.map(function(p){ return [p[0],p[1]]; })).pad(.12),{ maxZoom:13 }); }catch(e){} }
       const ok=pts.length, busy=(scanned<total);
-      setNote('<b style="color:#e2e8f0;">📍 '+ok+' of '+total+'</b> active customers mapped'
+      setNote('<b style="color:#e2e8f0;">📍 '+ok+' of '+plans.length+'</b> active recurring plans mapped'
         +(busy?(' <span style="opacity:.7;">· locating '+scanned+'/'+total+'…</span>'):'')
         +(approx?(' <span style="color:#f59e0b;">· '+approx+' approximate</span>'):'')
+        +(noAddr?(' <span style="opacity:.7;">· '+noAddr+' with no address</span>'):'')
+        +(unzoned?(' <span style="color:#94a3b8;">· '+unzoned+' in an unzoned ZIP</span>'):'')
         +(failed.length?('<details style="margin-top:5px;"><summary style="cursor:pointer;color:#f87171;">⚠ '+failed.length+" couldn't be located — click to fix</summary>"
             +'<div style="margin-top:5px;padding-left:4px;border-left:2px solid #7f1d1d;">'
             +failed.map(function(f){ return '<div style="padding:2px 0;">'+esc(f.name||'(no name)')+' — <span style="opacity:.75;">'+esc(f.address||'')+(f.zip?(', '+esc(f.zip)):'')+'</span></div>'; }).join('')
@@ -2332,7 +2428,7 @@ function renderCustomers(){
       +_custMapShell()
       +'<div id="custKpis" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;font-size:12.5px;font-weight:700;"></div>'
       +'<div id="custList" style="display:flex;flex-direction:column;gap:8px;"></div></div>';
-    try{ _custMapSetMode(_custMapMode); }catch(e){}
+    try{ _custMapSetMode(_custMapMode); _custMapZones(_custZonesOn); }catch(e){}
     setTimeout(function(){ try{ _custMapLoad(); }catch(e){} }, 60);
   } else if(_custMap){
     setTimeout(function(){ try{ _custMap.invalidateSize(); }catch(e){} }, 120);   // tab was hidden → Leaflet sized it to 0
