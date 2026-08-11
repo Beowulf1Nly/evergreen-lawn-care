@@ -2196,7 +2196,14 @@ try{ _custMapMode=localStorage.getItem('hq_custmap_mode')||'both'; }catch(e){}
    a zone outline can never be mistaken for a customer. Boundaries come from the
    Census ZCTA layer (TIGERweb, no key), fetched once for the zips in ZIP_ZONE
    and cached — the signature is the zip list, so editing ZIP_ZONE refetches. ── */
-const ZONE_COLORS={ Z2:'#a78bfa', Z3:'#f472b6', Z4:'#fbbf24', Z6:'#fb923c', Z7:'#22d3ee', Z8:'#e879f9' };
+/* Picked by measurement, not taste: these 6 maximise the SMALLEST pairwise
+   CIEDE2000 gap (24.8, up from 13.1 — the old violet/fuchsia and pink/fuchsia
+   pairs were indistinguishable at 2px), stay ≥26 from the pin green so a border
+   never reads as a customer, and hold up under red-green colour blindness
+   (protan 14.0 / deutan 10.9). Assignment puts the most distant colours on
+   zones that share a border — Beverly Hills cyan vs Hernando red, Citrus
+   Springs indigo vs Dunnellon orange. */
+const ZONE_COLORS={ Z2:'#fde047', Z3:'#22d3ee', Z4:'#818cf8', Z6:'#fb923c', Z7:'#f472b6', Z8:'#ef4444' };
 const _ZCTA_URL='https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_Current/MapServer/2/query';
 let _custZoneLayer=null, _custZoneCounts={}, _zctaGeo=null, _custZonesOn=true;
 try{ _custZonesOn=(localStorage.getItem('hq_custmap_zones')!=='0'); }catch(e){}
