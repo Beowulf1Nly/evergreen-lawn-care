@@ -1348,15 +1348,15 @@ function _openArchSheet(b,be){
    Rules live in each business's schedule config (same store as home base), so
    the BACKEND can stamp crews onto brand-new bookings the second they come in,
    and HQ's ⚡ Auto-assign sweeps anything that slipped through. */
-const ZONE_LABELS={ Z1:'Crystal River (retired)', Z2:'Inverness · Floral City', Z3:'Beverly Hills', Z4:'Citrus Springs', Z5:'Ocala · Marion County', Z6:'Dunnellon', Z7:'Homosassa · Lecanto', Z8:'Hernando' };
+const ZONE_LABELS={ Z2:'Inverness', Z3:'Beverly Hills', Z4:'Citrus Springs', Z6:'Dunnellon', Z7:'Homosassa · Lecanto', Z8:'Hernando' };
 /* 🎯 DEFAULT zone→weekday plan — applies until you save your own in 🤖 Crew rules.
    Built to match where the work already sits, on a Mon–Thu week:
      MON  Citrus Springs + Dunnellon      (north-west block)
      TUE  Citrus Springs                  (the big cluster gets two days)
      WED  Beverly Hills/Lecanto + Homosassa (central → coast sweep)
-     THU  Inverness/Floral City + Hernando  (east run)
-   Z1 Crystal River is retired and Z5 Ocala is ad-hoc — both intentionally have no day, so
-   nothing there is ever flagged. */
+     THU  Inverness + Hernando            (east run)
+   Crystal River and Ocala/Marion aren't zones at all any more — that work is ad-hoc,
+   so it has no zone, no day, and is never flagged. */
 const DEFAULT_ZONE_DAYS={ Z4:[1,2], Z6:[1], Z3:[3], Z7:[3], Z2:[4], Z8:[4] };
 function _zoneDaysFor(zi){
   const r=_crewRulesCache[zi||0], d=(r&&r.days&&typeof r.days==='object')?r.days:null;
@@ -2196,7 +2196,7 @@ try{ _custMapMode=localStorage.getItem('hq_custmap_mode')||'both'; }catch(e){}
    a zone outline can never be mistaken for a customer. Boundaries come from the
    Census ZCTA layer (TIGERweb, no key), fetched once for the zips in ZIP_ZONE
    and cached — the signature is the zip list, so editing ZIP_ZONE refetches. ── */
-const ZONE_COLORS={ Z1:'#38bdf8', Z2:'#a78bfa', Z3:'#f472b6', Z4:'#fbbf24', Z5:'#fb7185', Z6:'#fb923c', Z7:'#22d3ee', Z8:'#e879f9' };
+const ZONE_COLORS={ Z2:'#a78bfa', Z3:'#f472b6', Z4:'#fbbf24', Z6:'#fb923c', Z7:'#22d3ee', Z8:'#e879f9' };
 const _ZCTA_URL='https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_Current/MapServer/2/query';
 let _custZoneLayer=null, _custZoneCounts={}, _zctaGeo=null, _custZonesOn=true;
 try{ _custZonesOn=(localStorage.getItem('hq_custmap_zones')!=='0'); }catch(e){}
@@ -2834,18 +2834,20 @@ function bizSaveFromUI(){
 }
 
 /* ── zones + job-type icons ── */
+/* Only zips that belong to a REAL run live here. Crystal River (34428/34429/34423)
+   and Ocala/Marion (344xx east) are deliberately absent — that work is ad-hoc, not
+   a route, so it floats with no zone: no colour on the map, no day rule, and never
+   flagged as off-zone. Same for 34436 Floral City and 34448 Homosassa. Anything
+   missing here simply has no zone; _zoneOf() returns null and every caller already
+   handles that. */
 const ZIP_ZONE={
-  '34428':'Z1','34429':'Z1','34423':'Z1',
-  '34450':'Z2','34451':'Z2','34452':'Z2','34453':'Z2','34436':'Z2',   // Floral City runs with Inverness
+  '34450':'Z2','34451':'Z2','34452':'Z2','34453':'Z2',
   '34464':'Z3','34465':'Z3',              // Z3 = Beverly Hills only — tight cluster
   '34460':'Z7','34461':'Z7',              // Lecanto sits SW toward the coast, so it runs with Homosassa
   '34433':'Z4','34434':'Z4',
-  '34470':'Z5','34471':'Z5','34472':'Z5','34473':'Z5','34474':'Z5',
-  '34475':'Z5','34476':'Z5','34479':'Z5','34480':'Z5','34481':'Z5',
-  '34482':'Z5','34491':'Z5','34488':'Z5','34489':'Z5',
   '34431':'Z6','34432':'Z6',
-  '34446':'Z7','34447':'Z7','34448':'Z7',
-  '34442':'Z8'                                                        // Hernando on its own (Floral City moved to Z2)
+  '34446':'Z7','34447':'Z7',
+  '34442':'Z8'                                                        // Hernando on its own
 };
 function _zoneOf(b){ return ZIP_ZONE[String(b.zip||'').trim().slice(0,5)]||null; }
 /* ── zone service days — a job sitting on a day its zone doesn't run gets flagged RED on Dispatch ── */
