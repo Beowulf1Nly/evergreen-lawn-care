@@ -767,6 +767,7 @@
 <div id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
 <script>
 const SCRIPT_URL='https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
 const SESSION_KEY='eg_staff_session';
@@ -2177,17 +2178,164 @@ function _custBuild(){
   return arr;
 }
 function _custMoney(n){ return '$'+(Math.round(n)||0); }
+/* ═══════════ 🗺 CUSTOMER MAP — where the book actually lives ═══════════
+   A list of 150 addresses doesn't tell you that half your money is in two
+   subdivisions. This pins every ACTIVE customer (Customers-sheet Status not
+   inactive/cancelled) and lays a density heat layer over it, so route zones,
+   ad spend and "should I take this job 30 miles out" become a look, not a guess.
+
+   Geocoding reuses _hqGeocode — the SAME cached Census→Google→Nominatim chain
+   the run optimizer uses, sharing the same localStorage cache ('hq_geo5'). So
+   the first load pays for whatever's new and every load after it is instant.
+   Addresses nothing can locate are never silently dropped: they're counted and
+   listed under the map so the bad ones can actually get fixed. ── */
+let _custMap=null, _custPinLayer=null, _custHeatLayer=null, _custMapPins=[];
+let _custMapMode='both', _custMapRun=0, _custMapBusy=false;
+try{ _custMapMode=localStorage.getItem('hq_custmap_mode')||'both'; }catch(e){}
+const _CUST_MAP_BTN='padding:7px 12px;border-radius:999px;border:1px solid var(--line2,#2a3942);background:var(--card,#0f2740);color:inherit;font-family:inherit;font-size:12.5px;font-weight:800;cursor:pointer;';
+function _custMapShell(){
+  return '<div style="margin-bottom:12px;">'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">'
+    +'<div id="custMapModes" style="display:flex;gap:6px;flex-wrap:wrap;">'
+    +'<button data-m="pins" onclick="_custMapSetMode(\'pins\')" style="'+_CUST_MAP_BTN+'">📍 Pins</button>'
+    +'<button data-m="heat" onclick="_custMapSetMode(\'heat\')" style="'+_CUST_MAP_BTN+'">🔥 Heatmap</button>'
+    +'<button data-m="both" onclick="_custMapSetMode(\'both\')" style="'+_CUST_MAP_BTN+'">◉ Both</button>'
+    +'</div>'
+    +'<button onclick="_custMapLoad(true)" style="'+_CUST_MAP_BTN+'margin-left:auto;opacity:.8;">↻ Refresh</button>'
+    +'</div>'
+    +'<div id="custMap" style="height:clamp(260px,42vh,430px);border-radius:14px;border:1px solid var(--line2,#2a3942);overflow:hidden;background:var(--card,#0f2740);"></div>'
+    +'<div id="custMapNote" style="font-size:12px;color:var(--dim,#9fb2c0);margin-top:7px;line-height:1.5;"></div>'
+    +'</div>';
+}
+function _custMapSetMode(m){
+  _custMapMode=(m==='pins'||m==='heat')?m:'both';
+  try{ localStorage.setItem('hq_custmap_mode',_custMapMode); }catch(e){}
+  try{
+    document.querySelectorAll('#custMapModes button').forEach(function(b){
+      const on=(b.dataset.m===_custMapMode);
+      b.style.background=on?'#14532d':'var(--card,#0f2740)';
+      b.style.borderColor=on?'#22c55e':'var(--line2,#2a3942)';
+      b.style.opacity=on?'1':'.7';
+    });
+  }catch(e){}
+  _custMapLayers();
+}
+function _custMapLayers(){
+  if(!_custMap) return;
+  const wantPins=(_custMapMode!=='heat'), wantHeat=(_custMapMode!=='pins');
+  try{ if(_custPinLayer) wantPins?_custPinLayer.addTo(_custMap):_custMap.removeLayer(_custPinLayer); }catch(e){}
+  try{ if(_custHeatLayer) wantHeat?_custHeatLayer.addTo(_custMap):_custMap.removeLayer(_custHeatLayer); }catch(e){}
+}
+function _custMapEnsure(){
+  if(_custMap) return _custMap;
+  if(!document.getElementById('custMap')||!window.L) return null;
+  _custMap=L.map('custMap',{ zoomControl:true, attributionControl:false }).setView([28.9,-82.4],10);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{ maxZoom:19 }).addTo(_custMap);
+  _custPinLayer=L.layerGroup();
+  return _custMap;
+}
+function _custMapOpen(i){ const m=_custMapPins[i]; if(m&&m.key) try{ openCustomer(m.key); }catch(e){} }
+function _custMapPin(m,co){
+  const exact=(co.q==='exact');
+  const i=_custMapPins.push(m)-1;
+  // amber + hollow = the geocoder only found the town, not the house. Shown, but
+  // never dressed up as a real pin — an approximate dot on a route map lies.
+  L.circleMarker([co.lat,co.lon],{ radius:exact?6:5, weight:2, color:'#fff', opacity:exact?.9:.55, fillColor:exact?'#22c55e':'#f59e0b', fillOpacity:exact?.85:.45 })
+    .bindPopup('<div style="font-weight:800;font-size:13px;margin-bottom:3px;">'+esc(m.name||'(no name)')+'</div>'
+      +'<div style="font-size:12px;">'+esc(m.address||'')+(m.zip?(', '+esc(m.zip)):'')+'</div>'
+      +(m.freq?('<div style="font-size:11.5px;color:#64748b;margin-top:2px;">'+esc(m.freq)+'</div>'):'')
+      +(exact?'':'<div style="font-size:11px;color:#b45309;margin-top:3px;">⚠ approximate — town centroid, not the house</div>')
+      +'<div style="margin-top:7px;"><button onclick="_custMapOpen('+i+')" style="background:none;border:none;padding:0;color:#0369a1;font-family:inherit;font-weight:800;font-size:12px;cursor:pointer;text-decoration:underline;">Open customer →</button></div>')
+    .addTo(_custPinLayer);
+}
+async function _custMapLoad(force){
+  if(!document.getElementById('custMap')) return;
+  if(_custMapBusy&&!force) return;
+  const run=++_custMapRun;
+  _custMapBusy=true;
+  const setNote=function(h){ const n=document.getElementById('custMapNote'); if(n) n.innerHTML=h; };
+  try{
+    setNote('loading customers…');
+    try{ await _loadCustSheets(); }catch(e){}
+    if(run!==_custMapRun) return;
+    if(!_custMapEnsure()){ setNote('Map failed to load.'); return; }
+    try{ _custMap.invalidateSize(); }catch(e){}
+    _custMapPins=[]; _custPinLayer.clearLayers();
+    if(_custHeatLayer){ try{ _custMap.removeLayer(_custHeatLayer); }catch(e){} _custHeatLayer=null; }
+
+    const inact=_custInactiveEmails();
+    const rows=_custBuild().filter(function(m){
+      if(String(m.address||'').trim().length<4) return false;                       // no address = nothing to place
+      const em=String(m.email||'').toLowerCase().trim();
+      return !(em&&inact[em]);                                                      // inactive / cancelled sit this out
+    });
+    const total=rows.length;
+    if(!total){ setNote('No active customers with an address yet.'); return; }
+
+    const pts=[], failed=[];
+    let scanned=0, approx=0;
+    const repaint=function(fit){
+      if(_custHeatLayer){ try{ _custMap.removeLayer(_custHeatLayer); }catch(e){} _custHeatLayer=null; }
+      if(pts.length&&window.L&&L.heatLayer) _custHeatLayer=L.heatLayer(pts,{ radius:28, blur:20, minOpacity:.3, maxZoom:14 });
+      _custMapLayers();
+      if(fit&&pts.length){ try{ _custMap.fitBounds(L.latLngBounds(pts.map(function(p){ return [p[0],p[1]]; })).pad(.12),{ maxZoom:13 }); }catch(e){} }
+      const ok=pts.length, busy=(scanned<total);
+      setNote('<b style="color:#e2e8f0;">📍 '+ok+' of '+total+'</b> active customers mapped'
+        +(busy?(' <span style="opacity:.7;">· locating '+scanned+'/'+total+'…</span>'):'')
+        +(approx?(' <span style="color:#f59e0b;">· '+approx+' approximate</span>'):'')
+        +(failed.length?('<details style="margin-top:5px;"><summary style="cursor:pointer;color:#f87171;">⚠ '+failed.length+" couldn't be located — click to fix</summary>"
+            +'<div style="margin-top:5px;padding-left:4px;border-left:2px solid #7f1d1d;">'
+            +failed.map(function(f){ return '<div style="padding:2px 0;">'+esc(f.name||'(no name)')+' — <span style="opacity:.75;">'+esc(f.address||'')+(f.zip?(', '+esc(f.zip)):'')+'</span></div>'; }).join('')
+            +'</div></details>'):''));
+    };
+    repaint(false);
+
+    // 3 workers — cached addresses return instantly, and only genuinely new ones
+    // hit the network (where _hqGeocode already self-throttles for Nominatim).
+    let next=0;
+    const worker=async function(){
+      while(next<rows.length){
+        if(run!==_custMapRun) return;
+        const m=rows[next++];
+        const a=String(m.address||'').trim()+(m.zip?(', '+String(m.zip).trim()):'');
+        let co=null;
+        try{ co=await _hqGeocode(/\bFL\b/i.test(a)?a:(a+', FL')); }catch(e){}
+        if(run!==_custMapRun) return;
+        scanned++;
+        if(co&&co.lat!=null){
+          if(co.q!=='exact') approx++;
+          pts.push([co.lat,co.lon,1]);                                              // density = one customer, one unit
+          _custMapPin(m,co);
+        } else failed.push(m);
+        if(scanned%8===0) repaint(false);                                           // progressive — the map fills in as it goes
+      }
+    };
+    await Promise.all([worker(),worker(),worker()]);
+    if(run!==_custMapRun) return;
+    repaint(true);
+  } finally { if(run===_custMapRun) _custMapBusy=false; }
+}
 function renderCustomers(){
   try{ _loadCustSheets(); }catch(e){}
   const pane=document.getElementById('pane-customers'); if(!pane) return;
   if(!document.getElementById('custList')){
-    pane.innerHTML='<div style="padding:12px 14px 22px;max-width:1100px;margin:0 auto;">'
+    // Same wrapper contract as .sites-wrap/.dev-wrap (flex:1 · min-height:0 ·
+    // overflow-y:auto) so the taller pane scrolls instead of clipping. width:100%
+    // matters because `margin:0 auto` cancels the flex stretch — without it the
+    // column shrink-wraps to the widest customer row and the map inherits that
+    // arbitrary width instead of the pane's.
+    pane.innerHTML='<div style="flex:1;min-height:0;overflow-y:auto;padding:12px 14px 22px;width:100%;max-width:1100px;margin:0 auto;">'
       +'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">'
       +'<input id="custSearch" type="search" placeholder="🔎 Search name, email, phone, address, zip" oninput="_custQuery=this.value;_custRenderList();" style="flex:1;min-width:220px;padding:11px 13px;border-radius:11px;border:1px solid var(--line2,#2a3942);background:var(--card,#0f2740);color:inherit;font-size:14px;">'
       +'<select id="custSort" onchange="_custSort=this.value;_custRenderList();" style="padding:11px;border-radius:11px;background:var(--card,#0f2740);color:inherit;border:1px solid var(--line2,#2a3942);font-family:inherit;">'
       +'<option value="name">A–Z</option><option value="recent">Most recent</option><option value="ltv">Top spenders</option><option value="balance">Owes money</option></select></div>'
+      +_custMapShell()
       +'<div id="custKpis" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;font-size:12.5px;font-weight:700;"></div>'
       +'<div id="custList" style="display:flex;flex-direction:column;gap:8px;"></div></div>';
+    try{ _custMapSetMode(_custMapMode); }catch(e){}
+    setTimeout(function(){ try{ _custMapLoad(); }catch(e){} }, 60);
+  } else if(_custMap){
+    setTimeout(function(){ try{ _custMap.invalidateSize(); }catch(e){} }, 120);   // tab was hidden → Leaflet sized it to 0
   }
   _custRenderList();
 }
