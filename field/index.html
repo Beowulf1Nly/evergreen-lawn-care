@@ -13,7 +13,7 @@
 <script>
 /* APP_VER:2026-07-16.71 */
 (function(){
-  var V='2026-07-31.78'; window.__APP_VER=V;
+  var V='2026-07-31.79'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -753,7 +753,7 @@ function _authGuard(d){
       const _now=Date.now();
       if(_now-_authStrikeAt>180000) _authStrikes=0;   // stale strikes expire
       _authStrikes++; _authStrikeAt=_now;
-      if(_authStrikes<2) return false;                 // one fluke never logs anyone out
+      if(_authStrikes<3) return false;                 // 3 strikes — a slow/overloaded backend shouldn't cost a login
       _authBounced=true;
       try{ showToast('\ud83d\udd10 Session expired \u2014 log back in (10 seconds). Nothing is lost; queued work sends after login.',9000); }catch(e){}
       setTimeout(function(){ try{ logout(); }catch(e){} }, 1200);
