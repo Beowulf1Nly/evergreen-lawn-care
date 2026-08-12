@@ -13,7 +13,7 @@
 <script>
 /* APP_VER:2026-07-16.71 */
 (function(){
-  var V='2026-07-31.76'; window.__APP_VER=V;
+  var V='2026-07-31.77'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1147,7 +1147,7 @@ async function _fmComputeOptimizedOrder(){
     const keys=all.filter(s=>s&&s.bk&&s.bk.email).map(s=>_stopKey(s.bk));
     if(!keys.length) return false;
     const changed=!_optOrderKeys||_optOrderKeys.join('~')!==keys.join('~');
-    _optOrderKeys=keys; _saveOptOrderCache(keys);
+    _optOrderKeys=_fmApplyLocks(keys); _saveOptOrderCache(_optOrderKeys);   // 🔒 anchors survive GPS self-optimize too
     return { ok:true, changed:changed };   // SUCCESS. (Previously returned only "changed",
                                            // so an already-optimal route reported a false
                                            // "Could not optimize" every time after the first.)
@@ -1187,7 +1187,7 @@ async function _reoptimizeNow(){
           const za=String(a.zip||''), zb=String(b.zip||'');
           return za===zb?String(a.address||'').localeCompare(String(b.address||'')):za.localeCompare(zb);
         }).map(function(b){ return _stopKey(b); });
-        _optOrderKeys=keys; _saveOptOrderCache(keys); _fmRender();
+        _optOrderKeys=_fmApplyLocks(keys); _saveOptOrderCache(_optOrderKeys);   // 🔒 anchors survive GPS self-optimize too _fmRender();
         showToast('📍 Rough order by area — geocoder unreachable right now');
       } else showToast('No stops today');
     }
