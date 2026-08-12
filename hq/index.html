@@ -3786,11 +3786,14 @@ function renderDispatch(){
         // word: sort by start, then push any block that would overlap the previous one to begin
         // where it ended. Durations are preserved; only start times slide.
         evs.sort(function(a,b2){ return a.st-b2.st||a.en-b2.en; });
+        // Stops are separated by the DRIVE between them — the real measured OSRM leg when ⚡ has run,
+        // otherwise the flat buffer. Blocks used to butt together as if the truck teleported.
         (function(){
           let _pEnd=null;
           evs.forEach(function(ev){
             const _d=Math.max(5,ev.en-ev.st);
-            if(_pEnd!=null&&ev.st<_pEnd){ ev.st=_pEnd; ev.en=ev.st+_d; }
+            let _gap=0; try{ _gap=_drv(ev.b)||0; }catch(e){ _gap=DRIVE_BUF; }
+            if(_pEnd!=null&&ev.st<_pEnd+_gap){ ev.st=_pEnd+_gap; ev.en=ev.st+_d; }
             _pEnd=ev.en;
           });
         })();
