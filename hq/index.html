@@ -3760,7 +3760,10 @@ function renderDispatch(){
             // for stops with no time yet (dashed/projected). Previously EVERY open stop was re-placed
             // from "now" on every render — so a time you set was visually thrown away, and the whole
             // board shuffled every 20s as the clock moved.
-            if(!ev.proj){ _liveCur=Math.max(_liveCur,ev.en); _anyPlaced=true; _firstOpen=false; return; }
+            // A set time holds only while it's still AHEAD of now. Once its slot has passed and the
+            // job isn't done, it's the live stop (or running late) — it has to cascade with reality,
+            // otherwise the crew's current job sits frozen hours to the left of the now-line.
+            if(!ev.proj && ev.st>=_nowQ){ _liveCur=Math.max(_liveCur,ev.en); _anyPlaced=true; _firstOpen=false; return; }
             if(_firstOpen){
               const _k3=_svKey(ev.b);
               // ON DECK: starts a REAL drive-leg after the last yard ended — the crew is
