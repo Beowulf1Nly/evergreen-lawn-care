@@ -3778,8 +3778,23 @@ function renderDispatch(){
             _liveCur=ev.en; _anyPlaced=true;
           });
         }
-        const laneEnds=[];
+        // ── ONE CHAIN, ALWAYS ────────────────────────────────────────────────
+        // A crew is one truck: it cannot run two stops at once, so its day must render as a single
+        // non-overlapping sequence. Four separate passes above (done-pins, the live cascade, the
+        // de-overlap fixup, lane assignment) each mutate these positions and disagree, which is what
+        // produced blocks stacked on top of each other with gaps between them. This is the final
+        // word: sort by start, then push any block that would overlap the previous one to begin
+        // where it ended. Durations are preserved; only start times slide.
         evs.sort(function(a,b2){ return a.st-b2.st||a.en-b2.en; });
+        (function(){
+          let _pEnd=null;
+          evs.forEach(function(ev){
+            const _d=Math.max(5,ev.en-ev.st);
+            if(_pEnd!=null&&ev.st<_pEnd){ ev.st=_pEnd; ev.en=ev.st+_d; }
+            _pEnd=ev.en;
+          });
+        })();
+        const laneEnds=[];
         evs.forEach(function(ev){ let L=0; while(L<laneEnds.length&&laneEnds[L]>ev.st+1) L++; ev.lane=L; laneEnds[L]=ev.en; });
         const lanes=Math.max(1,laneEnds.length);
         const _aux=(c!=='un');                                   // Unassigned isn't a crew — no PMCS/load or base ghosts
