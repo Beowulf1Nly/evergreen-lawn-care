@@ -5890,7 +5890,21 @@ let _endedPlans=(function(){ try{ return JSON.parse(localStorage.getItem('hq_end
 function _endedSave(){ try{ localStorage.setItem('hq_endedplans',JSON.stringify(_endedPlans)); }catch(e){} }
 function _planEndKey(b){ const em=String(b&&b.email||'').toLowerCase().trim(); return em||('n:'+String(b&&b.name||'').toLowerCase().trim()); }
 function _planEnded(b){ const k=_planEndKey(b); return !!(k&&_endedPlans[k]); }
-function _endPlan(b,on){ const k=_planEndKey(b); if(!k) return; if(on) _endedPlans[k]={n:b.name||'',ts:Date.now()}; else delete _endedPlans[k]; _endedSave(); }
+function _endPlan(b,on){
+  const k=_planEndKey(b); if(!k) return;
+  if(on) _endedPlans[k]={n:b.name||'',ts:Date.now()}; else delete _endedPlans[k];
+  _endedSave();
+  // Write it through to the Customers sheet so Status actually flips (and it holds across devices).
+  // The local flag above stays as the instant/offline mirror.
+  try{
+    const em=String(b.email||'').toLowerCase().trim(); if(!em) return;
+    const be=_jobBE(b);
+    fetch(be.u+'?'+new URLSearchParams({ action:'hq_end_plan', email:em, address:String(b.address||''), ended:(on?'true':'false'), adminToken:be.t }))
+      .then(function(r){ return r.json(); })
+      .then(function(d){ if(!(d&&d.success)) toast('⚠ Sheet not updated: '+((d&&d.error)||'redeploy the backend')); })
+      .catch(function(){ toast('⚠ Sheet not updated — offline?'); });
+  }catch(e){}
+}
 function hqReopenPlan(){ const b=_jobCur; if(!b) return; _endPlan(b,false); toast('↩ '+(b.name||'They')+' counts as an active plan again'); try{ openJobSheetFor(b); }catch(e){} try{ renderDispatch(); }catch(e){} }
 function _hqActivePlans(books){
   // Counts a customer as an active plan if they have ANY non-cancelled recurring row on the
