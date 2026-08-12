@@ -13,7 +13,7 @@
 <script>
 /* APP_VER:2026-07-16.71 */
 (function(){
-  var V='2026-07-31.77'; window.__APP_VER=V;
+  var V='2026-07-31.78'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1843,20 +1843,36 @@ function _fmRenderSched(){
   });
   // EXPECTED stops: a recurring plan's next visit is already a sheet row (guaranteed);
   // visits beyond that are projected forward by the plan's interval.
+  // EXPECTED = projected future visits, ONE SERIES PER CUSTOMER off their latest visit.
+  // This used to project from EVERY booking row, so a customer with several past visits stacked
+  // several series onto the same day, and projections were also counted on top of real booked rows
+  // — which is how a normal Friday reported ~15 expected.
   const exp={};
-  (allBookings||[]).forEach(function(b){
-    if(b.rowCancelled||!_crewMatch(b)) return;
-    const f=String(b.frequency||'').toLowerCase();
-    const m=f.match(/every\s+(\d+)\s*week/);
-    const iv=m?(+m[1]*7):((f.indexOf('bi')>=0&&f.indexOf('week')>=0)?14:((f.indexOf('week')>=0&&f.indexOf('bi')<0)?7:0));
-    if(!iv) return;
-    const base=dateOf(b); if(!base) return;
-    for(let k2=1;k2<=5;k2++){
-      const dd=new Date(base+'T12:00:00'); dd.setDate(dd.getDate()+iv*k2);
-      const key=_iso(dd);
-      if(key>today&&key<=capISO) exp[key]=(exp[key]||0)+1;
-    }
-  });
+  (function(){
+    const latest={}, booked={};
+    const _ck=function(b){ return String(b.email||'').toLowerCase().trim()||String(b.name||'').toLowerCase().trim(); };
+    (allBookings||[]).forEach(function(b){
+      if(b.rowCancelled) return;
+      const em=_ck(b), d=dateOf(b); if(!em||!d) return;
+      (booked[em]=booked[em]||{})[d]=1;                       // every real row, so we never double-count one
+      if(!_crewMatch(b)) return;
+      const f=String(b.frequency||'').toLowerCase();
+      if(/one.?time|quote|free/.test(f)) return;
+      if(!latest[em]||d>latest[em].d) latest[em]={d:d,f:f};   // newest visit anchors their series
+    });
+    Object.keys(latest).forEach(function(em){
+      const f=latest[em].f, m=f.match(/every\s+(\d+)\s*week/);
+      const iv=m?(+m[1]*7):((f.indexOf('bi')>=0&&f.indexOf('week')>=0)?14:((f.indexOf('week')>=0&&f.indexOf('bi')<0)?7:0));
+      if(!iv) return;
+      for(let k2=1;k2<=5;k2++){
+        const dd=new Date(latest[em].d+'T12:00:00'); dd.setDate(dd.getDate()+iv*k2);
+        const key=_iso(dd);
+        if(key<=today||key>capISO) continue;
+        if(booked[em]&&booked[em][key]) continue;             // a real job already covers this one
+        exp[key]=(exp[key]||0)+1;
+      }
+    });
+  })();
   // QUOTES — business-wide, deliberately NOT crew-filtered: a quote can land on anyone.
   const qts={};
   (allBookings||[]).forEach(function(b){
