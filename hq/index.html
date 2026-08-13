@@ -2957,7 +2957,11 @@ async function _closeConvertedQuote(src){
   try{
     const be=_jobBE(b);
     const d=await(await fetch(be.u+'?'+new URLSearchParams({ action:'mark_done', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), amount:'0', markedBy:myName||'Owner', adminToken:be.t }))).json();
-    if(d&&d.success){ b.done='✓ Done'; _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{done:'✓ Done',ts:Date.now()}); _ghostAdd(b); toast('✅ Booked — quote for '+(b.name||'')+' closed out'); }
+    // NOTE: deliberately no _ghostAdd here. The ghost exists to hold a normal job's place while the
+    // archive catches up — but for a converted quote it renders a SECOND struck-through copy beside
+    // the real closed row, so the customer appeared twice, both completed. The quote is being
+    // retired, not tracked, so it doesn't need a placeholder.
+    if(d&&d.success){ b.done='✓ Done'; _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{done:'✓ Done',ts:Date.now()}); toast('✅ Quote closed — now book the real job'); }
     else toast('⚠ Job booked, but the quote row stayed open — close it manually');
   }catch(e){ toast('⚠ Job booked, but the quote row stayed open — close it manually'); }
   try{ renderDispatch(); }catch(e){}
