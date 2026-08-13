@@ -144,7 +144,7 @@
 <!-- DNS prefetch for the Google Apps Script backend -->
 <link rel="dns-prefetch" href="https://script.google.com"/>
 <link rel="preconnect" href="https://script.google.com"/>
-<link rel="preload" as="image" href="hero-lawn.webp">
+<link rel="preload" as="image" href="hero-lawn.webp" media="(min-width: 901px)">
 <link rel="icon" type="image/x-icon" href="favicon.ico"/>
 <link rel="icon" type="image/png" href="favicon.png"/>
 <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
@@ -1136,6 +1136,72 @@
     to   { opacity:1; }
   }
 
+  /* ── SERVICE CYCLER (square, auto-advancing) ── */
+  .svc-cycle {
+    max-width: 440px;
+    margin: 0 auto;
+    aspect-ratio: 1 / 1;
+    background: #fff;
+    border: 1px solid #e4ede4;
+    border-radius: 20px;
+    padding: 26px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    box-shadow: 0 10px 34px rgba(26,58,26,0.05);
+  }
+  .svc-tabs {
+    display: flex; justify-content: center; gap: 6px;
+    flex: none;
+  }
+  .svc-tab {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px;
+    font: inherit; font-size: 13px; font-weight: 700;
+    color: var(--text-muted);
+    background: transparent;
+    border: 1.5px solid transparent;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: color .25s, border-color .25s, background .25s;
+  }
+  .svc-tab:hover { color: var(--green-deep); }
+  /* The active service is outlined — this is the cycle indicator. */
+  .svc-tab.is-active {
+    color: var(--green-deep);
+    border-color: #2d6a2d;
+    background: #f3f9f3;
+  }
+  .svc-tab:focus-visible { outline: 2px solid #2d6a2d; outline-offset: 2px; }
+
+  .svc-panels { position: relative; flex: 1; }
+  .svc-panel {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center;
+    opacity: 0; visibility: hidden;
+    transform: translateY(8px);
+    transition: opacity .5s ease, transform .5s ease, visibility .5s;
+  }
+  .svc-panel.is-active { opacity: 1; visibility: visible; transform: translateY(0); }
+  .svc-panel-icon {
+    width: 74px; height: 74px; border-radius: 18px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 20px;
+  }
+  .svc-panel h3 {
+    font-size: 19px; font-weight: 700; color: var(--green-deep);
+    margin: 0 0 10px;
+  }
+  .svc-panel p {
+    font-size: 14px; color: var(--text-muted); line-height: 1.75;
+    margin: 0; max-width: 30ch;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .svc-panel { transition: opacity .01s; transform: none; }
+  }
+
   /* ── SCROLL REVEAL ── */
   .reveal {
     opacity: 0;
@@ -1470,10 +1536,8 @@
     /* ── HERO mobile ── */
     .hero { flex-direction: column; min-height: auto; }
     .hero-left { flex: none; padding: 130px 24px 48px; }
-    /* hero-right paints its photo as a CSS background and has no child element,
-       so it needs an explicit height here or it collapses to 0 and the hero
-       photo never renders on mobile. */
-    .hero-right { flex: none; display: block; width: 100%; height: 280px; margin-top: 0; }
+    /* No hero photo on mobile — the dark content panel carries the fold alone. */
+    .hero-right { display: none; }
     .hero p { max-width: 100%; }
     .hero-btns { gap: 10px; }
     .hero-btns .btn-primary, .hero-btns .btn-secondary { font-size: 14px; padding: 13px 22px; }
@@ -1489,8 +1553,11 @@
     .steps { gap: 32px; }
     .testimonials { grid-template-columns: 1fr; }
     #services { padding: 60px 20px !important; }
-    .svc-grid { grid-template-columns: 1fr !important; gap: 14px !important; }
-    .svc-grid > div { padding: 24px 20px !important; }
+    .svc-cycle { max-width: 100%; padding: 22px 18px; gap: 14px; }
+    .svc-tab { padding: 7px 11px; font-size: 12px; gap: 5px; }
+    .svc-panel-icon { width: 64px; height: 64px; border-radius: 16px; margin-bottom: 16px; }
+    .svc-panel h3 { font-size: 17px; }
+    .svc-panel p { font-size: 13px; }
 
     /* ── FAQ mobile ── */
     #faq { padding: 60px 16px; }
@@ -1662,27 +1729,46 @@
       <p class="animate-up" style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--green-mid);margin-bottom:12px;">Every Visit — No Exceptions</p>
       <h2 class="animate-up" style="font-family:'Playfair Display',serif;font-size:clamp(28px,3.5vw,44px);color:var(--green-deep);line-height:1.15;margin:0;animation-delay:.05s;">We Mow. We Trim. We Clear.</h2>
     </div>
-    <div class="svc-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
-      <div class="reveal" style="background:#fff;border:1px solid #e4ede4;border-radius:16px;padding:32px 24px;text-align:center;transition:transform .2s,box-shadow .2s,border-color .2s;" onmouseover="this.style.transform='translateY(-5px)';this.style.boxShadow='0 16px 40px rgba(26,58,26,0.09)';this.style.borderColor='#b2d4b2'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='none';this.style.borderColor='#e4ede4'">
-        <div style="width:60px;height:60px;border-radius:14px;background:#edf7ed;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2d6a2d" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V12M12 12C12 7 7 4 2 6c5 0 8 3 10 6zm0 0c0-5 5-8 10-6-5 0-8 3-10 6"/></svg>
-        </div>
-        <div style="font-size:15px;font-weight:700;color:var(--green-deep);margin-bottom:8px;">Mow</div>
-        <div style="font-size:13px;color:var(--text-muted);line-height:1.75;">Full cut at the right height for Florida grass. Clean lines, even every time.</div>
+    <!-- Square service cycler. All three panels stay in the DOM (crawlable);
+         JS only toggles which one is visible. -->
+    <div class="svc-cycle reveal">
+      <div class="svc-tabs" role="tablist" aria-label="Services included on every visit">
+        <button type="button" class="svc-tab is-active" role="tab" aria-selected="true" aria-controls="svcPanel0" onclick="svcShow(0)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V12M12 12C12 7 7 4 2 6c5 0 8 3 10 6zm0 0c0-5 5-8 10-6-5 0-8 3-10 6"/></svg>
+          <span>Mow</span>
+        </button>
+        <button type="button" class="svc-tab" role="tab" aria-selected="false" aria-controls="svcPanel1" onclick="svcShow(1)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="4" y2="4"/></svg>
+          <span>Trim</span>
+        </button>
+        <button type="button" class="svc-tab" role="tab" aria-selected="false" aria-controls="svcPanel2" onclick="svcShow(2)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.59 4.59A2 2 0 1111 8H2m10.59 11.41A2 2 0 1014 16H2m15.73-8.27A2.5 2.5 0 1119.5 12H2"/></svg>
+          <span>Clear</span>
+        </button>
       </div>
-      <div class="reveal" style="background:#fff;border:1px solid #e4ede4;border-radius:16px;padding:32px 24px;text-align:center;transition:transform .2s,box-shadow .2s,border-color .2s;transition-delay:.07s;" onmouseover="this.style.transform='translateY(-5px)';this.style.boxShadow='0 16px 40px rgba(26,58,26,0.09)';this.style.borderColor='#b2d4b2'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='none';this.style.borderColor='#e4ede4'">
-        <div style="width:60px;height:60px;border-radius:14px;background:#f0f4ee;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1a3a1a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="4" y2="4"/></svg>
+
+      <div class="svc-panels">
+        <div class="svc-panel is-active" id="svcPanel0" role="tabpanel">
+          <div class="svc-panel-icon" style="background:#edf7ed;">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#2d6a2d" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V12M12 12C12 7 7 4 2 6c5 0 8 3 10 6zm0 0c0-5 5-8 10-6-5 0-8 3-10 6"/></svg>
+          </div>
+          <h3>Mow</h3>
+          <p>Full cut at the right height for Florida grass. Clean lines, even every time.</p>
         </div>
-        <div style="font-size:15px;font-weight:700;color:var(--green-deep);margin-bottom:8px;">Trim &amp; Edge</div>
-        <div style="font-size:13px;color:var(--text-muted);line-height:1.75;">Weed eating along fences, beds, driveways, and sidewalks. The details that matter.</div>
-      </div>
-      <div class="reveal" style="background:#fff;border:1px solid #e4ede4;border-radius:16px;padding:32px 24px;text-align:center;transition:transform .2s,box-shadow .2s,border-color .2s;transition-delay:.14s;" onmouseover="this.style.transform='translateY(-5px)';this.style.boxShadow='0 16px 40px rgba(26,58,26,0.09)';this.style.borderColor='#b2d4b2'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='none';this.style.borderColor='#e4ede4'">
-        <div style="width:60px;height:60px;border-radius:14px;background:#f4f8f4;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4a7a4a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.59 4.59A2 2 0 1111 8H2m10.59 11.41A2 2 0 1014 16H2m15.73-8.27A2.5 2.5 0 1119.5 12H2"/></svg>
+        <div class="svc-panel" id="svcPanel1" role="tabpanel">
+          <div class="svc-panel-icon" style="background:#f0f4ee;">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#1a3a1a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="4" y2="4"/></svg>
+          </div>
+          <h3>Trim &amp; Edge</h3>
+          <p>Weed eating along fences, beds, driveways, and sidewalks. The details that matter.</p>
         </div>
-        <div style="font-size:15px;font-weight:700;color:var(--green-deep);margin-bottom:8px;">Clear &amp; Clean</div>
-        <div style="font-size:13px;color:var(--text-muted);line-height:1.75;">Every clipping cleared from your driveway, walkways, and porch. We leave it spotless.</div>
+        <div class="svc-panel" id="svcPanel2" role="tabpanel">
+          <div class="svc-panel-icon" style="background:#f4f8f4;">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#4a7a4a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.59 4.59A2 2 0 1111 8H2m10.59 11.41A2 2 0 1014 16H2m15.73-8.27A2.5 2.5 0 1119.5 12H2"/></svg>
+          </div>
+          <h3>Clear &amp; Clean</h3>
+          <p>Every clipping cleared from your driveway, walkways, and porch. We leave it spotless.</p>
+        </div>
       </div>
     </div>
     <p style="text-align:center;font-size:13px;color:var(--text-muted);margin-top:20px;">All three on every visit — no add-ons, no surprises.</p>
@@ -2445,6 +2531,88 @@ async function loadData() {
   renderTestimonials();
 }
 
+// Fire `start` once, the first time `el` scrolls into view. Uses
+// IntersectionObserver where available and falls back to a passive scroll/resize
+// check, so a cycler can never end up never starting. Idempotent — start() runs
+// at most once, and all listeners are torn down after it fires.
+function startWhenVisible(el, start) {
+  if (!el) return;
+  var fired = false, io = null;
+  function cleanup() {
+    window.removeEventListener('scroll', check);
+    window.removeEventListener('resize', check);
+    if (io) io.disconnect();
+  }
+  function go() { if (fired) return; fired = true; cleanup(); start(); }
+  function check() {
+    var r = el.getBoundingClientRect();
+    if (r.top < window.innerHeight * 0.85 && r.bottom > 0) go();
+  }
+  if ('IntersectionObserver' in window) {
+    io = new IntersectionObserver(function(e) { if (e[0].isIntersecting) go(); }, { threshold: 0.25 });
+    io.observe(el);
+  }
+  window.addEventListener('scroll', check, { passive: true });
+  window.addEventListener('resize', check);
+  // Defer the "already in view on load" test until layout settles. Run at
+  // DOMContentLoaded it measures against a half-built page — images above this
+  // element have no height yet, so it reports as on-screen when it isn't, and
+  // the cycler starts before the visitor ever reaches it.
+  if (document.readyState === 'complete') setTimeout(check, 0);
+  else window.addEventListener('load', function() { setTimeout(check, 0); });
+}
+
+// ── Services cycler (Mow / Trim / Clear) ──────────────────────
+// Independent of data.json — the panels are already in the HTML, so this only
+// toggles which one is showing. Defined as a no-op first so an early tap on a
+// tab can't throw before DOMContentLoaded wires it up.
+window.svcShow = window.svcShow || function(){};
+
+function initSvcCycle() {
+  var tabs   = document.querySelectorAll('.svc-tab');
+  var panels = document.querySelectorAll('.svc-panel');
+  if (!tabs.length || tabs.length !== panels.length) return;
+
+  var current = 0;
+  var timer   = null;
+  var HOLD    = 4200;
+
+  // setTimeout (not setInterval) so a manual tap can't be immediately
+  // overridden by a stale tick already in flight.
+  function schedule() {
+    clearTimeout(timer);
+    timer = setTimeout(function() { window.svcShow((current + 1) % panels.length); }, HOLD);
+  }
+
+  window.svcShow = function(idx) {
+    if (idx === current) { schedule(); return; }
+    tabs[current].classList.remove('is-active');
+    tabs[current].setAttribute('aria-selected', 'false');
+    panels[current].classList.remove('is-active');
+    current = idx;
+    tabs[current].classList.add('is-active');
+    tabs[current].setAttribute('aria-selected', 'true');
+    panels[current].classList.add('is-active');
+    schedule();
+  };
+
+  // Pause while the visitor is reading or tabbing through.
+  var box = document.querySelector('.svc-cycle');
+  if (box) {
+    box.addEventListener('mouseenter', function(){ clearTimeout(timer); });
+    box.addEventListener('mouseleave', schedule);
+    box.addEventListener('focusin',    function(){ clearTimeout(timer); });
+    box.addEventListener('focusout',   schedule);
+  }
+  // Don't start until the visitor has actually scrolled to it.
+  startWhenVisible(box, schedule);
+  if (box && 'IntersectionObserver' in window) {
+    new IntersectionObserver(function(entries) {
+      entries[0].isIntersecting ? schedule() : clearTimeout(timer);
+    }, { threshold: 0.2 }).observe(box);
+  }
+}
+
 // ── Services section photo strip ──────────────────────────────
 function initSvcStrip() {
   var strip = document.getElementById('svcPhotoStrip');
@@ -2497,7 +2665,9 @@ function initSvcStrip() {
     resetSvcTimer(); // Reset auto-advance so it doesn't fire immediately after a manual swipe
   };
 
-  resetSvcTimer(); // Start auto-advance
+  // Start auto-advance only once the gallery is scrolled into view, so the
+  // visitor sees it from the first photo instead of arriving mid-rotation.
+  startWhenVisible(strip, resetSvcTimer);
 
   // Lightbox
   window.openLightbox = function(idx) {
@@ -2656,6 +2826,7 @@ function renderTestimonials() {
 // Load on page load
 document.addEventListener('DOMContentLoaded', () => {
   loadData();
+  initSvcCycle();
   initScrollEffects();
   initViewportKeyboardFix();
 
