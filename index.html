@@ -8,8 +8,7 @@
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
   gtag('config', 'AW-18107107722');
-  // GA4 — same gtag library, second property. Powers Jobber
-  // booking/request conversion tracking on clienthub.getjobber.com.
+  // GA4 — same gtag library, second property.
   gtag('config', 'G-FES0WEY8N1');
 
   // Click-based conversion helper — fires conversion then redirects (if url provided)
@@ -32,24 +31,6 @@
   false = original instant-booking flow with Stripe card checkout
   To switch back instantly: set this to false and redeploy. -->
 <script>window.QUOTE_ONLY_MODE = true;</script>
-
-<!-- ===== JOBBER =================================================
-  Jobber owns lead capture. Every booking CTA on this page calls
-  openQuoteModal(), so this block redirects all of them at once.
-
-    'embed'    = Jobber's work-request form inside this site's modal
-    'redirect' = straight to Jobber, leaving this site
-    'off'      = the old built-in 4-step flow (still in the file, unused)
-
-  These two values come from the embed snippet in your Jobber account
-  (Settings -> Work request form). If you regenerate the form, both change. -->
-<script>
-window.JOBBER = {
-  mode:        'embed',
-  clienthubId: '664d5319-991b-405f-b630-68e9dfee79d1-5090268',
-  formUrl:     'https://clienthub.getjobber.com/client_hubs/664d5319-991b-405f-b630-68e9dfee79d1/public/work_request/embedded_work_request_form?form_id=5090268'
-};
-</script>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Evergreen Lawn Care & Landscaping LLC | Central Florida</title>
@@ -3525,136 +3506,7 @@ function calKeyHandler(e, dateStr, calType) {
 }
 
 // ── Open / Close ──
-/* ── JOBBER WORK REQUEST FORM ────────────────────────────────────────────────
-   Uses Jobber's own embed snippet rather than a hand-rolled iframe, because that
-   snippet does three things we'd otherwise lose: it forwards our UTM parameters
-   onto the form, it auto-resizes the iframe via postMessage, and it hands Jobber
-   our GA client_id so the lead can be attributed. It renders INLINE into a div
-   whose id must equal clienthubId - that's how the snippet finds its mount point.
-
-   Loaded once, on first open. The snippet fires an XHR and rewrites the div, so
-   re-running it would stack a second copy of the form. */
-var _jobberLoaded = false;
-
-/* Google Ads click id, forwarded to Jobber. The snippet copies utm_* across on its
-   own but drops gclid, which is the one parameter offline conversion import needs
-   to tie a closed job back to the ad that produced it. Whether Jobber retains it
-   depends on your form config - it costs nothing to send either way. */
-function jobberFormUrl() {
-  var url = window.JOBBER.formUrl;
-  try {
-    var q = new URLSearchParams(window.location.search);
-    var gclid = q.get('gclid') || q.get('wbraid') || q.get('gbraid');
-    if (gclid) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'gclid=' + encodeURIComponent(gclid);
-  } catch (e) {}
-  return url;
-}
-
-/* Ads events we can actually observe from this page. NOTE: this is engagement,
-   not the lead itself - see the comment on jobberWatchMessages below. */
-function jobberAdsEvent(name) {
-  try { if (typeof gtag === 'function') gtag('event', name, { send_to: 'AW-18107107722' }); } catch (e) {}
-}
-
-/* Jobber's snippet posts 'close', 'scrolltop', 'recaptcha-setup', and otherwise a
-   height string. There is deliberately no submit event in that list - the form is
-   cross-origin on clienthub.getjobber.com, so this page cannot see a submission.
-   We listen anyway for 'close', which Jobber sends when the form finishes, and
-   treat it as a soft signal only. Do NOT wire the real Ads conversion to this:
-   it is not a confirmed submit, and counting it as one inflates your cost-per-lead. */
-function jobberWatchMessages() {
-  window.addEventListener('message', function (e) {
-    if (typeof e.origin === 'string' && e.origin.indexOf('getjobber.com') < 0) return;
-    var msg = e.message || e.data;
-    if (msg === 'close') {
-      jobberAdsEvent('estimate_form_closed');
-      if (typeof trackEvt === 'function') trackEvt('/evt/quote_jobber_closed');
-    }
-  }, false);
-}
-
-function loadJobberEmbed() {
-  if (_jobberLoaded) return;
-  _jobberLoaded = true;
-  if (!document.getElementById('jobberEmbedCss')) {
-    var l = document.createElement('link');
-    l.id = 'jobberEmbedCss'; l.rel = 'stylesheet'; l.media = 'screen';
-    l.href = 'https://d3ey4dbjkt2f6s.cloudfront.net/assets/external/work_request_embed.css';
-    document.head.appendChild(l);
-  }
-  var s = document.createElement('script');
-  s.src = 'https://d3ey4dbjkt2f6s.cloudfront.net/assets/static_link/work_request_embed_snippet.js';
-  s.setAttribute('clienthub_id', window.JOBBER.clienthubId);
-  s.setAttribute('form_url', jobberFormUrl());
-  s.onerror = function () {
-    var host = document.getElementById(window.JOBBER.clienthubId);
-    if (host) host.innerHTML = '<div style="padding:26px 20px;text-align:center;color:#7a2020;font-size:14px;">'
-      + 'The form could not load. Please call <a href="tel:+13529003340" style="color:#166534;font-weight:700;">(352) 900-3340</a>.</div>';
-  };
-  document.body.appendChild(s);
-  jobberWatchMessages();
-}
-
-function openJobberModal() {
-  var ov = document.getElementById('jobberModalOverlay');
-  if (!ov) {
-    ov = document.createElement('div');
-    ov.id = 'jobberModalOverlay';
-    ov.className = 'modal-overlay';
-    // mousedown+mouseup pair, matching the quote modal: a drag that ENDS on the
-    // backdrop shouldn't close the dialog and lose what they typed.
-    ov.addEventListener('mousedown', function (e) { ov._md = (e.target === ov); });
-    ov.addEventListener('mouseup',   function (e) { if (ov._md && e.target === ov) closeJobberModal(); ov._md = false; });
-    ov.innerHTML =
-        '<div class="modal" style="max-width:640px;width:100%;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:90vh;">'
-      +   '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 20px;border-bottom:1px solid #e6ece6;flex-shrink:0;">'
-      +     '<div style="font-size:17px;font-weight:800;color:#1a3a1a;">Request your free estimate</div>'
-      +     '<button type="button" onclick="closeJobberModal()" aria-label="Close" style="background:#f1f5f1;border:none;border-radius:10px;font-size:20px;line-height:1;color:#3d5a45;cursor:pointer;padding:6px 13px;font-family:inherit;">&times;</button>'
-      +   '</div>'
-      // the embed grows itself via postMessage, so the SCROLLER is this wrapper
-      +   '<div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 14px 16px;">'
-      +     '<div id="' + window.JOBBER.clienthubId + '"></div>'
-      +   '</div>'
-      + '</div>';
-    document.body.appendChild(ov);
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && ov.classList.contains('open')) closeJobberModal();
-    });
-  }
-  ov.classList.add('open');
-  document.body.style.overflow = 'hidden';
-  // The sticky mobile call/quote bar sits above the overlay otherwise. The
-  // existing rule for it uses a sibling combinator that can't reach this node,
-  // so hide it directly.
-  var bar = document.getElementById('mobileCTAbarL');
-  if (bar) { bar.dataset.prevDisplay = bar.style.display || ''; bar.style.display = 'none'; }
-  loadJobberEmbed();   // after the mount div exists - the snippet looks it up immediately
-}
-
-function closeJobberModal() {
-  var ov = document.getElementById('jobberModalOverlay');
-  if (ov) ov.classList.remove('open');
-  document.body.style.overflow = '';
-  var bar = document.getElementById('mobileCTAbarL');
-  if (bar) bar.style.display = bar.dataset.prevDisplay || '';
-}
-
 function openQuoteModal(preselectedPlan) {
-  // ── Jobber takeover (see the JOBBER toggle up in <head>) ──────────────────
-  // Every booking CTA on the page routes through this function, so intercepting
-  // here moves all 12 of them at once and leaves the built-in flow below intact.
-  // A blank url falls through on purpose: a half-configured switch must never
-  // leave customers with no way to book.
-  if (window.JOBBER && window.JOBBER.mode && window.JOBBER.mode !== 'off') {
-    if (!window.JOBBER.formUrl) {
-      console.warn('JOBBER.mode is "' + window.JOBBER.mode + '" but formUrl is empty - using the built-in quote flow.');
-    } else {
-      if (typeof trackEvt === 'function') trackEvt('/evt/quote_opened_jobber');
-      jobberAdsEvent('estimate_form_open');
-      if (window.JOBBER.mode === 'redirect') { window.location.href = jobberFormUrl(); return; }
-      if (window.JOBBER.mode === 'embed')    { openJobberModal(); return; }
-    }
-  }
   // Default to biweekly; ignore one-time if somehow passed
   const validPlan = (preselectedPlan === 'weekly') ? 'weekly' : 'biweekly';
   qState = { name:'',email:'',phone:'',address:'',zip:'',lotTierIdx:0,lotAutoDetected:false,lotEstimated:false,detectedAcreage:null,selectedPlan:validPlan,startDate:'',stripeCustomerId:'',isReturning:false,personalQuoteRequested:false };
