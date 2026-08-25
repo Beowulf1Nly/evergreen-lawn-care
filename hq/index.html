@@ -1363,6 +1363,9 @@ function _zoneDaysFor(zi){
   return (d&&Object.keys(d).length)?d:DEFAULT_ZONE_DAYS;   // your saved rules win once you save any
 }
 let _crewRulesCache={}, _crBiz=0, _crDaysState={};
+// _crMode: 'zone' = who covers this zone. 'crew' = what does this crew cover.
+// Same underlying crewRules.zones either way — only the editing angle differs.
+let _crMode='zone', _crCrew='', _crZonesState={}, _crDefaultState='';
 async function _crLoad(zi){
   const z=_bizLoad()[zi]; if(!z) return {default:'',zones:{},days:{}};
   try{
@@ -1382,6 +1385,7 @@ async function crOpen(){
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;"><b style="font-size:17px;">🤖 Crew rules — who gets which zone</b><button onclick="document.getElementById(\'crSheet\').style.display=\'none\'" style="background:rgba(255,255,255,.08);border:none;color:inherit;font-size:20px;border-radius:10px;padding:6px 12px;cursor:pointer;">×</button></div>'
       +'<div style="font-size:12px;opacity:.7;margin-bottom:12px;">New bookings get their crew stamped automatically from these rules (after you redeploy the backends), and ⚡ Auto-assign uses them for anything already unassigned. Leave a zone blank to keep it manual.</div>'
       +'<div id="crBizChips" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;"></div>'
+      +'<div id="crModeTabs" style="display:flex;gap:6px;margin-bottom:12px;padding:4px;background:rgba(255,255,255,.05);border-radius:12px;"></div>'
       +'<div id="crBody"></div>'
       +'<button onclick="crSuggestDays()" style="width:100%;margin-top:14px;padding:12px;border:1.5px solid #38bdf8;border-radius:12px;background:rgba(56,189,248,.12);color:#38bdf8;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;">🎯 Suggest days from my current schedule</button>'
       +'<div style="font-size:11.5px;color:var(--dim);margin:6px 2px 0;line-height:1.5;">Fills each zone with the weekday(s) most of its visits already use — so turning this on doesn\'t move anybody. Whatever falls outside then shows red for you to fix by hand.</div>'
@@ -1390,7 +1394,20 @@ async function crOpen(){
   }
   document.getElementById('crSheet').style.display='flex';
   await _crLoad(_crBiz);
+  crSeed();
   crRender();
+}
+
+/* Seed the editor from the saved rules, or the built-in default plan if you've
+   never saved — so the screen shows live behaviour instead of looking empty.
+   Deliberately NOT part of crRender: every toggle re-renders, and reseeding on
+   each render would throw away the edit that triggered it. Call this only when
+   opening the sheet or switching business. */
+function crSeed(){
+  const r=_crewRulesCache[_crBiz]||{default:'',zones:{},days:{}};
+  _crDaysState=JSON.parse(JSON.stringify((r.days&&typeof r.days==='object'&&Object.keys(r.days).length)?r.days:DEFAULT_ZONE_DAYS));
+  _crZonesState=JSON.parse(JSON.stringify(r.zones||{}));
+  _crDefaultState=String(r.default||'');
 }
 function crRender(){
   const biz=_bizLoad();
@@ -1398,17 +1415,23 @@ function crRender(){
     return '<button onclick="crSetBiz('+i+')" style="padding:8px 13px;border-radius:999px;border:1.5px solid '+(i===_crBiz?'#38bdf8':'rgba(255,255,255,.2)')+';background:'+(i===_crBiz?'rgba(56,189,248,.15)':'transparent')+';color:inherit;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">'+esc((z.e||'')+' '+(z.n||''))+'</button>';
   }).join('');
   const r=_crewRulesCache[_crBiz]||{default:'',zones:{},days:{}};
-  // Seed the editor with your saved rules, or the built-in default plan if you've never saved —
-  // so the settings screen shows the live behaviour instead of looking empty.
-  _crDaysState=JSON.parse(JSON.stringify((r.days&&typeof r.days==='object'&&Object.keys(r.days).length)?r.days:DEFAULT_ZONE_DAYS));
   const _ZDC=['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+  const tab=function(m,label){
+    const on=_crMode===m;
+    return '<button onclick="crSetMode(\''+m+'\')" style="flex:1;padding:9px;border-radius:9px;border:none;background:'+(on?'rgba(56,189,248,.18)':'transparent')+';color:'+(on?'#38bdf8':'inherit')+';font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;">'+label+'</button>';
+  };
+  const _tabs=document.getElementById('crModeTabs');
+  if(_tabs) _tabs.innerHTML=tab('zone','By zone')+tab('crew','By crew');
+
+  if(_crMode==='crew'){ _crRenderByCrew(_ZDC); return; }
   const row=function(zone){
     const chips=[0,1,2,3,4,5,6].map(function(d){ const on=(_crDaysState[zone]||[]).indexOf(d)>=0; return '<button id="crd-'+zone+'-'+d+'" onclick="crDayTog(\''+zone+'\','+d+')" style="padding:6px 0;width:34px;border-radius:8px;border:1.5px solid '+(on?'#38bdf8':'rgba(255,255,255,.18)')+';background:'+(on?'rgba(56,189,248,.2)':'transparent')+';color:inherit;font-weight:800;font-size:11px;cursor:pointer;font-family:inherit;">'+_ZDC[d]+'</button>'; }).join('');
     return '<div style="padding:10px 12px;border:1px solid rgba(255,255,255,.12);border-radius:12px;margin-bottom:8px;">'
       +'<div style="display:flex;align-items:center;gap:10px;">'
       +'<div style="flex:1;min-width:0;"><b style="font-size:14px;">'+zone+'</b><div style="font-size:11.5px;opacity:.65;">'+(ZONE_LABELS[zone]||'')+'</div></div>'
       +'<span style="font-size:12px;opacity:.7;">Crew</span>'
-      +'<input id="cr-'+zone+'" maxlength="3" value="'+esc(String(r.zones[zone]||''))+'" placeholder="—" style="width:52px;padding:9px;border-radius:9px;border:1.5px solid rgba(255,255,255,.25);background:transparent;color:inherit;font-weight:800;text-align:center;font-size:15px;text-transform:uppercase;font-family:inherit;">'
+      +'<input id="cr-'+zone+'" maxlength="3" oninput="crZoneSet(\''+zone+'\',this.value)" value="'+esc(String(_crZonesState[zone]||''))+'" placeholder="—" style="width:52px;padding:9px;border-radius:9px;border:1.5px solid rgba(255,255,255,.25);background:transparent;color:inherit;font-weight:800;text-align:center;font-size:15px;text-transform:uppercase;font-family:inherit;">'
       +'</div>'
       +'<div style="display:flex;gap:4px;margin-top:8px;align-items:center;flex-wrap:wrap;">'+chips+'<span style="font-size:10.5px;opacity:.55;margin-left:4px;">service days — jobs on other days flag <b style="color:#f87171;">red</b> on Dispatch</span></div>'
       +'</div>';
@@ -1417,9 +1440,64 @@ function crRender(){
     +'<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px dashed rgba(255,255,255,.25);border-radius:12px;margin-top:4px;">'
     +'<div style="flex:1;"><b style="font-size:14px;">Everything else</b><div style="font-size:11.5px;opacity:.65;">Default crew when the zip has no zone rule</div></div>'
     +'<span style="font-size:12px;opacity:.7;">Crew</span>'
-    +'<input id="cr-default" maxlength="3" value="'+esc(String(r.default||''))+'" placeholder="—" style="width:52px;padding:9px;border-radius:9px;border:1.5px solid rgba(255,255,255,.25);background:transparent;color:inherit;font-weight:800;text-align:center;font-size:15px;text-transform:uppercase;font-family:inherit;">'
+    +'<input id="cr-default" maxlength="3" oninput="_crDefaultState=String(this.value||\'\').toUpperCase().trim()" value="'+esc(String(_crDefaultState||''))+'" placeholder="—" style="width:52px;padding:9px;border-radius:9px;border:1.5px solid rgba(255,255,255,.25);background:transparent;color:inherit;font-weight:800;text-align:center;font-size:15px;text-transform:uppercase;font-family:inherit;">'
     +'</div>';
 }
+
+/* ── By-crew view ──────────────────────────────────────────────────────────
+   Same data, inverted. The zone view asks "who covers Z4?"; this asks "what
+   does Crew B cover?" and is the natural way to think when you're handing a
+   route to somebody. A zone still belongs to exactly ONE crew, so tapping a
+   zone here MOVES it off whoever had it — the chip shows you who that was
+   before you tap, so it can't happen by accident. */
+function _crCrewList(){
+  const s={};
+  Object.keys(_crZonesState||{}).forEach(function(z){ const v=String(_crZonesState[z]||'').toUpperCase().trim(); if(v) s[v]=1; });
+  if(_crDefaultState) s[String(_crDefaultState).toUpperCase().trim()]=1;
+  ['A','B'].forEach(function(c){ s[c]=1; });          // always offer the two standing crews
+  return Object.keys(s).sort();
+}
+function _crRenderByCrew(_ZDC){
+  const crews=_crCrewList();
+  if(!_crCrew||crews.indexOf(_crCrew)<0) _crCrew=crews[0]||'A';
+  const mine=Object.keys(ZONE_LABELS).filter(function(z){ return String(_crZonesState[z]||'').toUpperCase().trim()===_crCrew; });
+
+  const chips=crews.map(function(c){
+    const n=Object.keys(ZONE_LABELS).filter(function(z){ return String(_crZonesState[z]||'').toUpperCase().trim()===c; }).length;
+    const on=c===_crCrew;
+    return '<button onclick="crPickCrew(\''+c+'\')" style="padding:9px 15px;border-radius:999px;border:1.5px solid '+(on?'#38bdf8':'rgba(255,255,255,.2)')+';background:'+(on?'rgba(56,189,248,.15)':'transparent')+';color:inherit;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;">Crew '+esc(c)+' <span style="opacity:.6;font-weight:600;">'+n+'</span></button>';
+  }).join('');
+
+  const rows=Object.keys(ZONE_LABELS).map(function(zone){
+    const owner=String(_crZonesState[zone]||'').toUpperCase().trim();
+    const on=owner===_crCrew;
+    const other=owner&&!on;
+    const days=(_crDaysState[zone]||[]).map(function(d){ return _ZDC[d]; }).join(' · ')||'no days set';
+    return '<div onclick="crCrewTog(\''+zone+'\')" style="display:flex;align-items:center;gap:11px;padding:11px 13px;border:1.5px solid '+(on?'#38bdf8':'rgba(255,255,255,.12)')+';background:'+(on?'rgba(56,189,248,.10)':'transparent')+';border-radius:12px;margin-bottom:8px;cursor:pointer;">'
+      +'<div style="width:21px;height:21px;border-radius:6px;flex:none;border:1.5px solid '+(on?'#38bdf8':'rgba(255,255,255,.3)')+';background:'+(on?'#38bdf8':'transparent')+';color:#0b1220;font-weight:900;font-size:14px;line-height:19px;text-align:center;">'+(on?'✓':'')+'</div>'
+      +'<div style="flex:1;min-width:0;"><b style="font-size:14px;">'+zone+'</b> <span style="font-size:12px;opacity:.65;">'+esc(ZONE_LABELS[zone]||'')+'</span>'
+      +'<div style="font-size:11px;opacity:.55;margin-top:2px;">'+esc(days)+'</div></div>'
+      +(other?'<span style="font-size:11px;font-weight:800;color:#fbbf24;white-space:nowrap;">Crew '+esc(owner)+'</span>':'')
+      +'</div>';
+  }).join('');
+
+  document.getElementById('crBody').innerHTML=
+     '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">'+chips+'</div>'
+    +'<div style="font-size:11.5px;opacity:.6;margin-bottom:9px;">Tap a zone to give it to Crew '+esc(_crCrew)+'. Amber means another crew has it now — tapping moves it.</div>'
+    +rows
+    +'<div style="font-size:11.5px;opacity:.6;margin-top:10px;">Crew '+esc(_crCrew)+' covers <b>'+mine.length+'</b> zone'+(mine.length===1?'':'s')+'. Service days are set per zone — switch to <b>By zone</b> to change them.</div>';
+}
+function crPickCrew(c){ _crCrew=c; crRender(); }
+function crCrewTog(zone){
+  const cur=String(_crZonesState[zone]||'').toUpperCase().trim();
+  if(cur===_crCrew) delete _crZonesState[zone]; else _crZonesState[zone]=_crCrew;
+  crRender();
+}
+function crZoneSet(zone,v){
+  const s=String(v||'').toUpperCase().trim();
+  if(s) _crZonesState[zone]=s; else delete _crZonesState[zone];
+}
+function crSetMode(m){ _crMode=m; crRender(); }
 /* 🎯 Derive zone→day rules from where jobs ALREADY land, so turning this on doesn't upend anyone's
    routine. For each zone we take the weekday(s) that already cover most of its visits — enough days
    to hold ~80% of them (max 2). Everything outside that shows red, which is exactly the small pile
@@ -1450,7 +1528,9 @@ function crSuggestDays(){
   });
   if(!confirm('🎯 Suggested zone days, learned from where your jobs already are:\n\n'+lines.join('\n')
     +'\n\nThis keeps most visits exactly where they are — anything outside its zone day turns red so you can move it by hand.\n\nApply these? (You can still tweak each zone before saving.)')) return;
-  _crDaysState=next; crOpen(); toast('🎯 Suggested days filled in — review, then Save');
+  // crRender, not crOpen — crOpen reseeds from the saved rules and would throw
+  // the suggestion away before you ever saw it.
+  _crDaysState=next; crRender(); toast('🎯 Suggested days filled in — review, then Save');
 }
 function crDayTog(zone,d){
   const a=_crDaysState[zone]=(_crDaysState[zone]||[]);
@@ -1458,11 +1538,15 @@ function crDayTog(zone,d){
   const el=document.getElementById('crd-'+zone+'-'+d);
   if(el){ const on=a.indexOf(d)>=0; el.style.border='1.5px solid '+(on?'#38bdf8':'rgba(255,255,255,.18)'); el.style.background=on?'rgba(56,189,248,.2)':'transparent'; }
 }
-async function crSetBiz(i){ _crBiz=i; await _crLoad(i); crRender(); }
+async function crSetBiz(i){ _crBiz=i; await _crLoad(i); crSeed(); crRender(); }
 async function crSave(){
   const zi=_crBiz, z=_bizLoad()[zi]; if(!z) return;
-  const rules={ default:String((document.getElementById('cr-default')||{}).value||'').toUpperCase().trim(), zones:{}, days:{} };
-  Object.keys(ZONE_LABELS).forEach(function(zn){ const v=String((document.getElementById('cr-'+zn)||{}).value||'').toUpperCase().trim(); if(v) rules.zones[zn]=v; });
+  // Read from state, not the DOM — the By-crew view has no per-zone input, so
+  // reading inputs here would silently wipe every assignment made in that view.
+  const _dEl=document.getElementById('cr-default');
+  if(_dEl) _crDefaultState=String(_dEl.value||'').toUpperCase().trim();
+  const rules={ default:String(_crDefaultState||'').toUpperCase().trim(), zones:{}, days:{} };
+  Object.keys(ZONE_LABELS).forEach(function(zn){ const v=String(_crZonesState[zn]||'').toUpperCase().trim(); if(v) rules.zones[zn]=v; });
   Object.keys(_crDaysState||{}).forEach(function(zn){ const a=(_crDaysState[zn]||[]).filter(function(x){ return x>=0&&x<=6; }); if(a.length&&a.length<7) rules.days[zn]=a; });
   _crewRulesCache[zi]=rules;
   // merge into the existing schedule config — never clobber home base etc.
@@ -2566,6 +2650,7 @@ function renderEstTab(){
       +'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">'
       +'<div id="estKpis" style="flex:1;display:flex;gap:8px;flex-wrap:wrap;font-size:12.5px;font-weight:700;"></div>'
       +'<button onclick="estNew()" style="padding:10px 16px;border-radius:11px;border:none;background:#16a34a;color:#fff;font-weight:800;cursor:pointer;font-family:inherit;">➕ New estimate</button>'
+      +'<button onclick="cinvOpen()" style="padding:10px 16px;border-radius:11px;border:1px solid var(--line2,#2a3942);background:var(--card,#0f2740);color:inherit;font-weight:800;cursor:pointer;font-family:inherit;">🧾 Custom invoice</button>'
       +'<button id="estDoneToggle" onclick="_estShowDone=!_estShowDone;this.textContent=_estShowDone?\'Hide done\':\'Show won/passed\';_estRenderList();" style="padding:10px 14px;border-radius:11px;border:1px solid var(--line2,#2a3942);background:var(--card,#0f2740);color:inherit;cursor:pointer;font-family:inherit;">Show won/passed</button>'
       +'</div><div id="estList" style="display:flex;flex-direction:column;gap:8px;"></div></div>';
   }
@@ -2723,6 +2808,191 @@ function estOpen(id){
   h+='<button class="ghost" onclick="closeSheet(\'jobSheet\');_estRenderList();" style="margin-top:10px;">Done</button>';
   document.getElementById('jobSheetBody').innerHTML=h;
   openSheet('jobSheet');
+}
+/* ═══════════════════════ 🧾 CUSTOM INVOICE ═══════════════════════════════════════════
+   A freeform invoice to any email — not tied to a job on the board. Line items, photos
+   of the work, and the property address (a commercial account with six properties needs
+   to know WHICH one this bill is for).
+
+   Send goes over POST, not GET: a few photo URLs plus itemised lines blow past the URL
+   length limit, which is exactly what broke estimate sends before they were moved to POST.
+   It posts its OWN action, send_custom_invoice, rather than reusing send_invoice: that
+   one is the JOB invoice path (re-finds Bookings rows, guards double-invoicing, stamps the
+   sheet) and a freeform invoice has no row to find. The handler lives in
+   INVOICE-BACKEND-ADDONS.gs. Until that is pasted in and deployed, the POST falls through
+   to the webhook branch, fails the wh_secret check and returns {received:true} — no invoice,
+   no charge — and cinvSend surfaces that exact shape as "backend not redeployed". */
+const _CINV_KEY='hq_custinv_v1';
+let _cinv=null;
+function _cinvBlank(){ return { id:'ci'+Date.now().toString(36), name:'', email:'', address:'', zip:'', items:[{desc:'',price:''}], note:'', due:7, photos:[] }; }
+function _cinvLoad(){ if(_cinv) return _cinv; try{ _cinv=JSON.parse(localStorage.getItem(_CINV_KEY)||'null'); }catch(e){ _cinv=null; } if(!_cinv||!_cinv.id) _cinv=_cinvBlank(); return _cinv; }
+function _cinvSave(){ try{ localStorage.setItem(_CINV_KEY,JSON.stringify(_cinv)); }catch(e){} }
+function _cinvField(f,v){ const r=_cinvLoad(); r[f]=v; _cinvSave(); }
+function _cinvTotal(){ const r=_cinvLoad(); return (r.items||[]).reduce(function(s,it){ const n=parseFloat(String(it.price||'').replace(/[^0-9.\-]/g,'')); return s+(isFinite(n)?n:0); },0); }
+function _cinvItemSet(i,f,v){
+  const r=_cinvLoad(); r.items=r.items||[];
+  if(!r.items[i]) r.items[i]={desc:'',price:''};
+  r.items[i][f]=v; _cinvSave();
+  const t=document.getElementById('cinvTotalBox'); if(t) t.textContent=_cinvTotal().toFixed(2);
+}
+function cinvAddLine(){ const r=_cinvLoad(); r.items=r.items||[]; r.items.push({desc:'',price:''}); _cinvSave(); cinvOpen(); }
+function cinvDelLine(i){ const r=_cinvLoad(); r.items.splice(i,1); if(!r.items.length) r.items=[{desc:'',price:''}]; _cinvSave(); cinvOpen(); }
+function cinvNew(){ if(_cinvTotal()>0||String(_cinvLoad().email||'').trim()){ if(!confirm('Clear the current invoice draft and start a new one?')){ cinvOpen(); return; } } _cinv=_cinvBlank(); _cinvSave(); cinvOpen(); }
+
+/* Customer book autofill — an invoice needs the RIGHT property, and typing an address
+   by hand is how you bill the wrong one. Matches name, email or address. */
+function _cinvCustList(){
+  const out=[];
+  try{ Object.keys(_custSheets||{}).forEach(function(k){ (_custSheets[k]||[]).forEach(function(c){ out.push(c); }); }); }catch(e){}
+  return out;
+}
+function _cinvSearch(q){
+  const box=document.getElementById('cinvCustHits'); if(!box) return;
+  q=String(q||'').trim().toLowerCase();
+  if(q.length<2){ box.innerHTML=''; return; }
+  const hits=_cinvCustList().filter(function(c){
+    return String(c.name||'').toLowerCase().indexOf(q)>=0
+        || String(c.email||'').toLowerCase().indexOf(q)>=0
+        || String(c.address||'').toLowerCase().indexOf(q)>=0;
+  }).slice(0,6);
+  window._cinvHits=hits;
+  if(!hits.length){ box.innerHTML='<div style="opacity:.55;font-size:12px;padding:4px 2px;">No match in the customer book.</div>'; return; }
+  box.innerHTML=hits.map(function(c,i){
+    return '<button onclick="_cinvPick('+i+')" style="display:block;width:100%;text-align:left;padding:8px 10px;margin-bottom:4px;border-radius:9px;border:1px solid var(--line2,#2a3942);background:var(--card,#0f2740);color:inherit;cursor:pointer;font-family:inherit;font-size:12.5px;">'
+      +'<b>'+esc(c.name||'(no name)')+'</b>'+(c.address?(' <span style="opacity:.7;">· '+esc(c.address)+(c.zip?(' '+esc(c.zip)):'')+'</span>'):'')
+      +'<br><span style="opacity:.6;font-size:11.5px;">'+esc(c.email||'no email')+'</span></button>';
+  }).join('');
+}
+function _cinvPick(i){
+  const c=(window._cinvHits||[])[i]; if(!c) return;
+  const r=_cinvLoad();
+  r.name=c.name||r.name; r.email=String(c.email||r.email||'').toLowerCase();
+  r.address=c.address||r.address; r.zip=String(c.zip||r.zip||'');
+  _cinvSave(); cinvOpen();
+}
+
+/* Photos reuse the estimate pipeline verbatim — compress client-side, upload to Drive,
+   keep only the URL. upload_estimate_photo is already routed in doPost. */
+function _cinvPhotoThumbs(){
+  const ph=(_cinvLoad().photos||[]);
+  if(!ph.length) return '<div style="opacity:.55;font-size:12px;">No photos yet.</div>';
+  return ph.map(function(u,i){ return '<div style="position:relative;">'
+    +'<a href="'+esc(u)+'" target="_blank"><img src="'+esc(_driveThumb(u))+'" style="width:76px;height:76px;object-fit:cover;border-radius:9px;border:1px solid var(--line2,#2a3942);" onerror="this.replaceWith(document.createTextNode(String.fromCodePoint(0x1F5BC)))"></a>'
+    +'<button onclick="_cinvDelPhoto('+i+')" title="Remove photo" style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;line-height:1;">✕</button></div>'; }).join('');
+}
+function _cinvDelPhoto(i){ const r=_cinvLoad(); if(!r.photos) return; if(!confirm('Remove this photo?')) return; r.photos.splice(i,1); _cinvSave(); cinvOpen(); }
+async function _cinvAddPhotos(files){
+  const r=_cinvLoad(); if(!files||!files.length) return;
+  r.photos=r.photos||[];
+  const stat=document.getElementById('cinvPhotoStatus');
+  let done=0;
+  for(let i=0;i<files.length;i++){
+    const f=files[i]; if(!/^image\//.test(f.type||'')) continue;
+    if(stat) stat.textContent='⏳ Uploading '+(i+1)+' of '+files.length+'…';
+    try{
+      const b=await _estCompress(f);
+      const d=await fetch(SCRIPT_URL,{ method:'POST', body:JSON.stringify({ action:'upload_estimate_photo', adminToken:token, base64Data:b.data, mimeType:b.mime, fileName:'invoice-'+r.id+'-'+Date.now()+'-'+i+'.jpg' }) }).then(function(x){ return x.json(); });
+      if(d&&d.success&&d.url){ r.photos.push(d.url); _cinvSave(); done++; }
+      else if(stat){ stat.textContent='⚠ '+((d&&d.error)||'Upload failed — is the backend redeployed?'); }
+    }catch(e){ if(stat) stat.textContent='⚠ Upload error — try a smaller photo'; }
+  }
+  if(stat&&done) stat.textContent='';
+  cinvOpen();
+}
+
+function cinvOpen(){
+  const r=_cinvLoad();
+  try{ _loadCustSheets(); }catch(e){}
+  const inp='width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line2,#2a3942);background:var(--card,#0f2740);color:inherit;font-family:inherit;font-size:14px;box-sizing:border-box;';
+  let h='<h3>🧾 Custom invoice</h3>';
+  h+='<div class="sub">Any amount, any email — it doesn\'t have to be a job on the board.</div>';
+
+  h+='<div class="lbl">Find a customer <span style="opacity:.6;font-weight:400;">(optional — fills name, email &amp; property)</span></div>';
+  h+='<input oninput="_cinvSearch(this.value)" placeholder="Search name, email or address…" style="'+inp+'">';
+  h+='<div id="cinvCustHits" style="margin-top:6px;"></div>';
+
+  h+='<div class="lbl">Bill to</div>';
+  h+='<input value="'+esc(r.name||'')+'" oninput="_cinvField(\'name\',this.value)" placeholder="Customer or company name" style="'+inp+'margin-bottom:7px;">';
+  h+='<input value="'+esc(r.email||'')+'" oninput="_cinvField(\'email\',this.value)" type="email" inputmode="email" placeholder="billing@email.com  (required)" style="'+inp+'">';
+
+  h+='<div class="lbl">Property address <span style="opacity:.6;font-weight:400;">(shows on the invoice)</span></div>';
+  h+='<input value="'+esc(r.address||'')+'" oninput="_cinvField(\'address\',this.value)" placeholder="1234 W Example St, Inverness" style="'+inp+'margin-bottom:7px;">';
+  h+='<input value="'+esc(r.zip||'')+'" oninput="_cinvField(\'zip\',this.value)" inputmode="numeric" placeholder="ZIP" style="'+inp+'max-width:140px;">';
+
+  h+='<div class="lbl">Line items</div>';
+  (r.items||[]).forEach(function(it,i){
+    h+='<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">'
+      +'<input value="'+esc(it.desc||'')+'" oninput="_cinvItemSet('+i+',\'desc\',this.value)" placeholder="What it\'s for" style="'+inp+'flex:1;">'
+      +'<input value="'+esc(it.price||'')+'" oninput="_cinvItemSet('+i+',\'price\',this.value)" inputmode="decimal" placeholder="0.00" style="'+inp+'width:96px;flex:none;text-align:right;">'
+      +'<button onclick="cinvDelLine('+i+')" title="Remove line" style="background:none;border:none;color:#ef4444;font-size:16px;cursor:pointer;padding:4px 6px;">✕</button>'
+      +'</div>';
+  });
+  h+='<button class="ghost" onclick="cinvAddLine()" style="margin-bottom:8px;">➕ Add line</button>';
+  h+='<div style="display:flex;justify-content:space-between;align-items:baseline;padding:9px 12px;border-radius:10px;background:rgba(22,163,74,.12);border:1px solid rgba(22,163,74,.3);">'
+    +'<span style="font-size:12.5px;opacity:.8;">Total</span>'
+    +'<span style="font-size:19px;font-weight:800;color:#4ade80;">$<span id="cinvTotalBox">'+_cinvTotal().toFixed(2)+'</span></span></div>';
+
+  h+='<div class="lbl">Photos <span style="opacity:.6;font-weight:400;">(embedded in the email)</span></div>';
+  h+='<div id="cinvPhotos" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:7px;">'+_cinvPhotoThumbs()+'</div>';
+  h+='<input type="file" accept="image/*" multiple onchange="_cinvAddPhotos(this.files)" style="font-size:12.5px;">';
+  h+='<div id="cinvPhotoStatus" style="font-size:11.5px;color:var(--dim,#9fb2c0);margin:2px;"></div>';
+
+  h+='<div class="lbl">Due in</div>';
+  h+='<select onchange="_cinvField(\'due\',this.value)" style="'+inp+'">'
+    +[3,7,14,30].map(function(n){ return '<option value="'+n+'"'+((+r.due===n)?' selected':'')+'>'+n+' days</option>'; }).join('')
+    +'</select>';
+
+  h+='<div class="lbl">Note to the customer <span style="opacity:.6;font-weight:400;">(optional)</span></div>';
+  h+='<textarea oninput="_cinvField(\'note\',this.value)" placeholder="Thanks for your business…" style="'+inp+'min-height:60px;resize:vertical;">'+esc(r.note||'')+'</textarea>';
+
+  h+='<button class="act" id="cinvSendBtn" onclick="cinvSend()" style="margin-top:12px;background:#16a34a;color:#fff;font-weight:800;"><span class="em">📧</span> Send invoice</button>';
+  h+='<button class="ghost" onclick="cinvNew()" style="margin-top:8px;">🗑 Clear &amp; start over</button>';
+  h+='<button class="ghost" onclick="closeSheet(\'jobSheet\')" style="margin-top:8px;">Close</button>';
+  document.getElementById('jobSheetBody').innerHTML=h;
+  openSheet('jobSheet');
+}
+
+async function cinvSend(){
+  const r=_cinvLoad();
+  const em=String(r.email||'').trim().toLowerCase();
+  if(!em||em.indexOf('@')<1||em.indexOf('.')<0){ toast('Enter a valid billing email'); return; }
+  const lines=(r.items||[]).map(function(it){
+    const n=parseFloat(String(it.price||'').replace(/[^0-9.\-]/g,''));
+    return { desc:String(it.desc||'').trim()||'Service', price:(isFinite(n)?Math.round(n*100)/100:0) };
+  }).filter(function(it){ return it.price>0; });
+  if(!lines.length){ toast('Add at least one line with a price'); return; }
+  const total=Math.round(lines.reduce(function(s,it){ return s+it.price; },0)*100)/100;
+  if(!(total>=1)){ toast('Total must be at least $1.00'); return; }
+  const addr=String(r.address||'').trim()+((r.zip&&String(r.zip).trim())?(', '+String(r.zip).trim()):'');
+  if(!confirm('Email this invoice?\n\nTo: '+em+'\nProperty: '+(addr||'(none given)')+'\nLines: '+lines.length+'\nTotal: $'+total.toFixed(2)+'\nDue in '+(r.due||7)+' days'
+      +((r.photos||[]).length?('\nPhotos: '+r.photos.length):''))) return;
+  const btn=document.getElementById('cinvSendBtn');
+  if(btn){ btn.disabled=true; btn.innerHTML='<span class="em">⏳</span> Sending…'; }
+  // description is what Stripe shows on the hosted page; the branded email carries the
+  // full itemisation. Capped — Stripe rejects descriptions past ~500 chars.
+  const desc=(lines.length===1?lines[0].desc:lines.map(function(l){ return l.desc+' ($'+l.price.toFixed(2)+')'; }).join(' · ')).slice(0,480);
+  try{
+    const d=await fetch(SCRIPT_URL,{ method:'POST', body:JSON.stringify({
+      action:'send_custom_invoice', adminToken:token,
+      email:em, name:r.name||'', amount:total.toFixed(2), description:desc,
+      rowIndex:'0', serviceDate:'', daysUntilDue:String(r.due||7),
+      address:addr, items:JSON.stringify(lines), photos:JSON.stringify(r.photos||[]),
+      note:String(r.note||''),
+      idemKey:'hqcinv:'+r.id+':'+Math.round(total*100)
+    }) }).then(function(x){ return x.json(); });
+    if(d&&d.success===true){
+      toast('📧 Invoice sent to '+em+' — $'+total.toFixed(2),6000);
+      _cinv=_cinvBlank(); _cinvSave(); closeSheet('jobSheet');
+    } else if(d&&d.received===true&&!d.success){
+      // fell through to the webhook branch = doPost has no send_invoice route yet
+      toast('⚠ Backend not redeployed — paste INVOICE-BACKEND-ADDONS.gs, then Deploy → New version. Nothing was charged.',10000);
+    } else {
+      toast('⚠ '+((d&&d.error)||'Invoice failed — nothing was charged'),8000);
+    }
+  }catch(e){
+    toast('⚠ Network error — the invoice was NOT sent',7000);
+  }
+  if(btn){ btn.disabled=false; btn.innerHTML='<span class="em">📧</span> Send invoice'; }
 }
 function setTab(t){
   _activeTab=t;
@@ -3625,12 +3895,27 @@ function renderDispatch(){
           if(ordKeys.length){ let pa=ordKeys.indexOf(_svKey(a)), pb=ordKeys.indexOf(_svKey(b2)); pa=pa<0?9999:pa; pb=pb<0?9999:pb; if(pa!==pb) return pa-pb; }
           return _jobSort(a,b2);
         });
+        // ── SEQUENCE = THE CREW'S ROUTE, NOT THE CLOCK ───────────────────────
+        // `cell` above is already the published run order (ordKeys, else _jobSort) — it IS the
+        // sequence. Every pass below used to re-sort by ev.st instead, so a single stale pinned
+        // time (or fresh times from ⚡ Optimize racing an old pin) dragged a stop out of position,
+        // and the chain pass then cemented that wrong order. Optimize "succeeded" and the board
+        // came out scrambled. Done stops still order by their measured times — their pins are what
+        // actually happened, which outranks the plan.
+        const _ordIx={}; cell.forEach(function(b,i){ _ordIx[_svKey(b)]=i; });
+        const _seqCmp=function(a,b2){
+          const da=isDone(a.b)?0:1, db=isDone(b2.b)?0:1;
+          if(da!==db) return da-db;                                  // finished work sits left of open work
+          if(da===0) return a.st-b2.st||a.en-b2.en;                  // done: reality wins over the plan
+          const ia=_ordIx[_svKey(a.b)], ib=_ordIx[_svKey(b2.b)];
+          return (ia==null?9999:ia)-(ib==null?9999:ib)||a.st-b2.st;
+        };
         const timed=cell.filter(function(b){return !!_dayTimeOf(b,iso);});
         const untimed=cell.filter(function(b){return !_dayTimeOf(b,iso);});
         // Google-Calendar-style: real start + real expected length; overlaps stack into lanes.
         // Jobs WITHOUT a set time get PROJECTED onto the lane in run order (dashed),
         // starting 8:00 or after the last placed job, with drive buffer between stops.
-        const evs=timed.map(function(b){ const t=_dayTimeOf(b,iso).split(':'); const st2=(+t[0])*60+(+t[1]||0); return {b:b,st:st2,en:st2+_hqMins(b,zi,c),proj:false}; }).sort(function(a,b2){ return a.st-b2.st||a.en-b2.en; });
+        const evs=timed.map(function(b){ const t=_dayTimeOf(b,iso).split(':'); const st2=(+t[0])*60+(+t[1]||0); return {b:b,st:st2,en:st2+_hqMins(b,zi,c),proj:false}; }).sort(_seqCmp);
         // Anchor the day to the crew's ACTUAL clock-in today (PMCS/load-up + jobs shift with it); else 8:00.
         const _shift=(iso===todayIso && zi===0)?_crewShift(c):null;   // clock data is lawn-only; other biz use the 7:30 assumption
         const _ciMin=(_shift&&_shift.clockIn)?(_shift.clockIn.getHours()*60+_shift.clockIn.getMinutes()):null;
@@ -3675,7 +3960,10 @@ function renderDispatch(){
         if(iso===todayIso){
           const _nowM=(new Date()).getHours()*60+(new Date()).getMinutes();
           const _nowQ=Math.ceil(_nowM/5)*5;   // display cascade snaps to 5-min steps (pins keep the real minute)
-          evs.sort(function(a,b2){ return a.st-b2.st||a.en-b2.en; });
+          // Route order, so the live cascade walks the stops in the sequence the crew actually
+          // drives — and _firstOpen below picks the crew's NEXT stop, not whichever open job
+          // happens to carry the earliest leftover timestamp.
+          evs.sort(_seqCmp);
           // Completed stops are PINNED where they actually happened. The old cascade
           // re-laid them from estimates on every render, so finished jobs wandered
           // around the board. Now: the render that catches a stop flipping done pins
@@ -3787,9 +4075,11 @@ function renderDispatch(){
         // non-overlapping sequence. Four separate passes above (done-pins, the live cascade, the
         // de-overlap fixup, lane assignment) each mutate these positions and disagree, which is what
         // produced blocks stacked on top of each other with gaps between them. This is the final
-        // word: sort by start, then push any block that would overlap the previous one to begin
-        // where it ended. Durations are preserved; only start times slide.
-        evs.sort(function(a,b2){ return a.st-b2.st||a.en-b2.en; });
+        // word: walk the crew's ROUTE order, then push any block that would overlap the previous
+        // one to begin where it ended. Durations are preserved; only start times slide.
+        // Driving this off the route (not off ev.st) is what makes ⚡ Optimize display correctly —
+        // sorting by start meant a stale pinned time decided the sequence and the chain locked it in.
+        evs.sort(_seqCmp);
         // Stops are separated by the DRIVE between them — the real measured OSRM leg when ⚡ has run,
         // otherwise the flat buffer. Blocks used to butt together as if the truck teleported.
         (function(){
