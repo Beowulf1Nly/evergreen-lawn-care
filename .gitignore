@@ -1,24 +1,51 @@
-# --- Evergreen Lawn Care: never publish these to GitHub Pages ---
+# ─────────────────────────────────────────────────────────────────────────
+# Evergreen Lawn Care — NEVER publish these to GitHub Pages / the live site
+# (active .gitignore — operationalizes gitignore-for-new-clone.txt)
+# ─────────────────────────────────────────────────────────────────────────
 
-# Google Apps Script source (contains live Stripe sk_live_ key) — paste-only, never deploy
+# Google Apps Script source — contains the live Stripe sk_live_ key.
+# This is PASTE-ONLY into the Apps Script editor; it must never be served.
 apps-script.txt
+apps-script*.txt
 
-# Stripe secrets
+# EVERY Apps Script file. This repo is PUBLIC and serves GitHub Pages, and these
+# carry shared secrets, sheet IDs, and API keys in plain text. RETELL-BRIDGE.gs
+# alone holds the only auth on the phone-agent web app. Paste-only, never commit.
+*.gs
+Broccoli-Setup/
+
+# Loose backend notes that quote URLs, secrets, or tokens.
+EMAIL-FIX-gmail-api.txt
+calendar-emoji-tagger.txt
+
+# Stripe secrets / backup codes
 stripe*.txt
 
-# Local databases
+# Local databases (not part of the website)
 *.db
 
-# Internal multi-agent "operating system" scaffold (not part of the website)
+# Internal multi-agent "operating system" scaffold + all backups (key-bearing)
 _Evergreen-OS/
 
-# Editor/manual backups
+# Editor / manual backups (these embed old copies of the key + SCRIPT_URL)
+*.bak
 *.bak-*
+*.bak.*
+*.bak-*.html
+index.html.bak*
 
-# Working notes / docs not meant for the live site
+# Working notes / internal docs — not for the live site
 CHAT_CONTEXT.md
+*.md
 *.docx
 site-audit-report.html
 
+# Raw data export (review before serving)
+data.json
+
 # Unused photo staging
 Photos/Unused/
+
+# OS noise
+.DS_Store
+Thumbs.db
