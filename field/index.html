@@ -11,14 +11,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-09-10.81 */
+/* APP_VER:2026-09-10.82 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-09-10.81'; window.__APP_VER=V;
+  var V='2026-09-10.82'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -90,6 +90,11 @@
   .fm-screen.active{ display:flex; }
   .fm-top{ display:flex; align-items:center; justify-content:space-between; padding:max(14px,env(safe-area-inset-top)) 16px 12px; gap:10px; flex-shrink:0; }
   .fm-top-exit{ background:rgba(255,255,255,.12); color:#dcfce7; border:none; border-radius:10px; padding:8px 12px; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+  /* ⟳ manual refresh — replaced the pull-to-refresh gesture, see fmManualRefresh */
+  .fm-refresh{ background:rgba(255,255,255,.12); color:#dcfce7; border:none; border-radius:10px; padding:8px 11px; font-family:inherit; font-size:15px; line-height:1; cursor:pointer; }
+  .fm-refresh:disabled{ opacity:.55; }
+  .fm-refresh.spin{ animation:fmRefSpin .8s linear infinite; }
+  @keyframes fmRefSpin{ to{ transform:rotate(360deg); } }
   .fm-top-timer{ font-variant-numeric:tabular-nums; font-size:14px; font-weight:700; color:#86efac; background:rgba(134,239,172,.14); padding:6px 11px; border-radius:999px; display:inline-flex; align-items:center; gap:6px; }
   .fm-dot{ width:8px; height:8px; border-radius:50%; background:#22c55e; animation:fmPulse 1.6s infinite; }
   @keyframes fmPulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
@@ -150,15 +155,9 @@
   .fm-jobnav button{ flex:1 1 auto; min-width:88px; background:rgba(255,255,255,.12); color:#dcfce7; border:none; border-radius:11px; padding:11px 13px; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; transition:background .15s,transform .08s ease; }
   .fm-jobnav button:active{ background:rgba(255,255,255,.2); transform:scale(.97); }
   .fm-jobnav button:disabled{ opacity:.3; }
-  /* ⤓ pull-to-refresh puck — lives in #fieldMode (position:fixed = its containing block) */
-  #fmPtr{ position:absolute; top:0; left:50%; margin-left:-20px; width:40px; height:40px; border-radius:50%; z-index:3050;
     display:flex; align-items:center; justify-content:center; pointer-events:none; opacity:0;
     transform:translateY(0) scale(.6); color:#86efac; background:rgba(14,44,26,.92);
     border:1px solid rgba(134,239,172,.28); box-shadow:0 6px 20px rgba(0,0,0,.36); }
-  #fmPtr.snap{ transition:transform .3s cubic-bezier(.22,1,.36,1),opacity .25s ease; }
-  #fmPtr svg{ width:19px; height:19px; display:block; }
-  #fmPtr.spin svg{ animation:fmPtrSpin .75s linear infinite; }
-  @keyframes fmPtrSpin{ to{ transform:rotate(360deg); } }
   #fmCompleteSheet,#fmSkipSheet{ display:none; position:fixed; inset:0; z-index:3100; background:rgba(0,0,0,.55); align-items:flex-end; justify-content:center; }
   /* finish-job is a full PAGE — the popup style clipped the top on long jobs */
   #fmCompleteSheet{ background:#eef6f0; align-items:stretch; }
@@ -293,7 +292,7 @@
   <div class="fm-screen" id="fmScreenJob">
     <div class="fm-top">
       <div style="display:flex;align-items:center;gap:8px;"><button class="fm-top-exit" onclick="fmBackToStart()">‹ Route</button><button class="fm-top-exit" onclick="fmShowJobList()" title="All of today's jobs">📋 Jobs</button></div>
-      <div style="display:flex;align-items:center;gap:8px;"><button class="fm-top-exit" onclick="pmcsOpenMenu()" title="PMCS / Maintenance">🔧 PMCS</button><button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button><div class="fm-top-timer" id="fmJobTimer" style="display:none;"><span class="fm-dot"></span><span id="fmJobTimerVal">0:00:00</span></div></div>
+      <div style="display:flex;align-items:center;gap:8px;"><button class="fm-refresh" onclick="fmManualRefresh(this)" title="Refresh jobs now" aria-label="Refresh jobs now">⟳</button><button class="fm-top-exit" onclick="pmcsOpenMenu()" title="PMCS / Maintenance">🔧 PMCS</button><button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button><div class="fm-top-timer" id="fmJobTimer" style="display:none;"><span class="fm-dot"></span><span id="fmJobTimerVal">0:00:00</span></div></div>
     </div>
     <div class="fm-progress-wrap">
       <div class="fm-progress-meta"><span>Stop <b id="fmStopPos">1</b> of <span id="fmStopTotal">1</span></span><span id="fmDoneCount">0 done</span></div>
@@ -1739,80 +1738,36 @@ function _startTimers(){
     _fmCheckRouteUpdate();                          // light route-order check (~10s)
   },10000);
 }
-/* ── ⤓ PULL TO REFRESH ───────────────────────────────────────────────────────────────────
-   The background poll is 10s light / 30s full, and a full refresh behind a slow cell signal
-   can take a while — long enough that the crew is looking at a stale board with no way to
-   ask for a fresh one. This is the manual override: drag down at the top of any .fm-body.
-   The page itself can never scroll (body is position:fixed), so there's no native gesture
-   to collide with; we own the whole pull. */
-(function(){
-  const TRIGGER=68, MAXPULL=112, RESIST=.55;
-  let _el=null,_y0=0,_dy=0,_armed=false,_busy=false,_ind=null;
-  function ind(){
-    if(_ind&&_ind.parentNode) return _ind;
-    const fm=document.getElementById('fieldMode'); if(!fm) return null;
-    _ind=document.createElement('div'); _ind.id='fmPtr';
-    _ind.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3.2V9h-5.8"/></svg>';
-    fm.appendChild(_ind); return _ind;
-  }
-  function paint(dy,snap){
-    const i=ind(); if(!i) return;
-    i.classList.toggle('snap',!!snap);
-    const p=Math.min(1,dy/TRIGGER);
-    i.style.opacity=String(Math.min(1,dy/26));
-    i.style.transform='translateY('+(Math.min(dy,MAXPULL)+6)+'px) scale('+(.6+.4*p)+') rotate('+Math.round(dy*2.4)+'deg)';
-    i.style.color=(p>=1)?'#4ade80':'#86efac';
-  }
-  function reset(){
-    const i=ind(); if(!i) return;
-    i.classList.add('snap'); i.classList.remove('spin');
-    i.style.opacity='0'; i.style.transform='translateY(0) scale(.6)';
-  }
-  // the nearest scrollable body under the finger, if any
-  function scroller(t){
-    let n=t;
-    while(n&&n!==document.body){ if(n.classList&&n.classList.contains('fm-body')) return n; n=n.parentNode; }
-    return null;
-  }
-  function blocked(){
-    const fm=document.getElementById('fieldMode');
-    if(!fm||!fm.classList.contains('show')) return true;
-    try{ if(typeof _anySheetOpen==='function'&&_anySheetOpen()) return true; }catch(e){}
-    // card/tap/offer overlays are built ad-hoc and aren't in _anySheetOpen's list
-    return !!document.querySelector('#fmCardOv,#fmCardOfferOv,#fmTapOv');
-  }
-  async function go(){
-    _busy=true;
-    const i=ind();
-    if(i){ i.classList.add('snap','spin'); i.style.opacity='1'; i.style.transform='translateY(50px) scale(1)'; i.style.color='#4ade80'; }
-    try{ if(typeof _fmFlushQueue==='function') await _fmFlushQueue(); }catch(e){}
-    try{ if(typeof loadData==='function') await loadData(true); }catch(e){}
-    try{ if(typeof _fmCheckRouteUpdate==='function') await _fmCheckRouteUpdate(); }catch(e){}
-    setTimeout(function(){ _busy=false; _dy=0; _armed=false; reset(); },300);
-  }
-  document.addEventListener('touchstart',function(e){
-    if(_busy||e.touches.length!==1||blocked()) return;
-    const el=scroller(e.target);
-    if(!el||el.scrollTop>0) return;
-    _el=el; _y0=e.touches[0].clientY; _dy=0; _armed=true;
-  },{passive:true});
-  document.addEventListener('touchmove',function(e){
-    if(!_armed||!_el||_busy) return;
-    const raw=e.touches[0].clientY-_y0;
-    // scrolled away from the top, or the finger went up — hand the gesture back
-    if(raw<=0||_el.scrollTop>0){ if(_dy>0){ _dy=0; reset(); } _armed=false; return; }
-    _dy=raw*RESIST;
-    if(_dy>6&&e.cancelable) e.preventDefault();   // stop the list rubber-banding under the puck
-    paint(_dy,false);
-  },{passive:false});
-  function end(){
-    if(_busy||!_armed) return;
-    _armed=false;
-    if(_dy>=TRIGGER) go(); else { _dy=0; reset(); }
-  }
-  document.addEventListener('touchend',end,{passive:true});
-  document.addEventListener('touchcancel',end,{passive:true});
-})();
+/* ── ⟳ MANUAL REFRESH ───────────────────────────────────────────────────────────────────
+   WAS a pull-to-refresh gesture (2026-08-13, shipped 2026-09-10, pulled 2026-09-10).
+   It hung a document-level touchmove listener with {passive:false} on every screen and
+   called preventDefault() mid-gesture. That is fine in a synthetic test and unreliable on
+   a real phone: once iOS has committed to a scroll it sets e.cancelable=false, so the
+   preventDefault is ignored while the indicator still tracks the finger — the list scrolls
+   AND the puck moves, which is what "super buggy" looked like. -webkit-overflow-scrolling
+   momentum also reports scrollTop 0 during the rubber-band, so the gesture armed itself
+   in the middle of a fling.
+
+   A field app crews run all day is the wrong place for a gesture that cannot be verified
+   on the device it ships to. Same job, a button: discoverable, works with gloves on, and
+   it cannot interfere with scrolling because it is not a gesture. The background poll
+   (10s light / 30s full) is unchanged — this is the manual override for when the crew
+   wants a fresh board NOW and doesn't want to wait for the next tick. */
+let _fmRefreshBusy=false;
+async function fmManualRefresh(btn){
+  if(_fmRefreshBusy) return;
+  _fmRefreshBusy=true;
+  const els=[].slice.call(document.querySelectorAll('.fm-refresh'));
+  els.forEach(function(b){ b.classList.add('spin'); b.disabled=true; });
+  try{ if(typeof _fmFlushQueue==='function') await _fmFlushQueue(); }catch(e){}
+  try{ if(typeof loadData==='function') await loadData(true); }catch(e){}
+  try{ if(typeof _fmCheckRouteUpdate==='function') await _fmCheckRouteUpdate(); }catch(e){}
+  // Always clears, even if a refresh above threw or timed out. The old gesture parked its
+  // reset behind the awaits, so a stalled refresh left it wedged and the crew had no
+  // working refresh for the rest of the day.
+  _fmRefreshBusy=false;
+  els.forEach(function(b){ b.classList.remove('spin'); b.disabled=false; });
+}
 let _fmPollTick=0, _routeCheckBusy=false;
 async function _fmCheckRouteUpdate(){
   if(_routeCheckBusy) return; _routeCheckBusy=true;
@@ -1944,7 +1899,7 @@ function _fmRenderCalls(){
   let scr=document.getElementById('fmScreenCalls');
   if(!scr){
     scr=document.createElement('div'); scr.className='fm-screen'; scr.id='fmScreenCalls';
-    scr.innerHTML='<div class="fm-top"><button class="fm-top-exit" onclick="fmCallsBack()">‹ Back</button><div style="font-weight:800;font-size:15px;color:#dcfce7;">📞 Calls to make</div><div style="width:64px;"></div></div>'
+    scr.innerHTML='<div class="fm-top"><button class="fm-top-exit" onclick="fmCallsBack()">‹ Back</button><div style="font-weight:800;font-size:15px;color:#dcfce7;">📞 Calls to make</div><button class="fm-refresh" onclick="fmManualRefresh(this)" title="Refresh leads now" aria-label="Refresh leads now">⟳</button></div>'
       +'<div id="fmCallsMeta" style="padding:10px 16px 2px;font-size:13px;font-weight:700;color:#9ed8b1;"></div>'
       +'<div id="fmCallsBody" style="padding:8px 14px 24px;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch;"></div>';
     document.getElementById('fieldMode').appendChild(scr);
@@ -2441,7 +2396,7 @@ function _fmRenderJobList(stops){
   let scr=document.getElementById('fmScreenJobs');
   if(!scr){
     scr=document.createElement('div'); scr.className='fm-screen'; scr.id='fmScreenJobs';
-    scr.innerHTML='<div class="fm-top"><button class="fm-top-exit" onclick="fmBackToStart()">‹ Route</button><div style="font-weight:800;font-size:15px;color:#dcfce7;">Today\'s Jobs</div><div style="width:64px;"></div></div>'
+    scr.innerHTML='<div class="fm-top"><button class="fm-top-exit" onclick="fmBackToStart()">‹ Route</button><div style="font-weight:800;font-size:15px;color:#dcfce7;">Today\'s Jobs</div><button class="fm-refresh" onclick="fmManualRefresh(this)" title="Refresh jobs now" aria-label="Refresh jobs now">⟳</button></div>'
       +'<div id="fmJobListMeta" style="padding:10px 16px 2px;font-size:13px;font-weight:700;color:#9ed8b1;"></div>'
       // mid-route the Start screen is gone, so the calls banner needs a second home here
       +'<div style="padding:6px 14px 0;">'+_fmCallsBannerHtml('fmCallsBannerList')+'</div>'
