@@ -11,6 +11,15 @@
 
   // Click-based conversion helper — fires conversion then redirects (if url provided)
   function gtag_report_conversion(url) {
+    /* Ad blockers and tracking protection leave `gtag` undefined, and an
+       unguarded call then throws a ReferenceError into whatever flow invoked it.
+       That is exactly how a completed booking ended up showing an error and a
+       live Pay button. Conversion tracking is never worth breaking a checkout:
+       if it cannot fire, navigate anyway and move on. */
+    if (typeof gtag !== 'function') {
+      if (typeof(url) != 'undefined') window.location = url;
+      return false;
+    }
     var callback = function () {
       if (typeof(url) != 'undefined') {
         window.location = url;
@@ -4072,6 +4081,9 @@ async function submitXLQuoteVisit() {
       zip:           qState.zip,
       quoteDateRaw:  qState.startDate,
       quoteDate:     dateFmt,
+      // Same person + same address is one estimate request, however many times
+      // the form is submitted. A duplicate here is a duplicate lead on the board.
+      idemKey:       'xq:'+String(qState.email||'').toLowerCase().trim()+'|'+String(qState.address||'').toLowerCase().trim(),
     });
     fetch(SHEETS_SCRIPT_URL + '?' + params.toString(), { method: 'GET', mode: 'no-cors' }).catch(() => {});
   } catch(e) { /* fire and forget */ }
@@ -4165,6 +4177,15 @@ async function quotePaySubmit() {
   const btn   = document.getElementById('q-pay-btn');
   const errEl = document.getElementById('q-card-errors');
   btn.classList.add('loading'); btn.disabled=true; errEl.textContent='';
+  /* Set the moment the booking request leaves. Everything after that point has to
+     treat this customer as booked, however it fails. */
+  let _bookingSent = false;
+  /* Card setup is three network round trips — check_customer, the SetupIntent, and
+     Stripe itself — which on a phone on cell data is a long time to stare at a
+     spinner with no words. Silence reads as "it froze", and a customer who thinks
+     it froze starts pressing things. */
+  errEl.style.color = '#6b7280';
+  errEl.textContent = 'Setting up your card — this can take a few seconds. Please don\'t close this page.';
 
   // Check if returning customer now that we have their email
   try {
@@ -4221,8 +4242,9 @@ async function quotePaySubmit() {
     });
 
     if (error) {
+      errEl.style.color = '';                       // back from the grey in-flight notice
       errEl.textContent = error.message;
-      btn.classList.remove('loading'); btn.disabled=false; return;
+      btn.classList.remove('loading'); btn.disabled=false; return;   // card declined — they SHOULD retry
     }
 
     const completeParams = new URLSearchParams({
@@ -4246,13 +4268,24 @@ async function quotePaySubmit() {
         ? 'Returning customer. Per-mow rate: ' + afterPrice
         : 'First service intro promo. Following: ' + afterPrice,
     });
+    /* A STABLE key, so a retry of the same booking is the same booking. The card
+       is already set up by this point and the row is about to be written; without
+       this, every extra send is another row, another calendar event and another
+       confirmation email to the customer. Same email + same start date + same
+       plan IS the same booking. */
+    completeParams.set('idemKey', 'bk:'+String(qState.email||'').toLowerCase().trim()+'|'+qState.startDate+'|'+planId);
     fetch(SHEETS_SCRIPT_URL+'?'+completeParams.toString(), { method:'GET', mode:'no-cors' }).catch(()=>{});
+    _bookingSent = true;
 
-    btn.classList.remove('loading'); btn.disabled=false;
+    /* THE BUTTON STAYS DISABLED. It used to be re-enabled here, one line before
+       an unguarded gtag call that throws for anyone running an ad blocker — so a
+       customer whose booking had just succeeded saw an error message above a live
+       Pay button, and pressed it again. And again. Past this point they are
+       booked; there is nothing left for them to press. */
+    btn.classList.remove('loading');
 
-    // ── Fire Google Ads conversion (booking confirmed) ──────────────
-    gtag_report_conversion();
-
+    // Confirmation FIRST. Everything below it is optional and must not be able
+    // to stop the customer being told their booking went through.
     document.getElementById('q-success-date').textContent =
       new Date(qState.startDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
     document.getElementById('quoteStepsBar').style.display='none';
@@ -4263,7 +4296,25 @@ async function quotePaySubmit() {
     _quoteCurrentStep = 0;
     if (_quoteAbandonTimer) { clearTimeout(_quoteAbandonTimer); _quoteAbandonTimer = null; }
     document.getElementById('quoteSuccess').style.display='block';
+
+    // Ads conversion LAST, and it cannot take the confirmation down with it.
+    try { gtag_report_conversion(); } catch(e) {}
   } catch(err) {
+    /* If the booking already went out, the customer IS booked whatever failed
+       afterwards. Showing them an error and re-arming the button here is what
+       produced the duplicates — so say it worked, and keep the button dead. */
+    if (_bookingSent) {
+      try {
+        document.getElementById('quoteStepsBar').style.display='none';
+        ['quoteStep1','quoteStep2','quoteStep3','quoteStep4'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; });
+        document.getElementById('quoteSuccess').style.display='block';
+      } catch(e2) {
+        errEl.textContent = "You're booked — we'll email your confirmation. No need to submit again.";
+      }
+      btn.classList.remove('loading');
+      return;
+    }
+    errEl.style.color = '';
     errEl.textContent = err.message || 'Something went wrong. Please call (352) 462-0627.';
     btn.classList.remove('loading'); btn.disabled=false;
   }
@@ -4610,7 +4661,7 @@ if (window.QUOTE_ONLY_MODE) document.addEventListener('DOMContentLoaded', functi
     // day and emails the customer that we'll be in contact ASAP.
     try{ qState.address=address; qState.zip=zip; qState.name=name; qState.email=email; qState.phone=phone; }catch(e){}
     var btn=document.getElementById('lqSubmitBtn'); if(btn){ btn.disabled=true; btn.textContent='Sending\u2026'; }
-    try{ var params=new URLSearchParams({action:'xl_quote_visit',name:name,email:email,phone:phone,address:address,zip:zip}); fetch(SHEETS_SCRIPT_URL+'?'+params.toString(),{method:'GET',mode:'no-cors',keepalive:true}).catch(function(){}); }catch(e){}
+    try{ var params=new URLSearchParams({action:'xl_quote_visit',name:name,email:email,phone:phone,address:address,zip:zip,idemKey:'xq:'+String(email||'').toLowerCase().trim()+'|'+String(address||'').toLowerCase().trim()}); fetch(SHEETS_SCRIPT_URL+'?'+params.toString(),{method:'GET',mode:'no-cors',keepalive:true}).catch(function(){}); }catch(e){}
     // Redirect to the thank-you page — it fires the Google Ads "Submit lead form" conversion on load (page-load conversion). keepalive above lets the lead request finish during navigation.
     window.location.href='/success';
   };
