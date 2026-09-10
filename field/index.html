@@ -11,14 +11,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-09-10.83 */
+/* APP_VER:2026-09-10.84 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-09-10.83'; window.__APP_VER=V;
+  var V='2026-09-10.84'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1862,7 +1862,7 @@ function _fmLeadAgeLabel(b){
   if(n===1) return 'came in yesterday';
   return 'came in '+n+' days ago';
 }
-function _fmCallTries(b){ return (String((b&&b.notes)||'').match(/No answer/g)||[]).length; }
+function _fmCallTries(b){ return (String((b&&b.notes)||'').match(/Left voicemail|No answer/gi)||[]).length; }   // a voicemail IS an attempt — both labels must count
 
 /* The 30s poll replaces allBookings wholesale, so a flag set on the row OBJECT is
    gone by the next refresh and a lead the crew just handled pops back onto the
@@ -1885,7 +1885,12 @@ function _fmMyCalls(){
     if(!b||b.rowCancelled||b.rowCompleted||b._localTemp) return false;
     if(!_isQuoteCall(b)||isDone(b)||_qcIsHandled(b)) return false;
     const d=dateOf(b);
-    if(!d||d>ds) return false;                       // dated ahead — leave tomorrow's leads for tomorrow
+    /* TODAY ONLY — not "today or older". A crew handed a backlog of month-old leads
+       mid-route will work none of them, and the ones they do ring are cold. The office
+       owns anything that slipped: HQ's "leads nobody is calling" panel lists every one,
+       and re-dating a lead to today is what hands it to a crew. A lead the crew can't
+       reach rolls to the next business day, so it comes back on its own. */
+    if(d!==ds) return false;
     /* ASSIGNED ONLY. _crewOk treats an unassigned job as everyone's, which is right
        for a yard that has to get mowed — but an unassigned LEAD is the office's, and
        inheriting that rule would put every lead in the county on every crew's phone. */
@@ -1900,8 +1905,9 @@ function _fmMyCalls(){
 // Calendar, so a lead reads as a lead everywhere it shows up.
 function _fmSyncCallsBanner(){
   const calls=_fmMyCalls(), n=calls.length, ds=todayISOStr();
-  const late=calls.filter(function(b){ return dateOf(b)<ds; }).length;
-  const sub=n+' customer'+(n!==1?'s':'')+' to ring — book their quote day'+(late?(' · '+late+' overdue'):'');
+  // today-only, so nothing here can be overdue; tries is what varies
+  const retry=calls.filter(function(b){ return _fmCallTries(b)>0; }).length;
+  const sub=n+' customer'+(n!==1?'s':'')+' to ring — book their quote day'+(retry?(' · '+retry+' call back'):'');
   ['fmCallsBanner','fmCallsBannerList'].forEach(function(id){ const el=document.getElementById(id); if(el) el.style.display=n?'block':'none'; });
   ['fmCallsBannerSub','fmCallsBannerListSub'].forEach(function(id){ const el=document.getElementById(id); if(el) el.textContent=sub; });
   /* The strip on the JOB screen — where a crew actually spends the day. Leads are money
@@ -1914,8 +1920,8 @@ function _fmSyncCallsBanner(){
     if(n){
       const oldest=calls.reduce(function(m,b){ const a=_fmLeadAgeDays(b); return (a!==null&&a>m)?a:m; },0);
       const t=document.getElementById('fmCallsStripTxt');
-      if(t) t.textContent=n+' lead'+(n!==1?'s':'')+' to call'+(oldest>=1?(' · oldest '+oldest+'d'):'');
-      strip.style.background=(late||oldest>=14)?'linear-gradient(135deg,#b45309,#d97706)':'linear-gradient(135deg,#0e7490,#0891b2)';
+      if(t) t.textContent=n+' lead'+(n!==1?'s':'')+' to call today'+(retry?(' · '+retry+' call back'):'');
+      strip.style.background=(oldest>=14)?'linear-gradient(135deg,#b45309,#d97706)':'linear-gradient(135deg,#0e7490,#0891b2)';
     }
   }
 }
@@ -1953,15 +1959,16 @@ function _fmRenderCalls(){
   }
   const B='font-size:10.5px;font-weight:800;letter-spacing:.06em;border-radius:6px;padding:2px 8px;white-space:nowrap;';
   body.innerHTML=calls.map(function(b,i){
-    const late=dateOf(b)<todayISOStr(), tries=_fmCallTries(b), ph=String(b.phone||'').trim();
+    const tries=_fmCallTries(b), ph=String(b.phone||'').trim();
     const age=_fmLeadAgeDays(b), stale=(age!==null&&age>=14);
-    // A lead this old is usually one the office never worked, not one that came in
-    // today — saying so on the row is what answers "who is this?" without opening it.
-    const badge = stale ? '<span style="'+B+'color:#7c2d12;background:#fef2f2;border:1px solid #fca5a5;">STALE '+age+'d</span>'
-                : late  ? '<span style="'+B+'color:#9a3412;background:#fff7ed;border:1px solid #fdba74;">OVERDUE</span>'
-                : tries ? '<span style="'+B+'color:#92400e;background:#fffbeb;border:1px solid #fde68a;">TRY '+(tries+1)+'</span>'
+    /* OVERDUE and STALE are gone from here: the list is today-only now, so neither can
+       occur. What DOES matter to whoever is dialling is how many times this lead has
+       already been tried — a third attempt is a different call from a first. The age
+       line below still says when the request came in, because a lead the office re-dated
+       to today can still be weeks old and the crew should know that before they dial. */
+    const badge = tries ? '<span style="'+B+'color:#92400e;background:#fffbeb;border:1px solid #fde68a;">TRY '+(tries+1)+'</span>'
                         : '<span style="'+B+'color:#155e75;background:#ecfeff;border:1px solid #67e8f9;">NEW</span>';
-    return '<button onclick="fmOpenCall('+i+')" style="display:block;width:100%;text-align:left;background:#fff;border:1.5px solid '+(late?'#fdba74':'#a5f3fc')+';border-radius:14px;padding:13px 14px;margin-bottom:9px;font-family:inherit;cursor:pointer;">'
+    return '<button onclick="fmOpenCall('+i+')" style="display:block;width:100%;text-align:left;background:#fff;border:1.5px solid '+(stale?'#fdba74':'#a5f3fc')+';border-radius:14px;padding:13px 14px;margin-bottom:9px;font-family:inherit;cursor:pointer;">'
       +'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;"><span style="font-size:16px;font-weight:800;color:#0e4f5e;">'+esc(b.name||'?')+'</span>'+badge+'</div>'
       +'<div style="font-size:12.5px;color:#64748b;margin-top:3px;">'+esc(b.address||'—')+(b.zip?(' · '+esc(String(b.zip))):'')+'</div>'
       +'<div style="font-size:13px;font-weight:700;color:'+(ph?'#0891b2':'#b45309')+';margin-top:5px;">'+(ph?('📞 '+esc(ph)):'⚠ No phone on file')+'</div>'
@@ -2037,6 +2044,11 @@ function _qcRender(){
   if(lead) h+='<div style="'+QC_LAB+'">What they asked for</div><div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:11px 13px;margin:4px 0 12px;font-size:13.5px;line-height:1.55;white-space:pre-wrap;">'+esc(lead)+'</div>';
   if(log.length) h+='<div style="'+QC_LAB+'">Call history</div><div style="background:#fffbeb;border:1.5px solid #fde68a;border-radius:10px;padding:11px 13px;margin:4px 0 12px;font-size:12.5px;line-height:1.6;color:#78350f;white-space:pre-wrap;">'+esc(log.join('\n'))+'</div>';
 
+  /* Crews freeze on voicemail. A line to read means the message is consistent and the
+     customer actually hears who called and why — the name comes from whoever is logged in. */
+  if(ph) h+='<div style="'+QC_LAB+'">If they don\'t pick up</div>'
+    +'<div style="font-size:12.5px;line-height:1.55;color:#92400e;background:#fffbeb;border:1.5px solid #fde68a;border-radius:10px;padding:11px 13px;margin:4px 0 12px;">'
+    +'<b>Leave a voicemail.</b> Something like:<br><span style="font-style:italic;">“Hi '+esc(String(b.name||'there').split(' ')[0])+', this is '+esc((adminName||'the team').split(' ')[0])+' with Evergreen Lawn Care returning your free estimate request. Give us a call back at (352) 462-0627 and we\'ll get you scheduled.”</span></div>';
   h+='<div style="'+QC_LAB+'">Days that fit the route</div><div id="qc-days" style="margin:6px 0 4px;"></div>'
     +'<div id="qc-say" style="font-size:13px;line-height:1.55;color:#0e7490;background:#ecfeff;border:1.5px solid #a5f3fc;border-radius:10px;padding:11px 13px;margin:2px 0 14px;display:none;"></div>'
     +'<div style="'+QC_LAB+'">Or pick any day</div><input id="qc-other" type="date" style="'+QC_INP+'" onchange="_qcPickOther(this.value)">'
@@ -2054,11 +2066,16 @@ function _qcRender(){
 
   document.getElementById('qc-body').innerHTML=h;
   document.getElementById('qc-foot').innerHTML=
-     '<button id="qcBookBtn" onclick="qcBook()" style="width:100%;padding:15px;border:none;border-radius:12px;background:#16a34a;color:#fff;font-family:inherit;font-size:16px;font-weight:800;cursor:pointer;">✅ Book it</button>'
+  /* A call ends ONE of three ways and each is a "Done": booked, left a voicemail, or
+     they said no. Leaving a voicemail is the expected outcome of not reaching someone —
+     it is the primary of the two, and "couldn't leave one" is the small escape hatch for
+     a full or unconfigured mailbox. All three take the lead off today's list. */
+     '<button id="qcBookBtn" onclick="qcBook()" style="width:100%;padding:15px;border:none;border-radius:12px;background:#16a34a;color:#fff;font-family:inherit;font-size:16px;font-weight:800;cursor:pointer;">✅ Done — book the day</button>'
     +'<div style="display:flex;gap:8px;margin-top:9px;">'
-    +'<button id="qcNoAnsBtn" onclick="qcNoAnswer()" style="flex:1;padding:12px 8px;border:1.5px solid #fde68a;border-radius:12px;background:#fffbeb;color:#92400e;font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer;">📞 No answer</button>'
-    +'<button id="qcNoBtn" onclick="qcNotInterested()" style="flex:1;padding:12px 8px;border:1.5px solid #fecaca;border-radius:12px;background:#fef2f2;color:#b91c1c;font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer;">🚫 Not interested</button>'
-    +'</div>';
+    +'<button id="qcVmBtn" onclick="qcLeftVoicemail()" style="flex:1;padding:12px 8px;border:1.5px solid #fde68a;border-radius:12px;background:#fffbeb;color:#92400e;font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer;">📮 Done — left voicemail</button>'
+    +'<button id="qcNoBtn" onclick="qcNotInterested()" style="flex:1;padding:12px 8px;border:1.5px solid #fecaca;border-radius:12px;background:#fef2f2;color:#b91c1c;font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer;">🚫 Done — not interested</button>'
+    +'</div>'
+    +'<button id="qcNoAnsBtn" onclick="qcNoAnswer()" style="width:100%;margin-top:8px;padding:9px;border:none;background:none;color:#94a3b8;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;text-decoration:underline;">No answer — couldn\'t leave a voicemail</button>';
 
   _qcSetMode(_qcMode);
   _qcRenderDays();
@@ -2192,25 +2209,30 @@ async function qcBook(){
   _fmSyncCallsBanner(); _fmRenderCalls();
 }
 
-function _qcOutcome(outcome,btnId,armLabel,toast){
+function _qcOutcome(outcome,btnId,armLabel,toast,voicemail){
   const b=_qcCur; if(!b) return;
   if(!_tapConfirm(btnId,armLabel)) return;
   _fmEnqueue({ kind:'callout', idemKey:'qco:'+outcome+':'+_stopKey(b)+'|'+Date.now(), method:'GET', params:{
     action:'quote_call_outcome', outcome:outcome, rowIndex:String(b._rowIndex||0),
-    email:b.email||'', serviceDate:dateOf(b), by:adminName||'Crew', note:_qcNote(), adminToken:adminToken } });
+    email:b.email||'', serviceDate:dateOf(b), by:adminName||'Crew', note:_qcNote(),
+    voicemail:voicemail?'1':'0', adminToken:adminToken } });
   _fmFlushQueue();
   _qcMarkHandled(b);
   qcallClose();
   showToast(toast,6000);
   _fmSyncCallsBanner(); _fmRenderCalls();
 }
+function qcLeftVoicemail(){
+  const b=_qcCur; if(!b) return;
+  _qcOutcome('no_answer','qcVmBtn','Tap again — voicemail left','📮 Voicemail logged — '+(b.name||'this lead')+' comes back on the next business day',true);
+}
 function qcNoAnswer(){
   const b=_qcCur; if(!b) return;
-  _qcOutcome('no_answer','qcNoAnsBtn','Tap again — log no answer','📞 Logged — '+(b.name||'this lead')+' comes back on the next business day');
+  _qcOutcome('no_answer','qcNoAnsBtn','Tap again — no voicemail','📞 Logged, no voicemail — '+(b.name||'this lead')+' comes back on the next business day',false);
 }
 function qcNotInterested(){
   const b=_qcCur; if(!b) return;
-  _qcOutcome('not_interested','qcNoBtn','Tap again — close this lead','🚫 Closed — '+(b.name||'this lead')+' comes off the board. No email is sent to them.');
+  _qcOutcome('not_interested','qcNoBtn','Tap again — close this lead','🚫 Closed — '+(b.name||'this lead')+' comes off the board. No email is sent to them.',false);
 }
 function _fmStops(){
   const jobs=_fmTodayRawJobs().map(bk=>({bk}));
