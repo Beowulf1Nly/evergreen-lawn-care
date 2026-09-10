@@ -11,14 +11,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-09-10.84 */
+/* APP_VER:2026-09-10.85 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-09-10.84'; window.__APP_VER=V;
+  var V='2026-09-10.85'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -1276,7 +1276,7 @@ function _fmApplyLocks(openKeys){
 }
 function fmLockStop(){
   if(!_fmIsOwner()) return;
-  const st=_fmStops()[_fmViewIdx]; if(!st) return; const k=_stopKey(st.bk);
+  const st=_fmCurrentStop(); if(!st) return; const k=_stopKey(st.bk);
   const v=prompt('🔒 Lock "'+(st.bk.name||'this stop')+'" at position # (1 = MUST be done first).\nLeave blank to unlock.', _stopLocks[k]||'');
   if(v===null) return;
   const n=parseInt(v);
@@ -1293,7 +1293,7 @@ function fmLockStop(){
 /* ── ✏️ Owner note editor — edits save EVERYWHERE (Customers sheet + Bookings row) ── */
 function fmEditNotes(){
   if(!_fmIsBoss()) return;
-  const st=_fmStops()[_fmViewIdx]; if(!st) return; const bk=st.bk;
+  const st=_fmCurrentStop(); if(!st) return; const bk=st.bk;
   const em=String(bk.email||'').toLowerCase().trim();
   const cust=em?(allCustomers||[]).find(function(c){ return String(c.Email||'').toLowerCase().trim()===em; }):null;
   let ov=document.getElementById('fmNotesSheet');
@@ -1315,7 +1315,7 @@ function fmEditNotes(){
 }
 function fmNotesClose(){ const ov=document.getElementById('fmNotesSheet'); if(ov) ov.style.display='none'; }
 function fmNotesSave(){
-  const st=_fmStops()[_fmViewIdx]; if(!st){ fmNotesClose(); return; } const bk=st.bk;
+  const st=_fmCurrentStop(); if(!st){ fmNotesClose(); return; } const bk=st.bk;
   const em=String(bk.email||'').toLowerCase().trim();
   const cn=String((document.getElementById('fmNotesCust')||{}).value||'').trim();
   const jn=String((document.getElementById('fmNotesJob')||{}).value||'').trim();
@@ -2619,7 +2619,13 @@ function _anySheetOpen(){
   // to swap the data out from under the crew's thumbs.
   if(window._fmStartFlowActive) return true;   // mid start-sequence — hands off
   const flexIds=['fmCompleteSheet','fmSkipSheet','fmCrewPicker','qcOverlay','qcallOverlay','ncOverlay','qjOverlay','fmNotesSheet','fmGasSheet','pmcsOverlay','loadoutOverlay'];
-  for(let i=0;i<flexIds.length;i++){ const el=document.getElementById(flexIds[i]); if(el&&el.style.display==='flex') return true; }
+  for(let i=0;i<flexIds.length;i++){
+    const el=document.getElementById(flexIds[i]);
+    if(!el||!el.isConnected) continue;
+    if(el.style.display!=='flex') continue;
+    if(!el.offsetParent && getComputedStyle(el).position!=='fixed') continue;   // present but not actually on screen
+    return true;
+  }
   return !!document.querySelector('.pmcs-overlay.open');
 }
 /* ───────── Crew / helper picker (prefilled from the staff roster) ───────── */
@@ -2866,11 +2872,50 @@ function fmSkip(){
 }
 
 /* ───────── Skip ───────── */
-function fmOpenSkip(){ const stop=_fmStops()[_fmViewIdx]; if(!stop) return; document.getElementById('fmSkipErr').style.display='none'; document.getElementById('fmSkipTitle').textContent="Couldn't service "+(stop.bk.name||'this stop'); document.getElementById('fmSkipSheet').style.display='flex'; }
+/* ── Which stop is the crew actually looking at? ──────────────────────────────
+   Every caller below used to be `_fmStops()[_fmViewIdx]` followed by a bare
+   `if(!stop) return;` — an INDEX into an array that a background poll can
+   reorder or shorten at any moment. When that index went stale the buttons did
+   nothing whatsoever: no sheet, no error, no toast, no log. The crew taps Done,
+   the screen does not move, and there is no way for them to tell why.
+
+   That is why "the big Done button and Couldn't service both aren't working"
+   named exactly those two — they are the two footer buttons that open a sheet
+   via this lookup. Skip for now, sitting between them, takes a different path
+   and kept working, which is what made it look like a button problem.
+
+   _fmRenderJob stamps window._fmViewKey with the KEY of the job it drew, so the
+   key — not the index — is what the crew is looking at. Resolve by key first,
+   fall back to the index, then to the first open stop, and only then give up. */
+function _fmCurrentStop(){
+  const stops=_fmStops();
+  if(!stops.length) return null;
+  const key=(window._fmPinKey!=null)?window._fmPinKey:window._fmViewKey;
+  if(key!=null){
+    const i=stops.findIndex(function(s){ return _stopKey(s.bk)===key; });
+    if(i>=0){ _fmViewIdx=i; return stops[i]; }
+  }
+  if(_fmViewIdx!=null && _fmViewIdx>=0 && _fmViewIdx<stops.length) return stops[_fmViewIdx];
+  const open=stops.findIndex(function(s){ return !_fmResolved(s); });
+  if(open>=0){ _fmViewIdx=open; return stops[open]; }
+  return null;
+}
+/* For anything the crew TAPPED. A button that silently does nothing is worse than
+   one that fails — they tap it again, and again, and then ring the office. If the
+   stop genuinely cannot be resolved, say so out loud and repaint the route. */
+function _fmNeedStop(){
+  const st=_fmCurrentStop();
+  if(!st){
+    try{ showToast('⚠ Lost track of this stop — refreshing your route. Try again.',6000); }catch(e){}
+    try{ window._fmPinKey=null; window._fmViewKey=null; _fmViewIdx=null; _fmRender(); }catch(e){}
+  }
+  return st;
+}
+function fmOpenSkip(){ const stop=_fmNeedStop(); if(!stop) return; document.getElementById('fmSkipErr').style.display='none'; document.getElementById('fmSkipTitle').textContent="Couldn't service "+(stop.bk.name||'this stop'); document.getElementById('fmSkipSheet').style.display='flex'; }
 function fmCloseSkip(){ document.getElementById('fmSkipSheet').style.display='none'; }
 function fmPromptSkipOther(){ const r=prompt("Reason you couldn't service this stop:"); if(r&&r.trim()) fmRecordSkip(r.trim()); }
 function fmRecordSkip(reason){
-  const stop=_fmStops()[_fmViewIdx]; if(!stop){ fmCloseSkip(); return; }
+  const stop=_fmCurrentStop(); if(!stop){ fmCloseSkip(); return; }
   const bk=stop.bk, rowIndex=bk._rowIndex||((allBookings||[]).indexOf(bk)+2), svcDate=dateOf(bk);
   const today=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
   const note=(String(bk.employeeNotes||'').trim()?bk.employeeNotes+' | ':'')+"⚠️ Couldn't service ("+reason+') — '+today+' by '+(adminName||'crew');
@@ -2882,9 +2927,9 @@ function fmRecordSkip(reason){
 /* ───────── Complete sheet ───────── */
 function fmOpenComplete(){
   // Quote visits close with an OUTCOME (book / email estimate / no) — not a payment.
-  const _qbk=(_fmStops()[_fmViewIdx]||{}).bk;
+  const _qbk=(_fmCurrentStop()||{}).bk;
   if(_qbk&&_isQuoteJob(_qbk)){ fmQuoteCloser(_qbk); return; }
-  const stop=_fmStops()[_fmViewIdx]; if(!stop) return;
+  const stop=_fmNeedStop(); if(!stop) return;
   const bk=stop.bk;
   _fmcStop=stop; _fmcRowIdx=(allBookings||[]).indexOf(bk); _fmcPayType=_payType(bk);
   // Autopay customers default to charging the card on file — pre-confirmed so the employee just
