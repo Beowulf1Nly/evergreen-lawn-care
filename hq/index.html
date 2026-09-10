@@ -1294,6 +1294,10 @@ function openJobSheetFor(b){
     +'<button class="act" onclick="openNotesEdit()"><span class="em">📝</span> Edit job notes</button>'
     +(/clean/i.test(String((_bizLoad()[(b._srcBiz||0)]||{}).n||''))?'<button class="act" onclick="hqEditEstimate()"><span class="em">🧮</span> Edit estimate (rooms · add-ons · deep · price)</button>':'')
     +'<div class="lbl">Schedule</div>'
+    // 📞 A Quote Call is a lead to RING. Give whoever opens it the same day
+    // suggestions /field's call sheet gets, from the same next_available engine,
+    // so the office and the truck can never offer a customer different days.
+    +((_hqIsQuoteCall(b)&&!done)?'<div id="jobLeadDays" class="rs-note" style="border-left:3px solid #22d3ee;">📞 Working out which days fit their zip…</div>':'')
     +((_hqIsQuote(b)&&!done)?'<button class="act" style="background:#16a34a;color:#fff;border-color:#16a34a;font-weight:800;" onclick="hqConvertQuote()"><span class="em">✅</span> Turn into a real job <span style="opacity:.75;font-size:11px;">(books it &amp; closes this quote)</span></button>':'')
     +'<button class="act" onclick="hqScheduleAnother()"><span class="em">➕</span> Schedule another job for '+esc((b.name||'them').split(' ')[0])+'</button>'
     +'<button class="act" onclick="openResched()"><span class="em">📅</span> Reschedule to another day</button>'
@@ -1319,6 +1323,51 @@ function openJobSheetFor(b){
   const cur=String(b.crew||'').toUpperCase().trim();
   document.getElementById('jobCrewPick').innerHTML=_allCrews(b._srcBiz||0).concat(['—']).map(function(cw){ const val=cw==='—'?'':cw; const on=(val===cur); return '<button class="'+(on?'on':'')+'" onclick="doAssign(\''+val+'\')">'+(cw==='—'?'Unassign':('Crew '+esc(cw)))+'</button>'; }).join('');
   openSheet('jobSheet');
+  if(document.getElementById('jobLeadDays')) _hqLoadLeadDays(b);
+}
+/* Day suggestions for a 📞 Quote Call, straight from the backend's next_available —
+   NOT from HQ's own ZIP_ZONE copy. That copy has drifted from the backend before
+   (34448/34487 were missing from it until 2026-09-10), and a lead is exactly where
+   a wrong answer costs a booking. One source, one answer, both apps. */
+async function _hqLoadLeadDays(b){
+  const el=document.getElementById('jobLeadDays'); if(!el) return;
+  const zip=String(b.zip||'').trim().slice(0,5);
+  if(!/^\d{5}$/.test(zip)){ el.innerHTML='📞 No zip on this lead — pick the day by hand when you book it.'; return; }
+  const be=_jobBE(b);
+  let d=null;
+  try{ d=await(await fetch(be.u+'?'+new URLSearchParams({action:'next_available',zip:zip,count:'3',adminToken:be.t}))).json(); }catch(e){}
+  if(_jobCur!==b) return;                      // sheet moved on to another job while we waited
+  if(!(d&&d.success)){ el.innerHTML='📞 Couldn\'t reach the scheduler — pick the day by hand.'; return; }
+  const opts=Array.isArray(d.options)?d.options:[];
+  if(!opts.length){ el.innerHTML='📞 No day came back for '+esc(zip)+' — pick one by hand.'; return; }
+  window._hqLeadOpts=opts;
+  const guess=(d.source==='no-zone'||d.source==='no-service-day');
+  el.innerHTML='<div style="font-weight:800;color:#22d3ee;margin-bottom:6px;">📞 Days that fit '+esc(zip)+(d.zoneLabel?(' · '+esc(d.zoneLabel)):'')+'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">'
+    +opts.map(function(o,i){
+      const p=String(o.date||'').split('-');
+      // Weekday from the DATE, not from o.dayName — hqConvertQuote's confirm derives
+      // it the same way, and a chip and a prompt naming different weekdays for the
+      // same booking is what a customer ends up hearing on the phone.
+      const lbl=(p.length===3)?new Date(+p[0],+p[1]-1,+p[2]).toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'}):(o.dayName||o.date||'');
+      const sub=[o.crew?('Crew '+o.crew):'',(o.load!=null)?(o.load+' stop'+(o.load!==1?'s':'')):''].filter(Boolean).join(' · ');
+      return '<button onclick="_hqBookLeadOn('+i+')" title="Book the quote visit on this day" style="text-align:left;padding:8px 11px;border-radius:9px;border:1px solid rgba(34,211,238,.45);background:rgba(34,211,238,.10);color:inherit;cursor:pointer;font-family:inherit;">'
+        +'<div style="font-weight:800;font-size:12.5px;">'+esc(lbl)+'</div>'
+        +(sub?'<div style="font-size:10.5px;color:var(--dim,#9fb2c0);font-weight:700;">'+esc(sub)+'</div>':'')
+        +'</button>';
+    }).join('')
+    +'</div>'
+    +(d.say?'<div style="font-size:11.5px;color:var(--dim,#9fb2c0);line-height:1.5;">💬 “'+esc(d.say)+'”</div>':'')
+    +(guess?'<div style="font-size:11.5px;color:#fb923c;font-weight:700;margin-top:5px;line-height:1.5;">⚠ No route day set for this zip — these are just the next working days, not a route we already run.</div>':'');
+}
+/* Tapping a day books THAT day. hqConvertQuote closes the lead and opens Add Job;
+   the prefill below is what carries the chosen day and the crew that actually has
+   room on it into that form — otherwise Add Job would open on today with the
+   zone's nominal crew and quietly undo the choice just made. */
+function _hqBookLeadOn(i){
+  const o=(window._hqLeadOpts||[])[i], b=_jobCur;
+  if(!o||!b) return;
+  hqConvertQuote({ date:o.date||'', crew:String(o.crew||b.crew||'').toUpperCase().trim() });
 }
 function _openArchSheet(b,be){
   const photos=String(b.photos||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
@@ -3219,7 +3268,10 @@ const ZIP_ZONE={
   '34460':'Z7','34461':'Z7',              // Lecanto sits SW toward the coast, so it runs with Homosassa
   '34433':'Z4','34434':'Z4',
   '34431':'Z6','34432':'Z6',
-  '34446':'Z7','34447':'Z7',
+  '34446':'Z7','34447':'Z7','34448':'Z7','34487':'Z7',                // 34448/34487 added 2026-09-10 — the backend's
+                                                                      // EVG_ZONE_MAP_ has had them since 8/24, this copy
+                                                                      // didn't, so Homosassa leads there showed no zone
+                                                                      // and never got a wrong-day flag on the board
   '34442':'Z8'                                                        // Hernando on its own
 };
 function _zoneOf(b){ return ZIP_ZONE[String(b.zip||'').trim().slice(0,5)]||null; }
@@ -3309,9 +3361,21 @@ async function hqSetCcEmail(){
    customer; once the job is booked, the quote row is closed out automatically so it stops sitting
    on the board. _convertingQuote carries the source row across the Add Job sheet. */
 let _convertingQuote=null;
-async function hqConvertQuote(){
+async function hqConvertQuote(prefill){
   const b=_jobCur; if(!b) return;
-  if(!confirm('Turn '+(b.name||'this')+'\'s quote into a real job?\n\nThe quote closes now, then you pick the service, price and day.')) return;
+  // A day chip passes a prefill; the plain button passes nothing. Naming the day in
+  // the prompt matters — this is the last stop before the lead row is closed.
+  const dayTxt=(function(){
+    const p=String((prefill&&prefill.date)||'').split('-');
+    if(p.length!==3) return '';
+    return new Date(+p[0],+p[1]-1,+p[2]).toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+  })();
+  if(!confirm(dayTxt
+      ? ('Book '+(b.name||'this lead')+'\'s quote visit for '+dayTxt+(prefill.crew?(' with Crew '+prefill.crew):'')+'?\n\nThe lead closes now, then you confirm the service and price.')
+      : ('Turn '+(b.name||'this')+'\'s quote into a real job?\n\nThe quote closes now, then you pick the service, price and day.'))) return;
+  // Set only AFTER the confirm — a cancelled convert must not leave a stale day
+  // waiting to hijack the next plain Add Job.
+  window._hqLeadPrefill=prefill||null;
   // ⚠️ Close the quote BEFORE booking. Booking inserts a row at the TOP of the sheet and the
   // backend re-resolves mark_done by email — so closing afterwards could land on the JUST-CREATED
   // job and complete it instead (quote and real job "tied together").
@@ -3345,6 +3409,15 @@ function hqScheduleAnother(){   // Add Job pre-filled with this customer — pic
     document.getElementById('addPhone').value=b.phone||'';
     document.getElementById('addSearch').value=b.name||'';
     if(b.crew){ document.querySelectorAll('#addCrewPick button').forEach(function(bt){ if(bt.textContent.indexOf('Crew '+String(b.crew).toUpperCase())>=0) bt.click(); }); }
+    /* 📞 Came in from a day chip on a Quote Call — carry the chosen day and the crew
+       that has room on it. openAddJob() has already stamped addDate with today, and
+       this runs after it, so this wins. Consume it either way: a stale prefill must
+       never leak into the NEXT plain Add Job. */
+    const pf=window._hqLeadPrefill; window._hqLeadPrefill=null;
+    if(pf&&pf.date){
+      const dEl=document.getElementById('addDate'); if(dEl) dEl.value=pf.date;
+      if(pf.crew) document.querySelectorAll('#addCrewPick button').forEach(function(bt){ if(bt.textContent.indexOf('Crew '+String(pf.crew).toUpperCase())>=0) bt.click(); });
+    }
   }catch(e){} },120);
 }
 async function hqInvoiceJob(){   // Stripe invoice for THIS job — same backend the staff portal uses
@@ -3789,6 +3862,75 @@ function _hqChargeStuck(i){ const b=(window._needPayRefs||[])[i]; if(!b) return;
 function _hqCashStuck(i){ const b=(window._needPayRefs||[])[i]; if(!b) return; _jobCur=b; try{ _jobBi=_bookings.indexOf(b); }catch(e){} doMarkCashDone(); }
 function _hqWaiveStuck(i){ const b=(window._needPayRefs||[])[i]; if(b) hqWaiveJob(b); }
 function _hqNeedPayToggle(){ try{ localStorage.setItem('hq_needpay_open', localStorage.getItem('hq_needpay_open')==='1'?'0':'1'); }catch(e){} try{ renderDispatch(); }catch(e){} }
+
+/* ═══════════ 📞 UNCALLED LEADS SAFETY NET ═══════════
+   A Quote Call is a website estimate request waiting for someone to RING. /field
+   shows a crew lead only the ones assigned to THEIR crew, deliberately — an
+   unassigned lead is the office's, not every crew's, or every truck in the county
+   would get every lead's phone number.
+
+   Which means a lead nobody assigns is a lead nobody calls, and it ages on the
+   board in silence. Same for one whose date has already passed with no attempt
+   logged on it. Both are money walking away, so both get surfaced here with the
+   one action that fixes them: put it on a crew. */
+function _hqIsQuoteCall(b){ return /quote call/i.test(String((b&&(b.service||b.serviceType))||'')); }
+function _hqLeadTries(b){ return (String((b&&b.notes)||'').match(/No answer/g)||[]).length; }
+function _hqUncalledLeads(){
+  try{
+    const t=todayISO();
+    return _dispJobs().filter(function(b){
+      if(!b||b.rowCancelled||_isArch(b)||isDone(b)||!_hqIsQuoteCall(b)) return false;
+      const d=String(dateOf(b)||'');
+      return !String(b.crew||'').trim() || (d&&d<t);   // nobody owns it, or its day came and went
+    }).sort(function(a,b){ return String(dateOf(a)||'').localeCompare(String(dateOf(b)||'')); });
+  }catch(e){ return []; }
+}
+function _hqUncalledPanel(){
+  const list=_hqUncalledLeads(); window._uncalledRefs=list;
+  if(!list.length) return '';
+  const t=todayISO();
+  const unass=list.filter(function(b){ return !String(b.crew||'').trim(); }).length;
+  const late =list.filter(function(b){ const d=String(dateOf(b)||''); return d&&d<t; }).length;
+  let open=false; try{ open=localStorage.getItem('hq_leads_open')==='1'; }catch(e){}
+  const bits=[]; if(unass) bits.push(unass+' on no crew'); if(late) bits.push(late+' past their day');
+  let h='<div class="dev-card" style="grid-column:1/-1;border:1px solid rgba(34,211,238,.5);background:rgba(34,211,238,.06);margin-bottom:10px;">';
+  h+='<button onclick="_hqLeadsToggle()" style="width:100%;text-align:left;background:none;border:none;color:#22d3ee;cursor:pointer;font-family:inherit;font-weight:800;font-size:13px;padding:10px 12px;display:flex;align-items:center;gap:8px;">'
+    +'<span style="display:inline-block;transform:rotate('+(open?'90':'0')+'deg);">▸</span>'
+    +'<span>📞 '+list.length+' lead'+(list.length===1?'':'s')+' nobody is calling'+(bits.length?(' · '+bits.join(' · ')):'')+'</span>'
+    +'<span style="margin-left:auto;font-weight:700;opacity:.75;font-size:11.5px;white-space:nowrap;">'+(open?'hide ▲':'put them on a crew ▾')+'</span>'
+    +'</button>';
+  if(!open) return h+'</div>';
+  const crews=_allCrewsAny();
+  h+='<div id="uncalledScroll" onscroll="window._uncalledScroll=this.scrollTop;" class="dev-b" style="display:flex;flex-direction:column;gap:6px;max-height:44vh;overflow:auto;padding-top:2px;">';
+  setTimeout(function(){ var el=document.getElementById('uncalledScroll'); if(el&&window._uncalledScroll) el.scrollTop=window._uncalledScroll; },0);
+  h+=list.map(function(b,i){
+    const d=String(dateOf(b)||''), isLate=d&&d<t, cw=String(b.crew||'').trim(), tries=_hqLeadTries(b);
+    const zone=_zoneOf(b);
+    const tags=[d||'no date', cw?('Crew '+cw):'unassigned', zone?(zone+' '+(ZONE_LABELS[zone]||'')):'zip not zoned']
+      .concat(tries?[tries+' attempt'+(tries===1?'':'s')]:[]).join(' · ');
+    return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--card,#0f2740);border:1px solid '+(isLate?'rgba(251,146,60,.45)':'var(--line2,#2a3942)')+';border-radius:11px;padding:9px 11px;">'
+      +'<button onclick="_hqLeadOpen('+i+')" style="flex:1;min-width:150px;text-align:left;background:none;border:none;color:inherit;cursor:pointer;font-family:inherit;padding:0;">'
+      +'<div style="font-weight:800;font-size:14px;">'+esc(b.name||'Lead')+(isLate?' <span style="font-weight:800;color:#fb923c;font-size:11.5px;">· overdue</span>':'')+'</div>'
+      +'<div style="font-size:11.5px;color:var(--dim,#9fb2c0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(b.address||'')+' · '+esc(tags)+'</div>'
+      +'</button>'
+      +(b.phone?('<a href="tel:'+esc(String(b.phone).replace(/[^0-9+]/g,''))+'" style="padding:8px 11px;border-radius:9px;border:1px solid var(--line2,#2a3942);background:transparent;color:inherit;text-decoration:none;font-family:inherit;font-size:12.5px;font-weight:800;white-space:nowrap;">📞 Call</a>'):'')
+      // One tap puts it on a truck — that's the whole point of the panel, so the
+      // crew buttons live here rather than two screens down in the job sheet.
+      +crews.map(function(c){ return '<button onclick="_hqLeadAssign('+i+',\''+esc(c)+'\')" style="padding:8px 11px;border-radius:9px;border:none;background:'+(cw===c?'#334155':crewColor(c))+';color:#fff;font-weight:800;cursor:pointer;font-family:inherit;font-size:12.5px;white-space:nowrap;"'+(cw===c?' disabled':'')+'>'+(cw===c?'✓ ':'→ ')+esc(c)+'</button>'; }).join('')
+      +'<button onclick="_hqLeadOpen('+i+')" style="padding:8px 11px;border-radius:9px;border:1px solid var(--line2,#2a3942);background:transparent;color:inherit;cursor:pointer;font-family:inherit;font-size:12.5px;white-space:nowrap;">Open ▸</button>'
+      +'</div>';
+  }).join('');
+  h+='</div></div>';
+  return h;
+}
+function _hqLeadOpen(i){ const b=(window._uncalledRefs||[])[i]; if(b) openJobSheetFor(b); }
+function _hqLeadAssign(i,crew){
+  const b=(window._uncalledRefs||[])[i]; if(!b) return;
+  _jobCur=b; try{ _jobBi=_bookings.indexOf(b); }catch(e){}
+  doAssign(crew);   // same path the job sheet uses — set_crew + local echo + repaint
+}
+function _hqLeadsToggle(){ try{ localStorage.setItem('hq_leads_open', localStorage.getItem('hq_leads_open')==='1'?'0':'1'); }catch(e){} try{ renderDispatch(); }catch(e){} }
+
 function renderDispatch(){
   const board=document.getElementById('dispBoard'); if(!board) return;
   _zdEnsure(); try{ _loadCustSheets(); }catch(e){}   // zone-day rules + customer notes for the cards
@@ -3819,7 +3961,7 @@ function renderDispatch(){
     box.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on',b.dataset.c===_dispCrew); });
   })();
   const todayIso=todayISO();
-  let rangeStart, rangeEnd, h=_hqBizFailBanner()+_hqNeedsPayPanel();   // ⚠️ a business that can't load + completed jobs not yet paid
+  let rangeStart, rangeEnd, h=_hqBizFailBanner()+_hqNeedsPayPanel()+_hqUncalledPanel();   // ⚠️ a business that can't load · completed jobs not yet paid · 📞 leads nobody is calling
   if(_dispView==='month'){
     const y=_dispAnchor.getFullYear(), mo=_dispAnchor.getMonth();
     document.getElementById('dispTitle').textContent=MO[mo]+' '+y;
