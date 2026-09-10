@@ -7088,18 +7088,48 @@ async function renderEstimates(force){
   h+='</div></div>';
   // composer
   h+='<div class="dev-card"><div class="dev-h">📨 New estimate — '+esc(z.e)+' '+esc(z.n)+'</div><div class="dev-b">'
-    +'<div class="dev-row"><input class="dev-inp" id="esName" placeholder="Customer name" style="flex:1;"><input class="dev-inp" id="esEmail" placeholder="Email" style="flex:1;"></div>'
+    +'<div class="dev-row"><input class="dev-inp" id="esName" placeholder="Customer name" style="flex:1;" oninput="_esSyncEmail()"><input class="dev-inp" id="esEmail" placeholder="Email" style="flex:1;"></div>'
     +'<div class="dev-row"><input class="dev-inp" id="esPhone" placeholder="Phone (optional)" style="flex:1;"><input class="dev-inp" id="esAddr" placeholder="Address (optional)" style="flex:1;"></div>'
     +'<div class="dev-row" style="font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);">Services</div>'
     +'<div id="esItems">'+_esItems.map(function(it,i){ return _esItemRow(it,i); }).join('')+'</div>'
     +'<div class="dev-row"><button class="dev-btn" onclick="_esItems.push({desc:\'\',price:\'\'});_esReRender();">＋ line</button><span class="grow"></span><span style="font-family:var(--mono);font-weight:700;" id="esTotal">$0</span></div>'
     +'<div class="dev-row"><input class="dev-inp" id="esSummary" placeholder="Summary shown at top of the estimate (optional)" style="flex:1;"></div>'
-    +'<div class="dev-row"><input class="dev-inp" id="esMsg" placeholder="Personal message in the email (optional)" style="flex:1;"></div>'
+    /* The email the customer actually receives. This used to be a single-line box
+       that was left EMPTY by default — and personalMessage is the only greeting the
+       template has, so every estimate sent from HQ arrived with no "Hey <name>" at
+       all, straight into the line items. Prefilled now, and editable per estimate:
+       what is in this box is exactly what sends. */
+    +'<div class="dev-row" style="font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);">Email to the customer</div>'
+    +'<div class="dev-row"><input class="dev-inp" id="esSubject" placeholder="Subject" style="flex:1;" oninput="this.dataset.edited=\'1\'"></div>'
+    +'<div class="dev-row"><textarea class="dev-inp" id="esMsg" placeholder="Message at the top of the estimate email" style="flex:1;min-height:118px;resize:vertical;font-family:inherit;line-height:1.5;" oninput="this.dataset.edited=\'1\'"></textarea></div>'
+    +'<div class="dev-row" style="color:var(--dim);font-size:11.5px;">Edited per estimate. Clear it and the email goes out with no message — the line items start straight away. <button class="dev-btn" style="margin-left:6px;" onclick="_esSyncEmail(true)">↩ Reset to default</button></div>'
     +'<div class="dev-row"><input class="dev-inp" id="esValid" type="date" title="Valid through" value="'+(function(){const d=new Date();d.setDate(d.getDate()+14);return _iso(d);})()+'" style="flex:1;"><button class="dev-btn go" style="flex:1;" onclick="estSend()">'+(myRole==='owner'?'📧 Send estimate':'📤 Submit for approval')+'</button></div>'
     +'<div class="dev-row" id="esStatus" style="color:var(--dim);"></div>'
     +'</div></div>';
   h+='</div>';
   el.innerHTML=h;
+  // The composer is rebuilt from scratch on every render, so seed the defaults after.
+  setTimeout(function(){ try{ _esSyncEmail(); }catch(e){} },0);
+}
+/* The house wording, in ONE place. invoice.html has had the same text in its own
+   estimate composer for months; this is HQ finally matching it rather than sending
+   a greeting-less email. */
+function _esDefaultBody(firstName){
+  return 'Hey ' + (firstName || 'there') + ',\n\n'
+       + "Here's your estimate — let us know if you have any questions!\n\n"
+       + 'Thanks,\nEvergreen Lawn Care & Landscaping';
+}
+function _esDefaultSubject(){ return 'Your estimate is ready — Evergreen Lawn Care & Landscaping'; }
+/* Refill from the customer name, but NEVER over a typed edit — same dataset.edited
+   guard invoice.html uses, because retyping a message every time the name field
+   changes is how people stop bothering to personalise it. force=true is the
+   explicit Reset button. */
+function _esSyncEmail(force){
+  const nameEl=document.getElementById('esName'); if(!nameEl) return;
+  const first=String(nameEl.value||'').trim().split(/\s+/)[0]||'';
+  const subj=document.getElementById('esSubject'), body=document.getElementById('esMsg');
+  if(subj && (force || !subj.dataset.edited)){ subj.value=_esDefaultSubject(); if(force) delete subj.dataset.edited; }
+  if(body && (force || !body.dataset.edited)){ body.value=_esDefaultBody(first); if(force) delete body.dataset.edited; }
 }
 function _esItemRow(it,i){
   return '<div class="dev-row"><input class="dev-inp es-desc" data-i="'+i+'" value="'+esc(it.desc)+'" placeholder="Service description" style="flex:2.2;" oninput="_esItems['+i+'].desc=this.value">'
@@ -7133,10 +7163,19 @@ async function estSend(){
   const action=(myRole==='owner')?'send_quote_email':'submit_estimate_for_approval';
   const d=await bizGet(z,{ action:action, submittedBy:myName||'Owner', name:name, email:email,
     phone:(document.getElementById('esPhone').value||'').trim(), address:(document.getElementById('esAddr').value||'').trim(),
-    summary:(document.getElementById('esSummary').value||'').trim(), personalMessage:(document.getElementById('esMsg').value||'').trim(),
+    summary:(document.getElementById('esSummary').value||'').trim(),
+    personalMessage:(document.getElementById('esMsg').value||'').trim(),
+    emailSubject:(document.getElementById('esSubject')?document.getElementById('esSubject').value:'').trim(),
     estimateDate:todayISO(), validThru:(document.getElementById('esValid').value||''),
     items:JSON.stringify(items), notes:'[]' });
-  if(d&&d.success){ st.textContent='✅ Sent to '+email; toast('📧 Estimate sent'); _esItems=[{desc:'',price:''}]; _estList=null; renderEstimates(true); }
+  if(d&&d.success){
+    st.textContent='✅ Sent to '+email; toast('📧 Estimate sent');
+    _esItems=[{desc:'',price:''}];
+    // Drop the edited flags so the NEXT estimate starts from the house wording
+    // again rather than inheriting whatever was written for this customer.
+    ['esSubject','esMsg'].forEach(function(id){ const el=document.getElementById(id); if(el) delete el.dataset.edited; });
+    _estList=null; renderEstimates(true);
+  }
   else st.textContent='⚠ '+((d&&d.error)||'Failed — is that backend connected?');
 }
 /* ── mass email v2 — branded, previewed, templated ── */
