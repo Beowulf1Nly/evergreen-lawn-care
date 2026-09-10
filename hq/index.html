@@ -733,6 +733,7 @@
     <div style="display:flex;gap:10px;"><input type="date" id="addDate" class="field" style="flex:1;"><input type="text" id="addPrice" class="field" placeholder="$ price" style="flex:0 0 120px;"></div>
     <div class="lbl">Plan</div>
     <select id="addFreq" class="field" style="width:100%;" onchange="_ajFreqChg()">
+      <option value="📞 Call job">📞 Call job — someone to ring back, no visit yet</option>
       <option value="📋 Quote Visit">📋 Quote visit — no price, estimate on site</option>
       <option value="One-time" selected>One-time job</option>
       <option value="Weekly Plan">Weekly plan (auto-reschedules every 7d)</option>
@@ -1960,8 +1961,22 @@ const AJ_ADDONS=[
 ];
 let _ajC={bed:1,bath:1,extra:0,deepAll:0,firstOnly:0,addons:{}};
 function _ajClnActive(){ const z=_bizLoad()[_addBiz]||{}; return /clean/i.test(String(z.n||'')); }
-function _ajIsQuote(){ if(document.getElementById('hqEESheet')&&document.getElementById('hqEESheet').classList.contains('show')) return false; return /quote/i.test(String((document.getElementById('addFreq')||{}).value||'')); }
-function _ajFreqChg(){ _ajClnRender(); }
+function _ajIsCallJob(){ return /call job/i.test(String((document.getElementById('addFreq')||{}).value||'')); }
+/* A call job carries no price and no service build-up, exactly like a quote visit,
+   so everything _ajIsQuote gates (price, the cleaning/lawn builders) applies to it
+   too. Keep them one test — two would drift. */
+function _ajIsQuote(){ if(document.getElementById('hqEESheet')&&document.getElementById('hqEESheet').classList.contains('show')) return false; const v=String((document.getElementById('addFreq')||{}).value||''); return /quote/i.test(v)||/call job/i.test(v); }
+function _ajFreqChg(){
+  _ajClnRender();
+  // A call job is not a visit: no price, and the notes box is where the reason goes.
+  const cj=_ajIsCallJob();
+  const pr=document.getElementById('addPrice');
+  if(pr){ pr.style.display=cj?'none':''; if(cj) pr.value=''; }
+  const nt=document.getElementById('addNotes');
+  if(nt) nt.placeholder=cj?'Why are we calling them? (what they asked about)':'Notes';
+  const go=document.getElementById('addGo');
+  if(go) go.textContent=cj?'📞 Add call job':'Schedule job';
+}
 /* ── 🌿 lawn quick-pricer — sizes from the pricebook (LAWN-MOW-*), extras ride as
    per-visit Services just like cleaning. Built tier-ready for good/better/best later. ── */
 const AJ_LAWN_SIZES=[
@@ -2195,6 +2210,7 @@ function openAddJob(){
   _ajC={bed:1,bath:1,extra:0,deepAll:0,firstOnly:0,addons:{}};
   _ajL={size:'',extras:{}};
   _ajType='MOW'; _ajTypeCustom='';
+  setTimeout(function(){ try{ _ajFreqChg(); }catch(e){} },40);   // price/notes/button reflect the selected type
   try{ _hqPbFetch(); }catch(e){}
   setTimeout(function(){ try{ _ajClnRender(); }catch(e){} },30);
   document.getElementById('addBizPick').innerHTML=_bizLoad().map(function(z,i){
@@ -2220,6 +2236,34 @@ function renderAddSearch(q){
 function fillCustomer(bi){ const b=(window._addHits||[])[bi]; if(!b) return; document.getElementById('addName').value=b.name||''; document.getElementById('addAddr').value=b.address||''; document.getElementById('addZip').value=b.zip||''; document.getElementById('addPhone').value=b.phone||''; document.getElementById('addEmail').value=b.email||''; if(b.price) document.getElementById('addPrice').value=String(b.price).replace(/[^0-9.]/g,''); document.getElementById('addResults').style.display='none'; document.getElementById('addSearch').value=b.name||''; }
 async function doAddJob(){
   const name=document.getElementById('addName').value.trim(); const addr=document.getElementById('addAddr').value.trim(); const date=document.getElementById('addDate').value;
+  const _phone=document.getElementById('addPhone').value.trim(), _mail=document.getElementById('addEmail').value.trim();
+  /* A CALL JOB has different requirements from a visit. There is nowhere to drive to
+     yet — often all we have is a name and a number — so an address is not required,
+     but something to call on is. It also goes to its own action: manual_schedule
+     would route a Quote-Visit frequency into handleQuoteVisit and email the customer
+     "your quote visit is confirmed" for a visit nobody has booked. */
+  if(_ajIsCallJob()){
+    if(!name){ toast('Name required'); return; }
+    if(!_phone&&!_mail){ toast('A phone number or email is required — there is nothing to call otherwise'); return; }
+    if(!date){ toast('Pick the day to call them'); return; }
+    const cb=document.getElementById('addGo'); cb.disabled=true; cb.textContent='Adding…';
+    try{
+      const _cz=_bizLoad()[_addBiz]||_bizLoad()[0];
+      const cp=new URLSearchParams({ action:'create_call_job', name:name, phone:_phone, email:_mail,
+        address:addr, zip:document.getElementById('addZip').value.trim(), crew:_addCrew||'',
+        reason:document.getElementById('addNotes').value.trim(), serviceDate:date,
+        idemKey:'ccj:'+name+'|'+date+'|'+(_phone||_mail), adminToken:_bizTok(_cz) });
+      const cd=await(await fetch(_bizUrl(_cz)+'?'+cp)).json();
+      if(cd&&cd.success){
+        toast('📞 Call job added for '+date+(cd.crew?(' · Crew '+cd.crew):' · unassigned'));
+        closeSheet('addSheet');
+        if(_bizUrl(_cz)===SCRIPT_URL) await refreshBookings();
+        try{ renderDispatch(); }catch(e){}
+      } else toast('⚠ '+((cd&&cd.error)||'could not add the call job')+(/Unknown|Missing/i.test(String(cd&&cd.error||''))?' — that backend is running old code, re-paste + Deploy':''));
+    }catch(e){ toast('Network error — call job not added'); }
+    cb.disabled=false; cb.textContent='📞 Add call job';
+    return;
+  }
   if(!name||!addr){ toast('Name and address required'); return; } if(!date){ toast('Pick a date'); return; }
   const btn=document.getElementById('addGo'); btn.disabled=true; btn.textContent='Scheduling…';
   try{ const price=(document.getElementById('addPrice').value||'').replace(/[^0-9.]/g,'');
@@ -3931,6 +3975,128 @@ function _hqLeadAssign(i,crew){
 }
 function _hqLeadsToggle(){ try{ localStorage.setItem('hq_leads_open', localStorage.getItem('hq_leads_open')==='1'?'0':'1'); }catch(e){} try{ renderDispatch(); }catch(e){} }
 
+
+/* ═══════════ ☎️ EVERY CALL THE PHONE AGENT TOOK ═══════════
+   The agent has been logging every call to its own tabs in the same spreadsheet
+   for months, and the board never showed any of it — so a caller who asked for a
+   price and did not book left no trace anywhere anyone looks.
+
+   get_retell_calls merges 'Retell Call Log' (every call) with 'Retell Leads'
+   (the ones where something was captured, carrying Call Type and Urgent) and
+   returns ONE 'kind' per call. The classification is decided in the backend on
+   purpose: two places deciding what a call was is two places to disagree.
+
+     quote     — asked for a price and did NOT get booked. The money one, and
+                 the reason this panel exists. Green, loud, and it says BOOKED
+                 instead when the agent already put it on the board.
+     urgent    — flagged urgent, or escalated/complaint. Needs a human. Red.
+     customer  — existing customer asking about their service.
+     other     — captured something, none of the above.
+     call      — no lead row at all: spam, wrong number, hangup. Dimmed. */
+let _rcCalls=[], _rcFetchedAt=0, _rcBusy=false, _rcFilter='all';
+const RC_KIND={
+  quote:    { label:'WANTS A QUOTE', c:'#22c55e', bg:'rgba(34,197,94,.13)',  bd:'rgba(34,197,94,.55)' },
+  urgent:   { label:'NEEDS A HUMAN', c:'#f87171', bg:'rgba(248,113,113,.13)', bd:'rgba(248,113,113,.55)' },
+  customer: { label:'CUSTOMER',      c:'#38bdf8', bg:'transparent',           bd:'var(--line2,#2a3942)' },
+  other:    { label:'CALL',          c:'#9fb2c0', bg:'transparent',           bd:'var(--line2,#2a3942)' },
+  call:     { label:'—',             c:'#64748b', bg:'transparent',           bd:'var(--line2,#2a3942)' }
+};
+async function _rcLoad(force){
+  if(_rcBusy) return;
+  if(!force && Date.now()-_rcFetchedAt < 60000) return;   // 60s is plenty for a call log
+  _rcBusy=true;
+  try{
+    const d=await fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'get_retell_calls',days:'14',limit:'120',adminToken:token})).then(function(r){ return r.json(); });
+    if(d&&d.success&&Array.isArray(d.calls)){ _rcCalls=d.calls; _rcFetchedAt=Date.now(); }
+    else if(d&&!d.success){ _rcCalls=[]; window._rcErr=String(d.error||'')||'backend error'; }
+  }catch(e){ window._rcErr='network'; }
+  finally{ _rcBusy=false; }
+  try{ renderDispatch(); }catch(e){}
+}
+function _rcSetFilter(k){ _rcFilter=k; try{ renderDispatch(); }catch(e){} }
+function _rcToggle(){ try{ localStorage.setItem('hq_calls_open', localStorage.getItem('hq_calls_open')==='1'?'0':'1'); }catch(e){} try{ renderDispatch(); }catch(e){} }
+function _rcAgo(at){
+  const t=Date.parse(String(at||'').replace(' ','T')); if(isNaN(t)) return '';
+  const m=Math.round((Date.now()-t)/60000);
+  if(m<60) return m+'m ago';
+  const h=Math.round(m/60); if(h<24) return h+'h ago';
+  return Math.round(h/24)+'d ago';
+}
+/* One tap turns a call into a 📞 lead on the board — the whole point of surfacing
+   a caller who wanted a price and never got booked. */
+async function _rcMakeLead(i){
+  const c=(_rcCalls||[])[i]; if(!c) return;
+  const who=c.name||c.phone||'this caller';
+  if(!confirm('Add a call job for '+who+'?\n\nIt lands on today as a 📞 lead for a crew to ring back.')) return;
+  try{
+    const d=await fetch(SCRIPT_URL+'?'+new URLSearchParams({ action:'create_call_job',
+      name:c.name||('Caller '+(c.phone||'')), phone:c.phone||'', email:c.email||'',
+      address:c.address||'', zip:c.zip||'', reason:('From the phone agent — '+(c.summary||c.leadNotes||'wanted a quote')).slice(0,300),
+      serviceDate:todayISO(), idemKey:'ccj:retell:'+(c.callId||who), adminToken:token })).then(function(r){ return r.json(); });
+    if(d&&d.success){ toast('📞 Call job added for '+who); await refreshBookings(); renderDispatch(); }
+    else alert('⚠ '+((d&&d.error)||'could not add it')+(/Unknown/i.test(String(d&&d.error||''))?'\n\nThat backend is running old code — re-paste apps-script.txt and Deploy.':''));
+  }catch(e){ alert('⚠ Network error — nothing was added.'); }
+}
+function _hqCallsPanel(){
+  let open=false; try{ open=localStorage.getItem('hq_calls_open')==='1'; }catch(e){}
+  if(open) _rcLoad(false);                       // only fetch when it is actually being looked at
+  const all=_rcCalls||[];
+  const nQ=all.filter(function(c){ return c.kind==='quote'&&!c.booked; }).length;
+  const nU=all.filter(function(c){ return c.kind==='urgent'; }).length;
+  const bits=[]; if(nQ) bits.push(nQ+' wanting a quote'); if(nU) bits.push(nU+' needing a human');
+  const hot=(nQ||nU);
+  let h='<div class="dev-card" style="grid-column:1/-1;border:1px solid '+(hot?'rgba(34,197,94,.5)':'var(--line2,#2a3942)')+';background:'+(hot?'rgba(34,197,94,.06)':'transparent')+';margin-bottom:10px;">';
+  h+='<button onclick="_rcToggle()" style="width:100%;text-align:left;background:none;border:none;color:'+(hot?'#22c55e':'var(--dim,#9fb2c0)')+';cursor:pointer;font-family:inherit;font-weight:800;font-size:13px;padding:10px 12px;display:flex;align-items:center;gap:8px;">'
+    +'<span style="display:inline-block;transform:rotate('+(open?'90':'0')+'deg);">▸</span>'
+    +'<span>☎️ Phone agent calls'+(bits.length?(' · '+bits.join(' · ')):(all.length?(' · '+all.length+' in 14 days'):''))+'</span>'
+    +'<span style="margin-left:auto;font-weight:700;opacity:.75;font-size:11.5px;white-space:nowrap;">'+(open?'hide ▲':'see who called ▾')+'</span>'
+    +'</button>';
+  if(!open) return h+'</div>';
+
+  const counts={all:all.length};
+  ['quote','urgent','customer','other','call'].forEach(function(k){ counts[k]=all.filter(function(c){ return c.kind===k; }).length; });
+  const chip=function(k,lbl){ const on=(_rcFilter===k);
+    return '<button onclick="_rcSetFilter(\''+k+'\')" style="padding:5px 10px;border-radius:999px;border:1px solid '+(on?'#22c55e':'var(--line2,#2a3942)')+';background:'+(on?'rgba(34,197,94,.15)':'transparent')+';color:inherit;font-family:inherit;font-size:11.5px;font-weight:800;cursor:pointer;">'+lbl+' '+(counts[k]||0)+'</button>'; };
+  h+='<div class="dev-b" style="display:flex;gap:6px;flex-wrap:wrap;padding:0 12px 8px;">'
+    +chip('all','All')+chip('quote','Wants a quote')+chip('urgent','Needs a human')+chip('customer','Customers')+chip('call','Spam / hangups')
+    +'<button onclick="_rcLoad(true)" style="margin-left:auto;padding:5px 10px;border-radius:999px;border:1px solid var(--line2,#2a3942);background:transparent;color:inherit;font-family:inherit;font-size:11.5px;font-weight:800;cursor:pointer;">⟳ Refresh</button></div>';
+
+  const list=all.filter(function(c){ return _rcFilter==='all'||c.kind===_rcFilter; });
+  if(!list.length){
+    h+='<div class="dev-b" style="padding:14px 12px 16px;color:var(--dim,#9fb2c0);font-size:12.5px;line-height:1.6;">'
+      +(window._rcErr
+        ? ('Couldn\'t read the call log — '+esc(String(window._rcErr))+(/Unknown/i.test(String(window._rcErr))?'. That backend is running old code: re-paste apps-script.txt and Deploy.':'.'))
+        : (all.length?'Nothing in this filter.':'No calls logged in the last 14 days.'))
+      +'</div></div>';
+    return h;
+  }
+  h+='<div id="rcScroll" onscroll="window._rcScroll=this.scrollTop;" class="dev-b" style="display:flex;flex-direction:column;gap:6px;max-height:46vh;overflow:auto;padding:0 12px 12px;">';
+  setTimeout(function(){ var el=document.getElementById('rcScroll'); if(el&&window._rcScroll) el.scrollTop=window._rcScroll; },0);
+  h+=list.map(function(c){
+    const i=all.indexOf(c), K=RC_KIND[c.kind]||RC_KIND.other;
+    // A quote request the agent ALREADY booked is not an action item — say so
+    // rather than showing it as money left on the table.
+    const wantsAction=(c.kind==='quote'&&!c.booked)||c.kind==='urgent';
+    const badge=(c.kind==='quote'&&c.booked)
+      ? '<span style="font-size:10px;font-weight:800;letter-spacing:.06em;border-radius:6px;padding:2px 7px;color:#22c55e;background:rgba(34,197,94,.14);border:1px solid rgba(34,197,94,.4);">BOOKED ✓</span>'
+      : '<span style="font-size:10px;font-weight:800;letter-spacing:.06em;border-radius:6px;padding:2px 7px;color:'+K.c+';background:'+(K.bg==='transparent'?'rgba(255,255,255,.04)':K.bg)+';border:1px solid '+K.bd+';">'+K.label+'</span>';
+    const mins=c.seconds?(c.seconds<60?(c.seconds+'s'):(Math.round(c.seconds/60)+'m')):'';
+    const meta=[_rcAgo(c.at), c.direction||'', mins, c.inArea==='NO'?'out of area':'', c.sentiment||''].filter(Boolean).join(' · ');
+    return '<div style="border:1px solid '+(wantsAction?K.bd:'var(--line2,#2a3942)')+';background:'+(wantsAction?K.bg:'var(--card,#0f2740)')+';border-radius:11px;padding:9px 11px;'+(c.kind==='call'?'opacity:.6;':'')+'">'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+      +'<span style="font-weight:800;font-size:13.5px;">'+esc(c.name||c.phone||'Unknown caller')+'</span>'+badge
+      +'<span style="margin-left:auto;font-size:11px;color:var(--dim,#9fb2c0);font-weight:700;white-space:nowrap;">'+esc(meta)+'</span></div>'
+      +(c.summary?('<div style="font-size:12px;color:var(--dim,#9fb2c0);line-height:1.5;margin-top:4px;">'+esc(String(c.summary).slice(0,240))+'</div>'):'')
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;">'
+      +(c.phone?('<a href="tel:'+esc(String(c.phone).replace(/[^0-9+]/g,''))+'" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line2,#2a3942);background:transparent;color:inherit;text-decoration:none;font-family:inherit;font-size:11.5px;font-weight:800;">📞 '+esc(c.phone)+'</a>'):'')
+      +(c.recording?('<a href="'+esc(c.recording)+'" target="_blank" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line2,#2a3942);background:transparent;color:inherit;text-decoration:none;font-family:inherit;font-size:11.5px;font-weight:800;">▶ Recording</a>'):'')
+      +(wantsAction?('<button onclick="_rcMakeLead('+i+')" style="padding:6px 10px;border-radius:8px;border:none;background:'+K.c+';color:#04121b;font-family:inherit;font-size:11.5px;font-weight:800;cursor:pointer;">＋ Make it a call job</button>'):'')
+      +'</div></div>';
+  }).join('');
+  h+='</div></div>';
+  return h;
+}
+
 function renderDispatch(){
   const board=document.getElementById('dispBoard'); if(!board) return;
   _zdEnsure(); try{ _loadCustSheets(); }catch(e){}   // zone-day rules + customer notes for the cards
@@ -3961,7 +4127,7 @@ function renderDispatch(){
     box.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on',b.dataset.c===_dispCrew); });
   })();
   const todayIso=todayISO();
-  let rangeStart, rangeEnd, h=_hqBizFailBanner()+_hqNeedsPayPanel()+_hqUncalledPanel();   // ⚠️ a business that can't load · completed jobs not yet paid · 📞 leads nobody is calling
+  let rangeStart, rangeEnd, h=_hqBizFailBanner()+_hqNeedsPayPanel()+_hqUncalledPanel()+_hqCallsPanel();   // ⚠️ can't load · unpaid · 📞 uncalled leads · ☎️ phone agent calls
   if(_dispView==='month'){
     const y=_dispAnchor.getFullYear(), mo=_dispAnchor.getMonth();
     document.getElementById('dispTitle').textContent=MO[mo]+' '+y;
