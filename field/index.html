@@ -11,9 +11,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-07-16.71 */
+/* APP_VER:2026-08-13.80 */
 (function(){
-  var V='2026-07-31.79'; window.__APP_VER=V;
+  /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
+     check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
+     compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
+     on every single check — the 90s guard was the only thing standing between the crew and
+     a reload every time they foregrounded the app. Bump BOTH together, every time. */
+  var V='2026-08-13.80'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -105,7 +110,7 @@
   .fm-start-sub{ color:#9ed8b1; font-size:14px; margin-bottom:30px; }
   .fm-section-title{ font-size:22px; font-weight:800; padding:4px 16px 2px; }
   .fm-section-sub{ color:#9ed8b1; font-size:14px; padding:0 16px 14px; }
-  .fm-card{ background:#fff; color:#14361f; border-radius:22px; padding:22px 20px; box-shadow:0 12px 40px rgba(0,0,0,.3); margin-top:4px; }
+  .fm-card{ background:#fff; color:#14361f; border-radius:22px; padding:22px 18px 20px; box-shadow:0 10px 34px rgba(0,0,0,.26),0 1px 0 rgba(255,255,255,.5) inset; margin-top:4px; }
   .fm-card-stopno{ display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:10px; background:#14361f; color:#fff; font-weight:800; font-size:16px; margin-bottom:12px; }
   .fm-card-name{ font-size:26px; font-weight:800; color:#14361f; line-height:1.15; margin-bottom:4px; }
   .fm-card-addr{ font-size:16px; color:#3f6b4d; font-weight:600; margin-bottom:14px; }
@@ -116,24 +121,44 @@
   .fm-pill.muted{ background:#f1f5f9; color:#475569; border-color:#e2e8f0; }
   .fm-note-box{ background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:11px 13px; font-size:14px; color:#92400e; margin-bottom:16px; line-height:1.5; }
   .fm-note-box b{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:.06em; margin-bottom:3px; color:#b45309; }
-  .fm-btn{ display:flex; align-items:center; justify-content:center; gap:9px; width:100%; border:none; border-radius:15px; font-family:inherit; font-weight:800; cursor:pointer; transition:transform .08s,opacity .15s; text-decoration:none; }
-  .fm-btn:active{ transform:scale(.98); }
+  .fm-btn{ display:flex; align-items:center; justify-content:center; gap:8px; width:100%; min-width:0; border:none; border-radius:15px; font-family:inherit; font-weight:800; cursor:pointer; transition:transform .08s ease,opacity .15s,box-shadow .15s; text-decoration:none;
+    /* a label that outgrows its button trims instead of shoving the row sideways */
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .fm-btn:active{ transform:scale(.97); }
   .fm-btn-lg{ padding:18px; font-size:17px; }
   .fm-btn-xl{ padding:20px; font-size:19px; }
-  .fm-btn-sm{ padding:13px; font-size:14px; }
+  .fm-btn-sm{ padding:12px 10px; font-size:13.5px; font-weight:700; border-radius:13px; }
   .fm-btn-nav{ background:#1565c0; color:#fff; box-shadow:0 6px 20px rgba(21,101,192,.4); }
   .fm-btn-done{ background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; box-shadow:0 6px 22px rgba(22,163,74,.45); }
   .fm-btn-start{ background:linear-gradient(135deg,#22c55e,#15803d); color:#fff; box-shadow:0 8px 28px rgba(34,197,94,.5); }
-  .fm-btn-ghost{ background:#fff; color:#14361f; border:2px solid #14361f; }
+  /* Ghost buttons were a heavy 2px near-black outline — six of them fought the primary
+     action for attention. Now a light chip: the blue Navigate button reads first. */
+  .fm-btn-ghost{ background:#f8fafc; color:#14361f; border:1.5px solid #dbe3ea; box-shadow:none; }
+  .fm-btn-ghost:active{ background:#eef2f6; }
   .fm-btn:disabled{ opacity:.5; cursor:not-allowed; box-shadow:none; }
   .fm-card-actions{ display:flex; flex-direction:column; gap:10px; }
-  .fm-secondary-row{ display:flex; gap:10px; }
-  .fm-secondary-row .fm-btn{ flex:1; }
+  /* WAS a single non-wrapping flex row. With Call/Text/Tap to Pay/Card on file/Edit plan/
+     Notes/Remaining all in it, the buttons squeezed past the card edge and spilled right.
+     auto-fit grid = clean 2-up on a phone, 3-up on a big screen, always inside the card. */
+  .fm-secondary-row{ display:grid; grid-template-columns:repeat(auto-fit,minmax(132px,1fr)); gap:8px; }
+  .fm-secondary-row .fm-btn{ width:100%; }
   .fm-foot{ padding:12px 16px max(16px,env(safe-area-inset-bottom)); flex-shrink:0; background:linear-gradient(0deg,rgba(12,42,24,.95),rgba(12,42,24,0)); }
   .fm-skip{ display:block; text-align:center; color:#9ed8b1; font-size:14px; margin-top:12px; cursor:pointer; background:none; border:none; width:100%; font-family:inherit; font-weight:600; }
-  .fm-jobnav{ display:flex; justify-content:space-between; align-items:center; margin:14px 2px 0; }
-  .fm-jobnav button{ background:rgba(255,255,255,.12); color:#dcfce7; border:none; border-radius:10px; padding:8px 14px; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+  /* Prev / Re-route / Lock / Next — flex-wrap so a fourth button drops to its own line
+     instead of crushing the others; each stays a comfortable thumb target. */
+  .fm-jobnav{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:14px 2px 0; }
+  .fm-jobnav button{ flex:1 1 auto; min-width:88px; background:rgba(255,255,255,.12); color:#dcfce7; border:none; border-radius:11px; padding:11px 13px; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; transition:background .15s,transform .08s ease; }
+  .fm-jobnav button:active{ background:rgba(255,255,255,.2); transform:scale(.97); }
   .fm-jobnav button:disabled{ opacity:.3; }
+  /* ⤓ pull-to-refresh puck — lives in #fieldMode (position:fixed = its containing block) */
+  #fmPtr{ position:absolute; top:0; left:50%; margin-left:-20px; width:40px; height:40px; border-radius:50%; z-index:3050;
+    display:flex; align-items:center; justify-content:center; pointer-events:none; opacity:0;
+    transform:translateY(0) scale(.6); color:#86efac; background:rgba(14,44,26,.92);
+    border:1px solid rgba(134,239,172,.28); box-shadow:0 6px 20px rgba(0,0,0,.36); }
+  #fmPtr.snap{ transition:transform .3s cubic-bezier(.22,1,.36,1),opacity .25s ease; }
+  #fmPtr svg{ width:19px; height:19px; display:block; }
+  #fmPtr.spin svg{ animation:fmPtrSpin .75s linear infinite; }
+  @keyframes fmPtrSpin{ to{ transform:rotate(360deg); } }
   #fmCompleteSheet,#fmSkipSheet{ display:none; position:fixed; inset:0; z-index:3100; background:rgba(0,0,0,.55); align-items:flex-end; justify-content:center; }
   /* finish-job is a full PAGE — the popup style clipped the top on long jobs */
   #fmCompleteSheet{ background:#eef6f0; align-items:stretch; }
@@ -1711,6 +1736,80 @@ function _startTimers(){
     _fmCheckRouteUpdate();                          // light route-order check (~10s)
   },10000);
 }
+/* ── ⤓ PULL TO REFRESH ───────────────────────────────────────────────────────────────────
+   The background poll is 10s light / 30s full, and a full refresh behind a slow cell signal
+   can take a while — long enough that the crew is looking at a stale board with no way to
+   ask for a fresh one. This is the manual override: drag down at the top of any .fm-body.
+   The page itself can never scroll (body is position:fixed), so there's no native gesture
+   to collide with; we own the whole pull. */
+(function(){
+  const TRIGGER=68, MAXPULL=112, RESIST=.55;
+  let _el=null,_y0=0,_dy=0,_armed=false,_busy=false,_ind=null;
+  function ind(){
+    if(_ind&&_ind.parentNode) return _ind;
+    const fm=document.getElementById('fieldMode'); if(!fm) return null;
+    _ind=document.createElement('div'); _ind.id='fmPtr';
+    _ind.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3.2V9h-5.8"/></svg>';
+    fm.appendChild(_ind); return _ind;
+  }
+  function paint(dy,snap){
+    const i=ind(); if(!i) return;
+    i.classList.toggle('snap',!!snap);
+    const p=Math.min(1,dy/TRIGGER);
+    i.style.opacity=String(Math.min(1,dy/26));
+    i.style.transform='translateY('+(Math.min(dy,MAXPULL)+6)+'px) scale('+(.6+.4*p)+') rotate('+Math.round(dy*2.4)+'deg)';
+    i.style.color=(p>=1)?'#4ade80':'#86efac';
+  }
+  function reset(){
+    const i=ind(); if(!i) return;
+    i.classList.add('snap'); i.classList.remove('spin');
+    i.style.opacity='0'; i.style.transform='translateY(0) scale(.6)';
+  }
+  // the nearest scrollable body under the finger, if any
+  function scroller(t){
+    let n=t;
+    while(n&&n!==document.body){ if(n.classList&&n.classList.contains('fm-body')) return n; n=n.parentNode; }
+    return null;
+  }
+  function blocked(){
+    const fm=document.getElementById('fieldMode');
+    if(!fm||!fm.classList.contains('show')) return true;
+    try{ if(typeof _anySheetOpen==='function'&&_anySheetOpen()) return true; }catch(e){}
+    // card/tap/offer overlays are built ad-hoc and aren't in _anySheetOpen's list
+    return !!document.querySelector('#fmCardOv,#fmCardOfferOv,#fmTapOv');
+  }
+  async function go(){
+    _busy=true;
+    const i=ind();
+    if(i){ i.classList.add('snap','spin'); i.style.opacity='1'; i.style.transform='translateY(50px) scale(1)'; i.style.color='#4ade80'; }
+    try{ if(typeof _fmFlushQueue==='function') await _fmFlushQueue(); }catch(e){}
+    try{ if(typeof loadData==='function') await loadData(true); }catch(e){}
+    try{ if(typeof _fmCheckRouteUpdate==='function') await _fmCheckRouteUpdate(); }catch(e){}
+    setTimeout(function(){ _busy=false; _dy=0; _armed=false; reset(); },300);
+  }
+  document.addEventListener('touchstart',function(e){
+    if(_busy||e.touches.length!==1||blocked()) return;
+    const el=scroller(e.target);
+    if(!el||el.scrollTop>0) return;
+    _el=el; _y0=e.touches[0].clientY; _dy=0; _armed=true;
+  },{passive:true});
+  document.addEventListener('touchmove',function(e){
+    if(!_armed||!_el||_busy) return;
+    const raw=e.touches[0].clientY-_y0;
+    // scrolled away from the top, or the finger went up — hand the gesture back
+    if(raw<=0||_el.scrollTop>0){ if(_dy>0){ _dy=0; reset(); } _armed=false; return; }
+    _dy=raw*RESIST;
+    if(_dy>6&&e.cancelable) e.preventDefault();   // stop the list rubber-banding under the puck
+    paint(_dy,false);
+  },{passive:false});
+  function end(){
+    if(_busy||!_armed) return;
+    _armed=false;
+    if(_dy>=TRIGGER) go(); else { _dy=0; reset(); }
+  }
+  document.addEventListener('touchend',end,{passive:true});
+  document.addEventListener('touchcancel',end,{passive:true});
+})();
 let _fmPollTick=0, _routeCheckBusy=false;
 async function _fmCheckRouteUpdate(){
   if(_routeCheckBusy) return; _routeCheckBusy=true;
@@ -2866,24 +2965,45 @@ function fmTapToPay(bk){
    token, which is exactly what autopay already charges. Never add a plain card-number input. */
 const FM_STRIPE_PK='pk_live_51TLrat4J18msjfgfYqm9zvDa2pkr5ZPv6s10bl5UwMIYnAqpJbXEU14YXFlS6sEA3H0VgsLPTxHuPWD6YutUy1J000mzhTGL1N';
 let _fmStripe=null,_fmCardEl=null,_fmCardBk=null;
+/* The Save button is GATED on the consent tick — it starts ticked (the crew reads it to the
+   customer at the door) but untick it and Save goes dead, so a customer who says no can't be
+   pushed through by a mis-tap. fmCardSave keeps its own check as the real guard. */
+function _fmCardGate(){
+  const cb=document.getElementById('fmCardConsent'), btn=document.getElementById('fmCardSaveBtn');
+  if(!cb||!btn) return;
+  const ok=!!cb.checked;
+  btn.disabled=!ok;
+  btn.style.background=ok?'#16a34a':'#cbd5e1';
+  btn.style.color=ok?'#fff':'#64748b';
+  btn.style.cursor=ok?'pointer':'not-allowed';
+  const m=document.getElementById('fmCardMsg');
+  if(m&&!ok) m.textContent='Consent is required to keep a card on file.';
+  else if(m&&m.textContent.indexOf('Consent is required')===0) m.textContent='';
+}
 function fmCardOpen(bk){
   bk=bk||window._fmCurBk; if(!bk){ showToast('Open a stop first'); return; }
   const em=String(bk.email||'').trim();
-  if(!em||em.indexOf('@')<1){ showToast('No email on this customer — the office needs to add one first',6000); return; }
+  // No email is NO LONGER a dead end. Quote stops usually have none until the crew types one in
+  // the closer, and "come back and add the card later" was impossible because of this bail-out.
+  const needEmail=(!em||em.indexOf('@')<1);
   _fmCardBk=bk;
   const old=document.getElementById('fmCardOv'); if(old) old.remove();
   const ov=document.createElement('div'); ov.id='fmCardOv';
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:99999;display:flex;align-items:flex-end;justify-content:center;';
-  ov.innerHTML='<div style="background:#fff;width:100%;max-width:540px;border-radius:18px 18px 0 0;padding:18px 16px 24px;max-height:94vh;overflow:auto;">'
+  ov.innerHTML='<div style="background:#fff;width:100%;max-width:540px;border-radius:18px 18px 0 0;padding:18px 16px calc(24px + env(safe-area-inset-bottom));max-height:94vh;overflow:auto;">'
+    +'<div style="width:38px;height:4px;border-radius:99px;background:#e2e8f0;margin:0 auto 14px;"></div>'
     +'<div style="font-size:17.5px;font-weight:800;color:#0f172a;">💳 Save card — '+esc(bk.name||'Customer')+'</div>'
     +'<div style="font-size:12.5px;color:#64748b;margin:4px 0 14px;">Turns on autopay so future visits charge automatically. Nothing is charged right now.</div>'
+    +(needEmail?('<label style="display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#475569;margin:0 2px 5px;">Customer email — needed for the receipt</label>'
+      +'<input id="fmCardEmail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="customer@email.com" value="'+esc(em)+'" style="width:100%;box-sizing:border-box;padding:14px;margin-bottom:12px;border:1.5px solid #cbd5e1;border-radius:12px;font-size:16px;font-family:inherit;">'):'')
     +'<div id="fmCardEl" style="border:1.5px solid #cbd5e1;border-radius:12px;padding:14px;"></div>'
-    +'<label style="display:flex;gap:10px;align-items:flex-start;margin:14px 2px;font-size:12.5px;color:#334155;cursor:pointer;line-height:1.45;"><input type="checkbox" id="fmCardConsent" style="width:19px;height:19px;flex-shrink:0;margin-top:1px;"><span>Customer agrees to keep this card on file and be charged automatically for future services.</span></label>'
+    +'<label style="display:flex;gap:10px;align-items:flex-start;margin:14px 2px;font-size:12.5px;color:#334155;cursor:pointer;line-height:1.45;"><input type="checkbox" id="fmCardConsent" checked onchange="_fmCardGate()" style="width:19px;height:19px;flex-shrink:0;margin-top:1px;"><span>Customer agrees to keep this card on file and be charged automatically for future services.</span></label>'
     +'<div id="fmCardMsg" style="font-size:12.5px;color:#dc2626;margin:2px;min-height:17px;"></div>'
     +'<button id="fmCardSaveBtn" onclick="fmCardSave()" style="width:100%;padding:16px;border:none;border-radius:13px;background:#16a34a;color:#fff;font-size:15.5px;font-weight:800;font-family:inherit;cursor:pointer;">Save card &amp; turn on autopay</button>'
     +'<button onclick="var o=document.getElementById(\'fmCardOv\');if(o)o.remove();" style="width:100%;padding:13px;margin-top:9px;border:1px solid #cbd5e1;border-radius:13px;background:#fff;color:#334155;font-weight:700;font-family:inherit;cursor:pointer;">Cancel</button>'
     +'</div>';
   document.body.appendChild(ov);
+  _fmCardGate();
   try{
     if(typeof Stripe!=='function') throw new Error('Stripe.js not loaded — check the connection');
     if(!_fmStripe) _fmStripe=Stripe(FM_STRIPE_PK);
@@ -2895,8 +3015,17 @@ async function fmCardSave(){
   const bk=_fmCardBk; if(!bk) return;
   const msg=document.getElementById('fmCardMsg'), btn=document.getElementById('fmCardSaveBtn');
   if(!document.getElementById('fmCardConsent').checked){ msg.textContent='Tick the consent box with the customer present.'; return; }
+  // Email typed here (quote stops that had none) becomes the customer's email — it's what
+  // getOrCreateStripeCustomer keys on, so autopay and the receipt both hang off it.
+  let em=String(bk.email||'').trim().toLowerCase();
+  const _ein=document.getElementById('fmCardEmail');
+  if(_ein){
+    em=String(_ein.value||'').trim().toLowerCase();
+    if(!em||em.indexOf('@')<1||em.indexOf('.')<0){ msg.textContent='Enter the customer’s email — autopay is keyed to it.'; _ein.focus(); return; }
+    bk.email=em;
+  }
+  if(!em||em.indexOf('@')<1){ msg.textContent='No email on this customer — type one above.'; return; }
   msg.style.color='#dc2626'; msg.textContent=''; btn.disabled=true; btn.textContent='Saving…';
-  const em=String(bk.email||'').trim().toLowerCase();
   try{
     const si=await fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'hq_setup_card',custEmail:em,adminToken:adminToken})).then(function(r){ return r.json(); });
     if(!si||!si.success||!si.clientSecret) throw new Error((si&&si.error)||'Could not start card setup');
@@ -2910,7 +3039,7 @@ async function fmCardSave(){
     try{ bk.hasCard=true; bk.portalAutopay=true; localStorage.setItem('evg_field_bookings',JSON.stringify(allBookings)); _fmRender(); }catch(e){}
   }catch(e){
     msg.textContent='⚠ '+(e&&e.message?e.message:'Could not save the card');
-    btn.disabled=false; btn.textContent='Save card & turn on autopay';
+    btn.disabled=false; btn.textContent='Save card & turn on autopay'; _fmCardGate();
   }
 }
 function fmQuoteCloser(bk){
@@ -3011,10 +3140,10 @@ async function qjOutcome(kind){
     try{ _qjBookedStore[base]={ date:date, email:String(bk.email||'').toLowerCase().trim(), name:bk.name||'', freq:_qjFreqLabel(), price:String(firstPrice), qj:JSON.parse(JSON.stringify(_qj)), override:String((document.getElementById('qjPriceOverride')||{}).value||'') }; _qjBookedSave(); }catch(e){}
     if(date===todayISOStr()){
       _fmAddLocalSameDay({ name:bk.name||'', email:String(bk.email||'').toLowerCase(), phone:String(bk.phone||''), address:bk.address||'', zip:String(bk.zip||''), frequency:_qjFreqLabel(), price:'$'+firstPrice, serviceDate:date, notes:'Booked at quote visit (same-day)', crew:bk.crew||'', jobTime:'', payMethod:'card' }, base);
-      _qjFinish('✅ Booked for TODAY — it\u2019s your next stop after this quote. 1st cut $'+firstPrice, 'Quote WON — booked '+_qjFreqLabel()+' $'+price+ogNote+' ('+desc+') — same-day job added', true);
+      _qjFinish('✅ Booked for TODAY — it\u2019s your next stop after this quote. 1st cut $'+firstPrice, 'Quote WON — booked '+_qjFreqLabel()+' $'+price+ogNote+' ('+desc+') — same-day job added', true, true);
       return;
     }
-    _qjFinish('✅ Booked! '+(ogNote?('1st cut $'+firstPrice):('$'+price))+' · starts '+date+' — ‹ Prev lets you edit it', 'Quote WON — booked '+_qjFreqLabel()+' $'+price+ogNote+' ('+desc+')', true);
+    _qjFinish('✅ Booked! '+(ogNote?('1st cut $'+firstPrice):('$'+price))+' · starts '+date+' — ‹ Prev lets you edit it', 'Quote WON — booked '+_qjFreqLabel()+' $'+price+ogNote+' ('+desc+')', true, true);
   } else if(kind==='estimate'){
     let _em=prompt('Send the estimate to this email — fix it if it\u2019s wrong:', String(bk.email||'').trim());
     if(_em===null) return;
@@ -3048,7 +3177,26 @@ async function qjOutcome(kind){
     _qjFinish('👍 Logged — maybe next time', 'Quote — not interested ('+desc+' · quoted $'+price+ogNote+')');
   }
 }
-function _qjFinish(toastMsg,note,skipQueue){
+/* Right after a quote is WON is the one moment the customer is standing there and already said
+   yes — so ask for the card then. Declining costs nothing: 💳 Card on file stays on the stop's
+   button row for the rest of the day, and finished stops stay in the list, so they can come back. */
+function fmCardOffer(bk){
+  if(!bk||bk.hasCard) return;
+  const old=document.getElementById('fmCardOfferOv'); if(old) old.remove();
+  const ov=document.createElement('div'); ov.id='fmCardOfferOv';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:99998;display:flex;align-items:flex-end;justify-content:center;';
+  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.innerHTML='<div style="background:#fff;width:100%;max-width:540px;border-radius:18px 18px 0 0;padding:20px 16px calc(22px + env(safe-area-inset-bottom));">'
+    +'<div style="width:38px;height:4px;border-radius:99px;background:#e2e8f0;margin:0 auto 14px;"></div>'
+    +'<div style="font-size:18px;font-weight:800;color:#0f172a;">💳 Take their card while you’re here?</div>'
+    +'<div style="font-size:13px;color:#64748b;line-height:1.55;margin:6px 0 16px;">'+esc(bk.name||'They')+' just booked. Putting the card on file now turns on autopay — no invoice to chase, and the next visit schedules itself once it charges.</div>'
+    +'<button onclick="var o=document.getElementById(\'fmCardOfferOv\');if(o)o.remove();fmCardOpen(window._fmCurBk);" style="width:100%;padding:16px;border:none;border-radius:13px;background:#16a34a;color:#fff;font-size:15.5px;font-weight:800;font-family:inherit;cursor:pointer;">Add card now</button>'
+    +'<button onclick="var o=document.getElementById(\'fmCardOfferOv\');if(o)o.remove();" style="width:100%;padding:13px;margin-top:9px;border:1px solid #cbd5e1;border-radius:13px;background:#fff;color:#334155;font-weight:700;font-family:inherit;cursor:pointer;">Not now</button>'
+    +'<div style="font-size:11.5px;color:#94a3b8;text-align:center;margin-top:11px;">You can add it later from 💳 Card on file on this stop.</div>'
+    +'</div>';
+  document.body.appendChild(ov);
+}
+function _qjFinish(toastMsg,note,skipQueue,offerCard){
   const bk=_qjBk, base=_stopKey(bk);
   if(_qjNote()) note=note+' | 📝 '+_qjNote();
   // Note goes FIRST so it resolves onto the still-open QUOTE row — marking done
@@ -3060,6 +3208,8 @@ function _qjFinish(toastMsg,note,skipQueue){
   _fmFlushQueue();
   bk.done='✓ Done'; _fmGhostMark(bk); _fmMarkSeq(bk);
   qjClose(); showToast(toastMsg); _persist(); _fmRender();
+  // after the toast has had a beat to land, not on top of it
+  if(offerCard){ window._fmCurBk=bk; setTimeout(function(){ try{ fmCardOffer(bk); }catch(e){} },1100); }
 }
 
 /* lawn quote builder: lot tier + frequency → plan price (same table as the website) */
