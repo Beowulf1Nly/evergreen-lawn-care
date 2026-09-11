@@ -11,14 +11,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-09-11.87 */
+/* APP_VER:2026-09-11.88 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-09-11.87'; window.__APP_VER=V;
+  var V='2026-09-11.88'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -81,6 +81,24 @@
     }
     b.textContent='🔄 Update ready — tap to install (safe mid-route)';
   }
+  /* Mirror the VISIBLE viewport height into --fm-vh. visualViewport is the one
+     that actually tracks Safari's toolbar sliding in and out; innerHeight is the
+     fallback. Runs before the app boots so the first paint is already correct. */
+  function _fmSyncVH(){
+    try{
+      var h = (window.visualViewport && window.visualViewport.height) || window.innerHeight || 0;
+      if (h > 0) document.documentElement.style.setProperty('--fm-vh', Math.round(h) + 'px');
+    }catch(e){}
+  }
+  _fmSyncVH();
+  addEventListener('resize', _fmSyncVH);
+  addEventListener('orientationchange', function(){ setTimeout(_fmSyncVH, 250); });
+  try{
+    if (window.visualViewport){
+      visualViewport.addEventListener('resize', _fmSyncVH);
+      visualViewport.addEventListener('scroll', _fmSyncVH);
+    }
+  }catch(e){}
   setTimeout(check, 8000);
   document.addEventListener('visibilitychange', function(){ if(!document.hidden) setTimeout(check, 3000); });
   // Re-check on a slow loop too. visibilitychange alone means a phone left awake on
@@ -119,7 +137,19 @@
   .login-input:focus{ border-color:var(--green); }
   .login-btn{ width:100%; padding:15px; border:none; border-radius:12px; background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; font-size:16px; font-weight:800; font-family:inherit; cursor:pointer; }
   .login-btn:disabled{ opacity:.6; }
-  #fieldMode{ display:none; position:fixed; inset:0; z-index:3000; background:linear-gradient(170deg,#0f2417 0%,#14361f 45%,#0c2a18 100%); color:#fff; flex-direction:column; overscroll-behavior:contain; }
+  /* ── THE FOOTER WAS UNDER SAFARI'S TOOLBAR ──────────────────────────────────
+     inset:0 on a position:fixed element resolves against the LARGE viewport on
+     iOS Safari — the height the page has when the toolbars are hidden, roughly
+     90–140px taller than what is actually on screen. .fm-body is flex:1 and eats
+     the difference, so .fm-foot — Done, Couldn't service, End my route — was laid
+     out below the visible area, behind the browser chrome. Drawn, sometimes even
+     partly visible, and completely untappable.
+     This is why it never reproduced: an emulated viewport has no browser chrome,
+     so every hit-test I ran passed.
+     --fm-vh is set from window.innerHeight (the VISIBLE height) for iOS below
+     15.4, which has no dvh; 100dvh covers everything newer; 100vh is the last
+     resort and is only what we already had. */
+  #fieldMode{ display:none; position:fixed; inset:0; height:100vh; height:100dvh; height:var(--fm-vh, 100dvh); z-index:3000; background:linear-gradient(170deg,#0f2417 0%,#14361f 45%,#0c2a18 100%); color:#fff; flex-direction:column; overscroll-behavior:contain; }
   #fieldMode.show{ display:flex; }
   .fm-screen{ display:none; flex-direction:column; height:100%; }
   .fm-screen.active{ display:flex; }
