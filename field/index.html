@@ -11,14 +11,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-09-11.91 */
+/* APP_VER:2026-09-11.92 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-09-11.91'; window.__APP_VER=V;
+  var V='2026-09-11.92'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -408,12 +408,12 @@
     </div>
     <div class="fm-body" id="fmJobBody"></div>
     <div class="fm-foot">
-      <button class="fm-btn fm-btn-xl fm-btn-done" id="fmDoneBtn">✓ Done — Collect &amp; Next</button>
+      <button class="fm-btn fm-btn-xl fm-btn-done" id="fmDoneBtn" data-fm-press="done" onclick="fmPressAction('done')">✓ Done — Collect &amp; Next</button>
       <div style="display:flex;gap:18px;justify-content:center;margin-top:12px;">
-        <button class="fm-skip" id="fmSkipHopBtn" style="margin-top:0;width:auto;">Skip for now ›</button>
-        <button class="fm-skip" style="margin-top:0;width:auto;color:#fca5a5;">⚠ Couldn't service</button>
+        <button class="fm-skip" id="fmSkipHopBtn" style="margin-top:0;width:auto;" data-fm-press="skip" onclick="fmPressAction('skip')">Skip for now ›</button>
+        <button class="fm-skip" style="margin-top:0;width:auto;color:#fca5a5;" data-fm-press="couldnt" onclick="fmPressAction('couldnt')">⚠ Couldn't service</button>
       </div>
-      <button class="fm-skip" style="color:#fca5a5;margin-top:10px;">🚨 End my route now (emergency)</button>
+      <button class="fm-skip" style="color:#fca5a5;margin-top:10px;" data-fm-press="end" onclick="fmPressAction('end')">🚨 End my route now (emergency)</button>
       <button class="fm-skip" style="color:#6f9b80;font-size:12px;margin-top:6px;" onclick="fmDiag()">🩺 Something's not working</button>
     </div>
   </div>
@@ -3079,6 +3079,62 @@ function _fmBumpTap(){
    bound as well for desktop and keyboard; a 600ms guard means whichever arrives
    first wins and the second is ignored. A press that drags more than 12px is a
    scroll, not a tap, and is skipped. */
+/* ── LAST RESORT, AND NOW THE PRIMARY PATH ──────────────────────────────────
+   Per-element binding can silently fail to run — if _fmWireTapCounter throws
+   before reaching it, or the element is replaced afterwards, the button ends up
+   with NO handler at all, which is worse than where this started. This listener
+   lives on the document in the CAPTURE phase and matches by data-fm-press, so it
+   works regardless of when the button appeared, whether anything bound to it, or
+   whether a click is ever synthesised. Inline onclick is back as a third path;
+   the shared guard means whichever arrives first wins. */
+const FM_PRESS_ACTIONS = {
+  done:    function(){ fmTapDone(); },
+  skip:    function(){ fmSkip(); },
+  couldnt: function(){ fmTapSkip(); },
+  end:     function(){ fmEmergencyEnd(); }
+};
+let _fmPressLast = 0, _fmPressSX = 0, _fmPressSY = 0, _fmPressMoved = false;
+function fmPressAction(kind, ev){
+  const now = Date.now();
+  if (now - _fmPressLast < 600) return;        // one action per press, any source
+  _fmPressLast = now;
+  const fn = FM_PRESS_ACTIONS[kind];
+  if (!fn) return;
+  try{ fn(); }
+  catch(err){ try{ window._fmReportErr('Button ' + kind, err); }catch(e){} }
+}
+(function _fmDelegatePress(){
+  const at = function(e){
+    const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
+    return { x: (t && t.clientX) || 0, y: (t && t.clientY) || 0 };
+  };
+  const hit = function(e){
+    let n = e.target;
+    while (n && n !== document) {
+      if (n.getAttribute && n.getAttribute('data-fm-press')) return n;
+      n = n.parentNode;
+    }
+    return null;
+  };
+  document.addEventListener('touchstart', function(e){
+    if (!hit(e)) return; const pt = at(e); _fmPressSX = pt.x; _fmPressSY = pt.y; _fmPressMoved = false;
+  }, true);
+  document.addEventListener('touchmove', function(e){
+    if (_fmPressMoved) return;
+    const pt = at(e);
+    if (Math.abs(pt.x - _fmPressSX) > 12 || Math.abs(pt.y - _fmPressSY) > 12) _fmPressMoved = true;
+  }, true);
+  document.addEventListener('touchend', function(e){
+    const el = hit(e); if (!el) return;
+    if (_fmPressMoved) { _fmPressMoved = false; return; }   // a scroll, not a tap
+    fmPressAction(el.getAttribute('data-fm-press'), e);
+  }, true);
+  document.addEventListener('pointerup', function(e){
+    if (e.pointerType === 'touch') return;                  // touchend already handled it
+    const el = hit(e); if (!el) return;
+    fmPressAction(el.getAttribute('data-fm-press'), e);
+  }, true);
+})();
 function _fmBindPress(el, fn){
   if(!el || el.__pressBound) return;
   el.__pressBound = 1;
