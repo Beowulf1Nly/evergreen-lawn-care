@@ -835,7 +835,7 @@ function enterApp(){
   document.getElementById('today').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
   if(!map){
     map=L.map('map',{ zoomControl:true, attributionControl:false }).setView([28.9,-82.4],10);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{ maxZoom:19 }).addTo(map);
+    evgBasemap(map);
     setTimeout(function(){ try{ map.invalidateSize(); }catch(e){} }, 300);
   }
   // ⚡ Instant paint (stale-while-revalidate): show the last data we saw immediately, then refresh
@@ -2590,7 +2590,7 @@ function _custMapEnsure(){
   if(_custMap) return _custMap;
   if(!document.getElementById('custMap')||!window.L) return null;
   _custMap=L.map('custMap',{ zoomControl:true, attributionControl:false }).setView([28.9,-82.4],10);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{ maxZoom:19 }).addTo(_custMap);
+  evgBasemap(_custMap);
   _custPinLayer=L.layerGroup();
   return _custMap;
 }
@@ -3917,6 +3917,35 @@ function _hqNeedPayToggle(){ try{ localStorage.setItem('hq_needpay_open', localS
    board in silence. Same for one whose date has already passed with no attempt
    logged on it. Both are money walking away, so both get surfaced here with the
    one action that fixes them: put it on a crew. */
+/* ── BASEMAP ───────────────────────────────────────────────────────────────
+   CARTO withdrew anonymous access to basemaps.cartocdn.com. It does not fail
+   with a 403 — it returns a perfectly valid 256x256 PNG with "API KEY REQUIRED"
+   printed diagonally across it, so every tile loads "successfully" and the whole
+   map reads as that message. That is the "api key required everywhere".
+
+   Esri's World_Dark_Gray_Base is keyless, dark (so the UI still matches) and
+   stable. Note its axis order is {z}/{y}/{x}, NOT the usual {z}/{x}/{y}.
+   It only has tiles to zoom 16, so maxNativeZoom stops it requesting deeper
+   ones and Leaflet upscales instead of showing blanks when you zoom into a
+   street. If Esri is ever unreachable it falls back to OSM on the first tile
+   error — a working light map beats a broken dark one. */
+function evgBasemap(map){
+  const esri = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    { maxZoom:19, maxNativeZoom:16, attribution:'Tiles &copy; Esri' });
+  let swapped = false;
+  esri.on('tileerror', function(){
+    if (swapped) return;
+    swapped = true;
+    try{
+      map.removeLayer(esri);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        { maxZoom:19, attribution:'&copy; OpenStreetMap' }).addTo(map);
+    }catch(e){}
+  });
+  esri.addTo(map);
+  return esri;
+}
 function _hqIsQuoteCall(b){ return /quote call/i.test(String((b&&(b.service||b.serviceType))||'')); }
 function _hqLeadTries(b){ return (String((b&&b.notes)||'').match(/Left voicemail|No answer/gi)||[]).length; }   // a voicemail IS an attempt — both labels must count
 function _hqUncalledLeads(){
