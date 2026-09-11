@@ -2661,6 +2661,27 @@ let currentSlide = 0;
 let carouselInterval;
 
 let carouselData = { images: [], reviews: [] };
+/* Pull the deferred gallery images in once they are actually wanted: on first
+   interaction with the gallery, or when the browser is idle and nothing is
+   competing. Falls back to a timeout where requestIdleCallback is unavailable
+   (Safari), and a scroll/touch anywhere also triggers it — nobody should ever
+   reach the gallery and find it empty. */
+function _egHydrateDeferred(root){
+  if(!root || root.__egHydrated) return;
+  const go=function(){
+    if(root.__egHydrated) return;
+    root.__egHydrated=1;
+    root.querySelectorAll('img[data-src]').forEach(function(im){
+      im.src=im.getAttribute('data-src'); im.removeAttribute('data-src');
+    });
+  };
+  ['pointerdown','touchstart','mouseenter'].forEach(function(ev){
+    root.addEventListener(ev, go, {once:true, passive:true});
+  });
+  addEventListener('scroll', go, {once:true, passive:true});
+  if(window.requestIdleCallback) requestIdleCallback(go, {timeout:4000});
+  else setTimeout(go, 2500);
+}
 // Safe defaults — the gallery arrows/lightbox exist in the DOM before data.json
 // loads; without these, an early tap throws ReferenceError.
 window.svcGoTo = window.svcGoTo || function(){};
@@ -2787,7 +2808,7 @@ function initSvcStrip() {
   var imgEls;
 
   strip.innerHTML = imgs.map(function(src, i) {
-    return '<img src="' + src + '" alt="Lawn photo ' + (i+1) + '" loading="' + (i===0?'eager':'lazy') + '" ' +
+    return '<img ' + (i < 2 ? 'src="' + src + '"' : 'data-src="' + src + '"') + ' alt="Lawn photo ' + (i+1) + '" loading="' + (i===0?'eager':'lazy') + '" ' +
       'style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;' +
       'opacity:' + (i===0?'1':'0') + ';transition:opacity 0.9s ease;" />';
   }).join('');
@@ -2797,6 +2818,7 @@ function initSvcStrip() {
       (i===0?'#fff':'rgba(255,255,255,0.45)') + ';transition:all 0.3s ease;cursor:pointer;" onclick="svcGoTo(' + i + ')"></div>';
   }).join('');
 
+  _egHydrateDeferred(strip);   // the strip defers too — without this its data-src images would never load
   imgEls = strip.querySelectorAll('img');
 
   // Click strip to open lightbox
@@ -2900,11 +2922,19 @@ function initCarousel() {
   }
 
   // Populate slides
+  /* loading="lazy" does NOTHING here. These slides are laid out horizontally, so
+     every one of them sits inside the viewport's vertical band and the browser
+     considers them all visible — all nine photos (1.5MB) were downloading on
+     first paint, competing with the hero image on exactly the slow connections
+     this matters most on.
+     Only the first two carry a real src; the rest keep theirs in data-src and are
+     fetched when the carousel is first touched, or when the browser goes idle. */
   track.innerHTML = carouselData.images.map((img, i) => `
     <div class="carousel-slide">
-      <img src="${img}" alt="Gallery" loading="${i === 0 ? 'eager' : 'lazy'}" decoding="async"/>
+      <img ${i < 2 ? 'src="'+img+'"' : 'data-src="'+img+'"'} alt="Gallery" loading="${i === 0 ? 'eager' : 'lazy'}" decoding="async"/>
     </div>
   `).join('');
+  _egHydrateDeferred(track);
 
   // Populate dots
   dotsContainer.innerHTML = carouselData.images.map((_, idx) => `

@@ -11,14 +11,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-09-11.96 */
+/* APP_VER:2026-09-11.97 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-09-11.96'; window.__APP_VER=V;
+  var V='2026-09-11.97'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -396,7 +396,7 @@
   <div class="fm-screen" id="fmScreenJob">
     <div class="fm-top">
       <div style="display:flex;align-items:center;gap:8px;"><button class="fm-top-exit" onclick="fmBackToStart()">‹ Route</button><button class="fm-top-exit" onclick="fmShowJobList()" title="All of today's jobs">📋 Jobs</button></div>
-      <div style="display:flex;align-items:center;gap:8px;"><span id="fmVerTag" onclick="fmDiag()" style="font-size:10px;font-weight:800;color:#6f9b80;letter-spacing:.02em;cursor:pointer;white-space:nowrap;">v?</span><button class="fm-refresh" onclick="fmManualRefresh(this)" title="Refresh jobs now" aria-label="Refresh jobs now">⟳</button><button class="fm-top-exit" onclick="pmcsOpenMenu()" title="PMCS / Maintenance">🔧 PMCS</button><button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button><div class="fm-top-timer" id="fmJobTimer" style="display:none;"><span class="fm-dot"></span><span id="fmJobTimerVal">0:00:00</span></div></div>
+      <div style="display:flex;align-items:center;gap:8px;"><span id="fmVerTag" onclick="fmDiag()" title="Build — tap for diagnostics" style="font-size:10px;font-weight:700;color:#4d7561;letter-spacing:.02em;cursor:pointer;white-space:nowrap;">v?</span><button class="fm-refresh" onclick="fmManualRefresh(this)" title="Refresh jobs now" aria-label="Refresh jobs now">⟳</button><button class="fm-top-exit" onclick="pmcsOpenMenu()" title="PMCS / Maintenance">🔧 PMCS</button><button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button><div class="fm-top-timer" id="fmJobTimer" style="display:none;"><span class="fm-dot"></span><span id="fmJobTimerVal">0:00:00</span></div></div>
     </div>
     <div class="fm-progress-wrap">
       <div class="fm-progress-meta"><span>Stop <b id="fmStopPos">1</b> of <span id="fmStopTotal">1</span></span><span id="fmDoneCount">0 done</span></div>
@@ -3067,11 +3067,6 @@ function fmSkip(){
    If the handler throws, the crew sees why. If it runs but the sheet does not
    actually open, they see THAT — which is the case no console would have caught,
    because nothing went wrong as far as JavaScript was concerned. */
-window.__FM_TAPS = 0;
-function _fmBumpTap(){
-  window.__FM_TAPS++;
-  try{ const v=document.getElementById('fmVerTag'); if(v) v.textContent='v'+(window.__APP_VER||'?')+' · taps '+window.__FM_TAPS; }catch(e){}
-}
 
 /* ── DON'T DEPEND ON `click` ────────────────────────────────────────────────
    The tap counter settled this: the press DOES reach the Done button, and the
@@ -3123,18 +3118,7 @@ function fmBackdrop(ev, el, closeFn){
   }catch(e){}
 }
 let _fmPressLast = 0, _fmPressSX = 0, _fmPressSY = 0, _fmPressMoved = false;
-/* Which events the device ACTUALLY delivers, shown next to the build number.
-   "it bounces then nothing" means :active fired, so the touch lands — but that
-   says nothing about which event ends the press. Guessing between touchend,
-   pointerup and click has cost three attempts; this shows it. */
-window.__FM_EVT = {};
-function _fmEvtSeen(tag){
-  window.__FM_EVT[tag] = (window.__FM_EVT[tag]||0) + 1;
-  try{
-    const v=document.getElementById('fmVerTag');
-    if(v) v.textContent='v'+(window.__APP_VER||'?')+' · taps '+window.__FM_TAPS+' ['+Object.keys(window.__FM_EVT).join(' ')+']';
-  }catch(e){}
-}
+function _fmEvtSeen(){}   /* the press-event trace is gone; the handlers below kept their call sites */
 function fmPressAction(kind, ev){
   const now = Date.now();
   if (now - _fmPressLast < 600) return;        // one action per press, any source
@@ -3208,16 +3192,12 @@ function _fmBindPress(el, fn){
   // the button left `moved` true and swallowed the NEXT genuine click.
   el.addEventListener('click', function(e){ moved=false; fire(e); });
 }
+/* Presses are handled by the delegated document listener — nothing to bind per
+   element. This just keeps the build number in the header current. */
 function _fmWireTapCounter(){
   try{
-    const b=document.getElementById('fmDoneBtn');
-    // pointerdown alone — touchstart as well was counting every tap twice.
-    if(b && !b.__tapWired){ b.__tapWired=1; b.addEventListener('pointerdown', _fmBumpTap, true); }
-    /* Per-element binding is GONE. The delegated document listener covers every
-       one of these, and keeping both meant two independent 600ms guards — so a
-       single press fired the action twice. One path, one guard. */
     const v=document.getElementById('fmVerTag');
-    if(v && v.textContent==='v?') v.textContent='v'+(window.__APP_VER||'?')+' · taps '+window.__FM_TAPS;
+    if(v) v.textContent='v'+(window.__APP_VER||'?');
   }catch(e){}
 }
 function fmTapDone(){ _fmTapGuard('Done', 'fmCompleteSheet', fmOpenComplete); }
