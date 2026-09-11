@@ -11,14 +11,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-09-11.89 */
+/* APP_VER:2026-09-11.90 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-09-11.89'; window.__APP_VER=V;
+  var V='2026-09-11.90'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -392,7 +392,7 @@
   <div class="fm-screen" id="fmScreenJob">
     <div class="fm-top">
       <div style="display:flex;align-items:center;gap:8px;"><button class="fm-top-exit" onclick="fmBackToStart()">‹ Route</button><button class="fm-top-exit" onclick="fmShowJobList()" title="All of today's jobs">📋 Jobs</button></div>
-      <div style="display:flex;align-items:center;gap:8px;"><button class="fm-refresh" onclick="fmManualRefresh(this)" title="Refresh jobs now" aria-label="Refresh jobs now">⟳</button><button class="fm-top-exit" onclick="pmcsOpenMenu()" title="PMCS / Maintenance">🔧 PMCS</button><button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button><div class="fm-top-timer" id="fmJobTimer" style="display:none;"><span class="fm-dot"></span><span id="fmJobTimerVal">0:00:00</span></div></div>
+      <div style="display:flex;align-items:center;gap:8px;"><span id="fmVerTag" onclick="fmDiag()" style="font-size:10px;font-weight:800;color:#6f9b80;letter-spacing:.02em;cursor:pointer;white-space:nowrap;">v?</span><button class="fm-refresh" onclick="fmManualRefresh(this)" title="Refresh jobs now" aria-label="Refresh jobs now">⟳</button><button class="fm-top-exit" onclick="pmcsOpenMenu()" title="PMCS / Maintenance">🔧 PMCS</button><button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button><div class="fm-top-timer" id="fmJobTimer" style="display:none;"><span class="fm-dot"></span><span id="fmJobTimerVal">0:00:00</span></div></div>
     </div>
     <div class="fm-progress-wrap">
       <div class="fm-progress-meta"><span>Stop <b id="fmStopPos">1</b> of <span id="fmStopTotal">1</span></span><span id="fmDoneCount">0 done</span></div>
@@ -2976,6 +2976,7 @@ function _fmRenderJob(stops,idx){
     ? '<button class="fm-btn fm-btn-lg" style="background:#64748b;color:#e2e8f0;cursor:not-allowed;" disabled>✓ Completed — no need to drive</button>'
     : '<button class="fm-btn fm-btn-lg fm-btn-nav" onclick="fmNavigate('+idx+')">🧭 Navigate Here</button>';
   try{ _fmSyncCallsBanner(); }catch(e){}
+  try{ _fmWireTapCounter(); }catch(e){}
   document.getElementById('fmJobBody').innerHTML=
     '<div class="fm-card" style="'+(done?'opacity:.5;filter:grayscale(.6);':'')+'"><div class="fm-card-stopno">'+(idx+1)+'</div><div class="fm-card-name">'+esc(bk.name||'Customer')+'</div>'+
     '<div class="fm-card-addr">📍 '+esc(bk.address||'—')+(bk.zip?', '+esc(bk.zip):'')+'</div>'+(_isQuoteJob(bk)&&!done&&!skipped?'<div style="margin:10px 0;padding:13px 14px;border-radius:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;"><div style="font-size:16px;font-weight:900;letter-spacing:.02em;">\ud83d\udccb QUOTE VISIT \u2014 DO NOT MOW</div><div style="font-size:12.5px;font-weight:700;opacity:.92;margin-top:3px;">No equipment. Walk it with the customer, then tap \u201cBuild Estimate\u201d and Book / Email / Declined.</div></div>':'')+'<div class="fm-pills">'+pills+'</div>'+noteHtml+
@@ -3058,6 +3059,19 @@ function fmSkip(){
    If the handler throws, the crew sees why. If it runs but the sheet does not
    actually open, they see THAT — which is the case no console would have caught,
    because nothing went wrong as far as JavaScript was concerned. */
+window.__FM_TAPS = 0;
+function _fmBumpTap(){
+  window.__FM_TAPS++;
+  try{ const v=document.getElementById('fmVerTag'); if(v) v.textContent='v'+(window.__APP_VER||'?')+' · taps '+window.__FM_TAPS; }catch(e){}
+}
+function _fmWireTapCounter(){
+  try{
+    const b=document.getElementById('fmDoneBtn');
+    if(b && !b.__tapWired){ b.__tapWired=1; b.addEventListener('pointerdown', _fmBumpTap, true); b.addEventListener('touchstart', _fmBumpTap, true); }
+    const v=document.getElementById('fmVerTag');
+    if(v && v.textContent==='v?') v.textContent='v'+(window.__APP_VER||'?')+' · taps '+window.__FM_TAPS;
+  }catch(e){}
+}
 function fmTapDone(){ _fmTapGuard('Done', 'fmCompleteSheet', fmOpenComplete); }
 function fmTapSkip(){ _fmTapGuard("Couldn't service", 'fmSkipSheet', fmOpenSkip); }
 function _fmTapGuard(label, sheetId, fn){
