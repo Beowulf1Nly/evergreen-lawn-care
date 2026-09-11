@@ -11,14 +11,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-09-11.88 */
+/* APP_VER:2026-09-11.89 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-09-11.88'; window.__APP_VER=V;
+  var V='2026-09-11.89'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -99,6 +99,39 @@
       visualViewport.addEventListener('scroll', _fmSyncVH);
     }
   }catch(e){}
+  /* ── NOTHING FAILS SILENTLY ──────────────────────────────────────────────
+     An exception inside an inline onclick lands in a console no one on a truck
+     can open, so a broken handler and a dead button look identical. Three
+     rounds of this were spent guessing at which one it was. Now the error comes
+     to the screen, with the line, and it is copyable. */
+  window.__FM_LAST_ERR = null;
+  function _fmReportErr(what, err){
+    var msg = (err && (err.message || err)) + '';
+    var where = (err && err.stack ? (' · ' + String(err.stack).split('\n')[1] || '').trim() : '');
+    window.__FM_LAST_ERR = { what: what, msg: msg, at: new Date().toISOString(), stack: err && err.stack };
+    try { console.error('[FM]', what, err); } catch(e){}
+    try {
+      var t = document.getElementById('fmErrToast');
+      if (!t) {
+        t = document.createElement('div'); t.id = 'fmErrToast';
+        t.style.cssText = 'position:fixed;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));z-index:9000;'
+          + 'background:#7f1d1d;color:#fff;border:1px solid #fca5a5;border-radius:12px;padding:11px 13px;'
+          + "font:700 12.5px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;"
+          + 'box-shadow:0 6px 22px rgba(0,0,0,.45);word-break:break-word;';
+        t.onclick = function(){ t.style.display='none'; };
+        (document.body||document.documentElement).appendChild(t);
+      }
+      t.style.display = 'block';
+      t.textContent = '⚠ ' + what + ' — ' + msg + ' (tap to dismiss)';
+    } catch(e){}
+  }
+  window._fmReportErr = _fmReportErr;
+  addEventListener('error', function(ev){
+    if (ev && ev.message) _fmReportErr('Error', { message: ev.message + ' @' + (ev.lineno||'?') + ':' + (ev.colno||'?') });
+  });
+  addEventListener('unhandledrejection', function(ev){
+    _fmReportErr('Unhandled promise', (ev && ev.reason) || 'unknown');
+  });
   setTimeout(check, 8000);
   document.addEventListener('visibilitychange', function(){ if(!document.hidden) setTimeout(check, 3000); });
   // Re-check on a slow loop too. visibilitychange alone means a phone left awake on
@@ -375,10 +408,10 @@
     </div>
     <div class="fm-body" id="fmJobBody"></div>
     <div class="fm-foot">
-      <button class="fm-btn fm-btn-xl fm-btn-done" id="fmDoneBtn" onclick="fmOpenComplete()">✓ Done — Collect &amp; Next</button>
+      <button class="fm-btn fm-btn-xl fm-btn-done" id="fmDoneBtn" onclick="fmTapDone()">✓ Done — Collect &amp; Next</button>
       <div style="display:flex;gap:18px;justify-content:center;margin-top:12px;">
         <button class="fm-skip" id="fmSkipHopBtn" style="margin-top:0;width:auto;" onclick="fmSkip()">Skip for now ›</button>
-        <button class="fm-skip" style="margin-top:0;width:auto;color:#fca5a5;" onclick="fmOpenSkip()">⚠ Couldn't service</button>
+        <button class="fm-skip" style="margin-top:0;width:auto;color:#fca5a5;" onclick="fmTapSkip()">⚠ Couldn't service</button>
       </div>
       <button class="fm-skip" style="color:#fca5a5;margin-top:10px;" onclick="fmEmergencyEnd()">🚨 End my route now (emergency)</button>
       <button class="fm-skip" style="color:#6f9b80;font-size:12px;margin-top:6px;" onclick="fmDiag()">🩺 Something's not working</button>
@@ -2732,7 +2765,8 @@ async function fmDiag(){
   // The offline queue, with the REAL backend error on anything stuck.
   try{
     const q=_fmQueueLoad();
-    add('queue', q.length+' item(s)');
+    add('last error', window.__FM_LAST_ERR ? (window.__FM_LAST_ERR.what+' — '+window.__FM_LAST_ERR.msg+' @'+window.__FM_LAST_ERR.at) : '(none)');
+  add('queue', q.length+' item(s)');
     q.slice(0,8).forEach(function(it,i){
       out.push('   ['+(i+1)+'] '+it.kind+'  tries='+(it.tries||0)+'  err='+(it.lastErr||'(none yet)'));
     });
@@ -3020,6 +3054,33 @@ function fmSkip(){
    _fmRenderJob stamps window._fmViewKey with the KEY of the job it drew, so the
    key — not the index — is what the crew is looking at. Resolve by key first,
    fall back to the index, then to the first open stop, and only then give up. */
+/* The footer buttons go through here rather than calling their handler directly.
+   If the handler throws, the crew sees why. If it runs but the sheet does not
+   actually open, they see THAT — which is the case no console would have caught,
+   because nothing went wrong as far as JavaScript was concerned. */
+function fmTapDone(){ _fmTapGuard('Done', 'fmCompleteSheet', fmOpenComplete); }
+function fmTapSkip(){ _fmTapGuard("Couldn't service", 'fmSkipSheet', fmOpenSkip); }
+function _fmTapGuard(label, sheetId, fn){
+  try{
+    fn();
+  }catch(err){
+    try{ window._fmReportErr(label + ' failed', err); }catch(e){}
+    return;
+  }
+  // Give the sheet a frame to paint, then confirm it is actually on screen.
+  setTimeout(function(){
+    try{
+      const el = document.getElementById(sheetId);
+      const shown = el && getComputedStyle(el).display !== 'none';
+      if (shown) return;
+      const st = (typeof _fmCurrentStop === 'function') ? _fmCurrentStop() : null;
+      window._fmReportErr(label + ' did nothing',
+        { message: 'sheet=' + sheetId + ' stayed hidden · stops=' + ((typeof _fmStops==='function') ? _fmStops().length : '?')
+                 + ' · viewIdx=' + String(typeof _fmViewIdx!=='undefined'?_fmViewIdx:'?')
+                 + ' · stop=' + (st && st.bk ? (st.bk.name||'?') : 'NONE') });
+    }catch(e){}
+  }, 250);
+}
 function _fmCurrentStop(){
   const stops=_fmStops();
   if(!stops.length) return null;
