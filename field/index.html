@@ -11,14 +11,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-09-11.86 */
+/* APP_VER:2026-09-11.87 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-09-11.86'; window.__APP_VER=V;
+  var V='2026-09-11.87'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -307,6 +307,8 @@
       <button class="fm-btn fm-btn-xl fm-btn-start" id="fmStartBtn" onclick="fmStartTapped()" style="min-width:260px;">🟢 Start My Route</button>
       <button class="fm-skip" id="fmStartEndBtn" style="color:#fca5a5;display:none;margin-top:12px;" onclick="fmEmergencyEnd()">🏁 End route &amp; clock out</button>
       <div style="display:flex;gap:10px;width:100%;max-width:380px;margin:18px auto 0;"><button onclick="pmcsOpenMenu()" style="flex:1;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:13px 8px;color:#fff;font-family:inherit;font-weight:800;font-size:13.5px;cursor:pointer;line-height:1.5;">🔧 PMCS<br><span style="font-weight:600;font-size:11px;color:#9ed8b1;">maintenance checks</span></button><button onclick="ncOpen()" style="flex:1;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:13px 8px;color:#fff;font-family:inherit;font-weight:800;font-size:13.5px;cursor:pointer;line-height:1.5;">➕ New customer<br><span style="font-weight:600;font-size:11px;color:#9ed8b1;">book on the spot</span></button></div>
+      <!-- Reachable when something is wrong and nobody can explain what -->
+      <button onclick="fmDiag()" style="margin-top:12px;background:none;border:none;color:#6f9b80;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;text-decoration:underline;">🩺 Something's not working — diagnostics</button>
     </div>
   </div>
   <!-- START-OF-ROUTE CHECKLIST -->
@@ -349,6 +351,7 @@
         <button class="fm-skip" style="margin-top:0;width:auto;color:#fca5a5;" onclick="fmOpenSkip()">⚠ Couldn't service</button>
       </div>
       <button class="fm-skip" style="color:#fca5a5;margin-top:10px;" onclick="fmEmergencyEnd()">🚨 End my route now (emergency)</button>
+      <button class="fm-skip" style="color:#6f9b80;font-size:12px;margin-top:6px;" onclick="fmDiag()">🩺 Something's not working</button>
     </div>
   </div>
   <!-- DONE -->
@@ -2663,6 +2666,71 @@ function _anySheetOpen(){
   }
   return !!document.querySelector('.pmcs-overlay.open');
 }
+
+/* ═══════════ 🩺 DIAGNOSTICS ═══════════
+   "It isn't working" is not something anyone can fix from a description, and a
+   crew on a truck cannot open a console. This turns the report into facts: the
+   build actually running, who the server thinks they are, whether their token
+   still works, and the real error text behind anything stuck in the queue.
+   One tap to copy, so it can be pasted straight into a message. */
+async function fmDiag(){
+  let ov=document.getElementById('fmDiagOv');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='fmDiagOv';
+    ov.style.cssText='position:fixed;inset:0;z-index:3600;background:rgba(4,18,10,.96);display:flex;flex-direction:column;padding:max(16px,env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));';
+    ov.innerHTML='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">'
+      +'<div style="font-size:16px;font-weight:800;color:#dcfce7;flex:1;">🩺 Diagnostics</div>'
+      +'<button onclick="fmDiagCopy()" style="padding:9px 13px;border:none;border-radius:10px;background:#15803d;color:#fff;font-family:inherit;font-weight:800;font-size:13px;cursor:pointer;">Copy</button>'
+      +'<button onclick="document.getElementById(\'fmDiagOv\').remove()" style="padding:9px 13px;border:1px solid rgba(255,255,255,.25);border-radius:10px;background:transparent;color:#dcfce7;font-family:inherit;font-weight:800;font-size:13px;cursor:pointer;">Close</button></div>'
+      +'<pre id="fmDiagBody" style="flex:1;overflow:auto;margin:0;padding:12px;background:#08150e;border:1px solid rgba(255,255,255,.14);border-radius:12px;color:#bbf7d0;font-size:11.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;">collecting…</pre>';
+    document.body.appendChild(ov);
+  }
+  const out=[];
+  const add=(k,v)=>out.push(String(k).padEnd(16)+' '+v);
+  add('build', (window.__APP_VER||'?'));
+  add('when', new Date().toString());
+  add('role', adminRole||'(none)');
+  add('crews', adminCrews||'(none)');
+  add('email', adminEmail||'(none)');
+  add('token', adminToken ? (adminToken.slice(0,6)+'… ('+adminToken.length+' chars)') : 'MISSING');
+  add('online', String(navigator.onLine!==false));
+  add('started', String(!!_fmStarted)+'  bootd='+String(!!_fmBooted)+'  busy='+String(!!window.__FM_BUSY));
+  add('stops today', String((function(){ try{ return _fmStops().length; }catch(e){ return 'ERR '+e.message; } })()));
+  add('raw jobs', String((function(){ try{ return _fmTodayRawJobs().length; }catch(e){ return 'ERR '+e.message; } })()));
+  add('bookings', String((allBookings||[]).length));
+  add('viewIdx', String(_fmViewIdx)+'  viewKey='+String(window._fmViewKey));
+  // The offline queue, with the REAL backend error on anything stuck.
+  try{
+    const q=_fmQueueLoad();
+    add('queue', q.length+' item(s)');
+    q.slice(0,8).forEach(function(it,i){
+      out.push('   ['+(i+1)+'] '+it.kind+'  tries='+(it.tries||0)+'  err='+(it.lastErr||'(none yet)'));
+    });
+  }catch(e){ add('queue','ERR '+e.message); }
+  document.getElementById('fmDiagBody').textContent=out.join('\n')+'\n\npinging server…';
+  // A real authenticated call, so auth problems show up as themselves.
+  for(const a of ['bookings','get_route','get_checklist_config']){
+    let line;
+    try{
+      const r=await fetch(SCRIPT_URL+'?action='+a+'&date='+todayISOStr()+'&'+authParam());
+      const t=(await r.text()).slice(0,140);
+      line='HTTP '+r.status+'  '+t;
+    }catch(e){ line='FETCH FAILED — '+e.message; }
+    out.push('ping '+a.padEnd(12)+' '+line);
+    document.getElementById('fmDiagBody').textContent=out.join('\n');
+  }
+  window._fmDiagText=out.join('\n');
+}
+function fmDiagCopy(){
+  const t=window._fmDiagText||'';
+  try{ navigator.clipboard.writeText(t).then(function(){ showToast('📋 Copied — paste it to Hunter'); },function(){ _fmDiagFallback(t); }); }
+  catch(e){ _fmDiagFallback(t); }
+}
+function _fmDiagFallback(t){
+  try{ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast('📋 Copied'); }
+  catch(e){ try{ showToast('Select the text and copy it manually'); }catch(_){} }
+}
+
 /* ───────── Crew / helper picker (prefilled from the staff roster) ───────── */
 let _crewListAll=[], _crewPickerResolve=null, _crewPickerView=[];
 const _CREW_CACHE_KEY='evg_field_crewlist_v1';
