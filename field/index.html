@@ -11,14 +11,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-09-11.93 */
+/* APP_VER:2026-09-11.94 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-09-11.93'; window.__APP_VER=V;
+  var V='2026-09-11.94'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -458,7 +458,7 @@
 </div>
 
 <!-- COMPLETE SHEET -->
-<div id="fmCompleteSheet" onclick="if(event.target===this)fmCloseComplete()">
+<div id="fmCompleteSheet" onclick="fmBackdrop(event,this,fmCloseComplete)">
   <div class="fm-sheet">
     <div class="fm-sheet-title" id="fmcTitle">Finish job</div>
     <div class="fm-sheet-sub">Photo, checklist, then payment at the bottom → Complete.</div>
@@ -496,7 +496,7 @@
 </div>
 
 <!-- SKIP SHEET -->
-<div id="fmSkipSheet" onclick="if(event.target===this)fmCloseSkip()">
+<div id="fmSkipSheet" onclick="fmBackdrop(event,this,fmCloseSkip)">
   <div class="fm-sheet">
     <div class="fm-sheet-title" id="fmSkipTitle">Couldn't service this stop</div>
     <div class="fm-sheet-sub">The job stays open for follow-up — a note is logged for the office.</div>
@@ -2096,7 +2096,7 @@ function qcallOpen(b){
     const o=document.createElement('div');
     o.id='qcallOverlay';
     o.style.cssText='display:none;position:fixed;inset:0;z-index:3500;background:rgba(0,0,0,.6);align-items:flex-end;justify-content:center;';
-    o.onclick=function(e){ if(e.target===o) qcallClose(); };
+    o.onclick=function(e){ fmBackdrop(e,o,qcallClose); };
     o.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:640px;max-height:calc(100dvh - max(20px, env(safe-area-inset-top)) - 8px);display:flex;flex-direction:column;color:#0f2740;">'
       +'<div style="padding:16px 18px 12px;border-bottom:1.5px solid #e2e8f0;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">'
       +'<div style="min-width:0;"><div id="qc-name" style="font-size:18px;font-weight:800;"></div><div id="qc-addr" style="font-size:12.5px;color:#64748b;margin-top:2px;"></div><div id="qc-prov" style="font-size:11.5px;margin-top:4px;line-height:1.4;"></div></div>'
@@ -2772,7 +2772,10 @@ async function fmDiag(){
       out.push('   ['+(i+1)+'] '+it.kind+'  tries='+(it.tries||0)+'  err='+(it.lastErr||'(none yet)'));
     });
   }catch(e){ add('queue','ERR '+e.message); }
-  document.getElementById('fmDiagBody').textContent=out.join('\n')+'\n\npinging server…';
+  const _diagSet=function(txt){ const el=document.getElementById('fmDiagBody'); if(el) el.textContent=txt; return !!el; };
+  // Closing the panel mid-ping removed the node while these awaits were still
+  // running — hence "null is not an object (evaluating ...textContent)".
+  if(!_diagSet(out.join('\n')+'\n\npinging server…')) return;
   // A real authenticated call, so auth problems show up as themselves.
   for(const a of ['bookings','get_route','get_checklist_config']){
     let line;
@@ -2782,7 +2785,7 @@ async function fmDiag(){
       line='HTTP '+r.status+'  '+t;
     }catch(e){ line='FETCH FAILED — '+e.message; }
     out.push('ping '+a.padEnd(12)+' '+line);
-    document.getElementById('fmDiagBody').textContent=out.join('\n');
+    if(!_diagSet(out.join('\n'))) return;      // panel was closed — stop quietly
   }
   window._fmDiagText=out.join('\n');
 }
@@ -3093,6 +3096,28 @@ const FM_PRESS_ACTIONS = {
   couldnt: function(){ fmTapSkip(); },
   end:     function(){ fmEmergencyEnd(); }
 };
+/* ── THE SHEET WAS CLOSING ITSELF ─────────────────────────────────────────
+   A sheet opened from a TOUCH gets a synthesised click roughly 300ms later, at
+   the same screen coordinates. By then the sheet covers that point, so the click
+   lands on its backdrop — and every backdrop here closes on
+   `if(event.target===this)`. The sheet opened and shut again before it could be
+   seen: the button bounces, and nothing happens.
+
+   This is why the Done button looked dead no matter what fired it. Opening on
+   touchend made it worse, not better, because the ghost click then had a sheet
+   to land on.
+
+   Backdrop dismissal is ignored for 600ms after a sheet opens. Deliberate
+   dismissals are unaffected — nobody opens a sheet and closes it inside 600ms. */
+let _fmSheetOpenedAt = 0;
+function fmMarkSheetOpened(){ _fmSheetOpenedAt = Date.now(); }
+function fmBackdrop(ev, el, closeFn){
+  try{
+    if (ev && ev.target !== el) return;                    // the sheet itself, not the backdrop
+    if (Date.now() - _fmSheetOpenedAt < 600) return;       // the ghost click that opened it
+    closeFn();
+  }catch(e){}
+}
 let _fmPressLast = 0, _fmPressSX = 0, _fmPressSY = 0, _fmPressMoved = false;
 /* Which events the device ACTUALLY delivers, shown next to the build number.
    "it bounces then nothing" means :active fired, so the touch lands — but that
@@ -3110,6 +3135,7 @@ function fmPressAction(kind, ev){
   const now = Date.now();
   if (now - _fmPressLast < 600) return;        // one action per press, any source
   _fmPressLast = now;
+  fmMarkSheetOpened();                        // anything this press opens is protected
   const fn = FM_PRESS_ACTIONS[kind];
   if (!fn) return;
   try{ fn(); }
@@ -3237,7 +3263,7 @@ function _fmNeedStop(){
   }
   return st;
 }
-function fmOpenSkip(){ const stop=_fmNeedStop(); if(!stop) return; document.getElementById('fmSkipErr').style.display='none'; document.getElementById('fmSkipTitle').textContent="Couldn't service "+(stop.bk.name||'this stop'); document.getElementById('fmSkipSheet').style.display='flex'; }
+function fmOpenSkip(){ const stop=_fmNeedStop(); if(!stop) return; document.getElementById('fmSkipErr').style.display='none'; document.getElementById('fmSkipTitle').textContent="Couldn't service "+(stop.bk.name||'this stop'); document.getElementById('fmSkipSheet').style.display='flex'; fmMarkSheetOpened(); }
 function fmCloseSkip(){ document.getElementById('fmSkipSheet').style.display='none'; }
 function fmPromptSkipOther(){ const r=prompt("Reason you couldn't service this stop:"); if(r&&r.trim()) fmRecordSkip(r.trim()); }
 function fmRecordSkip(reason){
@@ -3285,7 +3311,7 @@ function fmOpenComplete(){
     cn.placeholder=em0?'Gate code, dogs, sprinkler heads to avoid…':'(needs a customer email on file)';
   })();
   _fmcRenderAddons(); _fmcRenderPhotos(); _fmcRenderAmount(); _fmcRenderPay(); _fmcRenderEndChk();
-  document.getElementById('fmCompleteSheet').style.display='flex';
+  document.getElementById('fmCompleteSheet').style.display='flex'; fmMarkSheetOpened();
 }
 function fmCloseComplete(){ document.getElementById('fmCompleteSheet').style.display='none'; }
 function _fmcAddonTotal(){ return (_fmcAddons||[]).filter(a=>a.on).reduce((s,a)=>s+(+a.price||0),0); }
@@ -3592,7 +3618,7 @@ function ncOpen(){
     const o=document.createElement('div');
     o.id='ncOverlay';
     o.style.cssText='display:none;position:fixed;inset:0;z-index:3500;background:rgba(0,0,0,.6);align-items:flex-end;justify-content:center;';
-    o.onclick=function(e){ if(e.target===o) ncClose(); };
+    o.onclick=function(e){ fmBackdrop(e,o,ncClose); };
     o.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:640px;max-height:calc(100dvh - max(20px, env(safe-area-inset-top)) - 8px);display:flex;flex-direction:column;color:#0f2740;">'
       +'<div style="padding:16px 18px 12px;border-bottom:1.5px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">'
       +'<div><div style="font-size:18px;font-weight:800;">➕ New Customer</div><div style="font-size:12.5px;color:#64748b;margin-top:2px;">Got one on the route? Add & schedule them right here.</div></div>'
@@ -3805,7 +3831,7 @@ function fmQuoteCloser(bk){
     const o=document.createElement('div');
     o.id='qjOverlay';
     o.style.cssText='display:none;position:fixed;inset:0;z-index:3450;background:rgba(0,0,0,.6);align-items:flex-end;justify-content:center;';
-    o.onclick=function(e){ if(e.target===o) qjClose(); };
+    o.onclick=function(e){ fmBackdrop(e,o,qjClose); };
     o.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:640px;max-height:calc(100dvh - max(20px, env(safe-area-inset-top)) - 8px);display:flex;flex-direction:column;color:#10233a;">'
       +'<div style="padding:16px 18px 12px;border-bottom:1.5px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">'
       +'<div><div style="font-size:18px;font-weight:800;">🧾 Close this quote</div><div id="qjName" style="font-size:12.5px;color:#64748b;margin-top:2px;"></div></div>'
