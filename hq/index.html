@@ -4030,19 +4030,62 @@ const RC_KIND={
   other:    { label:'CALL',          c:'#9fb2c0', bg:'transparent',           bd:'var(--line2,#2a3942)' },
   call:     { label:'—',             c:'#64748b', bg:'transparent',           bd:'var(--line2,#2a3942)' }
 };
+/* ── THIS WAS AN INFINITE FETCH LOOP, AND IT TOOK THE WHOLE BACKEND DOWN ──────
+   The throttle stamp was only set on SUCCESS, and the function re-rendered
+   unconditionally at the end. renderDispatch() draws _hqCallsPanel(), which calls
+   _rcLoad() again — so on any FAILED call the stamp stayed 0, the throttle never
+   armed, and it went fetch → render → fetch with no gap. get_retell_calls fails
+   for anyone who has not pasted the backend yet, so this ran flat out.
+
+   Apps Script has a simultaneous-execution limit. Past it Google stops returning
+   JSON and serves 404 HTML instead — which is why a cached read took 9.8s, why
+   rescheduling span forever, and why /field showed "string did not match expected
+   pattern" (Safari trying to JSON.parse an HTML error page). One loop in HQ, and
+   every app that shares the backend went down with it.
+
+   Now: the window is claimed BEFORE the request, so a failure throttles exactly
+   like a success; repeated failures back off progressively; and the re-render only
+   happens when the data actually changed, which breaks the cycle at its root. */
+let _rcFailStreak = 0;
 async function _rcLoad(force){
   if(_rcBusy) return;
-  if(!force && Date.now()-_rcFetchedAt < 60000) return;   // 60s is plenty for a call log
+  const wait = _rcFailStreak ? Math.min(600000, 60000 * Math.pow(2, _rcFailStreak)) : 60000;
+  if(!force && Date.now()-_rcFetchedAt < wait) return;
   _rcBusy=true;
+  _rcFetchedAt=Date.now();          // claim the window FIRST — failures must throttle too
+  let changed=false;
   try{
-    const d=await fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'get_retell_calls',days:'14',limit:'120',adminToken:token})).then(function(r){ return r.json(); });
-    if(d&&d.success&&Array.isArray(d.calls)){ _rcCalls=d.calls; _rcFetchedAt=Date.now(); }
-    else if(d&&!d.success){ _rcCalls=[]; window._rcErr=String(d.error||'')||'backend error'; }
-  }catch(e){ window._rcErr='network'; }
+    const r=await fetch(SCRIPT_URL+'?'+new URLSearchParams({action:'get_retell_calls',days:'14',limit:'120',adminToken:token}));
+    const txt=await r.text();
+    let d=null;
+    try{ d=JSON.parse(txt); }
+    catch(pe){ throw new Error(r.status===200?'backend returned HTML, not JSON (Apps Script overloaded)':('HTTP '+r.status)); }
+    if(d&&d.success&&Array.isArray(d.calls)){
+      changed = JSON.stringify(d.calls)!==JSON.stringify(_rcCalls);
+      _rcCalls=d.calls; window._rcErr=null; _rcFailStreak=0;
+    } else {
+      changed = (_rcCalls||[]).length>0;
+      _rcCalls=[]; window._rcErr=String((d&&d.error)||'backend error'); _rcFailStreak++;
+    }
+  }catch(e){
+    changed = (_rcCalls||[]).length>0;
+    _rcCalls=[]; window._rcErr=String(e.message||'network'); _rcFailStreak++;
+  }
   finally{ _rcBusy=false; }
-  try{ renderDispatch(); }catch(e){}
+  // Only repaint when something actually moved. An unconditional render here is
+  // what closed the loop.
+  if(changed){ try{ renderDispatch(); }catch(e){} }
 }
 function _rcSetFilter(k){ _rcFilter=k; try{ renderDispatch(); }catch(e){} }
+/* One-time: force the panel closed for anyone whose stored state has them
+   restarting the loop on every load. Removed once the flag is set, so it never
+   fights a deliberate choice again. */
+try{
+  if(!localStorage.getItem('hq_calls_loopfix_v1')){
+    localStorage.setItem('hq_calls_loopfix_v1','1');
+    localStorage.setItem('hq_calls_open','0');
+  }
+}catch(e){}
 function _rcToggle(){ try{ localStorage.setItem('hq_calls_open', localStorage.getItem('hq_calls_open')==='1'?'0':'1'); }catch(e){} try{ renderDispatch(); }catch(e){} }
 function _rcAgo(at){
   const t=Date.parse(String(at||'').replace(' ','T')); if(isNaN(t)) return '';
