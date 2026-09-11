@@ -11,14 +11,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-09-11.90 */
+/* APP_VER:2026-09-11.91 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-09-11.90'; window.__APP_VER=V;
+  var V='2026-09-11.91'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -408,12 +408,12 @@
     </div>
     <div class="fm-body" id="fmJobBody"></div>
     <div class="fm-foot">
-      <button class="fm-btn fm-btn-xl fm-btn-done" id="fmDoneBtn" onclick="fmTapDone()">✓ Done — Collect &amp; Next</button>
+      <button class="fm-btn fm-btn-xl fm-btn-done" id="fmDoneBtn">✓ Done — Collect &amp; Next</button>
       <div style="display:flex;gap:18px;justify-content:center;margin-top:12px;">
-        <button class="fm-skip" id="fmSkipHopBtn" style="margin-top:0;width:auto;" onclick="fmSkip()">Skip for now ›</button>
-        <button class="fm-skip" style="margin-top:0;width:auto;color:#fca5a5;" onclick="fmTapSkip()">⚠ Couldn't service</button>
+        <button class="fm-skip" id="fmSkipHopBtn" style="margin-top:0;width:auto;">Skip for now ›</button>
+        <button class="fm-skip" style="margin-top:0;width:auto;color:#fca5a5;">⚠ Couldn't service</button>
       </div>
-      <button class="fm-skip" style="color:#fca5a5;margin-top:10px;" onclick="fmEmergencyEnd()">🚨 End my route now (emergency)</button>
+      <button class="fm-skip" style="color:#fca5a5;margin-top:10px;">🚨 End my route now (emergency)</button>
       <button class="fm-skip" style="color:#6f9b80;font-size:12px;margin-top:6px;" onclick="fmDiag()">🩺 Something's not working</button>
     </div>
   </div>
@@ -2388,7 +2388,8 @@ function _fmOpenStops(){ return _fmStops().filter(s=>!_fmResolved(s)); }
 // True only when the stop being completed is the LAST open stop. A "Skip for now"
 // stop is still open, so being on the last stop by position is NOT the finish.
 function _fmIsFinalOpenStop(){ return _fmOpenStops().length<=1; }
-function _fmShow(screen){ document.querySelectorAll('#fieldMode .fm-screen').forEach(s=>s.classList.remove('active')); const el=document.getElementById(screen); if(el) el.classList.add('active'); }
+function _fmShow(screen){
+  try{ setTimeout(function(){ if(typeof _fmWireTapCounter==='function') _fmWireTapCounter(); },0); }catch(e){} document.querySelectorAll('#fieldMode .fm-screen').forEach(s=>s.classList.remove('active')); const el=document.getElementById(screen); if(el) el.classList.add('active'); }
 function fmBackToStart(){ window._fmListMode=false; _fmShow('fmScreenStart'); _fmRenderStart(); }
 /* ── EMPLOYEE HUB: My Schedule tab — counts/time/areas only, zero customer PII ── */
 let _fmSchedTab='weekly', _fmSchedWkSel=null;
@@ -3064,10 +3065,55 @@ function _fmBumpTap(){
   window.__FM_TAPS++;
   try{ const v=document.getElementById('fmVerTag'); if(v) v.textContent='v'+(window.__APP_VER||'?')+' · taps '+window.__FM_TAPS; }catch(e){}
 }
+
+/* ── DON'T DEPEND ON `click` ────────────────────────────────────────────────
+   The tap counter settled this: the press DOES reach the Done button, and the
+   click never arrives. Nothing in this app calls preventDefault on a touch and
+   there are no other touch listeners, so the click is simply not being
+   synthesised on the device — lost to a layout shift under the finger, to the
+   :active transform pulling the button's edge out from under it mid-press, or
+   to a Safari quirk. Four rounds went into guessing which.
+
+   So stop asking. The primary action of a field app fires on the RELEASE of the
+   press itself, which is the event the browser actually delivers. click stays
+   bound as well for desktop and keyboard; a 600ms guard means whichever arrives
+   first wins and the second is ignored. A press that drags more than 12px is a
+   scroll, not a tap, and is skipped. */
+function _fmBindPress(el, fn){
+  if(!el || el.__pressBound) return;
+  el.__pressBound = 1;
+  let sx=0, sy=0, moved=false, last=0;
+  const pt = function(e){ return (e && e.touches && e.touches[0]) || (e && e.changedTouches && e.changedTouches[0]) || e || {}; };
+  const start = function(e){ const t=pt(e); sx=t.clientX||0; sy=t.clientY||0; moved=false; };
+  const move  = function(e){ const t=pt(e); if(Math.abs((t.clientX||0)-sx)>12 || Math.abs((t.clientY||0)-sy)>12) moved=true; };
+  const fire  = function(e){
+    if(moved) return;                                  // a drag, not a tap
+    const now=Date.now(); if(now-last<600) return;     // one action per press
+    last=now;
+    try{ fn(e); }catch(err){ try{ window._fmReportErr('Button handler', err); }catch(_){} }
+  };
+  el.addEventListener('touchstart', start, {passive:true});
+  el.addEventListener('touchmove',  move,  {passive:true});
+  el.addEventListener('touchend',   fire,  {passive:true});
+  el.addEventListener('pointerdown',start);
+  el.addEventListener('pointerup',  fire);
+  // A click is a COMPLETED click by definition, and no browser fires one after a
+  // drag on a button — so clear the drag flag first. Without this, one scroll past
+  // the button left `moved` true and swallowed the NEXT genuine click.
+  el.addEventListener('click', function(e){ moved=false; fire(e); });
+}
 function _fmWireTapCounter(){
   try{
     const b=document.getElementById('fmDoneBtn');
-    if(b && !b.__tapWired){ b.__tapWired=1; b.addEventListener('pointerdown', _fmBumpTap, true); b.addEventListener('touchstart', _fmBumpTap, true); }
+    // pointerdown alone — touchstart as well was counting every tap twice.
+    if(b && !b.__tapWired){ b.__tapWired=1; b.addEventListener('pointerdown', _fmBumpTap, true); }
+    _fmBindPress(b, fmTapDone);
+    _fmBindPress(document.getElementById('fmSkipHopBtn'), fmSkip);
+    [...document.querySelectorAll('#fmScreenJob .fm-foot button')].forEach(function(btn){
+      const t=(btn.textContent||'').trim();
+      if(/Couldn/.test(t)) _fmBindPress(btn, fmTapSkip);
+      else if(/End my route/.test(t)) _fmBindPress(btn, fmEmergencyEnd);
+    });
     const v=document.getElementById('fmVerTag');
     if(v && v.textContent==='v?') v.textContent='v'+(window.__APP_VER||'?')+' · taps '+window.__FM_TAPS;
   }catch(e){}
