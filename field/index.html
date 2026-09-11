@@ -11,14 +11,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-09-11.97 */
+/* APP_VER:2026-09-11.98 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-09-11.97'; window.__APP_VER=V;
+  var V='2026-09-11.98'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -142,6 +142,16 @@
 <title>Evergreen Field Mode</title>
 <meta name="description" content="On-the-job crew app for Evergreen Lawn Care."/>
 <meta name="robots" content="noindex,nofollow"/>
+<!-- Every origin this app talks to, warmed before the first request. The crew app
+     had none of these, and it is the one running on cell data in a moving truck —
+     a cold DNS + TLS handshake to Apps Script costs 200-400ms there, on top of
+     whatever Apps Script itself takes. googleusercontent is where Apps Script
+     redirects its responses, so it pays the handshake twice without this. -->
+<link rel="preconnect" href="https://script.google.com"/>
+<link rel="preconnect" href="https://script.googleusercontent.com"/>
+<link rel="dns-prefetch" href="https://script.google.com"/>
+<link rel="preconnect" href="https://js.stripe.com"/>
+<link rel="dns-prefetch" href="https://router.project-osrm.org"/>
 <link rel="manifest" href="manifest.webmanifest"/>
 <meta name="theme-color" content="#0f2417"/>
 <meta name="color-scheme" content="light"/>
