@@ -11,14 +11,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-09-10.85 */
+/* APP_VER:2026-09-11.86 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-09-10.85'; window.__APP_VER=V;
+  var V='2026-09-11.86'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -42,15 +42,50 @@
           var at=0; try{ at=+localStorage.getItem('evg_field_upd_at')||0; }catch(e){}
           if(Date.now()-at<90000) return;
         }
-        // NEVER yank the app out from under a crew mid-route — if a route is
-        // running, hold the update until the day is finished (route lock owns the day).
-        try{ if(window.__FM_BUSY){ return; } }catch(e){}
+        /* Mid-route we must not reload under the crew's thumbs — but the old code
+           RETURNED here, which pinned a running route to whatever build it started
+           on for the entire working day. A crew that began the morning on a broken
+           build stayed broken until tomorrow, with no way out and nothing on screen
+           to tell them a fix existed. That is exactly how a Done-button bug fixed at
+           2pm still had crews stuck on it at 5pm.
+
+           So: never reload underneath them, but always TELL them, and let them take
+           it the moment they have a free hand. A reload is safe — _restoreState
+           rebuilds the route, the clock and the route lock from localStorage, which
+           is the whole reason that state is persisted. */
+        try{
+          if(window.__FM_BUSY){ _fmShowUpdateBanner(tgt); return; }
+        }catch(e){}
         try{ localStorage.setItem('evg_field_updated_to', tgt); localStorage.setItem('evg_field_upd_at', String(Date.now())); }catch(e){}
         location.replace('index.html?_='+Date.now());         // one clean reload to the new build
       }).catch(function(){});
   }
+  /* TOP of the screen on purpose. The bottom belongs to Done / Couldn't service,
+     and a banner pinned over those is the same class of bug this is here to fix. */
+  function _fmShowUpdateBanner(tgt){
+    var b=document.getElementById('fmUpdBanner');
+    if(!b){
+      b=document.createElement('div');
+      b.id='fmUpdBanner';
+      b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:4000;'
+        +'background:#15803d;color:#fff;text-align:center;cursor:pointer;'
+        +"font:800 13.5px/1.3 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;"
+        +'padding:calc(9px + env(safe-area-inset-top)) 14px 9px;'
+        +'box-shadow:0 3px 14px rgba(0,0,0,.35);';
+      b.onclick=function(){
+        try{ localStorage.setItem('evg_field_updated_to', tgt); localStorage.setItem('evg_field_upd_at', String(Date.now())); }catch(e){}
+        b.textContent='Updating…';
+        location.replace('index.html?_='+Date.now());
+      };
+      (document.body||document.documentElement).appendChild(b);
+    }
+    b.textContent='🔄 Update ready — tap to install (safe mid-route)';
+  }
   setTimeout(check, 8000);
   document.addEventListener('visibilitychange', function(){ if(!document.hidden) setTimeout(check, 3000); });
+  // Re-check on a slow loop too. visibilitychange alone means a phone left awake on
+  // the job screen for hours never asks again.
+  setInterval(check, 300000);
 })();
 </script>
 <title>Evergreen Field Mode</title>
