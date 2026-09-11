@@ -11,14 +11,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-09-11.94 */
+/* APP_VER:2026-09-11.96 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-09-11.94'; window.__APP_VER=V;
+  var V='2026-09-11.96'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -253,13 +253,17 @@
   .fm-jobnav button{ flex:1 1 auto; min-width:88px; background:rgba(255,255,255,.12); color:#dcfce7; border:none; border-radius:11px; padding:11px 13px; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; transition:background .15s,transform .08s ease; }
   .fm-jobnav button:active{ background:rgba(255,255,255,.2); transform:scale(.97); }
   .fm-jobnav button:disabled{ opacity:.3; }
-    display:flex; align-items:center; justify-content:center; pointer-events:none; opacity:0;
-    transform:translateY(0) scale(.6); color:#86efac; background:rgba(14,44,26,.92);
-    border:1px solid rgba(134,239,172,.28); box-shadow:0 6px 20px rgba(0,0,0,.36); }
-  #fmCompleteSheet,#fmSkipSheet{ display:none; position:fixed; inset:0; z-index:3100; background:rgba(0,0,0,.55); align-items:flex-end; justify-content:center; }
+  /* (the orphaned body of the removed #fmPtr rule lived here. Deleting only its
+     FIRST line left these three behind, and the CSS parser then consumed the NEXT
+     rule as their block — which is why #fmCompleteSheet lost position:fixed and
+     z-index and opened BEHIND the job card. Remove whole rules, not lines. */
+  #fmCompleteSheet,#fmSkipSheet{ display:none; position:fixed; inset:0; height:100vh; height:100dvh; height:var(--fm-vh, 100dvh); z-index:3100; background:rgba(0,0,0,.55); align-items:flex-end; justify-content:center; }
   /* finish-job is a full PAGE — the popup style clipped the top on long jobs */
   #fmCompleteSheet{ background:#eef6f0; align-items:stretch; }
-  #fmCompleteSheet .fm-sheet{ height:100dvh; max-height:100dvh; border-radius:0; box-shadow:none; padding-top:max(18px, env(safe-area-inset-top)); }
+  /* height:100dvh alone is dropped wholesale on iOS < 15.4, taking max-height with
+     it and leaving this sized against a viewport the phone does not have. Fall back
+     through vh, then dvh, then the measured visible height. */
+  #fmCompleteSheet .fm-sheet{ height:100vh; height:100dvh; height:var(--fm-vh, 100dvh); max-height:var(--fm-vh, 100dvh); border-radius:0; box-shadow:none; padding-top:max(18px, env(safe-area-inset-top)); }
   .fm-block{ border:1.5px solid #e6ebf0; box-shadow:0 1px 4px rgba(15,42,25,.05); background:#fff; }
   .fm-sheet{ background:#fff; color:#14361f; border-radius:24px 24px 0 0; width:100%; max-width:520px; padding:24px 20px max(28px,env(safe-area-inset-bottom)); box-shadow:0 -10px 50px rgba(0,0,0,.3); max-height:92vh; overflow-y:auto; }
   .fm-sheet-title{ font-size:22px; font-weight:800; margin-bottom:2px; }
@@ -3219,18 +3223,44 @@ function _fmWireTapCounter(){
 function fmTapDone(){ _fmTapGuard('Done', 'fmCompleteSheet', fmOpenComplete); }
 function fmTapSkip(){ _fmTapGuard("Couldn't service", 'fmSkipSheet', fmOpenSkip); }
 function _fmTapGuard(label, sheetId, fn){
+  /* Clear anything left over the app first. fmCardOv / fmCardOfferOv / fmTapOv sit
+     at z-index 99998-99999 and are dismissed ONLY by an inline onclick, so on a
+     phone where clicks are unreliable one of them can be left covering everything
+     — including a sheet that opened correctly underneath it. */
+  try{
+    ['fmCardOfferOv','fmTapOv','fmDiagOv'].forEach(function(id){
+      const o=document.getElementById(id);
+      if(o && getComputedStyle(o).display!=='none') o.remove();
+    });
+  }catch(e){}
   try{
     fn();
   }catch(err){
     try{ window._fmReportErr(label + ' failed', err); }catch(e){}
     return;
   }
-  // Give the sheet a frame to paint, then confirm it is actually on screen.
+  // Give the sheet a frame to paint, then confirm it is actually on screen AND
+  // that nothing is sitting on top of it. "display:flex but invisible" and
+  // "covered by a stale overlay" both look exactly like a dead button.
   setTimeout(function(){
     try{
       const el = document.getElementById(sheetId);
       const shown = el && getComputedStyle(el).display !== 'none';
-      if (shown) return;
+      if (shown) {
+        const r = el.getBoundingClientRect();
+        if (r.width < 40 || r.height < 40) {
+          window._fmReportErr(label + ' opened but has no size',
+            { message: sheetId + ' is ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' — CSS height problem' });
+          return;
+        }
+        const top = document.elementFromPoint(Math.round(r.left + r.width/2), Math.round(r.top + Math.min(r.height/2, innerHeight/2)));
+        if (top && !el.contains(top) && top !== el) {
+          const id = top.id ? ('#'+top.id) : (top.className||top.tagName);
+          window._fmReportErr(label + ' is covered',
+            { message: String(id) + ' (z=' + getComputedStyle(top).zIndex + ') is on top of ' + sheetId });
+        }
+        return;
+      }
       const st = (typeof _fmCurrentStop === 'function') ? _fmCurrentStop() : null;
       window._fmReportErr(label + ' did nothing',
         { message: 'sheet=' + sheetId + ' stayed hidden · stops=' + ((typeof _fmStops==='function') ? _fmStops().length : '?')
