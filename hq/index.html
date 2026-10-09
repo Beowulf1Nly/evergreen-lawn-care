@@ -474,7 +474,7 @@
 
 <div id="app">
   <div class="topbar">
-    <div class="brand"><div class="logo">🌿</div><div><div class="t">Evergreen HQ</div><div class="s" id="today"></div></div></div>
+    <div class="brand"><div class="logo">🌿</div><div><div class="t">Evergreen HQ</div><div class="s" id="today"></div><div class="s" id="beVer" style="font-size:10.5px;opacity:.75;" title="Which backend (Apps Script) version is live right now">backend: checking…</div></div></div>
     <div class="spacer"></div>
     <div class="dayring" title="Today's stops completed">
       <svg width="42" height="42" viewBox="0 0 42 42">
@@ -772,6 +772,19 @@
 <script>
 const SCRIPT_URL='https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
 const SESSION_KEY='eg_staff_session';
+// Shows which Apps Script version is LIVE under the "Evergreen HQ" title. The backend is pasted
+// and deployed by hand, so "did the fix ship?" used to be a guess. A backend from before the
+// version action falls through to handleBooking, which answers "Missing required fields" and
+// writes nothing; that shape reads as "older than 2026-10-09".
+(function _hqBackendVersion(){
+  const el=document.getElementById('beVer'); if(!el) return;
+  const ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  const t=setTimeout(function(){ try{ ctrl&&ctrl.abort(); }catch(e){} },15000);
+  fetch(SCRIPT_URL+'?action=version',ctrl?{signal:ctrl.signal}:{}).then(function(r){ return r.json(); })
+    .then(function(d){ el.textContent=(d&&d.version)?('backend '+d.version):'backend: older than 2026-10-09 (not deployed)'; if(!(d&&d.version)) el.style.color='#fbbf24'; })
+    .catch(function(){ el.textContent='backend: version check failed'; })
+    .finally(function(){ clearTimeout(t); });
+})();
 const GEO_CACHE_KEY='evg_geocache_v7';
 let token='', myEmail='', myName='', myRole='', myCrews='';
 let map=null, markers={}, _crews=[], _bookings=[], _expanded={}, _tick=null, _statusBad=false, _routeLayers=[];
@@ -3479,9 +3492,15 @@ async function hqInvoiceJob(){   // Stripe invoice for THIS job — same backend
   if(hqInvoiceJob._busy) return;   // re-entry guard: a second click after confirm() must not fire a second invoice
   hqInvoiceJob._busy=true;
   try{
-    // Stable idemKey (email+serviceDate+amount) — NOT Date.now() — so a retry can't create a second Stripe invoice.
-    const d=await fetch(ut.u+'?'+new URLSearchParams({ action:'send_invoice', email:em, name:b.name||'', amount:String(n), description:svc+' — '+(dateOf(b)||''), rowIndex:String(_ri(b)||0), serviceDate:dateOf(b)||'', idemKey:'hqinv:'+em+':'+(dateOf(b)||'')+':'+n, adminToken:ut.t })).then(function(r){ return r.json(); });
-    if(d&&d.success) toast('🧾 Invoice sent to '+em);
+    // idemKey = email+serviceDate+amount+MINUTE: a network retry inside the same minute can't create a
+    // second Stripe invoice, but tapping Invoice again later really re-sends. (A fully stable key made the
+    // backend replay its first answer for hours, so "re-send" silently did nothing.) The backend itself
+    // never creates a second invoice for a job that has one; it re-sends the open one.
+    const d=await fetch(ut.u+'?'+new URLSearchParams({ action:'send_invoice', email:em, name:b.name||'', amount:String(n), description:svc+' — '+(dateOf(b)||''), rowIndex:String(_ri(b)||0), serviceDate:dateOf(b)||'', idemKey:'hqinv:'+em+':'+(dateOf(b)||'')+':'+n+':'+Math.floor(Date.now()/60000), adminToken:ut.t })).then(function(r){ return r.json(); });
+    if(d&&d.success&&d.alreadyPaid) alert('✅ Nothing sent — this job’s invoice ('+(d.invoiceId||'')+') is already PAID'+(d.amount?(' ($'+d.amount+')'):'')+'.');
+    else if(d&&d.success&&d.resent) toast('🧾 Re-sent the open $'+(d.amount||n.toFixed(2))+' invoice to '+em);
+    else if(d&&d.success&&d.alreadyInvoiced) alert('⚠ This job already has an invoice ('+(d.invoiceId||'')+') and the server did NOT send anything. The backend needs the latest Apps Script deploy to re-send it.');
+    else if(d&&d.success) toast('🧾 Invoice sent to '+em);
     else alert('⚠ '+((d&&d.error)||'Could not send the invoice'));
   }catch(e){ alert('⚠ Network error — invoice not sent.'); }
   finally{ hqInvoiceJob._busy=false; }

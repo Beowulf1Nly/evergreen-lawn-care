@@ -865,7 +865,13 @@ function _fmMyCrew(){
 
 /* ───────── Session ───────── */
 function loadSavedSession(){ try{ const raw=localStorage.getItem(SESSION_KEY); if(!raw) return null; const s=JSON.parse(raw); const exp=s.expiry||s.exp; if(!s.token||!exp) return null; if(new Date()>new Date(exp)){ localStorage.removeItem(SESSION_KEY); return null; } return {...s,expiry:exp}; }catch(e){ return null; } }
-function saveSession(token,name,email,role,days){ try{ const expiry=new Date(Date.now()+(days||7)*864e5).toISOString(); localStorage.setItem(SESSION_KEY, JSON.stringify({token,name,email,role,crews:adminCrews,expiry})); }catch(e){} }
+// If phone storage was full the login silently didn't save, and the next time the phone
+// reopened the app the crew landed on the login screen. Free the re-downloadable caches and retry.
+function saveSession(token,name,email,role,days){
+  const v=JSON.stringify({token,name,email,role,crews:adminCrews,expiry:new Date(Date.now()+(days||30)*864e5).toISOString()});
+  try{ localStorage.setItem(SESSION_KEY, v); return; }catch(e){}
+  try{ localStorage.removeItem('evg_field_bookings'); localStorage.removeItem('evg_field_customers'); localStorage.setItem(SESSION_KEY, v); }catch(e){}
+}
 function showLoginError(m){ const el=document.getElementById('loginError'); if(!el) return; el.textContent=m||''; el.style.display=m?'block':'none'; }
 
 /* ───────── Auth ───────── */
@@ -890,16 +896,39 @@ async function verifyCode(){
 function backToEmail(){ document.getElementById('loginStep2').style.display='none'; document.getElementById('loginStep1').style.display='block'; document.getElementById('codeInput').value=''; showLoginError(''); }
 // Zombie-session guard: server rejected our token — the app LOOKS logged in but
 // every call fails. Bounce to the login screen once with a clear message.
-let _authBounced=false,_authStrikes=0,_authStrikeAt=0;
+let _authBounced=false,_authStrikes=0,_authStrikeAt=0,_authChecking=false,_authConfirmed=false,_sessRefreshedAt=0;
 function _authGuard(d){
   try{
     if(_authBounced) return false;
-    if(d && d.success===true){ _authStrikes=0; return false; }   // healthy call resets the count
+    if(d && d.success===true){
+      _authStrikes=0;   // healthy call resets the count
+      // Keep the phone's copy of the login alive while it's being used (the server slides its
+      // side too) — and put it back if storage pressure wiped it.
+      if(Date.now()-_sessRefreshedAt>6*3600*1000 && adminToken){ _sessRefreshedAt=Date.now(); saveSession(adminToken,adminName,adminEmail,adminRole,30); }
+      return false;
+    }
     if(d && d.success===false && /unauthor/i.test(String(d.error||''))){
       const _now=Date.now();
       if(_now-_authStrikeAt>180000) _authStrikes=0;   // stale strikes expire
       _authStrikes++; _authStrikeAt=_now;
-      if(_authStrikes<3) return false;                 // 3 strikes — a slow/overloaded backend shouldn't cost a login
+      if(_authStrikes<3 || _authChecking) return false;   // 3 strikes — a slow/overloaded backend shouldn't cost a login
+      // Heartbeats fire on every GPS move, so 3 strikes can be one bad minute on Google's side.
+      // Before signing anyone out, wait 15s and ask once more on a separate call; only a second
+      // clear "Unauthorized" counts (it re-enters here confirmed). Busy/timeout/no signal keeps them in.
+      if(!_authConfirmed){
+        _authChecking=true;
+        setTimeout(function(){
+          _fmFetchT(SCRIPT_URL+'?action=get_crew_list&adminToken='+encodeURIComponent(adminToken),{},20000)
+            .then(function(r){ return r.json(); })
+            .then(function(c){
+              _authChecking=false;
+              if(c && c.success===false && /unauthor/i.test(String(c.error||''))){ _authConfirmed=true; _authGuard(c); }
+              else _authStrikes=0;
+            })
+            .catch(function(){ _authChecking=false; });
+        }, 15000);
+        return false;
+      }
       _authBounced=true;
       try{ showToast('\ud83d\udd10 Session expired \u2014 log back in (10 seconds). Nothing is lost; queued work sends after login.',9000); }catch(e){}
       setTimeout(function(){ try{ logout(); }catch(e){} }, 1200);
@@ -908,15 +937,31 @@ function _authGuard(d){
   }catch(e){}
   return false;
 }
-function logout(){ try{ localStorage.removeItem(SESSION_KEY); }catch(e){} /* day state (clock-in, progress) is kept per-user — logging back in the same day resumes it */ if(_fmPollInt) clearInterval(_fmPollInt); _stopGeo(); _releaseWake(); adminToken=''; _fmStarted=false; _clockInTime=null; _clockedOut=false; document.getElementById('fieldMode').classList.remove('show'); const _ls=document.getElementById('loginScreen'); _ls.style.display='flex'; _ls.style.visibility='visible'; }
+function logout(){ _authBounced=false; _authConfirmed=false; _authChecking=false; _authStrikes=0; try{ localStorage.removeItem(SESSION_KEY); }catch(e){} /* day state (clock-in, progress) is kept per-user — logging back in the same day resumes it */ if(_fmPollInt) clearInterval(_fmPollInt); _stopGeo(); _releaseWake(); adminToken=''; _fmStarted=false; _clockInTime=null; _clockedOut=false; document.getElementById('fieldMode').classList.remove('show'); const _ls=document.getElementById('loginScreen'); _ls.style.display='flex'; _ls.style.visibility='visible'; }
 function showApp(){ document.getElementById('loginScreen').style.display='none'; document.getElementById('fieldMode').classList.add('show'); _restoreState(); /* fresh login same day → resume clock/progress */ _startPoint=_loadStartPoint(); _crewSel=_loadCrewSel(); _startTimers(); try{ _startGeo(); }catch(e){}   /* warm GPS the instant the app opens so the route can optimize from the crew's real location the moment they Start — this is what stops the "wrong first house until I hit Re-route" problem */ _fmRender(); }
 
 /* ───────── State persistence (resume where left off) ───────── */
-function _persist(){
+// CREW-HOURS BUG (found 2026-10-09): a forced logout blanks _clockInTime in memory, and a route
+// poll answering a moment later reached `else _persist()` in _fmTakeSavedOrder — saving the BLANK
+// clock-in over the real one. Re-login restored nothing, the next job screen minted a fresh
+// clock-in, and the morning vanished from the clock-out (9/30: 07:20→17:50 worked, 5.5h sent).
+//  • Never write state while signed out (logout clears adminToken first, so nothing in flight can).
+//  • Never replace a saved SAME-DAY clock-in with blank unless the shift really ended
+//    (_clockedOut) or the caller explicitly says the day is being reset: _persist({resetDay:true}).
+function _persist(opts){
+  if(!adminToken) return;
   try{ window.__FM_BUSY=!!_fmStarted; }catch(e){}
+  let _ciKeep=_clockInTime?_clockInTime.toISOString():null;
+  if(!_ciKeep && !_clockedOut && !(opts&&opts.resetDay)){
+    try{ const prev=JSON.parse(localStorage.getItem(_stateKey())||'null');
+      // restore memory too — otherwise the next job screen sees a null clock-in, mints a fresh one,
+      // and its own _persist overwrites the clock-in just protected here
+      if(prev && prev.dayISO===todayISOStr() && prev.clockInTime && !prev.clockedOut){ _ciKeep=prev.clockInTime; _clockInTime=new Date(_ciKeep); }
+    }catch(e){}
+  }
   try{ localStorage.setItem(_stateKey(), JSON.stringify({
     dayISO: todayISOStr(), started:_fmStarted, viewIdx:_fmViewIdx,
-    clockInTime:_clockInTime?_clockInTime.toISOString():null, clockOutTime:_clockOutTime?_clockOutTime.toISOString():null, clockedOut:_clockedOut,
+    clockInTime:_ciKeep, clockOutTime:_clockOutTime?_clockOutTime.toISOString():null, clockedOut:_clockedOut,
     cashTotal:_fmCashTotal, billedTotal:_fmBilledTotal, skipped:_fmSkipped, startChk:_startChkState, jobTimers:_jobTimers, helpers:_helpers, atBase:_fmAtBase,
     routeLock:_routeLock, savedSig:_savedSig, doneSeq:_doneSeq, stopLocks:_stopLocks
   })); }catch(e){}
@@ -1662,11 +1707,25 @@ function _fmRenderRouteSetup(){
 
 /* ───────── Offline queue + idempotency ───────── */
 const FM_QUEUE_KEY='evg_fm_sync_queue_v2', FM_DONEKEYS_KEY='evg_fm_done_keys_v1';
-let _fmFlushing=false;
+let _fmFlushing=false, _fmSandbox=false;
+// fetch that gives up after ms — a timeout rejects like a network drop, so callers retry it later.
+function _fmFetchT(url,opts,ms){
+  if(typeof AbortController==='undefined') return fetch(url,opts||{});
+  const ctrl=new AbortController(); const t=setTimeout(function(){ try{ ctrl.abort(); }catch(e){} },ms||60000);
+  return fetch(url,Object.assign({},opts||{},{signal:ctrl.signal})).finally(function(){ clearTimeout(t); });
+}
 function _fmQueueLoad(){ try{ return JSON.parse(localStorage.getItem(FM_QUEUE_KEY)||'[]'); }catch(e){ return []; } }
 // one-time hygiene: drop legacy set_crew chasers — redundant (crew rides the booking call)
 try{ const _q0=JSON.parse(localStorage.getItem(FM_QUEUE_KEY)||'[]'); const _q1=_q0.filter(function(it){ return it&&it.kind!=='setcrew'; }); if(_q1.length!==_q0.length) localStorage.setItem(FM_QUEUE_KEY,JSON.stringify(_q1)); }catch(e){}
-function _fmQueueSave(q){ try{ localStorage.setItem(FM_QUEUE_KEY, JSON.stringify(q)); }catch(e){ try{ showToast('⚠️ Phone storage full — stay online so photos upload right away'); }catch(_e){} } }
+// A failed save used to drop EVERY new item — cash stamps, invoices, checklists — with only a
+// toast. The bookings/customers caches are re-downloadable, so evict them and retry before giving up.
+function _fmQueueSave(q){
+  const s=JSON.stringify(q);
+  try{ localStorage.setItem(FM_QUEUE_KEY, s); return true; }catch(e){}
+  try{ localStorage.removeItem('evg_field_bookings'); localStorage.removeItem('evg_field_customers'); localStorage.setItem(FM_QUEUE_KEY, s); return true; }catch(e){}
+  try{ showToast('⚠️ Phone storage full — stay online so photos upload right away'); }catch(_e){}
+  return false;
+}
 function _fmDoneKeys(){ try{ return new Set(JSON.parse(localStorage.getItem(FM_DONEKEYS_KEY)||'[]')); }catch(e){ return new Set(); } }
 function _fmMarkKeyDone(k){ try{ const s=_fmDoneKeys(); s.add(k); localStorage.setItem(FM_DONEKEYS_KEY, JSON.stringify([...s].slice(-500))); }catch(e){} }
 function _fmEnqueue(item){
@@ -1690,12 +1749,18 @@ async function _fmFlushQueue(){
     // so jobs never closed. Now every item gets a try each flush; a failure only
     // holds back items for the SAME customer+date (their order matters), and a real
     // network drop stops the pass entirely (retries next flush).
+    // Money first, photos last: a big photo upload that keeps timing out on a weak
+    // signal used to sit ahead of every later job's cash/invoice and block them all day.
+    const _rank=function(it){ return it.kind==='done'?0:(it.kind==='cash'||it.kind==='invoice'||it.kind==='addons')?1:it.kind==='photo'?3:2; };
+    const _order=q.slice().sort(function(a,b){ return _rank(a)-_rank(b); });
     const _blocked={};
-    let _qi=0;
-    while(_qi<q.length){
-      const item=q[_qi];
-      const _base=(function(){ var p=item.params||{}, em=String(p.email||'').trim(); if(em) return em+'|'+String(p.serviceDate||''); var ri=String(p.rowIndex||''); return ri?('row:'+ri+'|'+String(p.serviceDate||'')):('idem:'+String(item.idemKey||'')); })();   // no-email walk-ups must NOT all collapse to '|date' (one bad one would block every other walk-up)
-      if(_blocked[_base]){ _qi++; continue; }
+    for(const item of _order){
+      const _qi=q.indexOf(item); if(_qi<0) continue;
+      const _base=(function(){ var p=item.params||item.body||{}, em=String(p.email||'').trim(); if(em) return em+'|'+String(p.serviceDate||''); var ri=String(p.rowIndex||''); return ri?('row:'+ri+'|'+String(p.serviceDate||'')):('idem:'+String(item.idemKey||'')); })();   // no-email walk-ups must NOT all collapse to '|date' (one bad one would block every other walk-up)
+      if(_blocked[_base]) continue;
+      // A job's follow-ups (cash, invoice, checklist, photos) are queued BEFORE its done call is
+      // sent, so they survive the app being killed mid-save. They wait here until done lands.
+      if(item.after && !_fmDoneKeys().has(item.after)){ _blocked[_base]=1; continue; }
       try{
         // Always send with the CURRENT session token — queued items captured at enqueue
         // time carry a token that may have expired hours ago ("Unauthorized" forever).
@@ -1703,14 +1768,16 @@ async function _fmFlushQueue(){
           if(item.params&&item.params.adminToken!==undefined) item.params.adminToken=adminToken;
           if(item.body&&item.body.adminToken!==undefined) item.body.adminToken=adminToken;
         }
+        // Hard timeout: a request that never answers used to leave _fmFlushing stuck true,
+        // which silently froze the whole queue until the app was restarted.
         let res;
-        if(item.method==='POST') res=await fetch(SCRIPT_URL,{ method:'POST', body:JSON.stringify(item.body) });
-        else res=await fetch(SCRIPT_URL+'?'+new URLSearchParams(item.params).toString());
+        if(item.method==='POST') res=await _fmFetchT(SCRIPT_URL,{ method:'POST', body:JSON.stringify(item.body) }, 90000);
+        else res=await _fmFetchT(SCRIPT_URL+'?'+new URLSearchParams(item.params).toString(), {}, 60000);
         if(!res.ok) throw new Error('HTTP '+res.status);
         let _j=null; try{ _j=JSON.parse(await res.text()); }catch(_pe){}   // non-JSON body tolerated as success (as before)
         if(_j&&_j.success===false){ item.lastErr=String(_j.error||'rejected'); throw new Error('backend: '+item.lastErr); }   // queue rejections show in the badge — they never log anyone out
         if(_j && item.kind==='done' && _j.charged===false){ try{ showToast('⚠️ Card declined for '+((item.params&&item.params.email)||'a completed job')+' — office emailed. Collect cash/invoice if you can.',9000); }catch(_te){} }   // field_complete returns success:true,charged:false on a decline — crew never heard about it before
-        _fmMarkKeyDone(item.idemKey); q.splice(_qi,1); _fmQueueSave(q);
+        _fmMarkKeyDone(item.idemKey); q.splice(q.indexOf(item),1); _fmQueueSave(q);
       }catch(netErr){
         const _isLogical=/^backend:|^HTTP \d/.test(String((netErr&&netErr.message)||''));
         item.tries=(item.tries||0)+1;
@@ -1719,8 +1786,8 @@ async function _fmFlushQueue(){
         // NO silent age-out — queued work is customer data. Items stay until they succeed
         // or someone deletes them on purpose from the queue viewer (tap the sync badge).
         _fmQueueSave(q);
-        if(!_isLogical) break;        // device offline / network drop — stop the pass
-        _blocked[_base]=1; _qi++;     // backend rejected — hold this customer's items, keep going
+        if(!_isLogical && item.kind!=='photo') break;   // device offline / network drop — stop the pass (a slow photo just waits its turn)
+        _blocked[_base]=1;            // backend rejected — hold this customer's items, keep going
       }
     }
   } finally { _fmFlushing=false; _fmUpdateSyncBadge(); }
@@ -1907,7 +1974,7 @@ function _autoClockOut(){
   if(hours>16){ try{ showToast('⚠️ '+hours.toFixed(1)+'h on the clock — looks like a missed clock-out. Logged to '+_workDay+'; have the office double-check.',9000); }catch(e){} }
   if(!(parseFloat(hours)>0)){ try{ showToast('⏱ 0 hours on the clock — nothing to log for today'); }catch(e){} }
   else {
-    const _coParams={ action:'employee_clock_out', hours:hours.toFixed(2), date:_workDay, markedBy:adminName||'Crew', helpers:JSON.stringify((_helpers||[]).map(function(h){return (typeof h==='string')?{name:h}:{name:h&&h.name,hourlyRate:(h&&h.hourlyRate)||0};})), idemKey:_coKey, adminToken };
+    const _coParams={ action:'employee_clock_out', hours:hours.toFixed(2), date:_workDay, clockIn:_clockInTime.toISOString(), markedBy:adminName||'Crew', helpers:JSON.stringify((_helpers||[]).map(function(h){return (typeof h==='string')?{name:h}:{name:h&&h.name,hourlyRate:(h&&h.hourlyRate)||0};})), idemKey:_coKey, adminToken };
     _fmEnqueue({ kind:'clockout', idemKey:_coKey, method:'GET', params:_coParams });   // offline-safe copy
     // ALSO fire it directly with keepalive — the flush below is async and fmFinishRoute resets the
     // day (and the crew may close the app) right after, which can cut the send off before it lands.
@@ -3487,39 +3554,49 @@ async function fmSubmitComplete(){
     if(_fmcPayType==='cash') _fmCashTotal+=grand;
     if(!chargeFailed) _fmBilledTotal+=grand;   // a declined autopay charge must not inflate "total billed today"
     try{ localStorage.setItem('evg_field_bookings', JSON.stringify(allBookings)); }catch(e){}
-    fmCloseComplete(); showToast(offline?'📴 Saved — will sync when back online':'✅ '+(bk.name||'Job')+' done!');
+    fmCloseComplete(); showToast(offline?'📴 Saved on this phone — syncing in the background (keep the app open)':'✅ '+(bk.name||'Job')+' done!');
     _fmViewIdx=null; _persist(); _fmRender();
   };
+  // SAVE THE FOLLOW-UPS FIRST. They used to be queued only AFTER the done call answered —
+  // so when that call hung (autopay "Saving…" forever) and the crew closed the app, or the
+  // phone's storage was full, the job landed as Done while its cash stamp, invoice and
+  // checklist were never created. That is how Bookings filled up with Done-but-unbilled rows.
+  // Each follow-up waits in the queue (item.after) until its done call is confirmed.
+  extra.forEach(function(it){ it.after=doneItem.idemKey; });
+  const _money=extra.filter(function(it){ return it.kind!=='photo'; }), _pics=extra.filter(function(it){ return it.kind==='photo'; });
+  const _missing=function(items){ if(_fmSandbox) return []; const qk=new Set(_fmQueueLoad().map(function(x){ return x.idemKey; })), dk=_fmDoneKeys(); return items.filter(function(it){ return !qk.has(it.idemKey) && !dk.has(it.idemKey); }); };
+  const _dropFollowUps=function(){ _fmQueueSave(_fmQueueLoad().filter(function(x){ return x.after!==doneItem.idemKey; })); _fmUpdateSyncBadge(); };
+  const _storageFull=function(n){
+    errEl.textContent='⚠️ Phone storage is full — this job did NOT save ('+n+' item'+(n!==1?'s':'')+'). Free up space or get back online, then tap Complete again.';
+    errEl.style.display='block'; submitBtn.disabled=false; _fmcUpdateSubmit();
+    try{ showToast('⚠️ NOT saved — storage full. Don\'t leave; retry.',9000); }catch(e){}
+  };
+  _money.forEach(_fmEnqueue);
+  const _lostMoney=_missing(_money);
+  if(_lostMoney.length){ _dropFollowUps(); _storageFull(_lostMoney.length); return; }
+  _pics.forEach(_fmEnqueue);
+  if(_missing(_pics).length){ try{ showToast('⚠️ Photos could not be saved (phone storage full) — the job and payment still will be.',9000); }catch(e){} }
+
   const online=navigator.onLine!==false;
   if(online){
     try{
-      const res=await fetch(SCRIPT_URL+'?'+new URLSearchParams(Object.assign({}, doneItem.params, { idemKey: doneItem.idemKey })).toString());
+      // 45s cap: past that, stop spinning — the done call goes to the queue and retries safely
+      // (same idemKey, so the backend answers a repeat with the first result, never a 2nd charge).
+      const res=await _fmFetchT(SCRIPT_URL+'?'+new URLSearchParams(Object.assign({}, doneItem.params, { idemKey: doneItem.idemKey })).toString(), {}, 45000);
       if(!res.ok) throw new Error('HTTP '+res.status);
       let data=null; try{ data=await res.json(); }catch(_p){}
-      if(data&&data.success===false){ errEl.textContent='❌ '+(data.error||'Mark done failed'); errEl.style.display='block'; submitBtn.disabled=false; _fmcUpdateSubmit(); return; }
+      if(data&&data.success===false){ _dropFollowUps(); errEl.textContent='❌ '+(data.error||'Mark done failed'); errEl.style.display='block'; submitBtn.disabled=false; _fmcUpdateSubmit(); return; }
       // field_complete reports success even when the CHARGE fails (owner is emailed) —
       // tell the crew too, so they can collect another way while still at the door.
       const _chargeWarn=(data && doneAction==='field_complete' && data.charged===false);
-      _fmMarkKeyDone(doneItem.idemKey); extra.forEach(_fmEnqueue); _fmFlushQueue(); finish(false, _chargeWarn);
-      if(_chargeWarn) setTimeout(function(){ showToast('⚠️ Card charge FAILED — office was emailed. Collect cash or invoice if you can.'); },1500);
+      _fmMarkKeyDone(doneItem.idemKey); _fmFlushQueue(); finish(false, _chargeWarn);
+      if(_chargeWarn) setTimeout(function(){ showToast('⚠️ Card charge FAILED'+(data.chargeError?(' ('+data.chargeError+')'):'')+' — office was emailed. Collect cash or invoice if you can.',12000); },1500);
       return;
-    }catch(netErr){ /* offline fallback */ }
+    }catch(netErr){ /* offline or timed out — fall through and queue the done call */ }
   }
-  // OFFLINE fallback — but first confirm the work actually persisted to localStorage.
-  // If phone storage is full, _fmQueueSave() silently drops the items; showing "Saved"
-  // here would lose the job, payment, and photos. Verify each item landed, and if any
-  // didn't, keep the crew on this screen so they can free space / get online and retry.
-  const _allItems=[doneItem].concat(extra);
-  _allItems.forEach(_fmEnqueue);
-  const _qk=new Set(_fmQueueLoad().map(function(x){ return x.idemKey; })), _dk=_fmDoneKeys();
-  const _lost=_allItems.filter(function(it){ return !_qk.has(it.idemKey) && !_dk.has(it.idemKey); });
-  if(_lost.length){
-    errEl.textContent='⚠️ Phone storage is full — this job did NOT save ('+_lost.length+' item'+(_lost.length!==1?'s':'')+'). Free up space or get back online, then tap Complete again.';
-    errEl.style.display='block';
-    submitBtn.disabled=false; _fmcUpdateSubmit();
-    try{ showToast('⚠️ NOT saved — storage full. Don\'t leave; retry.',9000); }catch(e){}
-    return;
-  }
+  // OFFLINE / TIMED OUT — queue the done call too, and confirm it actually persisted.
+  _fmEnqueue(doneItem);
+  if(_missing([doneItem]).length){ _dropFollowUps(); _storageFull(1); return; }
   _fmFlushQueue(); finish(true);
 }
 
@@ -3567,7 +3644,7 @@ function fmFinishRoute(){
   showToast('🏁 Logged out — great work!');
   // reset the day's session so a fresh start is clean
   _fmStarted=false; _fmViewIdx=null; _clockInTime=null; _clockOutTime=null; _clockedOut=false; _fmCashTotal=0; _fmBilledTotal=0; _startChkState=[]; _jobTimers={}; _helpers=[]; _fmAtBase=false; _routeLock=null; _savedSig=''; _doneSeq=[]; _stopLocks={}; if(_fmBasePoll){ clearInterval(_fmBasePoll); _fmBasePoll=null; }
-  try{ localStorage.removeItem(_stateKey()); }catch(e){}
+  _persist({resetDay:true});   // the ONE place a same-day clock-in may be cleared — the shift ended and was logged above
   _fmShow('fmScreenStart'); _fmRenderStart();
 }
 
@@ -4098,6 +4175,7 @@ function _fmEnterTest(){
   };
   // no writes to localStorage queue/state, and the poll can't wipe our fake jobs
   _persist=function(){}; _fmEnqueue=function(){ return true; }; _fmFlushQueue=function(){}; _fmQueueSave=function(){}; _fmMarkKeyDone=function(){}; loadData=function(){ return Promise.resolve(); };
+  _fmSandbox=true;   // queue is stubbed out above, so the "did it persist?" check must not cry storage-full
   _qcSaveHandled=function(){};   // a test run must not leave a real lead suppressed on this phone
   adminToken='TEST-SANDBOX'; adminName='Test Run'; adminEmail='test@evergreen.local'; adminRole='owner'; adminCrews='A';
   const T=todayISOStr();
