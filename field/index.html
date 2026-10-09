@@ -825,9 +825,18 @@ function _fmOwesBanner(bk){
 }
 // After the crew collects an old balance in cash, zero it locally on every booking for that customer
 // (the backend's next payload confirms it) so the banner doesn't nag for money already in hand.
-function _fmClearOwes(email){
-  const em=String(email||'').toLowerCase().trim(); if(!em) return;
-  (allBookings||[]).forEach(function(b){ if(String(b.email||'').toLowerCase().trim()===em){ b.balanceDue=0; b.balanceRows=[]; b.balanceSince=''; } });
+// Customer identity, same rule as the backend's _evgCustKey_: the email, or for no-email / placeholder
+// customers (Maggie Klaus, Diana…) 'na:'+name+'|'+address, normalized.
+function _fmCustKey(b){
+  const e=String((b&&b.email)||'').toLowerCase().trim();
+  const fake=!e||e.indexOf('@')<1||/^(na|n\/a|none|test|noemail|no|null)@/.test(e)||/@example\.com$/.test(e);
+  if(!fake) return e;
+  const n=String((b&&b.name)||'').toLowerCase().replace(/[^a-z0-9]/g,''), a=String((b&&b.address)||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  return (n||a)?('na:'+n+'|'+a):'';
+}
+function _fmClearOwes(bk0){
+  const k=_fmCustKey(bk0); if(!k) return;
+  (allBookings||[]).forEach(function(b){ if(_fmCustKey(b)===k){ b.balanceDue=0; b.balanceRows=[]; b.balanceSince=''; } });
   try{ localStorage.setItem('evg_field_bookings', JSON.stringify(allBookings)); }catch(e){}
 }
 // Payment type: 'cash' | 'autopay' (card on file, auto-bills) | 'invoice' (card pay-after, needs invoice)
@@ -2385,7 +2394,7 @@ async function qcBook(){
      and completes it instead. That's the "quote and real job tied together" bug
      HQ hit; see the comment at hq/index.html:3315. Close the lead FIRST. */
   _fmEnqueue({ kind:'callclose', idemKey:'qcc:'+_stopKey(b), method:'GET', params:{
-    action:'mark_done', rowIndex:String(b._rowIndex||0), email:b.email||'', serviceDate:dateOf(b),
+    action:'mark_done', rowIndex:String(b._rowIndex||0), email:b.email||'', name:b.name||'', serviceDate:dateOf(b),
     amount:'0', markedBy:(adminName||'Crew')+' (booked from the truck)', adminToken:adminToken } });
 
   _fmEnqueue({ kind:'callbook', idemKey:'qcb:'+_stopKey(b)+'|'+_qcPick, method:'GET', params:{
@@ -3563,16 +3572,16 @@ async function fmSubmitComplete(){
   const grand=_fmcGrand(), ownerNote=String(document.getElementById('fmcOwnerNote').value||'').trim();
   // Done action: autopay uses field_complete (marks done + charges + emails owner on fail); others mark_done.
   const doneAction=_fmcPayType==='autopay'?'field_complete':'mark_done';
-  const doneItem={ kind:'done', idemKey:'done:'+base, method:'GET', params:{ action:doneAction, rowIndex, email, serviceDate:svcDate, amount:grand.toFixed(2), addons:(selAddons.length?JSON.stringify(selAddons):''), markedBy:adminName||adminEmail||'Staff', adminToken } };
+  const doneItem={ kind:'done', idemKey:'done:'+base, method:'GET', params:{ action:doneAction, rowIndex, email, name:bk.name||'', serviceDate:svcDate, amount:grand.toFixed(2), addons:(selAddons.length?JSON.stringify(selAddons):''), markedBy:adminName||adminEmail||'Staff', adminToken } };
   const extra=[];
   if(selAddons.length && _fmcPayType!=='autopay'){ const tag=selAddons.map(a=>a.name+'='+a.price).join(','); extra.push({ kind:'addons', idemKey:'addons:'+base+':'+tag, method:'GET', params:{ action:'apply_job_addons', rowIndex, email, serviceDate:svcDate, addons:JSON.stringify(selAddons), adminToken } }); } // autopay applies extras inside field_complete so the charge includes them
-  if(_fmcPayType==='cash') extra.push({ kind:'cash', idemKey:'cash:'+base, method:'GET', params:{ action:'mark_cash_paid', rowIndex, email, serviceDate:svcDate, adminToken, markedBy:adminName||'Crew' } });
+  if(_fmcPayType==='cash') extra.push({ kind:'cash', idemKey:'cash:'+base, method:'GET', params:{ action:'mark_cash_paid', rowIndex, email, name:bk.name||'', serviceDate:svcDate, adminToken, markedBy:adminName||'Crew' } });
   // Old balance collected in cash too — ONLY when the tick is on at submit. One mark_cash_paid per
   // old visit, found by email + serviceDate (rowIndex is only a hint: autoScheduleNext shifts rows;
   // archived visits are stamped in Completed Jobs by the backend's archive path).
   const _owesNow=_fmOwes(bk), _oldCash=(_fmcPayType==='cash' && _fmcCash && _fmcCollectOld && _owesNow) ? _owesNow : null;
   if(_oldCash) _oldCash.rows.forEach(function(r){ if(!r||!r.date) return;
-    extra.push({ kind:'cash', idemKey:'cash:old:'+String(email||'').toLowerCase()+':'+r.date, method:'GET', params:{ action:'mark_cash_paid', rowIndex:(r.archived?0:(r.rowIndex||0)), email, serviceDate:r.date, adminToken, markedBy:(adminName||'Crew')+' (old balance)' } });
+    extra.push({ kind:'cash', idemKey:'cash:old:'+_fmCustKey(bk)+':'+r.date, method:'GET', params:{ action:'mark_cash_paid', rowIndex:(r.archived?0:(r.rowIndex||0)), email, name:bk.name||'', serviceDate:r.date, adminToken, markedBy:(adminName||'Crew')+' (old balance)' } });
   });
   if(_fmcPayType==='invoice' && _fmcInvoiceSent && !String(email||'').includes('@')){ try{ showToast('⚠️ No email on file — invoice NOT sent. Collect their email and invoice from HQ.',9000); }catch(e){} }
   if(_fmcPayType==='invoice' && _fmcInvoiceSent && String(email||'').includes('@')) extra.push({ kind:'invoice', idemKey:'invoice:'+base, method:'GET', params:{ action:'send_invoice', rowIndex, email, serviceDate:svcDate, amount:grand.toFixed(2), description:(['Lawn service $'+(_fmcBase||0).toFixed(0)].concat((_fmcAddons||[]).filter(a=>a.on&&a.price>0).map(a=>a.name+' $'+(+a.price).toFixed(0))).join(' + ')), adminToken } });
@@ -3587,7 +3596,7 @@ async function fmSubmitComplete(){
   })();
   const _jk=_stopKey(bk); const _jStart=_jobTimers[_jk]; const _jEnd=new Date().toISOString();
   const _jMin=_jStart?Math.max(0,Math.round((Date.now()-new Date(_jStart).getTime())/60000)):null;
-  extra.push({ kind:'endchk', idemKey:'endck:'+base, method:'GET', params:{ action:'log_checklist', type:'job_complete', date:svcDate, rowIndex, email, by:adminName||'Crew', items:JSON.stringify({checklist:Object.keys(_fmcEndChk), jobMinutes:_jMin, startedAt:_jStart||null, completedAt:_jEnd}), adminToken } });
+  extra.push({ kind:'endchk', idemKey:'endck:'+base, method:'GET', params:{ action:'log_checklist', type:'job_complete', date:svcDate, rowIndex, email, name:bk.name||'', by:adminName||'Crew', items:JSON.stringify({checklist:Object.keys(_fmcEndChk), jobMinutes:_jMin, startedAt:_jStart||null, completedAt:_jEnd}), adminToken } });
   delete _jobTimers[_jk]; try{ delete _fmDrivePhase[_jk]; localStorage.setItem('evg_fm_drive',JSON.stringify(_fmDrivePhase)); }catch(e){}
   _fmcPhotos.forEach((p,i)=>extra.push({ kind:'photo', idemKey:'photo:'+base+':'+_uuid(), method:'POST', body:{ action:'upload_job_photo', base64Data:p.b64, fileName:p.fileName, mimeType:p.mimeType, rowIndex, email, serviceDate:svcDate, jobLabel:(bk.name||'')+' - '+svcDate+(_fmcPhotos.length>1?' ('+(i+1)+')':''), markedBy:adminName||'Crew', adminToken } }));
 
@@ -3605,7 +3614,7 @@ async function fmSubmitComplete(){
     _tgt.done='✓ Done — '+lbl; _tgt.markedBy=adminName; if(selAddons.length) _tgt.price='$'+grand.toFixed(0);
     _fmGhostMark(bk);
     if(_fmcPayType==='cash') _fmCashTotal+=grand+(_oldCash?_oldCash.amt:0);
-    if(_oldCash) _fmClearOwes(bk.email);
+    if(_oldCash) _fmClearOwes(bk);
     if(!chargeFailed) _fmBilledTotal+=grand;   // a declined autopay charge must not inflate "total billed today"
     try{ localStorage.setItem('evg_field_bookings', JSON.stringify(allBookings)); }catch(e){}
     fmCloseComplete(); showToast(offline?'📴 Saved on this phone — syncing in the background (keep the app open)':'✅ '+(bk.name||'Job')+' done!');
@@ -4067,7 +4076,7 @@ async function qjOutcome(kind){
     (function(){
       const _noteWon='Quote WON — booked '+_qjFreqLabel()+' $'+price+ogNote+' ('+desc+')'+(_qjNote()?(' | 📝 '+_qjNote()):'');
       _fmEnqueue({ kind:'quotenote', idemKey:'qn:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), note:_noteWon, markedBy:adminName||'Crew', adminToken } });
-      _fmEnqueue({ kind:'quotedone', idemKey:'qd:'+base, method:'GET', params:{ action:'mark_done', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), amount:'0', markedBy:adminName||'Crew', adminToken } });
+      _fmEnqueue({ kind:'quotedone', idemKey:'qd:'+base, method:'GET', params:{ action:'mark_done', rowIndex:(bk._rowIndex||0), email:bk.email||'', name:bk.name||'', serviceDate:dateOf(bk), amount:'0', markedBy:adminName||'Crew', adminToken } });
     })();
     _fmEnqueue({ kind:'quotebook', idemKey:'qb:'+base, method:'GET', params:{ action:'manual_schedule', name:bk.name||'', email:bk.email||'', phone:String(bk.phone||''), address:bk.address||'', zip:String(bk.zip||''), frequency:_qjFreqLabel(), price:String(promo?price:firstPrice), firstMowPromo:(promo?'true':''), firstMowPrice:(promo?String(promoPrice):''), serviceDate:date, notes:'Booked at quote visit — '+desc+ogNote+((og&&ogFee>0&&_qj.freq!=='onetime')?(' · First mow: $'+firstPrice+'. Following: $'+price):'')+(_qjNote()?(' | 📝 '+_qjNote()):'')+' — by '+(adminName||'crew'), payMethod:'card', crew:_fmMyCrew(), adminToken } });
     _qjLogCommission(base,firstPrice,bk,date);
@@ -4137,7 +4146,7 @@ function _qjFinish(toastMsg,note,skipQueue,offerCard){
   // first (or a same-day booking shifting rows) could land it on the wrong job.
   if(!skipQueue){
     _fmEnqueue({ kind:'quotenote', idemKey:'qn:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), note:note, markedBy:adminName||'Crew', adminToken } });
-    _fmEnqueue({ kind:'quotedone', idemKey:'qd:'+base, method:'GET', params:{ action:'mark_done', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), amount:'0', markedBy:adminName||'Crew', adminToken } });
+    _fmEnqueue({ kind:'quotedone', idemKey:'qd:'+base, method:'GET', params:{ action:'mark_done', rowIndex:(bk._rowIndex||0), email:bk.email||'', name:bk.name||'', serviceDate:dateOf(bk), amount:'0', markedBy:adminName||'Crew', adminToken } });
   }
   _fmFlushQueue();
   bk.done='✓ Done'; _fmGhostMark(bk); _fmMarkSeq(bk);

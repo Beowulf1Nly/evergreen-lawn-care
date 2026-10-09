@@ -1766,7 +1766,7 @@ async function doAssign(crew){
 }
 async function doMarkDone(){
   const b=_jobCur; if(!b) return; const be=_jobBE(b); toast('Marking done…');
-  try{ const p=new URLSearchParams({action:'mark_done', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), amount:amtOf(b).toFixed(2), markedBy:myName||'Owner', adminToken:be.t});
+  try{ const p=new URLSearchParams({action:'mark_done', rowIndex:_ri(b), email:b.email||'', name:b.name||'', serviceDate:dateOf(b), amount:amtOf(b).toFixed(2), markedBy:myName||'Owner', adminToken:be.t});
     const d=await(await fetch(be.u+'?'+p)).json();
     if(d.success){ b.done='✓ Done'; _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{done:'✓ Done',ts:Date.now()}); _ghostAdd(b); toast('✅ Marked done'); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings(); closeSheet('jobSheet'); }
     else toast('Error: '+(d.error||'could not mark done'));
@@ -1780,7 +1780,7 @@ async function doMarkCashDone(){
   const b=_jobCur; if(!b) return; const be=_jobBE(b);
   if(!confirm('Mark '+(b.name||'this job')+' DONE and record CASH collected'+(amtOf(b)?(' ($'+amtOf(b).toFixed(2)+')'):'')+'?\n\nThis marks it paid and schedules their next visit.')) return;
   toast('Completing (cash)…');
-  const base={ rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), adminToken:be.t };
+  const base={ rowIndex:_ri(b), email:b.email||'', name:b.name||'', serviceDate:dateOf(b), adminToken:be.t };
   try{
     // 1) record the cash payment
     const d1=await(await fetch(be.u+'?'+new URLSearchParams(Object.assign({ action:'mark_cash_paid', markedBy:myName||'Owner' }, base)))).json();
@@ -1929,11 +1929,20 @@ async function _loadCustSheets(){
 }
 // Read-only: set of lowercased emails whose Customers-sheet Status is inactive/cancelled.
 // Used ONLY to exclude them from counts/ghosts — never deletes or changes any data.
+// Customer identity, same rule as the backend's _evgCustKey_: the email, or for customers with no
+// (or a placeholder) email — Maggie Klaus, Diana, Patton's na@gmail.com — 'na:'+name+'|'+address.
+function _hqCustKey(b){
+  const e=String((b&&b.email)||'').toLowerCase().trim();
+  const fake=!e||e.indexOf('@')<1||/^(na|n\/a|none|test|noemail|no|null)@/.test(e)||/@example\.com$/.test(e);
+  if(!fake) return e;
+  const n=String((b&&b.name)||'').toLowerCase().replace(/[^a-z0-9]/g,''), a=String((b&&b.address)||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  return (n||a)?('na:'+n+'|'+a):'';
+}
 let _custInactiveCache=null;
 function _custInactiveEmails(){
   if(_custInactiveCache) return _custInactiveCache;
   const s={};
-  try{ Object.keys(_custSheets||{}).forEach(function(k){ (_custSheets[k]||[]).forEach(function(c){ const em=String(c.email||'').toLowerCase().trim(); if(em && /inactive|cancel/i.test(String(c.status||''))) s[em]=1; }); }); }catch(e){}
+  try{ Object.keys(_custSheets||{}).forEach(function(k){ (_custSheets[k]||[]).forEach(function(c){ const em=_hqCustKey(c); if(em && /inactive|cancel/i.test(String(c.status||''))) s[em]=1; }); }); }catch(e){}
   _custInactiveCache=s; return s;
 }
 function _uniqueCustomers(){
@@ -3445,7 +3454,7 @@ async function _closeConvertedQuote(src){
   const b=src||_convertingQuote; _convertingQuote=null; if(!b) return;
   try{
     const be=_jobBE(b);
-    const d=await(await fetch(be.u+'?'+new URLSearchParams({ action:'mark_done', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), amount:'0', markedBy:myName||'Owner', adminToken:be.t }))).json();
+    const d=await(await fetch(be.u+'?'+new URLSearchParams({ action:'mark_done', rowIndex:_ri(b), email:b.email||'', name:b.name||'', serviceDate:dateOf(b), amount:'0', markedBy:myName||'Owner', adminToken:be.t }))).json();
     // NOTE: deliberately no _ghostAdd here. The ghost exists to hold a normal job's place while the
     // archive catches up — but for a converted quote it renders a SECOND struck-through copy beside
     // the real closed row, so the customer appeared twice, both completed. The quote is being
@@ -3625,7 +3634,7 @@ function _ghostVisits(rangeStart,rangeEnd){
     (_bookings||[]).forEach(function(b){
       if(!b||b.rowCancelled) return;
       try{ if(_hqIsQuote(b)) return; }catch(e){}
-      const em=String(b.email||'').toLowerCase().trim(); if(!em) return;
+      const em=_hqCustKey(b); if(!em) return;   // email, or name+address for no-email customers
       const d=String(dateOf(b)||''); if(!d) return;
       const r=byEm[em]=byEm[em]||{last:'',b:null,dates:{}};
       r.dates[d]=1;
