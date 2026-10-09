@@ -603,6 +603,7 @@ function _fmIsBoss(){ const r=String(adminRole||'').toLowerCase().trim(); return
 function _fmIsOwner(){ return String(adminRole||'').toLowerCase().trim()==='owner'; }
 let _fmBooted=false;   // false until the crew taps Start/Continue → land on the Start screen on every fresh app open (never auto-drop into a job)
 // complete-sheet state
+let _fmcCollectOld=false; // cash only: also collect the customer's OLD balance (balanceRows) with today's job
 let _fmcStop=null, _fmcRowIdx=-1, _fmcPayType='invoice', _fmcCash=false, _fmcInvoiceSent=false, _fmcChargeChosen=false, _fmcBase=0, _fmcAddons=[], _fmcPhotos=[], _fmcEndChk={}, _fmcCustNote0='';
 
 /* ╔══════════════════════════════════════════════════════════════════════════╗
@@ -806,6 +807,29 @@ let _fmGhostDone={}; try{ const _g=JSON.parse(localStorage.getItem('evg_fm_ghost
 function _fmGhostMark(bk){ try{ _fmGhostDone[_stopKey(bk)]=Date.now(); localStorage.setItem('evg_fm_ghostdone',JSON.stringify(_fmGhostDone)); }catch(e){} }
 function isDone(b){ if(b.rowCompleted) return true; const d=String(b.done||''); if(d.includes('Done')||d.startsWith('✓')) return true; try{ if(typeof _stopKey==='function'&&_fmGhostDone[_stopKey(b)]) return true; }catch(e){} return false; }
 function _fmAmt(bk){ return parseFloat(String(bk.price||'0').replace(/[^0-9.]/g,''))||0; }
+// What this customer OWES from OTHER visits (backend: balanceDue / balanceSince / balanceRows on every
+// booking — never includes this booking's own row). Rides the bookings payload, so it's cached offline too.
+function _fmOwes(bk){
+  const amt=+(bk&&bk.balanceDue)||0; if(!(amt>0)) return null;
+  const rows=Array.isArray(bk.balanceRows)?bk.balanceRows:[];
+  return { amt:amt, since:String(bk.balanceSince||''), rows:rows, n:rows.length };
+}
+function _fmShortDate(iso){ const p=String(iso||'').split('-'); if(p.length!==3) return iso||''; return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][(+p[1]||1)-1]+' '+(+p[2]); }
+function _fmOwesBanner(bk){
+  const o=_fmOwes(bk); if(!o) return '';
+  return '<div style="margin:10px 0;padding:14px 15px;border-radius:14px;background:#b91c1c;color:#fff;border:3px solid #7f1d1d;box-shadow:0 2px 10px rgba(127,29,29,.35);">'
+    +'<div style="font-size:21px;font-weight:900;letter-spacing:.01em;line-height:1.2;">💰 OWES $'+o.amt.toFixed(0)+' from '+esc(_fmShortDate(o.since))+'</div>'
+    +'<div style="font-size:15px;font-weight:800;margin-top:3px;">Collect before mowing</div>'
+    +(o.n>1?'<div style="font-size:12.5px;font-weight:700;opacity:.92;margin-top:5px;">'+o.rows.map(function(r){ return esc(_fmShortDate(r.date))+' $'+(+r.amt).toFixed(0); }).join(' · ')+'</div>':'')
+    +'</div>';
+}
+// After the crew collects an old balance in cash, zero it locally on every booking for that customer
+// (the backend's next payload confirms it) so the banner doesn't nag for money already in hand.
+function _fmClearOwes(email){
+  const em=String(email||'').toLowerCase().trim(); if(!em) return;
+  (allBookings||[]).forEach(function(b){ if(String(b.email||'').toLowerCase().trim()===em){ b.balanceDue=0; b.balanceRows=[]; b.balanceSince=''; } });
+  try{ localStorage.setItem('evg_field_bookings', JSON.stringify(allBookings)); }catch(e){}
+}
 // Payment type: 'cash' | 'autopay' (card on file, auto-bills) | 'invoice' (card pay-after, needs invoice)
 function _payType(bk){
   const s=(String(bk.payMethod||'')+' '+String(bk.calendarEvent||'')).toLowerCase();
@@ -2684,6 +2708,7 @@ function _fmRenderJobList(stops){
     return '<button onclick="fmOpenJob('+i+')" style="display:block;width:100%;text-align:left;background:'+(dn?'rgba(22,163,74,.10)':'#fff')+';border:'+(nx?'2.5px solid #22c55e':('1.5px solid '+(dn?'#bbf7d0':(sk?'#fde68a':'#dbe6ef'))))+';border-radius:14px;padding:13px 14px;margin-bottom:9px;font-family:inherit;cursor:pointer;'+(dn?'opacity:.75;':'')+(nx?'box-shadow:0 0 0 3px rgba(34,197,94,.18);':'')+'">'
       +'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;"><span style="font-size:16px;font-weight:800;color:#14532d;">'+(i+1)+'. '+esc(bk.name||'?')+'</span>'+badge+'</div>'
       +'<div style="font-size:12.5px;color:#64748b;margin-top:3px;">'+esc(bk.address||'')+(_seeMoney(bk)&&bk.price?(' · '+esc(String(bk.price))):'')+'</div>'
+      +((!dn&&_fmOwes(bk))?('<div style="display:inline-block;margin-top:7px;background:#b91c1c;color:#fff;border-radius:8px;padding:4px 10px;font-size:13px;font-weight:900;letter-spacing:.02em;">💰 OWES $'+_fmOwes(bk).amt.toFixed(0)+' from '+esc(_fmShortDate(_fmOwes(bk).since))+'</div>'):'')
       +lock
       +'</button>';
   }).join('');
@@ -3064,7 +3089,7 @@ function _fmRenderJob(stops,idx){
   try{ _fmWireTapCounter(); }catch(e){}
   document.getElementById('fmJobBody').innerHTML=
     '<div class="fm-card" style="'+(done?'opacity:.5;filter:grayscale(.6);':'')+'"><div class="fm-card-stopno">'+(idx+1)+'</div><div class="fm-card-name">'+esc(bk.name||'Customer')+'</div>'+
-    '<div class="fm-card-addr">📍 '+esc(bk.address||'—')+(bk.zip?', '+esc(bk.zip):'')+'</div>'+(_isQuoteJob(bk)&&!done&&!skipped?'<div style="margin:10px 0;padding:13px 14px;border-radius:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;"><div style="font-size:16px;font-weight:900;letter-spacing:.02em;">\ud83d\udccb QUOTE VISIT \u2014 DO NOT MOW</div><div style="font-size:12.5px;font-weight:700;opacity:.92;margin-top:3px;">No equipment. Walk it with the customer, then tap \u201cBuild Estimate\u201d and Book / Email / Declined.</div></div>':'')+'<div class="fm-pills">'+pills+'</div>'+noteHtml+
+    '<div class="fm-card-addr">📍 '+esc(bk.address||'—')+(bk.zip?', '+esc(bk.zip):'')+'</div>'+(!done?_fmOwesBanner(bk):'')+(_isQuoteJob(bk)&&!done&&!skipped?'<div style="margin:10px 0;padding:13px 14px;border-radius:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;"><div style="font-size:16px;font-weight:900;letter-spacing:.02em;">\ud83d\udccb QUOTE VISIT \u2014 DO NOT MOW</div><div style="font-size:12.5px;font-weight:700;opacity:.92;margin-top:3px;">No equipment. Walk it with the customer, then tap \u201cBuild Estimate\u201d and Book / Email / Declined.</div></div>':'')+'<div class="fm-pills">'+pills+'</div>'+noteHtml+
     '<div class="fm-card-actions">'+_navBtn+
     '<div class="fm-secondary-row">'+phoneRow+'<button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#635bff;color:#4f46e5;" onclick="fmTapToPay(window._fmCurBk)">📲 Tap to Pay</button><button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#60a5fa;color:#1d4ed8;" onclick="fmCardOpen(window._fmCurBk)">💳 Card on file</button>'+(_isQuoteJob(bk)&&isDone(bk)&&_qjBookedStore[_stopKey(bk)]?'<button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#fdba74;color:#9a3412;" onclick="fmQuoteCloser(window._fmCurBk)">✏️ Edit booked plan</button>':'')+(_fmIsBoss()?'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmEditNotes()">✏️ Notes</button><button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmRemainingMap()">🗺 Remaining</button>':'')+'</div></div></div>'+
     '<div class="fm-jobnav"><button onclick="fmPrevStop()" '+(idx===0?'disabled':'')+'>‹ Prev</button>'
@@ -3375,7 +3400,7 @@ function fmOpenComplete(){
   // does the checklist and taps Complete (still undoable if a card needs to be skipped). Cash/invoice
   // still require an explicit tap.
   _fmcChargeChosen=(_fmcPayType==='autopay');
-  _fmcCash=false; _fmcInvoiceSent=false; _fmcBase=_fmAmt(bk); _fmcPhotos=[];
+  _fmcCash=false; _fmcInvoiceSent=false; _fmcCollectOld=false; _fmcBase=_fmAmt(bk); _fmcPhotos=[];
   _fmcAddons=(customerServicesFor(bk.email)||[]).map(s=>({name:s.name,price:+s.price||0,on:false}));
   _fmcEndChk={}; END_CHECKLIST.forEach(l=>_fmcEndChk[l]=false);
   if(_fmcPayType==='cash') _fmcEndChk['Collected cash']=false;
@@ -3419,6 +3444,17 @@ function _fmcRenderAmount(){
   const addTot=_fmcAddonTotal();
   const m={ cash:'💵 Cash — collect from the customer.', autopay:'💳 On autopay — completing charges the card on file automatically.', invoice:'🧾 Card / pay-after — send an invoice to collect.' }[_fmcPayType];
   document.getElementById('fmcMethod').textContent=m+(see&&addTot?' (incl. $'+addTot.toFixed(0)+' add-ons)':'');
+  (function(){   // 💰 old balance — shown next to today's amount for EVERY pay type
+    const meth=document.getElementById('fmcMethod'); if(!meth) return;
+    let el=document.getElementById('fmcOwes');
+    if(!el){ el=document.createElement('div'); el.id='fmcOwes'; meth.parentNode.insertBefore(el, meth.nextSibling); }
+    const o=_fmOwes(_fmcStop&&_fmcStop.bk);
+    if(!o){ el.style.display='none'; el.innerHTML=''; return; }
+    el.style.cssText='display:block;margin:8px 0;padding:10px 12px;border-radius:12px;background:#b91c1c;color:#fff;font-weight:900;font-size:15px;line-height:1.35;';
+    el.innerHTML='💰 + $'+o.amt.toFixed(0)+' past balance ('+o.n+' visit'+(o.n!==1?'s':'')+', from '+esc(_fmShortDate(o.since))+')'
+      +'<div style="font-size:13px;font-weight:800;opacity:.95;margin-top:2px;">Total to collect: $'+(_fmcGrand()+o.amt).toFixed(0)
+      +(_fmcPayType==='cash'?'':' — card/invoice: tell the office, it is billed from HQ')+'</div>';
+  })();
 }
 // Whether payment is satisfied for this customer type
 function _fmcPayResolved(){ if(_fmcPayType==='autopay') return _fmcChargeChosen; if(_fmcPayType==='cash') return _fmcCash; return _fmcInvoiceSent; }
@@ -3440,7 +3476,15 @@ function _fmcRenderPay(){
   if(_fmcPayType==='autopay'){
     ctrl='<button class="fm-toggle-btn pay'+(_fmcChargeChosen?' on':'')+'" onclick="fmToggleCharge()">'+(_fmcChargeChosen?('✓ Will charge'+(see?(' $'+grand.toFixed(0)):'')+' to card on complete — tap to undo'):('💳 Charge'+(see?(' $'+grand.toFixed(0)):'')+' to card on file'))+'</button>';
   } else if(_fmcPayType==='cash'){
-    ctrl='<button class="fm-toggle-btn pay'+(_fmcCash?' on':'')+'" onclick="fmToggleCash()">'+(_fmcCash?'✓ Collected $'+grand.toFixed(0)+' cash — tap to undo':'💵 Collect $'+grand.toFixed(0)+' cash')+'</button>';
+    const _ow=_fmOwes(bk);
+    if(_ow && !_fmcCash){
+      // Two explicit choices. The combined button is the ONLY thing that turns the old-balance tick on.
+      ctrl='<button class="fm-toggle-btn pay" style="background:#b91c1c;border-color:#7f1d1d;color:#fff;" onclick="fmCashCollect(true)">💵 Collect $'+(grand+_ow.amt).toFixed(0)+' cash — today $'+grand.toFixed(0)+' + owed $'+_ow.amt.toFixed(0)+'</button>'
+          +'<button class="fm-toggle-btn pay" style="margin-top:8px;" onclick="fmCashCollect(false)">💵 Today only — $'+grand.toFixed(0)+'</button>';
+    } else {
+      ctrl='<button class="fm-toggle-btn pay'+(_fmcCash?' on':'')+'" onclick="fmToggleCash()">'+(_fmcCash?'✓ Collected $'+(grand+(_ow&&_fmcCollectOld?_ow.amt:0)).toFixed(0)+' cash — tap to undo':'💵 Collect $'+grand.toFixed(0)+' cash')+'</button>';
+      if(_ow && _fmcCash) ctrl+='<label style="display:flex;align-items:center;gap:10px;margin-top:9px;padding:10px 12px;border-radius:12px;border:2px solid '+(_fmcCollectOld?'#b91c1c':'#cbd5e1')+';background:'+(_fmcCollectOld?'#fef2f2':'#f8fafc')+';font-weight:800;font-size:14px;color:#7f1d1d;"><input type="checkbox" '+(_fmcCollectOld?'checked':'')+' onchange="fmToggleCollectOld(this.checked)" style="width:22px;height:22px;">Also collected the old $'+_ow.amt.toFixed(0)+' ('+_ow.n+' visit'+(_ow.n!==1?'s':'')+')</label>';
+    }
   } else {
     ctrl='<button class="fm-toggle-btn pay'+(_fmcInvoiceSent?' on':'')+'" onclick="fmToggleInvoice()">'+(_fmcInvoiceSent?('✓ Will invoice'+(see?(' $'+grand.toFixed(0)):'')+' on complete — tap to undo'):('🧾 Invoice'+(see?(' $'+grand.toFixed(0)):'')+' on complete →'))+'</button>';
   }
@@ -3451,11 +3495,13 @@ function _fmcRenderPay(){
 function fmcSetMethod(t){
   if(_fmcPayType===t) return;
   _fmcPayType=t;
-  _fmcChargeChosen=false; _fmcCash=false; _fmcInvoiceSent=false;
+  _fmcChargeChosen=false; _fmcCash=false; _fmcInvoiceSent=false; _fmcCollectOld=false;
   if(t==='cash'){ _fmcEndChk['Collected cash']=false; } else if('Collected cash' in _fmcEndChk){ delete _fmcEndChk['Collected cash']; }
   _fmcRenderAmount(); _fmcRenderPay(); _fmcRenderEndChk();
 }
-function fmToggleCash(){ _fmcCash=!_fmcCash; if('Collected cash' in _fmcEndChk) _fmcEndChk['Collected cash']=_fmcCash; _fmcRenderPay(); _fmcRenderEndChk(); }
+function fmCashCollect(withOld){ _fmcCollectOld=!!withOld; _fmcCash=true; if('Collected cash' in _fmcEndChk) _fmcEndChk['Collected cash']=true; _fmcRenderAmount(); _fmcRenderPay(); _fmcRenderEndChk(); }
+function fmToggleCollectOld(on){ _fmcCollectOld=!!on; _fmcRenderAmount(); _fmcRenderPay(); }
+function fmToggleCash(){ if(_fmcCash) _fmcCollectOld=false; _fmcCash=!_fmcCash; if('Collected cash' in _fmcEndChk) _fmcEndChk['Collected cash']=_fmcCash; _fmcRenderPay(); _fmcRenderEndChk(); }
 // Payment is only CHOSEN here — the charge/invoice is executed exactly once on
 // completion submit (fmSubmitComplete), guarded by an idempotency key + backend.
 function fmToggleCharge(){ _fmcChargeChosen=!_fmcChargeChosen; _fmcRenderPay(); }
@@ -3521,6 +3567,13 @@ async function fmSubmitComplete(){
   const extra=[];
   if(selAddons.length && _fmcPayType!=='autopay'){ const tag=selAddons.map(a=>a.name+'='+a.price).join(','); extra.push({ kind:'addons', idemKey:'addons:'+base+':'+tag, method:'GET', params:{ action:'apply_job_addons', rowIndex, email, serviceDate:svcDate, addons:JSON.stringify(selAddons), adminToken } }); } // autopay applies extras inside field_complete so the charge includes them
   if(_fmcPayType==='cash') extra.push({ kind:'cash', idemKey:'cash:'+base, method:'GET', params:{ action:'mark_cash_paid', rowIndex, email, serviceDate:svcDate, adminToken, markedBy:adminName||'Crew' } });
+  // Old balance collected in cash too — ONLY when the tick is on at submit. One mark_cash_paid per
+  // old visit, found by email + serviceDate (rowIndex is only a hint: autoScheduleNext shifts rows;
+  // archived visits are stamped in Completed Jobs by the backend's archive path).
+  const _owesNow=_fmOwes(bk), _oldCash=(_fmcPayType==='cash' && _fmcCash && _fmcCollectOld && _owesNow) ? _owesNow : null;
+  if(_oldCash) _oldCash.rows.forEach(function(r){ if(!r||!r.date) return;
+    extra.push({ kind:'cash', idemKey:'cash:old:'+String(email||'').toLowerCase()+':'+r.date, method:'GET', params:{ action:'mark_cash_paid', rowIndex:(r.archived?0:(r.rowIndex||0)), email, serviceDate:r.date, adminToken, markedBy:(adminName||'Crew')+' (old balance)' } });
+  });
   if(_fmcPayType==='invoice' && _fmcInvoiceSent && !String(email||'').includes('@')){ try{ showToast('⚠️ No email on file — invoice NOT sent. Collect their email and invoice from HQ.',9000); }catch(e){} }
   if(_fmcPayType==='invoice' && _fmcInvoiceSent && String(email||'').includes('@')) extra.push({ kind:'invoice', idemKey:'invoice:'+base, method:'GET', params:{ action:'send_invoice', rowIndex, email, serviceDate:svcDate, amount:grand.toFixed(2), description:(['Lawn service $'+(_fmcBase||0).toFixed(0)].concat((_fmcAddons||[]).filter(a=>a.on&&a.price>0).map(a=>a.name+' $'+(+a.price).toFixed(0))).join(' + ')), adminToken } });
   if(ownerNote){ const noteLine='📝 '+ownerNote+' — '+(adminName||'crew'); extra.push({ kind:'note', idemKey:'note:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex, email, serviceDate:svcDate, note:(String(bk.employeeNotes||'').trim()?bk.employeeNotes+' | ':'')+noteLine, adminToken } }); }
@@ -3551,7 +3604,8 @@ async function fmSubmitComplete(){
     const _tgt=(_wi>=0?allBookings[_wi]:bk);
     _tgt.done='✓ Done — '+lbl; _tgt.markedBy=adminName; if(selAddons.length) _tgt.price='$'+grand.toFixed(0);
     _fmGhostMark(bk);
-    if(_fmcPayType==='cash') _fmCashTotal+=grand;
+    if(_fmcPayType==='cash') _fmCashTotal+=grand+(_oldCash?_oldCash.amt:0);
+    if(_oldCash) _fmClearOwes(bk.email);
     if(!chargeFailed) _fmBilledTotal+=grand;   // a declined autopay charge must not inflate "total billed today"
     try{ localStorage.setItem('evg_field_bookings', JSON.stringify(allBookings)); }catch(e){}
     fmCloseComplete(); showToast(offline?'📴 Saved on this phone — syncing in the background (keep the app open)':'✅ '+(bk.name||'Job')+' done!');

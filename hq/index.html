@@ -1294,7 +1294,9 @@ function openJobSheetFor(b){
   document.getElementById('jobSheetBody').innerHTML='<h3>'+_jobIcon(b)+' '+esc(b.name||'Customer')+'</h3>'
     +'<div class="sub">📍 '+esc(b.address||'')+(b.zip?', '+esc(b.zip):'')+(_zoneOf(b)?' · '+_zoneOf(b):'')+' · '+esc(dateOf(b)||'no date')+(b.crew?(' · Crew '+esc(b.crew)):' · unassigned')+(b.price?(' · '+esc(b.price)):'')+(b._srcBiz?(' · '+esc(be.e2+' '+be.n)):'')+'</div>'
     +(function(){ const ls=_lastSvcInfo(b); if(!ls) return (b._srcBiz>0?'':'<div class="sub" style="color:var(--dim);">↩ No completed visit on record before this date</div>'); return '<div class="sub" style="color:'+(ls.off?'#f87171':'#4ade80')+';font-weight:700;cursor:pointer;" onclick="showSvcHistory(\''+esc(String(b.email||'').toLowerCase())+'\',\''+esc(String(b.name||'').replace(/'/g,''))+'\')" title="Tap to see every record this date is based on">↩ Last serviced '+ls.d+' — '+ls.gap+' days before this visit'+(ls.off?(' ⚠ plan is every '+ls.expct+'d — check this date'):(ls.expct?' ✓ matches the plan':''))+' <span style="opacity:.6;">▸ history</span></div>'; })()
-    +(function(){ const ow=_owedFor(b); return ow?'<div class="rs-note" style="border:1.5px solid #f87171;color:#f87171;font-weight:800;">💸 Owes $'+ow.toFixed(0)+' from unpaid past visits — details on Stats → Who owes money</div>':''; })()
+    +(function(){ const ow=_owedFor(b); return ow?'<div class="rs-note" style="border:2px solid #dc2626;background:rgba(220,38,38,.12);color:#fca5a5;font-weight:800;font-size:14px;">💸 OWES $'+ow.toFixed(0)+(b.balanceSince?(' from '+esc(b.balanceSince)):'')+' — unpaid past visits'
+      +((b.balanceRows||[]).length?('<div style="font-size:12px;font-weight:700;margin-top:3px;opacity:.9;">'+(b.balanceRows||[]).map(function(r){ return esc(r.date)+' $'+(+r.amt).toFixed(0)+(r.archived?' (archived)':''); }).join(' · ')+'</div>'):'')
+      +'<div style="font-size:11.5px;font-weight:600;margin-top:3px;opacity:.8;">Collect from the ⚠️ completed-jobs-not-paid list · details on Stats → Who owes money</div></div>':''; })()
     +(function(){ const zd=_zoneDayMsg(b); return zd?'<div class="rs-note" style="border:1.5px solid #f87171;color:#f87171;font-weight:800;">⚠ Wrong day for zone — '+esc(zd)+'</div>':''; })()
     +(cNotes?'<div class="rs-note">📝 Job notes: '+esc(cNotes)+'</div>':'<div class="rs-note" style="opacity:.55;">📝 No job notes</div>')
     +(function(){ const cn=_custNoteFor(b); return cn?'<div class="rs-note" style="border-left:3px solid #38bdf8;">👤 Customer notes: '+esc(cn)+'</div>':''; })()
@@ -3576,7 +3578,18 @@ async function _owedCleanLoad(){   // cleaning archive isn't in _completed — p
   try{ const db=document.getElementById('dispBoard'); if(db&&db.innerHTML) renderDispatch(); }catch(e){}
 }
 function _owedFor(b){
-  try{ if(isDone(b)||_isArch(b)) return 0; const em=String(b.email||'').toLowerCase().trim(); return em?(_owedEmailMap[em]||0):0; }catch(e){ return 0; }
+  try{
+    if(isDone(b)||_isArch(b)) return 0;
+    const em=String(b.email||'').toLowerCase().trim();
+    // Backend balanceDue (2026-10-09.4+) is the same number /field shows — it covers archived unpaid
+    // visits too. Minus anything written off here with ✕ (that write-off is local-first).
+    if(typeof b.balanceDue==='number'){
+      let t=b.balanceDue;
+      (b.balanceRows||[]).forEach(function(r){ if(_waivedSet[em+'|'+r.date+'|'+(+r.amt).toFixed(2)]) t-=(+r.amt||0); });
+      return Math.max(0,Math.round(t*100)/100);
+    }
+    return em?(_owedEmailMap[em]||0):0;   // older backend: HQ's own tally
+  }catch(e){ return 0; }
 }
 /* ── ✕ WRITE-OFF / "not owed" — LOCAL-first, persistent, applies EVERYWHERE ──
    The old ✕ only worked if the backend could match an archive row by email+date+
@@ -4663,7 +4676,7 @@ function _dispPill(b){
   // Finished jobs stay put; open ones can be dragged to another crew lane / day cell.
   const drag=done?'':' draggable="true" ondragstart="dispDragStart(event,'+_ref+')" ondragend="dispDragEnd(event)"';
   return '<div class="disp-pill'+(done?' done':'')+(arch?' arch':'')+(zd?' zday':'')+'" style="--pc:'+_dispPC(b)+'"'+drag+' '+click
-    +'>'+(zd?'⚠ ':'')+(ow?'💸 ':'')+(done?'✓ ':'')+(_crewLockFor(b)?'🔒':'')+_jobIcon(b)+' '+esc(b.name||'?')+((jn||cn)&&!done?' 📝':'')+' <span class="pp">'+(zone?((function(){ const _mv=_zoneMoveTag(b); return _mv?('<b style="color:#f87171;">'+esc(_mv)+'</b>'):esc(zone); })()+' · '):'')+(b.jobTime?esc(b.jobTime)+' · ':'')+esc(String(b.price||''))
+    +'>'+(zd?'⚠ ':'')+(ow?'<b style="color:#fca5a5;">💸$'+ow.toFixed(0)+'</b> ':'')+(done?'✓ ':'')+(_crewLockFor(b)?'🔒':'')+_jobIcon(b)+' '+esc(b.name||'?')+((jn||cn)&&!done?' 📝':'')+' <span class="pp">'+(zone?((function(){ const _mv=_zoneMoveTag(b); return _mv?('<b style="color:#f87171;">'+esc(_mv)+'</b>'):esc(zone); })()+' · '):'')+(b.jobTime?esc(b.jobTime)+' · ':'')+esc(String(b.price||''))
     +(function(){ const ls=_lastSvcInfo(b); return ls?(' · <span style="color:'+(ls.off?'#f87171':'inherit')+';font-weight:'+(ls.off?'800':'inherit')+';">↩ '+ls.nice+' ('+ls.gap+'d'+(ls.off?' ⚠ plan says '+ls.expct+'d':'')+')</span>'):''; })()
     +'</span></div>';
 }
@@ -5142,7 +5155,7 @@ function _stBlockEv(b,stMin,enMin,top,proj){
   return '<div class="st-block'+(done?' done':'')+(arch?' arch':'')+(proj?' proj':'')+'" style="--pc:'+_dispPC(b)+';left:'+left+'%;width:'+width+'%;top:'+top+'px;'+(left<92?'min-width:52px;':'')+(_bg?'border:2px solid #f87171;box-shadow:0 0 8px rgba(248,113,113,.5);':'')+(zd?'border:2px solid #f87171;box-shadow:0 0 9px rgba(248,113,113,.6);':'')+'" '
     +(function(){ if(done) return ''; const _r=_jr(b); return ' draggable="true" ondragstart="dispDragStart(event,'+_r+')" ondragend="dispDragEnd(event)"'; })()
     +'onclick="openJobRef('+_jr(b)+')" title="'+tip+(arch?' — tap for notes & photos':'')+'"'
-    +'>'+(zd?'⚠ ':'')+(ow?'💸 ':'')+(done?'✓ ':'')+(_crewLockFor(b)?'🔒':'')+_jobIcon(b)+' '+esc(b.name||'?')+'<span class="bt2">'+(zone?((function(){ const _mv=_zoneMoveTag(b); return _mv?('<b style="color:#f87171;">'+esc(_mv)+'</b>'):esc(zone); })()+' · '):'')+tRange+(b.price?' · '+esc(String(b.price)):'')+((jn||cn)&&!done?' · 📝':'')+'</span></div>';
+    +'>'+(zd?'⚠ ':'')+(ow?'<b style="color:#fca5a5;">💸$'+ow.toFixed(0)+'</b> ':'')+(done?'✓ ':'')+(_crewLockFor(b)?'🔒':'')+_jobIcon(b)+' '+esc(b.name||'?')+'<span class="bt2">'+(zone?((function(){ const _mv=_zoneMoveTag(b); return _mv?('<b style="color:#f87171;">'+esc(_mv)+'</b>'):esc(zone); })()+' · '):'')+tRange+(b.price?' · '+esc(String(b.price)):'')+((jn||cn)&&!done?' · 📝':'')+'</span></div>';
 }
 
 /* ── drag & drop ── */
