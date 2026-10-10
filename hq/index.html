@@ -3905,8 +3905,10 @@ const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
    surfaces every one of them with one-tap recovery so nothing falls through. */
 function _hqStuckJobs(){
   try{
+    // Same cutoff as the backend's EVG_BALANCE_SINCE: before 2026-09-01 hundreds of paid visits were
+    // never stamped ✅, so they are not debt and must not sit in this list (it read $14.5k on 10/10).
     return _dispJobs().filter(function(b){
-      return b && !b.rowCancelled && !_isArch(b) && isDone(b) && !_hqIsQuote(b) && payBadge(b).t!=='Paid' && !_isWaived(b);
+      return b && !b.rowCancelled && !_isArch(b) && isDone(b) && !_hqIsQuote(b) && payBadge(b).t!=='Paid' && !_isWaived(b) && String(dateOf(b)||'')>='2026-09-01';
     }).sort(function(a,b){ return String(dateOf(b)||'').localeCompare(String(dateOf(a)||'')); });
   }catch(e){ return []; }
 }
