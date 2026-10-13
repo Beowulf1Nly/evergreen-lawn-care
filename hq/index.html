@@ -796,9 +796,18 @@ const CREW_COLORS={ A:'#22c55e', B:'#38bdf8', C:'#fbbf24', D:'#c084fc' };
 const _netLog=[], _conLog=[];
 (function(){
   const _rf=window.fetch.bind(window);
-  window.fetch=function(u,o){ const t0=performance.now(); const e={t:new Date(),url:String(u),ms:0,ok:null}; _netLog.unshift(e); if(_netLog.length>60)_netLog.pop();
-    return _rf(u,o).then(function(r){ e.ms=Math.round(performance.now()-t0); e.ok=r.status; try{_devNetRender();}catch(x){} return r; })
-      .catch(function(err){ e.ms=Math.round(performance.now()-t0); e.ok='FAIL'; try{_devNetRender();}catch(x){} throw err; }); };
+  // Coalesce identical in-flight GETs: on load HQ fired completed_jobs ×3, customers_list ×2,
+  // schedule_config ×2, crew_pay ×2 and bookings ×2 within seconds, each a 2–7s Apps Script call.
+  // Same URL while the first is still pending → everyone shares that one response (cloned).
+  const _inflight={};
+  window.fetch=function(u,o){ const t0=performance.now(); const url=String(u); const e={t:new Date(),url:url,ms:0,ok:null}; _netLog.unshift(e); if(_netLog.length>60)_netLog.pop();
+    const isGet=!o||!o.method||String(o.method).toUpperCase()==='GET';
+    const key=isGet&&/script\.google\.com/.test(url)?url:'';
+    if(key&&_inflight[key]){ e.ok='dup'; e.ms=0; return _inflight[key].then(function(r){ return r.clone(); }); }
+    const pr=_rf(u,o).then(function(r){ e.ms=Math.round(performance.now()-t0); e.ok=r.status; try{_devNetRender();}catch(x){} return r; })
+      .catch(function(err){ e.ms=Math.round(performance.now()-t0); e.ok='FAIL'; try{_devNetRender();}catch(x){} throw err; });
+    if(key){ _inflight[key]=pr; pr.then(function(){ delete _inflight[key]; },function(){ delete _inflight[key]; }); return pr.then(function(r){ return r.clone(); }); }
+    return pr; };
   ['error','warn'].forEach(function(k){ const orig=console[k].bind(console);
     console[k]=function(){ try{ _conLog.unshift({k:k,t:new Date().toLocaleTimeString('en-US',{hour12:false}),m:[].map.call(arguments,function(a){try{return typeof a==='string'?a:JSON.stringify(a);}catch(e2){return String(a);}}).join(' ')}); if(_conLog.length>50)_conLog.pop(); }catch(e2){} orig.apply(null,arguments); }; });
   window.addEventListener('error',function(ev){ _conLog.unshift({k:'error',t:new Date().toLocaleTimeString('en-US',{hour12:false}),m:(ev.message||'')+' @'+String(ev.filename||'').split('/').pop()+':'+ev.lineno}); if(_conLog.length>50)_conLog.pop(); });
@@ -824,7 +833,7 @@ function durStr(fromIso){ if(!fromIso) return '—'; const ms=Date.now()-new Dat
 function _ri(b){ const r=parseInt(b&&b._rowIndex,10); return (r&&r>=2)?r:0; }
 function initials(n){ const p=String(n||'').trim().split(/\s+/); return ((p[0]||'')[0]||'?').toUpperCase()+((p[1]||'')[0]||'').toUpperCase(); }
 function crewColor(cr){ return CREW_COLORS[String(cr||'').toUpperCase().split(/[^A-Z0-9]+/)[0]]||'#22c55e'; }
-let _tt=null; function toast(m){ const t=document.getElementById('toast'); if(!t) return; t.textContent=m; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(function(){t.classList.remove('show');},3200); }
+let _tt=null; function toast(m,ms){ const t=document.getElementById('toast'); if(!t) return; t.textContent=m; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(function(){t.classList.remove('show');},(ms>0?ms:3200)); }
 function closeSheet(id){ const e=document.getElementById(id); if(e) e.classList.remove('show'); }
 function openSheet(id){ const e=document.getElementById(id); if(e) e.classList.add('show'); }
 
@@ -1764,11 +1773,37 @@ async function doAssign(crew){
     else { b.crew=prev; toast('Error: '+(d.error||'could not assign')); }
   }catch(e){ b.crew=prev; toast('Network error'); }
 }
+// Marking done from HQ now BILLS the job the same way the crew app does (2026-10-13: Charles McGowin's
+// 10/12 job was marked done here by Jon and nobody ever sent the invoice). Autopay + card on file →
+// field_complete, which marks done AND charges the card. No card → mark done, then send the Stripe
+// invoice. Cash → mark done only (use "Done — collected cash" to record the money). Already paid /
+// already invoiced → mark done only. Every outcome is said out loud in the toast.
 async function doMarkDone(){
   const b=_jobCur; if(!b) return; const be=_jobBE(b); toast('Marking done…');
-  try{ const p=new URLSearchParams({action:'mark_done', rowIndex:_ri(b), email:b.email||'', name:b.name||'', serviceDate:dateOf(b), amount:amtOf(b).toFixed(2), markedBy:myName||'Owner', adminToken:be.t});
+  const pb=payBadge(b), em=String(b.email||'').toLowerCase().trim(), amt=amtOf(b), svc=dateOf(b);
+  const hasCard=(b.hasCard===true)||!!String(b.cardLast4||'').trim();
+  const autop=(b.portalAutopay===true)&&hasCard&&pb.t!=='Paid'&&pb.t!=='Cash'&&amt>=1;
+  const wantInv=!autop&&pb.t!=='Paid'&&pb.t!=='Cash'&&pb.t!=='Invoiced'&&em.indexOf('@')>0&&amt>=1;
+  try{ const p=new URLSearchParams({action:(autop?'field_complete':'mark_done'), rowIndex:_ri(b), email:b.email||'', name:b.name||'', serviceDate:svc, amount:amt.toFixed(2), markedBy:myName||'Owner', adminToken:be.t});
+    if(autop) p.set('idemKey','done:'+(_ri(b)||0)+':'+svc);   // same key the crew app uses, so a phone retry can't charge twice
     const d=await(await fetch(be.u+'?'+p)).json();
-    if(d.success){ b.done='✓ Done'; _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{done:'✓ Done',ts:Date.now()}); _ghostAdd(b); toast('✅ Marked done'); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings(); closeSheet('jobSheet'); }
+    if(d.success){
+      b.done='✓ Done'; _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{done:'✓ Done',ts:Date.now()}); _ghostAdd(b);
+      let msg='✅ Marked done';
+      if(autop) msg=(d.charged===false)?('⚠ Done, but the card charge FAILED'+(d.chargeError?(' ('+d.chargeError+')'):'')+' — send an invoice from the job sheet'):'✅ Done — card charged';
+      else if(wantInv){
+        try{
+          const svcName=String(b.service||b.serviceType||'').trim()||'Lawn Service';
+          const r=await(await fetch(be.u+'?'+new URLSearchParams({ action:'send_invoice', email:em, name:b.name||'', amount:String(amt), description:svcName+' — '+svc, rowIndex:String(_ri(b)||0), serviceDate:svc, idemKey:'hqinv:'+em+':'+svc+':'+amt+':'+Math.floor(Date.now()/60000), adminToken:be.t }))).json();
+          if(r&&r.success&&r.alreadyPaid) msg='✅ Done — already paid';
+          else if(r&&r.success&&r.resent) msg='✅ Done — re-sent the open invoice to '+em;
+          else if(r&&r.success) msg='✅ Done — 🧾 invoice sent to '+em;
+          else msg='⚠ Done, but the invoice was NOT sent: '+((r&&r.error)||'unknown error')+' — send it from the job sheet';
+        }catch(ie){ msg='⚠ Done, but the invoice was NOT sent (network) — send it from the job sheet'; }
+      }
+      else if(pb.t==='Cash') msg='✅ Done — cash job: tap "Done — collected cash" to record the money';
+      toast(msg, /⚠/.test(msg)?9000:4000); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings(); closeSheet('jobSheet');
+    }
     else toast('Error: '+(d.error||'could not mark done'));
   }catch(e){ toast('Network error'); }
 }
