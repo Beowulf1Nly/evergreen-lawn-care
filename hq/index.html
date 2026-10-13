@@ -3353,7 +3353,7 @@ function bizSaveFromUI(){
   const list=_bizCollectFromUI();
   if(!list.length){ toast('Keep at least one business'); return; }
   _bizSave(list); closeSheet('bizSheet');
-  try{ Object.keys(_bizDown).forEach(function(k){ delete _bizDown[k]; }); }catch(e){}   // a reconnect lifts the 15-min back-off
+  try{ _bizDown={}; localStorage.removeItem('hq_bizdown'); }catch(e){}   // a reconnect lifts the 15-min back-off
   _bizExtraAt=0; _bizExtra={};                               // re-pull sister-business bookings with fresh connections
   _crewPayTried=false; _crewPay=null; loadCrewPay(true);     // …and every business's Crew Pay sheet
   initDispatch();
@@ -6390,8 +6390,8 @@ function _bizTok(z){ const u=_bizUrl(z); return u===SCRIPT_URL?token:((z&&z.tk)|
 // A sister backend that answers "Unauthorized" (expired connection) is skipped for 15 minutes.
 // Before this, every HQ load fired bookings, customers, crew pay, schedule config and completed
 // jobs at the dead Cleaning backend — each a 2–4s round trip that failed — on top of the real ones.
-const _bizDown={};
-function _bizNote(z,d){ try{ const u=_bizUrl(z); if(u&&u!==SCRIPT_URL&&d&&d.success===false&&/unauthor/i.test(String(d.error||''))) _bizDown[u]=Date.now(); }catch(e){} }
+let _bizDown={}; try{ _bizDown=JSON.parse(localStorage.getItem('hq_bizdown')||'{}')||{}; }catch(e){ _bizDown={}; }   // remembered across reloads, else every load re-fires the dead calls
+function _bizNote(z,d){ try{ const u=_bizUrl(z); if(u&&u!==SCRIPT_URL&&d&&d.success===false&&/unauthor/i.test(String(d.error||''))){ _bizDown[u]=Date.now(); try{ localStorage.setItem('hq_bizdown',JSON.stringify(_bizDown)); }catch(e2){} } }catch(e){} }
 function _bizConnected(z){ if(!_bizTok(z)) return false; try{ const u=_bizUrl(z); if(u!==SCRIPT_URL&&_bizDown[u]&&Date.now()-_bizDown[u]<900000) return false; }catch(e){} return true; }
 async function bizGet(z,params){
   try{
