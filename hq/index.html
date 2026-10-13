@@ -1953,6 +1953,7 @@ async function _loadCustSheets(){
     try{
       const ut=_bizUT(i);
       const d=await fetch(ut.u+'?'+new URLSearchParams({ action:'customers_list', adminToken:ut.t })).then(function(r){ return r.json(); });
+      try{ _bizNote(z,d); }catch(e){}
       const arr=(d&&d.success)?(d.customers||d.list||d.rows||[]):[];
       if(Array.isArray(arr)&&arr.length) _custSheets[i]=arr.map(function(c){ return { name:c.Name||c.name||'', email:String(c.Email||c.email||'').toLowerCase(), phone:c.Phone||c.phone||'', address:c.Address||c.address||'', zip:String(c.Zip||c.zip||''), services:String(c.Services||c.services||''), notes:String(c.Notes||c.notes||''), cc:String(c['CC Email']||c.ccEmail||''), status:String(c.Status||c.status||''), price:'', _fromSheet:1, _srcBiz:i }; });
     }catch(e){}
@@ -3352,6 +3353,7 @@ function bizSaveFromUI(){
   const list=_bizCollectFromUI();
   if(!list.length){ toast('Keep at least one business'); return; }
   _bizSave(list); closeSheet('bizSheet');
+  try{ Object.keys(_bizDown).forEach(function(k){ delete _bizDown[k]; }); }catch(e){}   // a reconnect lifts the 15-min back-off
   _bizExtraAt=0; _bizExtra={};                               // re-pull sister-business bookings with fresh connections
   _crewPayTried=false; _crewPay=null; loadCrewPay(true);     // …and every business's Crew Pay sheet
   initDispatch();
@@ -6385,11 +6387,18 @@ function _devConRender(){
 const BIZ_URL_CLEAN='https://script.google.com/macros/s/AKfycbxkrw4S5fjdvID0RRownPZqh-kQdUQzaNY7Z4CVbGefkyT2ai0IdmQBYR45ooL5fCMl/exec';
 function _bizUrl(z){ return (z&&z.su)||SCRIPT_URL; }
 function _bizTok(z){ const u=_bizUrl(z); return u===SCRIPT_URL?token:((z&&z.tk)||''); }
-function _bizConnected(z){ return !!_bizTok(z); }
+// A sister backend that answers "Unauthorized" (expired connection) is skipped for 15 minutes.
+// Before this, every HQ load fired bookings, customers, crew pay, schedule config and completed
+// jobs at the dead Cleaning backend — each a 2–4s round trip that failed — on top of the real ones.
+const _bizDown={};
+function _bizNote(z,d){ try{ const u=_bizUrl(z); if(u&&u!==SCRIPT_URL&&d&&d.success===false&&/unauthor/i.test(String(d.error||''))) _bizDown[u]=Date.now(); }catch(e){} }
+function _bizConnected(z){ if(!_bizTok(z)) return false; try{ const u=_bizUrl(z); if(u!==SCRIPT_URL&&_bizDown[u]&&Date.now()-_bizDown[u]<900000) return false; }catch(e){} return true; }
 async function bizGet(z,params){
   try{
     const p=new URLSearchParams(params||{}); p.set('adminToken',_bizTok(z));
-    return await fetch(_bizUrl(z)+'?'+p).then(r=>r.json());
+    const d=await fetch(_bizUrl(z)+'?'+p).then(r=>r.json());
+    _bizNote(z,d);
+    return d;
   }catch(e){ return null; }
 }
 function _bizChips(elId,cur,onclickName,connectedOnly){
