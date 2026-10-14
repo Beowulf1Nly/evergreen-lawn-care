@@ -1782,7 +1782,7 @@ async function doMarkDone(){
   const b=_jobCur; if(!b) return; const be=_jobBE(b); toast('Marking done…');
   const pb=payBadge(b), em=String(b.email||'').toLowerCase().trim(), amt=amtOf(b), svc=dateOf(b);
   const hasCard=(b.hasCard===true)||!!String(b.cardLast4||'').trim();
-  const autop=(b.portalAutopay===true)&&hasCard&&pb.t!=='Paid'&&pb.t!=='Cash'&&amt>=1;
+  const autop=(b.portalAutopay===true)&&hasCard&&pb.t!=='Paid'&&pb.t!=='Cash'&&pb.t!=='Invoiced'&&amt>=1;   // an open invoice already bills this visit — never ALSO charge the card
   const wantInv=!autop&&pb.t!=='Paid'&&pb.t!=='Cash'&&pb.t!=='Invoiced'&&em.indexOf('@')>0&&amt>=1;
   try{ const p=new URLSearchParams({action:(autop?'field_complete':'mark_done'), rowIndex:_ri(b), email:b.email||'', name:b.name||'', serviceDate:svc, amount:amt.toFixed(2), markedBy:myName||'Owner', adminToken:be.t});
     if(autop) p.set('idemKey','done:'+(_ri(b)||0)+':'+svc);   // same key the crew app uses, so a phone retry can't charge twice
