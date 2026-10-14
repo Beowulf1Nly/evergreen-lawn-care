@@ -3567,7 +3567,11 @@ async function fmSubmitComplete(){
   if(!_fmcCanFinish()){ errEl.textContent='Take payment and finish the checklist first.'; errEl.style.display='block'; return; }
   submitBtn.disabled=true; submitBtn.textContent='Saving…'; errEl.style.display='none';
   const _liveIdx=(allBookings||[]).indexOf(bk);   // fresh, not the index captured when the sheet opened
-  const rowIndex=bk._rowIndex||((_liveIdx>=0?_liveIdx:(_fmcRowIdx>=0?_fmcRowIdx:0))+2), email=bk.email||'', svcDate=dateOf(bk), base=rowIndex+':'+svcDate;
+  // The idempotency base was rowIndex+date. Row numbers shift every time a paid job archives out of
+  // Bookings, so two customers on the same day could end up with the SAME key — the backend replayed
+  // the first one's cached result and silently did nothing for the second (2026-10-14: Kai, Rose
+  // McCotter, Roy Brown, David smith). Key by customer identity instead; rowIndex is only a hint.
+  const rowIndex=bk._rowIndex||((_liveIdx>=0?_liveIdx:(_fmcRowIdx>=0?_fmcRowIdx:0))+2), email=bk.email||'', svcDate=dateOf(bk), base=(_fmCustKey(bk)||('row'+rowIndex))+':'+svcDate;
   const selAddons=(_fmcAddons||[]).filter(a=>a.on&&a.price>0).map(a=>({name:a.name,price:a.price}));
   const grand=_fmcGrand(), ownerNote=String(document.getElementById('fmcOwnerNote').value||'').trim();
   // Done action: autopay uses field_complete (marks done + charges + emails owner on fail); others mark_done.
