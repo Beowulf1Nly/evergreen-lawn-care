@@ -604,6 +604,7 @@ function _fmIsOwner(){ return String(adminRole||'').toLowerCase().trim()==='owne
 let _fmBooted=false;   // false until the crew taps Start/Continue → land on the Start screen on every fresh app open (never auto-drop into a job)
 // complete-sheet state
 let _fmcCollectOld=false; // cash only: also collect the customer's OLD balance (balanceRows) with today's job
+let _fmcPrepaid=false;   // this visit is already settled (prepaid / charged from HQ) — nothing to collect
 let _fmcStop=null, _fmcRowIdx=-1, _fmcPayType='invoice', _fmcCash=false, _fmcInvoiceSent=false, _fmcChargeChosen=false, _fmcBase=0, _fmcAddons=[], _fmcPhotos=[], _fmcEndChk={}, _fmcCustNote0='';
 
 /* ╔══════════════════════════════════════════════════════════════════════════╗
@@ -814,6 +815,10 @@ function _fmOwes(bk){
   const rows=Array.isArray(bk.balanceRows)?bk.balanceRows:[];
   return { amt:amt, since:String(bk.balanceSince||''), rows:rows, n:rows.length };
 }
+// Is THIS visit already settled? Same rule as the backend's _isRowPaid_ (2026-11-10.1): a ✅ or "waived"
+// stamp in either payment column wins over leftover "❌ NOT PAID" text; "Invoice Status … PAID in full" too.
+function _fmCellPaid(t){ const s=String(t||''), l=s.toLowerCase(); if(s.indexOf('✅')>=0||l.indexOf('waived')>=0) return true; if(l.indexOf('not paid')>=0||l.indexOf('unpaid')>=0||l.indexOf('pending')>=0) return false; return l.indexOf('paid')>=0; }
+function _fmIsPaid(bk){ return !!bk && (_fmCellPaid(bk.payMethod)||_fmCellPaid(bk.calendarEvent)||/paid in full/i.test(String(bk.invoiced||''))); }
 function _fmShortDate(iso){ const p=String(iso||'').split('-'); if(p.length!==3) return iso||''; return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][(+p[1]||1)-1]+' '+(+p[2]); }
 function _fmOwesBanner(bk){
   const o=_fmOwes(bk); if(!o) return '';
@@ -1759,6 +1764,11 @@ function _fmQueueSave(q){
   try{ showToast('⚠️ Phone storage full — stay online so photos upload right away'); }catch(_e){}
   return false;
 }
+// Read-modify-write against STORAGE, by idemKey. The flush used to save its own copy of the queue
+// (read once, before up to 90s of awaits), which erased every item queued meanwhile — a cash stamp,
+// invoice or checklist for the job the crew just finished vanished, and that customer showed OWES.
+function _fmQueueRemoveKey(k){ const q=_fmQueueLoad(); const n=q.filter(function(x){ return x&&x.idemKey!==k; }); if(n.length!==q.length) _fmQueueSave(n); }
+function _fmQueuePutItem(it){ const q=_fmQueueLoad(); const i=q.findIndex(function(x){ return x&&x.idemKey===it.idemKey; }); if(i>=0){ q[i]=it; _fmQueueSave(q); } }
 function _fmDoneKeys(){ try{ return new Set(JSON.parse(localStorage.getItem(FM_DONEKEYS_KEY)||'[]')); }catch(e){ return new Set(); } }
 function _fmMarkKeyDone(k){ try{ const s=_fmDoneKeys(); s.add(k); localStorage.setItem(FM_DONEKEYS_KEY, JSON.stringify([...s].slice(-500))); }catch(e){} }
 function _fmEnqueue(item){
@@ -1794,6 +1804,8 @@ async function _fmFlushQueue(){
       // A job's follow-ups (cash, invoice, checklist, photos) are queued BEFORE its done call is
       // sent, so they survive the app being killed mid-save. They wait here until done lands.
       if(item.after && !_fmDoneKeys().has(item.after)){ _blocked[_base]=1; continue; }
+      // A done call saved before its direct send waits out that send (see fmSubmitComplete).
+      if(item.holdUntil && Date.now()<item.holdUntil){ _blocked[_base]=1; continue; }
       try{
         // Always send with the CURRENT session token — queued items captured at enqueue
         // time carry a token that may have expired hours ago ("Unauthorized" forever).
@@ -1807,10 +1819,13 @@ async function _fmFlushQueue(){
         if(item.method==='POST') res=await _fmFetchT(SCRIPT_URL,{ method:'POST', body:JSON.stringify(item.body) }, 90000);
         else res=await _fmFetchT(SCRIPT_URL+'?'+new URLSearchParams(item.params).toString(), {}, 60000);
         if(!res.ok) throw new Error('HTTP '+res.status);
-        let _j=null; try{ _j=JSON.parse(await res.text()); }catch(_pe){}   // non-JSON body tolerated as success (as before)
-        if(_j&&_j.success===false){ item.lastErr=String(_j.error||'rejected'); throw new Error('backend: '+item.lastErr); }   // queue rejections show in the badge — they never log anyone out
-        if(_j && item.kind==='done' && _j.charged===false){ try{ showToast('⚠️ Card declined for '+((item.params&&item.params.email)||'a completed job')+' — office emailed. Collect cash/invoice if you can.',9000); }catch(_te){} }   // field_complete returns success:true,charged:false on a decline — crew never heard about it before
-        _fmMarkKeyDone(item.idemKey); q.splice(q.indexOf(item),1); _fmQueueSave(q);
+        let _j=null; try{ _j=JSON.parse(await res.text()); }catch(_pe){}
+        // A non-JSON answer is a Google error page (script error / timeout), NOT a success. Treating it
+        // as success dropped the item while nothing was written. Retry it; the idemKey makes that safe.
+        if(!_j) throw new Error('no JSON reply (Google error page) — will retry');
+        if(_j.success===false){ item.lastErr=String(_j.error||'rejected'); throw new Error('backend: '+item.lastErr); }   // queue rejections show in the badge — they never log anyone out
+        if(item.kind==='done' && _j.charged===false){ try{ showToast('⚠️ Card declined for '+((item.params&&item.params.email)||'a completed job')+' — office emailed. Collect cash/invoice if you can.',9000); }catch(_te){} }   // field_complete returns success:true,charged:false on a decline — crew never heard about it before
+        _fmMarkKeyDone(item.idemKey); q.splice(q.indexOf(item),1); _fmQueueRemoveKey(item.idemKey);
       }catch(netErr){
         const _isLogical=/^backend:|^HTTP \d/.test(String((netErr&&netErr.message)||''));
         item.tries=(item.tries||0)+1;
@@ -1818,7 +1833,7 @@ async function _fmFlushQueue(){
         if(_crit&&item.lastErr&&item.tries===3){ try{ showToast('⚠️ '+item.kind.toUpperCase()+' not going through: '+item.lastErr+' — it will keep retrying'); }catch(e){} }
         // NO silent age-out — queued work is customer data. Items stay until they succeed
         // or someone deletes them on purpose from the queue viewer (tap the sync badge).
-        _fmQueueSave(q);
+        _fmQueuePutItem(item);
         if(!_isLogical && item.kind!=='photo') break;   // device offline / network drop — stop the pass (a slow photo just waits its turn)
         _blocked[_base]=1;            // backend rejected — hold this customer's items, keep going
       }
@@ -3405,14 +3420,15 @@ function fmOpenComplete(){
   const stop=_fmNeedStop(); if(!stop) return;
   const bk=stop.bk;
   _fmcStop=stop; _fmcRowIdx=(allBookings||[]).indexOf(bk); _fmcPayType=_payType(bk);
+  _fmcPrepaid=_fmIsPaid(bk);
   // Autopay customers default to charging the card on file — pre-confirmed so the employee just
   // does the checklist and taps Complete (still undoable if a card needs to be skipped). Cash/invoice
   // still require an explicit tap.
-  _fmcChargeChosen=(_fmcPayType==='autopay');
+  _fmcChargeChosen=(_fmcPayType==='autopay')&&!_fmcPrepaid;
   _fmcCash=false; _fmcInvoiceSent=false; _fmcCollectOld=false; _fmcBase=_fmAmt(bk); _fmcPhotos=[];
   _fmcAddons=(customerServicesFor(bk.email)||[]).map(s=>({name:s.name,price:+s.price||0,on:false}));
   _fmcEndChk={}; END_CHECKLIST.forEach(l=>_fmcEndChk[l]=false);
-  if(_fmcPayType==='cash') _fmcEndChk['Collected cash']=false;
+  if(_fmcPayType==='cash'&&!_fmcPrepaid) _fmcEndChk['Collected cash']=false;
   document.getElementById('fmcTitle').textContent='Finish '+(bk.name||'job');
   document.getElementById('fmcErr').style.display='none';
   document.getElementById('fmcOwnerNote').value='';
@@ -3466,12 +3482,17 @@ function _fmcRenderAmount(){
   })();
 }
 // Whether payment is satisfied for this customer type
-function _fmcPayResolved(){ if(_fmcPayType==='autopay') return _fmcChargeChosen; if(_fmcPayType==='cash') return _fmcCash; return _fmcInvoiceSent; }
+function _fmcPayResolved(){ if(_fmcPrepaid) return true; if(_fmcPayType==='autopay') return _fmcChargeChosen; if(_fmcPayType==='cash') return _fmcCash; return _fmcInvoiceSent; }
 function _fmcRenderPay(){
   const wrap=document.getElementById('fmcPayControls'); const grand=_fmcGrand();
   const state=document.getElementById('fmcPayState');
   const see=_isMoneyRole();
   const bk=_fmcStop&&_fmcStop.bk; const _l4=bk?String(bk.cardLast4||'').trim():''; const hasCard=(bk&&bk.hasCard===true)||!!_l4;
+  if(_fmcPrepaid){   // already settled — collecting again would double-bill (2nd invoice / blocked charge = false "FAILED")
+    wrap.innerHTML='<div style="padding:12px 14px;border-radius:12px;background:#dcfce7;border:2px solid #16a34a;color:#14532d;font-weight:800;font-size:15px;">✅ Already paid — nothing to collect</div>';
+    if(state){ state.textContent='✓ done'; state.className='ok'; }
+    _fmcUpdateSubmit(); return;
+  }
   // ── On-the-spot method switch — crew can change how THIS job is paid, right now ──
   const methods=[
     {k:'cash',   lbl:'💵 Cash'},
@@ -3522,7 +3543,9 @@ function _fmcRenderEndChk(){
   const st=document.getElementById('fmcCheckState'); if(st){ st.textContent=allChecked?'✓ done':'required'; st.className=allChecked?'ok':'req'; }
   _fmcUpdateSubmit();
 }
-function fmcCheckAll(){ Object.keys(_fmcEndChk).forEach(function(l){ _fmcEndChk[l]=true; }); if('Collected cash' in _fmcEndChk){ _fmcCash=true; _fmcRenderPay(); } _fmcRenderEndChk(); }
+// "Check all" ticks the GEAR checklist only. It used to tick "Collected cash" too, which recorded cash as
+// collected (mark_cash_paid) for money nobody took. Cash is confirmed only by its own button or tick.
+function fmcCheckAll(){ Object.keys(_fmcEndChk).forEach(function(l){ if(l!=='Collected cash') _fmcEndChk[l]=true; }); _fmcRenderEndChk(); }
 function fmToggleEndChk(label){ _fmcEndChk[label]=!_fmcEndChk[label]; if(label==='Collected cash') _fmcCash=_fmcEndChk[label], _fmcRenderPay(); _fmcRenderEndChk(); }
 function _fmcEndChkDone(){ return Object.keys(_fmcEndChk).every(l=>_fmcEndChk[l]); }
 function _fmcCanFinish(){ return _fmcPayResolved()&&_fmcEndChkDone(); }
@@ -3575,11 +3598,11 @@ async function fmSubmitComplete(){
   const selAddons=(_fmcAddons||[]).filter(a=>a.on&&a.price>0).map(a=>({name:a.name,price:a.price}));
   const grand=_fmcGrand(), ownerNote=String(document.getElementById('fmcOwnerNote').value||'').trim();
   // Done action: autopay uses field_complete (marks done + charges + emails owner on fail); others mark_done.
-  const doneAction=_fmcPayType==='autopay'?'field_complete':'mark_done';
+  const doneAction=(_fmcPayType==='autopay'&&!_fmcPrepaid)?'field_complete':'mark_done';
   const doneItem={ kind:'done', idemKey:'done:'+base, method:'GET', params:{ action:doneAction, rowIndex, email, name:bk.name||'', serviceDate:svcDate, amount:grand.toFixed(2), addons:(selAddons.length?JSON.stringify(selAddons):''), markedBy:adminName||adminEmail||'Staff', adminToken } };
   const extra=[];
   if(selAddons.length && _fmcPayType!=='autopay'){ const tag=selAddons.map(a=>a.name+'='+a.price).join(','); extra.push({ kind:'addons', idemKey:'addons:'+base+':'+tag, method:'GET', params:{ action:'apply_job_addons', rowIndex, email, serviceDate:svcDate, addons:JSON.stringify(selAddons), adminToken } }); } // autopay applies extras inside field_complete so the charge includes them
-  if(_fmcPayType==='cash') extra.push({ kind:'cash', idemKey:'cash:'+base, method:'GET', params:{ action:'mark_cash_paid', rowIndex, email, name:bk.name||'', serviceDate:svcDate, adminToken, markedBy:adminName||'Crew' } });
+  if(_fmcPayType==='cash'&&!_fmcPrepaid&&_fmcCash) extra.push({ kind:'cash', idemKey:'cash:'+base, method:'GET', params:{ action:'mark_cash_paid', rowIndex, email, name:bk.name||'', serviceDate:svcDate, adminToken, markedBy:adminName||'Crew' } });
   // Old balance collected in cash too — ONLY when the tick is on at submit. One mark_cash_paid per
   // old visit, found by email + serviceDate (rowIndex is only a hint: autoScheduleNext shifts rows;
   // archived visits are stamped in Completed Jobs by the backend's archive path).
@@ -3617,7 +3640,7 @@ async function fmSubmitComplete(){
     const _tgt=(_wi>=0?allBookings[_wi]:bk);
     _tgt.done='✓ Done — '+lbl; _tgt.markedBy=adminName; if(selAddons.length) _tgt.price='$'+grand.toFixed(0);
     _fmGhostMark(bk);
-    if(_fmcPayType==='cash') _fmCashTotal+=grand+(_oldCash?_oldCash.amt:0);
+    if(_fmcPayType==='cash'&&!_fmcPrepaid&&_fmcCash) _fmCashTotal+=grand+(_oldCash?_oldCash.amt:0);
     if(_oldCash) _fmClearOwes(bk);
     if(!chargeFailed) _fmBilledTotal+=grand;   // a declined autopay charge must not inflate "total billed today"
     try{ localStorage.setItem('evg_field_bookings', JSON.stringify(allBookings)); }catch(e){}
@@ -3645,6 +3668,13 @@ async function fmSubmitComplete(){
   if(_missing(_pics).length){ try{ showToast('⚠️ Photos could not be saved (phone storage full) — the job and payment still will be.',9000); }catch(e){} }
 
   const online=navigator.onLine!==false;
+  // Save the DONE call to the phone too, BEFORE sending it. It used to be queued only after the direct
+  // call failed — if iOS killed the app mid-send, nothing ever re-sent it and this job's cash/invoice/
+  // checklist sat in the queue forever behind "after: done". It is held for 60s so the background sync
+  // can't send it at the same moment as the direct call below; after that (app killed) the sync sends it,
+  // and the idemKey makes a repeat harmless.
+  if(online){ doneItem.holdUntil=Date.now()+60000; _fmEnqueue(doneItem); }
+  const _releaseDone=function(){ try{ const q=_fmQueueLoad(); const it=q.find(function(x){ return x&&x.idemKey===doneItem.idemKey; }); if(it){ delete it.holdUntil; _fmQueuePutItem(it); } }catch(e){} };
   if(online){
     try{
       // 45s cap: past that, stop spinning — the done call goes to the queue and retries safely
@@ -3652,7 +3682,9 @@ async function fmSubmitComplete(){
       const res=await _fmFetchT(SCRIPT_URL+'?'+new URLSearchParams(Object.assign({}, doneItem.params, { idemKey: doneItem.idemKey })).toString(), {}, 45000);
       if(!res.ok) throw new Error('HTTP '+res.status);
       let data=null; try{ data=await res.json(); }catch(_p){}
-      if(data&&data.success===false){ _dropFollowUps(); errEl.textContent='❌ '+(data.error||'Mark done failed'); errEl.style.display='block'; submitBtn.disabled=false; _fmcUpdateSubmit(); return; }
+      if(!data) throw new Error('no JSON reply');   // Google error page — not a success; let the queue retry it
+      if(data.success===false){ _fmQueueRemoveKey(doneItem.idemKey); _dropFollowUps(); errEl.textContent='❌ '+(data.error||'Mark done failed'); errEl.style.display='block'; submitBtn.disabled=false; _fmcUpdateSubmit(); return; }
+      _fmQueueRemoveKey(doneItem.idemKey);
       // field_complete reports success even when the CHARGE fails (owner is emailed) —
       // tell the crew too, so they can collect another way while still at the door.
       const _chargeWarn=(data && doneAction==='field_complete' && data.charged===false);
@@ -3661,7 +3693,8 @@ async function fmSubmitComplete(){
       return;
     }catch(netErr){ /* offline or timed out — fall through and queue the done call */ }
   }
-  // OFFLINE / TIMED OUT — queue the done call too, and confirm it actually persisted.
+  // OFFLINE / TIMED OUT — queue the done call too (or release the copy saved above), and confirm it persisted.
+  _releaseDone();
   _fmEnqueue(doneItem);
   if(_missing([doneItem]).length){ _dropFollowUps(); _storageFull(1); return; }
   _fmFlushQueue(); finish(true);

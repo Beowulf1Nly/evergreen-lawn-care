@@ -1076,11 +1076,20 @@ function render(){
   if(_activeTab==='dev') _devInfoRender();
 }
 
+// THE paid rule — identical to the backend's _isRowPaid_ (apps-script 2026-11-10.1), which is what the
+// crew's "OWES" banner uses. Every settlement stamp carries ✅ (card, invoice, cash paid, cash collected,
+// waived) and is often written next to leftover "❌ NOT PAID — Autopay pending" text, so ✅ wins.
+// A plain "💵 Cash" label means a cash CUSTOMER, not cash collected — that is still owed.
+function _hqCellPaid(t){ const s=String(t||''), l=s.toLowerCase(); if(s.indexOf('✅')>=0||l.indexOf('waived')>=0) return true; if(l.indexOf('not paid')>=0||l.indexOf('unpaid')>=0||l.indexOf('pending')>=0) return false; return l.indexOf('paid')>=0; }
+// Same cutoff as the backend's EVG_BALANCE_SINCE: visits before it were mostly never stamped paid, so
+// they are not counted as debt anywhere (HQ used a rolling 90 days and pulled unstamped August in).
+const HQ_BALANCE_SINCE='2026-09-01';
+function _hqSettled(b){ return _hqCellPaid(b&&b.payMethod)||_hqCellPaid(b&&b.calendarEvent)||/paid in full/i.test(String((b&&b.invoiced)||'')); }
 function payBadge(b){
   const pm=(String(b.payMethod||'')+' '+String(b.calendarEvent||'')).toLowerCase();
   const inv=String(b.invoiced||'').toLowerCase();
   // already collected
-  if(pm.indexOf('✅')>=0||(pm.indexOf('paid')>=0&&pm.indexOf('not paid')<0)||inv.indexOf('paid')>=0) return {t:'Paid',c:'#22c55e'};
+  if(_hqSettled(b)) return {t:'Paid',c:'#22c55e'};
   if(pm.indexOf('cash')>=0) return {t:'Cash',c:'#fbbf24'};
   if(inv.indexOf('invoiced')>=0) return {t:'Invoiced',c:'#38bdf8'};
   // job done but nothing collected → needs attention (also catches a failed autopay charge)
@@ -1332,7 +1341,7 @@ function openJobSheetFor(b){
     +(function(){   // status + one-tap charge on the saved card (autopay customers especially)
       const pb=payBadge(b), amt=amtOf(b);
       return '<div class="rs-note" style="color:var(--dim);">Payment: <b style="color:'+pb.c+';">'+pb.t+'</b>'+(amt>0?(' · job total $'+amt.toFixed(2)):'')+(pb.t==='Paid'?' — already collected, don\'t charge again.':'')+'</div>'
-        +(amt>0?('<button class="act" onclick="cdOpenFor(_jobCur,'+amt.toFixed(2)+')"><span class="em">💳</span> Charge their card — $'+amt.toFixed(2)+' <span style="opacity:.6;font-size:11px;">(saved card · autopay)</span></button>'):'');
+        +(amt>0?('<button class="act" onclick="cdOpenFor(_jobCur,'+amt.toFixed(2)+',true)"><span class="em">💳</span> Charge their card — $'+amt.toFixed(2)+' <span style="opacity:.6;font-size:11px;">(saved card · autopay)</span></button>'):'');
     })()
     +'<button class="act" onclick="hqInvoiceJob()"><span class="em">🧾</span> Send an invoice'+(b.email?'':' <span style="color:#f87171;font-size:11px;">(needs email)</span>')+'</button>'
     +((payBadge(b).t!=='Paid'&&!_isWaived(b))?'<button class="act" onclick="hqWaiveJob(_jobCur)"><span class="em">✕</span> Not owed — write off <span style="opacity:.6;font-size:11px;">(duplicate · comp · junk row)</span></button>':'')
@@ -1410,7 +1419,7 @@ function _openArchSheet(b,be){
       const pb=payBadge(b), amt=amtOf(b);
       return '<div class="lbl">Money</div>'
         +'<div class="rs-note" style="color:var(--dim);">Payment: <b style="color:'+pb.c+';">'+pb.t+'</b>'+(amt>0?(' · job total $'+amt.toFixed(2)):'')+(pb.t==='Paid'?' — already collected, don\'t charge again.':'')+'</div>'
-        +'<button class="act" onclick="cdOpenFor(_jobCur,'+(amt>0?amt.toFixed(2):0)+')"><span class="em">💳</span> Charge their card'+(amt>0?(' — $'+amt.toFixed(2)):'')+' <span style="opacity:.6;font-size:11px;">(saved card · autopay)</span></button>'
+        +'<button class="act" onclick="cdOpenFor(_jobCur,'+(amt>0?amt.toFixed(2):0)+',true)"><span class="em">💳</span> Charge their card'+(amt>0?(' — $'+amt.toFixed(2)):'')+' <span style="opacity:.6;font-size:11px;">(saved card · autopay)</span></button>'
         +'<button class="act" onclick="hqInvoiceJob()"><span class="em">🧾</span> Send an invoice'+(b.email?'':' <span style="color:#f87171;font-size:11px;">(needs email)</span>')+'</button>'
         +((pb.t!=='Paid'&&!_isWaived(b))?'<button class="act" onclick="hqWaiveJob(_jobCur)"><span class="em">✕</span> Not owed — write off <span style="opacity:.6;font-size:11px;">(duplicate · comp · junk row)</span></button>':'')
         +(_isWaived(b)?'<div class="rs-note" style="color:#94a3b8;">✕ Written off — not counted as owed. <button onclick="_waiveRemove(_waiveKey(_jobCur));toast(\'↩ Restored\');closeSheet(\'jobSheet\');(_activeTab===\'stats\'?renderStats(false):renderDispatch());" style="background:none;border:none;color:#38bdf8;cursor:pointer;font-family:inherit;font-weight:800;text-decoration:underline;padding:0;">↩ Restore</button></div>':'');
@@ -1791,10 +1800,13 @@ async function doMarkDone(){
       b.done='✓ Done'; _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{done:'✓ Done',ts:Date.now()}); _ghostAdd(b);
       let msg='✅ Marked done';
       if(autop) msg=(d.charged===false)?('⚠ Done, but the card charge FAILED'+(d.chargeError?(' ('+d.chargeError+')'):'')+' — send an invoice from the job sheet'):'✅ Done — card charged';
+      else if(wantInv && d.planCovered) msg='✅ Done — covered by their plan payment (no invoice)';   // mid-cycle visit of a prepaid plan: the backend stamped it covered; invoicing it billed the customer twice
       else if(wantInv){
         try{
           const svcName=String(b.service||b.serviceType||'').trim()||'Lawn Service';
-          const r=await(await fetch(be.u+'?'+new URLSearchParams({ action:'send_invoice', email:em, name:b.name||'', amount:String(amt), description:svcName+' — '+svc, rowIndex:String(_ri(b)||0), serviceDate:svc, idemKey:'hqinv:'+em+':'+svc+':'+amt+':'+Math.floor(Date.now()/60000), adminToken:be.t }))).json();
+          // First visit of a multi-visit plan: the backend set Price to the bundle — bill that, not one visit.
+          const invAmt=(d.planCharge&&+d.planCharge.bundle>0)?(+d.planCharge.bundle):amt;
+          const r=await(await fetch(be.u+'?'+new URLSearchParams({ action:'send_invoice', email:em, name:b.name||'', amount:String(invAmt), description:svcName+' — '+svc+((d.planCharge&&d.planCharge.visits>1)?(' ('+d.planCharge.visits+'-visit plan)'):''), rowIndex:String(_ri(b)||0), serviceDate:svc, idemKey:'hqinv:'+em+':'+svc+':'+invAmt+':'+Math.floor(Date.now()/60000), adminToken:be.t }))).json();
           if(r&&r.success&&r.alreadyPaid) msg='✅ Done — already paid';
           else if(r&&r.success&&r.resent) msg='✅ Done — re-sent the open invoice to '+em;
           else if(r&&r.success) msg='✅ Done — 🧾 invoice sent to '+em;
@@ -1821,10 +1833,15 @@ async function doMarkCashDone(){
     const d1=await(await fetch(be.u+'?'+new URLSearchParams(Object.assign({ action:'mark_cash_paid', markedBy:myName||'Owner' }, base)))).json();
     // 2) mark done — now the row is paid, so this schedules the next visit
     const d2=await(await fetch(be.u+'?'+new URLSearchParams(Object.assign({ action:'mark_done', amount:amtOf(b).toFixed(2), markedBy:myName||'Owner' }, base)))).json();
-    if((d1&&d1.success)||(d2&&d2.success)){
-      b.done='✓ Done'; _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{done:'✓ Done',ts:Date.now()}); _ghostAdd(b);
-      toast('✅ Done + cash recorded — next visit scheduled'); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings(); closeSheet('jobSheet');
-    } else toast('⚠ '+((d2&&d2.error)||(d1&&d1.error)||'Could not complete — refresh and try again'));
+    // Say exactly which half worked. This used to toast "Done + cash recorded" when EITHER call
+    // succeeded, so a failed cash stamp looked recorded and the visit kept showing as owed.
+    const ok1=!!(d1&&d1.success), ok2=!!(d2&&d2.success);
+    if(ok2){ b.done='✓ Done'; _pendingLocal[_svKey(b)]=Object.assign(_pendingLocal[_svKey(b)]||{},{done:'✓ Done',ts:Date.now()}); _ghostAdd(b); }
+    if(ok1){ b.calendarEvent='✅ Cash paid'; }
+    if(ok1&&ok2){ toast('✅ Done + cash recorded — next visit scheduled'); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings(); closeSheet('jobSheet'); }
+    else if(ok2) { toast('⚠ Marked done, but the CASH was NOT recorded: '+((d1&&d1.error)||'unknown error')+' — tap again to record it', 10000); render(); }
+    else if(ok1) { toast('⚠ Cash recorded, but NOT marked done: '+((d2&&d2.error)||'unknown error'), 10000); render(); }
+    else toast('⚠ '+((d2&&d2.error)||(d1&&d1.error)||'Could not complete — refresh and try again'));
   }catch(e){ toast('Network error'); }
 }
 async function sendReview(){
@@ -1927,11 +1944,13 @@ async function doCancel(){
     return;
   }
   btn.disabled=true; btn.textContent='Cancelling…';
-  try{ const p=new URLSearchParams({ action:'cancel_job', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), reason:document.getElementById('cancelReason').value.trim(), skipEmail:(document.getElementById('cancelNotify').checked?'false':'true'), adminToken:be.t });
+  const _endIt=!!(document.getElementById('cancelEndPlan')&&document.getElementById('cancelEndPlan').checked);
+  // endPlan tells the backend whether this ends the plan. Without it (before 2026-11-10.1) the backend
+  // guessed — and ended the plan on EVERY single-visit cancel. Unticked = a skip: next visit is booked.
+  try{ const p=new URLSearchParams({ action:'cancel_job', rowIndex:_ri(b), email:b.email||'', serviceDate:dateOf(b), reason:document.getElementById('cancelReason').value.trim(), skipEmail:(document.getElementById('cancelNotify').checked?'false':'true'), endPlan:(_endIt?'true':'false'), adminToken:be.t });
     const d=await(await fetch(be.u+'?'+p)).json();
     if(d.success){
       b.rowCancelled=true;
-      const _endIt=!!(document.getElementById('cancelEndPlan')&&document.getElementById('cancelEndPlan').checked);
       if(_endIt) _endPlan(b,true);   // cancelling a visit alone never ended the subscription
       toast(_endIt?('🚫 Cancelled — '+(b.name||'they')+'\'s plan ended'):'🗑 Job cancelled');
       closeSheet('cancelSheet'); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings();
@@ -2497,7 +2516,9 @@ function _custBuild(){
     let ltv=0, bal=0, done=0, autopay=false, card='', lastSvc='', next='', freq='';
     m.jobs.forEach(function(b){
       const pb=payBadge(b), amt=amtOf(b), d=dateOf(b);
-      if(isDone(b)||_isArch(b)){ done++; if(d>lastSvc) lastSvc=d; if(pb.t==='Paid') ltv+=amt; if(pb.t==='Unpaid'||pb.t==='Invoiced') bal+=amt; }
+      // Owes = the backend's rule: done, not settled, not cancelled or written off, on/after the cutoff.
+      // (Was: any Unpaid/Invoiced visit ever, which counted pre-September noise and missed cash-not-collected.)
+      if(isDone(b)||_isArch(b)){ done++; if(d>lastSvc) lastSvc=d; if(pb.t==='Paid') ltv+=amt; else if(!b.rowCancelled&&!_isWaived(b)&&amt>0&&String(d)>=HQ_BALANCE_SINCE) bal+=amt; }
       else if(d>=today){ if(!next||d<next) next=d; }
       if(b.portalAutopay===true) autopay=true;
       if(String(b.cardLast4||'').trim()) card=String(b.cardLast4).trim();
@@ -3553,11 +3574,15 @@ async function hqInvoiceJob(){   // Stripe invoice for THIS job — same backend
   }catch(e){ alert('⚠ Network error — invoice not sent.'); }
   finally{ hqInvoiceJob._busy=false; }
 }
-function cdOpenFor(b, amt){   // Card Desk pre-aimed at this customer (amt: optional prefill, e.g. charging a finished job)
+function cdOpenFor(b, amt, forVisit){   // Card Desk pre-aimed at this customer (amt: optional prefill, e.g. charging a finished job)
   if(!b) return;
   closeSheet('jobSheet');
   _cdBiz=b._srcBiz||0;
   cdOpen();
+  // forVisit: opened from ONE visit's job sheet. Charging exactly that visit's price then goes through
+  // manual_charge, which stamps the visit paid, books the next one and closes any open invoice for it.
+  // (hq_charge_card moved the money but never marked the visit paid, so it stayed "owed" everywhere.)
+  window._cdJob=(forVisit&&+amt>0&&dateOf(b))?b:null;
   setTimeout(function(){ try{
     document.getElementById('cdEmail').value=String(b.email||'').toLowerCase().trim();
     if(+amt>0){   // prefill amount + memo so charging a completed job is one tap; cdLookup() shows the real card/autopay state
@@ -3982,7 +4007,7 @@ function _hqNeedsPayPanel(){
   return h;
 }
 function _hqOpenStuck(i){ const b=(window._needPayRefs||[])[i]; if(b) openJobSheetFor(b); }
-function _hqChargeStuck(i){ const b=(window._needPayRefs||[])[i]; if(!b) return; _jobCur=b; try{ _jobBi=_bookings.indexOf(b); }catch(e){} cdOpenFor(b, amtOf(b)); }
+function _hqChargeStuck(i){ const b=(window._needPayRefs||[])[i]; if(!b) return; _jobCur=b; try{ _jobBi=_bookings.indexOf(b); }catch(e){} cdOpenFor(b, amtOf(b), true); }
 function _hqCashStuck(i){ const b=(window._needPayRefs||[])[i]; if(!b) return; _jobCur=b; try{ _jobBi=_bookings.indexOf(b); }catch(e){} doMarkCashDone(); }
 function _hqWaiveStuck(i){ const b=(window._needPayRefs||[])[i]; if(b) hqWaiveJob(b); }
 function _hqNeedPayToggle(){ try{ localStorage.setItem('hq_needpay_open', localStorage.getItem('hq_needpay_open')==='1'?'0':'1'); }catch(e){} try{ renderDispatch(); }catch(e){} }
@@ -6937,12 +6962,10 @@ function _revTipShow(ev,i){
   tip.style.left=x+'px'; tip.style.top=y+'px';
 }
 function _revTipHide(){ const t=document.querySelector('#revTip'); if(t) t.style.display='none'; }
-function _hqPaidJob(j){
-  const s=(String(j.payMethod||'')+' '+String(j.calendarEvent||'')).toLowerCase();
-  if(s.indexOf('waived')>=0) return true;   // written off → settled, must be checked BEFORE the "not paid" short-circuit below (the stamp is appended to the old NOT-PAID text)
-  if(s.indexOf('not paid')>=0||s.indexOf('unpaid')>=0||s.indexOf('pending')>=0) return false;
-  return s.indexOf('✅')>=0||s.indexOf('autopay')>=0||s.indexOf('auto-pay')>=0||s.indexOf('cash')>=0||s.indexOf('paid')>=0;
-}
+// Same rule as payBadge / the backend (2026-11-10.1). It used to count any "cash" or "autopay" label as
+// collected — so HQ's money board called a visit paid while the crew's phone showed it OWED, and it let
+// leftover "NOT PAID" text veto a ✅ Cash paid stamp. Now HQ and /field agree on every visit.
+function _hqPaidJob(j){ return _hqSettled(j); }
 // ✕ write-off — LOCAL-first so it ALWAYS works (duplicate invoices, live rows, and
 // cleaning-archive rows the backend can't match). Backend stamp fires best-effort.
 function hqWaiveOwed(oi){
@@ -6950,7 +6973,14 @@ function hqWaiveOwed(oi){
   if(!confirm('✕ Write off '+_fmtMoney(o.a)+' owed by '+(o.n||'?')+' ('+o.d+')?\n\nUse for duplicate invoices, comps, or junk rows — it stops counting as owed everywhere. Restore any time from the "Written off" list below. Does NOT touch Stripe.')) return;
   const j=o._j||{ name:o.n, email:o.em, serviceDate:o.d, price:o.a, _srcBiz:(o.zi||0) };
   _waiveAdd(j);
-  try{ const be=_bizUT(o.zi||0); fetch(be.u+'?'+new URLSearchParams({ action:'owner_waive_owed', email:o.em||'', serviceDate:o.d, amount:String(o.a), adminToken:be.t })).catch(function(){}); }catch(e){}
+  // The server stamp is what makes the crew's phone stop showing OWES — say so when it fails.
+  try{ const be=_bizUT(o.zi||0);
+    if(!o.em){ toast('⚠ Written off on this screen only — this customer has no email, so the crew app will still show it', 9000); }
+    else fetch(be.u+'?'+new URLSearchParams({ action:'owner_waive_owed', email:o.em||'', serviceDate:o.d, amount:String(o.a), adminToken:be.t }))
+      .then(function(r){ return r.json(); })
+      .then(function(d){ if(!d||!d.success) toast('⚠ Written off here, but the server did not record it ('+((d&&d.error)||'no reply')+') — the crew app may still show it', 9000); })
+      .catch(function(){ toast('⚠ Written off here, but the server could not be reached — try again later', 9000); });
+  }catch(e){}
   try{ _owedRebuild(); }catch(e){}
   toast('✕ Written off — '+(o.n||'')+' '+_fmtMoney(o.a));
   renderStats(false);
@@ -6978,7 +7008,7 @@ function _hqMoneyBoard(results){
     if(r.locked||!r.st) return;
     const z=r.z;
     let coll=0,owed=0,owedN=0;
-    const _owCut=new Date(Date.now()-90*864e5).toISOString().slice(0,10);   // debts older than 90d are archive noise, not AR
+    const _owCut=HQ_BALANCE_SINCE;   // same cutoff the backend and the crew's OWES banner use
     (r.jobs||[]).forEach(function(j){ const a=amtOf(j); if(!a||j.rowCancelled) return; if(_isWaived(j)) return; if(_hqPaidJob(j)){ coll+=a; } else if(String(dateOf(j)||'')>=_owCut){ owed+=a; owedN++; owes.push({n:j.name||'?',a:a,d:String(dateOf(j)||''),z:z,zi:results.indexOf(r),em:String(j.email||'').toLowerCase().trim(),_j:j}); } });
     const plans=_hqActivePlans(r.books||[]);
     let mrr=0;
@@ -7634,6 +7664,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
 const CD_STRIPE_PK='pk_live_51TLrat4J18msjfgfYqm9zvDa2pkr5ZPv6s10bl5UwMIYnAqpJbXEU14YXFlS6sEA3H0VgsLPTxHuPWD6YutUy1J000mzhTGL1N';
 let _cdBiz=0,_cdStripe=null,_cdCard=null;
 function cdOpen(){
+  window._cdJob=null;   // a plain Card Desk open is not tied to a visit (cdOpenFor sets it afterwards)
   const bl=_bizLoad();
   document.getElementById('cdBizPick').innerHTML=bl.map(function(z,i){
     const ok=_bizConnected(z)||i===0;
@@ -7706,9 +7737,21 @@ async function cdCharge(){
   try{
     // Stable idempotency key (email+amount+minute bucket) — NOT Date.now(). If the response times out and
     // the owner re-confirms, the same key makes both withIdempotency_ AND Stripe treat it as ONE charge.
-    const d=await _cdApi({action:'hq_charge_card',custEmail:em,amount:String(amt),memo:memo,idemKey:'hqcc:'+em+':'+amt+':'+Math.floor(Date.now()/60000)});
-    if(!d.success) throw new Error(d.error||'charge failed');
-    out.innerHTML='✅ Charged $'+esc(d.amount)+' to ····'+esc(d.last4)+' — Stripe receipt emailed to the customer.';
+    const j=window._cdJob;
+    const forVisit=!!(j && String(j.email||'').toLowerCase().trim()===em && Math.abs(amtOf(j)-amt)<0.005);
+    if(forVisit){
+      // One visit, its own price → charge THAT visit: stamps it paid, books the next visit, voids a stale open invoice.
+      const d=await _cdApi({action:'manual_charge',rowIndex:String(_ri(j)),email:em,name:String(j.name||''),serviceDate:dateOf(j),amount:String(amt)});
+      if(!d.success) throw new Error(d.error||'charge failed');
+      try{ j.payMethod='✅ PAID — Manual Charge ($'+amt.toFixed(2)+')'; j.balanceDue=0; }catch(e){}
+      out.innerHTML='✅ Charged $'+esc(amt.toFixed(2))+(d.last4?(' to ····'+esc(d.last4)):'')+' — the '+esc(dateOf(j))+' visit is marked paid.';
+      window._cdJob=null;
+      try{ render(); }catch(e){}
+    } else {
+      const d=await _cdApi({action:'hq_charge_card',custEmail:em,amount:String(amt),memo:memo,idemKey:'hqcc:'+em+':'+amt+':'+Math.floor(Date.now()/60000)});
+      if(!d.success) throw new Error(d.error||'charge failed');
+      out.innerHTML='✅ Charged $'+esc(d.amount)+' to ····'+esc(d.last4)+' — Stripe receipt emailed to the customer.<br><b style="color:#fbbf24;">Not tied to a visit.</b> If this paid for mows, mark those visits paid so they stop showing as owed.';
+    }
     document.getElementById('cdAmt').value=''; document.getElementById('cdMemo').value='';
   }catch(e){ out.textContent='❌ '+e.message; }
   finally{ btn.disabled=false; btn.textContent='💵 Charge card'; }
