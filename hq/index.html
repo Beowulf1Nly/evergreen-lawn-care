@@ -1084,6 +1084,10 @@ function _hqCellPaid(t){ const s=String(t||''), l=s.toLowerCase(); if(s.indexOf(
 // Same cutoff as the backend's EVG_BALANCE_SINCE: visits before it were mostly never stamped paid, so
 // they are not counted as debt anywhere (HQ used a rolling 90 days and pulled unstamped August in).
 const HQ_BALANCE_SINCE='2026-09-01';
+// Hunter's rule (backend 2026-11-10.2 _evgOwedKind_): a visit is OWED only when it was billed and not
+// collected — a Stripe invoice that isn't paid or voided, or a failed autopay. Never-invoiced visits and
+// cash customers are tracked other ways and don't count.
+function _hqOwedKind(b){ const pay=String((b&&b.payMethod)||'')+' '+String((b&&b.calendarEvent)||''), inv=String((b&&b.invoiced)||''); if(/autopay failed/i.test(pay)) return 'autopay'; if(/in_[A-Za-z0-9]+/.test(inv)&&!/voided/i.test(inv)) return 'invoice'; return ''; }
 function _hqSettled(b){ return _hqCellPaid(b&&b.payMethod)||_hqCellPaid(b&&b.calendarEvent)||/paid in full/i.test(String((b&&b.invoiced)||'')); }
 function payBadge(b){
   const pm=(String(b.payMethod||'')+' '+String(b.calendarEvent||'')).toLowerCase();
@@ -2518,7 +2522,7 @@ function _custBuild(){
       const pb=payBadge(b), amt=amtOf(b), d=dateOf(b);
       // Owes = the backend's rule: done, not settled, not cancelled or written off, on/after the cutoff.
       // (Was: any Unpaid/Invoiced visit ever, which counted pre-September noise and missed cash-not-collected.)
-      if(isDone(b)||_isArch(b)){ done++; if(d>lastSvc) lastSvc=d; if(pb.t==='Paid') ltv+=amt; else if(!b.rowCancelled&&!_isWaived(b)&&amt>0&&String(d)>=HQ_BALANCE_SINCE) bal+=amt; }
+      if(isDone(b)||_isArch(b)){ done++; if(d>lastSvc) lastSvc=d; if(pb.t==='Paid') ltv+=amt; else if(!b.rowCancelled&&!_isWaived(b)&&amt>0&&String(d)>=HQ_BALANCE_SINCE&&_hqOwedKind(b)) bal+=amt; }
       else if(d>=today){ if(!next||d<next) next=d; }
       if(b.portalAutopay===true) autopay=true;
       if(String(b.cardLast4||'').trim()) card=String(b.cardLast4).trim();
@@ -3624,8 +3628,8 @@ let _owedEmailMap={}, _owedCleanMap={}, _owedCleanAt=0, _owedCleanLoading=false;
 function _owedAdd_(m,j){
   try{
     const a=amtOf(j); if(!a||j.rowCancelled) return;
-    if(_hqPaidJob(j)||_isWaived(j)) return;
-    const cut=new Date(Date.now()-90*864e5).toISOString().slice(0,10);
+    if(_hqPaidJob(j)||_isWaived(j)||!_hqOwedKind(j)) return;
+    const cut=HQ_BALANCE_SINCE;   // same cutoff as the backend / crew app
     const d=String(dateOf(j)||''); if(!d||d<cut) return;
     const em=String(j.email||'').toLowerCase().trim(); if(!em) return;
     m[em]=(m[em]||0)+a;
@@ -7009,7 +7013,7 @@ function _hqMoneyBoard(results){
     const z=r.z;
     let coll=0,owed=0,owedN=0;
     const _owCut=HQ_BALANCE_SINCE;   // same cutoff the backend and the crew's OWES banner use
-    (r.jobs||[]).forEach(function(j){ const a=amtOf(j); if(!a||j.rowCancelled) return; if(_isWaived(j)) return; if(_hqPaidJob(j)){ coll+=a; } else if(String(dateOf(j)||'')>=_owCut){ owed+=a; owedN++; owes.push({n:j.name||'?',a:a,d:String(dateOf(j)||''),z:z,zi:results.indexOf(r),em:String(j.email||'').toLowerCase().trim(),_j:j}); } });
+    (r.jobs||[]).forEach(function(j){ const a=amtOf(j); if(!a||j.rowCancelled) return; if(_isWaived(j)) return; if(_hqPaidJob(j)){ coll+=a; } else if(String(dateOf(j)||'')>=_owCut&&_hqOwedKind(j)){ owed+=a; owedN++; owes.push({n:j.name||'?',a:a,d:String(dateOf(j)||''),z:z,zi:results.indexOf(r),em:String(j.email||'').toLowerCase().trim(),_j:j}); } });
     const plans=_hqActivePlans(r.books||[]);
     let mrr=0;
     plans.forEach(function(bk){ const mv=_hqPlanPrice(bk)*(30/_hqPlanInterval(String(bk.frequency||'').toLowerCase())); mrr+=mv; custAll.push({n:bk.name||'?',plan:bk.frequency||'',p:_hqPlanPrice(bk),m:mv,z:z}); });
