@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Noto+Emoji:wght@400;500&display=swap" rel="stylesheet"/>
 <script>
-/* APP_VER:2026-11-11.1 */
-(function(){ var V='2026-11-11.1'; window.__LIVE_VER=V;
+/* APP_VER:2026-11-11.2 */
+(function(){ var V='2026-11-11.2'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
     fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
@@ -831,6 +831,24 @@
 
 <!-- sheets -->
 <div class="sheet-wrap" id="jobSheet" onmousedown="this._dsd=(event.target===this)" onclick="if(this._dsd&&event.target===this)closeSheet('jobSheet')"><div class="sheet" id="jobSheetBody"></div></div>
+<div class="sheet-wrap" id="freqSheet" onmousedown="this._dsd=(event.target===this)" onclick="if(this._dsd&&event.target===this)closeSheet('freqSheet')">
+  <div class="sheet">
+    <h3>Repeat schedule</h3><div class="sub" id="freqSub"></div>
+    <div class="lbl">How often</div>
+    <div class="crewpick" id="freqPick">
+      <button data-f="weekly" onclick="freqPick('weekly')">Weekly</button>
+      <button data-f="biweekly" onclick="freqPick('biweekly')">Every 2 weeks</button>
+      <button data-f="custom" onclick="freqPick('custom')">Custom</button>
+    </div>
+    <div id="freqCustomRow" style="display:none;margin-top:12px;">
+      <div class="lbl" style="margin-top:0;">Every how many days</div>
+      <input type="number" id="freqDays" class="field" min="2" max="90" step="1" inputmode="numeric" placeholder="e.g. 10, 21, 28">
+    </div>
+    <div class="sub" id="freqNote" style="margin:12px 0 4px;">Changes their upcoming visits' spacing. The next visit keeps its date; the one after it follows the new schedule. Nothing is cancelled and the customer is not emailed.</div>
+    <button class="primary" id="freqGo" onclick="doSetFreq()">Save schedule</button>
+    <button class="ghost" onclick="closeSheet('freqSheet')">Cancel</button>
+  </div>
+</div>
 <div class="sheet-wrap" id="reschedSheet" onmousedown="this._dsd=(event.target===this)" onclick="if(this._dsd&&event.target===this)closeSheet('reschedSheet')">
   <div class="sheet">
     <h3>📅 Reschedule</h3><div class="sub" id="reschedSub"></div>
@@ -942,7 +960,7 @@ const SESSION_KEY='eg_staff_session';
   const ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
   const t=setTimeout(function(){ try{ ctrl&&ctrl.abort(); }catch(e){} },15000);
   fetch(SCRIPT_URL+'?action=version',ctrl?{signal:ctrl.signal}:{}).then(function(r){ return r.json(); })
-    .then(function(d){ el.textContent=(d&&d.version)?('backend '+d.version):'backend: older than 2026-10-09 (not deployed)'; if(!(d&&d.version)) el.style.color='#fbbf24'; })
+    .then(function(d){ window._hqBeVer=(d&&d.version)?String(d.version):''; el.textContent=(d&&d.version)?('backend '+d.version):'backend: older than 2026-10-09 (not deployed)'; if(!(d&&d.version)) el.style.color='#fbbf24'; })
     .catch(function(){ el.textContent='backend: version check failed'; })
     .finally(function(){ clearTimeout(t); });
 })();
@@ -1500,6 +1518,7 @@ function openJobSheetFor(b){
     +((_hqIsQuote(b)&&!done)?'<button class="act" style="background:#16a34a;color:#fff;border-color:#16a34a;font-weight:800;" onclick="hqConvertQuote()"><span class="em">✅</span> Turn into a real job <span style="opacity:.75;font-size:11px;">(books it &amp; closes this quote)</span></button>':'')
     +'<button class="act" onclick="hqScheduleAnother()"><span class="em">➕</span> Schedule another job for '+esc((b.name||'them').split(' ')[0])+'</button>'
     +'<button class="act" onclick="openResched()"><span class="em">📅</span> Reschedule to another day</button>'
+    +((!_hqIsQuote(b)&&_bizUrl(_bizLoad()[b._srcBiz||0]||{})===SCRIPT_URL)?('<button class="act" onclick="openFreqSheet()"><span class="em">🔁</span> Repeats: <b style="margin-left:2px;">'+esc(_freqLabel(b))+'</b> <span style="opacity:.6;font-size:11px;margin-left:auto;">change</span></button>'):'')
     +(done?'':'<button class="act" onclick="doMarkDone()"><span class="em">✓</span> Mark as done</button>')
     +(done?'':'<button class="act" onclick="doMarkCashDone()"><span class="em">💵</span> Done — collected cash <span style="opacity:.6;font-size:11px;">(marks paid + schedules next)</span></button>')
     +'<div class="lbl">Money</div>'
@@ -2087,6 +2106,62 @@ async function saveNotes(){
     } else toast('⚠ '+((d&&d.error)||'could not save — is that backend up to date?'));
   }catch(e){ toast('⚠ Network error'); }
   btn.disabled=false; btn.textContent='Save notes';
+}
+/* ── Repeat schedule: weekly / every 2 weeks / custom N days (backend owner_set_schedule) ── */
+function _freqDaysOf(b){
+  const f=String((b&&b.frequency)||''), d=parseInt((b&&b.days)||'',10);
+  const m=f.match(/every\s*(\d+)\s*day/i); if(m) return +m[1];
+  if(/bi/i.test(f)&&/week/i.test(f)) return 14;
+  if(/weekly/i.test(f)) return 7;
+  if(/month/i.test(f)) return 30;
+  return d>0?d:0;
+}
+function _freqLabel(b){
+  const f=String((b&&b.frequency)||'').trim();
+  if(!f||/one.?time|extra/i.test(f)) return 'One-time';
+  const n=_freqDaysOf(b);
+  if(n===7) return 'Weekly'; if(n===14) return 'Every 2 weeks';
+  return n?('Every '+n+' days'):f;
+}
+let _freqSel='';
+function freqPick(k){
+  _freqSel=k;
+  document.querySelectorAll('#freqPick button').forEach(function(x){ x.classList.toggle('on', x.dataset.f===k); });
+  document.getElementById('freqCustomRow').style.display=(k==='custom')?'':'none';
+  if(k==='custom'){ try{ document.getElementById('freqDays').focus(); }catch(e){} }
+}
+function openFreqSheet(){
+  const b=_jobCur; if(!b) return;
+  if(!String(b.email||'').trim()){ toast('⚠ This customer has no email — add one under Edit details first'); return; }
+  const n=_freqDaysOf(b), cur=_freqLabel(b);
+  document.getElementById('freqSub').textContent=(b.name||'Customer')+' · currently '+cur;
+  document.getElementById('freqDays').value=(n&&n!==7&&n!==14)?String(n):'';
+  freqPick(cur==='One-time'?'':n===7?'weekly':n===14?'biweekly':n?'custom':'');
+  closeSheet('jobSheet'); openSheet('freqSheet');
+}
+async function doSetFreq(){
+  const b=_jobCur; if(!b) return;
+  if(!_freqSel){ toast('Pick Weekly, Every 2 weeks or Custom'); return; }
+  // An older backend sends unknown actions to its NEW-BOOKING handler — never call it there.
+  if(!(window._hqBeVer && window._hqBeVer>='2026-11-11.1')){ toast('⚠ Deploy backend 2026-11-11.1 first — the live backend ('+(window._hqBeVer||'unknown')+') cannot change schedules yet', 9000); return; }
+  let days='';
+  if(_freqSel==='custom'){
+    days=String(parseInt(document.getElementById('freqDays').value,10)||'');
+    if(!(+days>=2&&+days<=90)){ toast('Enter a number of days between 2 and 90'); return; }
+  }
+  const be=_jobBE(b), btn=document.getElementById('freqGo'); btn.disabled=true; btn.textContent='Saving…';
+  try{
+    const d=await fetch(be.u+'?'+new URLSearchParams({ action:'owner_set_schedule', email:String(b.email||'').toLowerCase().trim(), freq:_freqSel, days:days, serviceDate:dateOf(b)||'', adminToken:be.t })).then(function(r){ return r.json(); });
+    if(d&&d.success){
+      const nd=+d.days||0;
+      (_bookings||[]).forEach(function(x){ if(String(x.email||'').toLowerCase().trim()===String(b.email||'').toLowerCase().trim() && (d.dates||[]).indexOf(dateOf(x))>=0){ x.frequency=d.label; x.days=nd; } });
+      toast('🔁 '+(b.name||'Customer')+' now repeats '+_freqLabel({frequency:d.label,days:nd}).toLowerCase()+(d.updated?(' — '+d.updated+' upcoming visit'+(d.updated===1?'':'s')+' updated'):''));
+      closeSheet('freqSheet'); render(); if(b._srcBiz) loadBizBookings(); else refreshBookings();
+    } else if(d&&/unknown action|not.*recogni/i.test(String(d.error||''))){
+      toast('⚠ The backend needs the latest deploy (2026-11-11.1) for this', 9000);
+    } else toast('⚠ '+((d&&d.error)||'Could not save the schedule'), 9000);
+  }catch(e){ toast('⚠ Network error — schedule not saved'); }
+  btn.disabled=false; btn.textContent='Save schedule';
 }
 function openResched(){ const b=_jobCur; if(!b) return; document.getElementById('reschedSub').textContent=(b.name||'Customer')+' · currently '+(dateOf(b)||'no date'); document.getElementById('reschedDate').value=dateOf(b)||todayISO(); document.getElementById('reschedReason').value=''; document.getElementById('reschedSeries').checked=false; document.getElementById('reschedNotify').checked=true; closeSheet('jobSheet'); openSheet('reschedSheet'); }
 async function doReschedule(){
