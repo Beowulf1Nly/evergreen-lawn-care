@@ -11,14 +11,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-09-11.98 */
+/* APP_VER:2026-11-17.1 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-09-11.98'; window.__APP_VER=V;
+  var V='2026-11-17.1'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -153,7 +153,7 @@
 <link rel="preconnect" href="https://js.stripe.com"/>
 <link rel="dns-prefetch" href="https://router.project-osrm.org"/>
 <link rel="manifest" href="manifest.webmanifest"/>
-<meta name="theme-color" content="#0f2417"/>
+<meta name="theme-color" content="#0f2c1e"/>
 <meta name="color-scheme" content="light"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="mobile-web-app-capable" content="yes"/>
@@ -326,16 +326,228 @@
   .fm-done-stat-lbl{ font-size:12px; color:#9ed8b1; margin-top:4px; text-transform:uppercase; letter-spacing:.06em; }
   #toast{ position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom)); transform:translateX(-50%); background:#14361f; color:#fff; padding:13px 20px; border-radius:12px; font-size:14px; font-weight:600; z-index:5000; opacity:0; transition:opacity .25s; pointer-events:none; max-width:90vw; text-align:center; box-shadow:0 8px 30px rgba(0,0,0,.4); }
   #toast.show{ opacity:1; }
+
+  /* ═══════════════════════════════════════════════════════════════════════════════════════
+     EVERGREEN FIELD — DESIGN SYSTEM (2026-11-13). Restyles only: every id, onclick and
+     data-fm-press is where it was.
+     · Light work surface — readable in direct sun.
+     · Dark brand bar on top — the home-screen app uses black-translucent, so iOS draws the
+       clock/battery in WHITE; the top of every screen has to stay dark or they vanish.
+     · Inter type, one SVG icon set (sprite #i-* under <body>), one green for "go", blue
+       for "drive", red only for money owed / danger.
+     · No :active scale on buttons — the Done-button notes below explain why a press must
+       never move the button under the finger.
+     ═══════════════════════════════════════════════════════════════════════════════════════ */
+  :root{
+    --font:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Roboto,Helvetica,Arial,'Noto Emoji',sans-serif;
+    --bg:#f2f3ef; --surface:#fff; --ink:#151d18; --ink-2:#3b4640; --mute:#68726c; --faint:#9aa39d;
+    --line:#e1e4de; --line-2:#cfd5cd;
+    --brand:#0f2c1e; --on-brand-2:rgba(255,255,255,.68); --on-brand-line:rgba(255,255,255,.14);
+    --go:#15803d; --go-press:#11692f; --go-soft:#e7f3eb; --drive:#1b5fc1; --drive-press:#174f9f;
+    --danger:#b42318; --warn:#9a5a06; --warn-soft:#fdf6e7;
+    --r:12px; --r-lg:16px;
+    --sh-1:0 1px 2px rgba(16,24,20,.06),0 1px 1px rgba(16,24,20,.03);
+  }
+  body{ font-family:var(--font); font-variant-emoji:text; font-feature-settings:'cv11','ss01'; letter-spacing:-.006em; background:var(--brand); color:var(--ink); }
+  button,a,input,textarea,select{ font-family:inherit; }
+  .ic{ width:18px; height:18px; flex:0 0 auto; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; vertical-align:-3px; pointer-events:none; }
+  .ic.fill{ fill:currentColor; stroke:none; }
+  .ic.sm{ width:15px; height:15px; vertical-align:-2px; }
+  .fm-mark{ width:30px; height:30px; border-radius:8px; background:#1c4a33; color:#86dba2; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .fm-mark .ic{ width:17px; height:17px; }
+
+  /* login */
+  #loginScreen{ background:var(--brand); }
+  .login-card{ border-radius:var(--r-lg); padding:28px 22px 24px; box-shadow:0 24px 60px rgba(0,0,0,.35); }
+  .login-card h1{ display:flex; align-items:center; gap:10px; font-size:22px; font-weight:700; letter-spacing:-.02em; color:var(--ink); margin-bottom:14px; }
+  .login-card h1 .fm-mark{ background:var(--brand); }
+  .login-card h1 small{ font-size:15px; font-weight:500; color:var(--mute); letter-spacing:0; }
+  .login-card p{ color:var(--mute); }
+  .login-input{ border:1px solid var(--line-2); border-radius:10px; padding:13px 14px; color:var(--ink); }
+  .login-input:focus{ border-color:var(--go); box-shadow:0 0 0 3px rgba(21,128,61,.15); }
+  .login-btn{ background:var(--go); border-radius:10px; font-weight:600; box-shadow:none; }
+
+  /* shell + brand bar */
+  #fieldMode{ background:var(--bg); color:var(--ink); }
+  .fm-top{ background:var(--brand); color:#fff; padding:max(10px,env(safe-area-inset-top)) 12px 10px; gap:8px; min-height:54px; }
+  .fm-top > div{ min-width:0; }
+  .fm-brand{ display:flex; align-items:center; gap:9px; font-size:16px; font-weight:600; letter-spacing:-.01em; color:#fff; white-space:nowrap; }
+  .fm-top-title{ font-size:16px; font-weight:600; color:#fff; letter-spacing:-.01em; white-space:nowrap; }
+  .fm-top-exit,.fm-refresh{ display:inline-flex; align-items:center; justify-content:center; gap:6px; height:34px; padding:0 11px; background:rgba(255,255,255,.07); color:#fff; border:1px solid var(--on-brand-line); border-radius:9px; font-size:13.5px; font-weight:600; line-height:1; white-space:nowrap; }
+  .fm-top-exit:active,.fm-refresh:active{ background:rgba(255,255,255,.16); }
+  .fm-refresh,.fm-top-exit.icon{ width:34px; padding:0; }
+  .fm-refresh .ic{ width:16px; height:16px; }
+  .fm-top-timer{ height:30px; padding:0 10px; color:#fff; background:rgba(255,255,255,.07); border:1px solid var(--on-brand-line); font-size:13px; font-weight:600; }
+  .fm-dot{ animation:none; width:7px; height:7px; background:#4ade80; }
+  .fm-sync{ font-weight:600; }
+  .fm-tabs{ display:flex; gap:6px; padding:0 12px 12px; background:var(--brand); flex-shrink:0; }
+  .fm-tabs .fm-top-exit{ flex:1; height:38px; background:transparent; border-color:transparent; color:var(--on-brand-2); }
+  .fm-tabs .fm-top-exit.on,.fm-tabs .fm-top-exit:disabled{ background:rgba(255,255,255,.12); border-color:var(--on-brand-line); color:#fff; opacity:1; cursor:default; }
+  @media (max-width:340px){ .fm-xs-hide{ display:none; } }
+  @media (max-width:420px){ .fm-ver{ display:none; } }
+
+  /* buttons */
+  .fm-btn{ border-radius:var(--r); font-weight:600; letter-spacing:-.01em; box-shadow:none; }
+  .fm-btn:active{ transform:none; }
+  .fm-btn-xl{ padding:0 20px; min-height:56px; font-size:17px; }
+  .fm-btn-lg{ padding:0 18px; min-height:52px; font-size:16px; }
+  .fm-btn-sm{ padding:0 10px; min-height:44px; font-size:14px; font-weight:600; border-radius:10px; }
+  .fm-btn-start,.fm-btn-done{ background:var(--go); color:#fff; box-shadow:0 1px 2px rgba(0,0,0,.14); }
+  .fm-btn-start:active,.fm-btn-done:active{ background:var(--go-press); }
+  .fm-btn-nav{ background:var(--drive); color:#fff; box-shadow:0 1px 2px rgba(0,0,0,.14); }
+  .fm-btn-nav:active{ background:var(--drive-press); }
+  .fm-btn-ghost{ background:var(--surface); color:var(--ink); border:1px solid var(--line-2); box-shadow:none; }
+  .fm-btn-ghost:active{ background:#f1f3ef; }
+  .fm-btn-ghost .ic{ color:var(--mute); }
+  .fm-btn:disabled{ opacity:.45; }
+
+  /* start screen */
+  .fm-start-center{ justify-content:flex-start; align-items:stretch; text-align:left; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:22px 16px max(24px,env(safe-area-inset-bottom)); }
+  .fm-start-center > *{ width:100%; max-width:520px; margin-left:auto; margin-right:auto; }
+  .fm-start-greet{ font-size:26px; font-weight:700; letter-spacing:-.025em; color:var(--ink); margin-bottom:3px; }
+  .fm-start-date{ color:var(--mute); font-size:14.5px; margin-bottom:18px; }
+  .fm-today{ background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); box-shadow:var(--sh-1); padding:16px 18px; margin-bottom:12px; }
+  .fm-start-stat{ background:none; border:0; border-radius:0; padding:0; margin:0; min-width:0; display:flex; align-items:baseline; gap:10px; }
+  .fm-start-stat-num{ font-size:44px; font-weight:700; letter-spacing:-.04em; line-height:1; color:var(--ink); font-variant-numeric:tabular-nums; }
+  .fm-start-stat-lbl{ font-size:16px; font-weight:500; color:var(--ink-2); text-transform:none; letter-spacing:0; margin:0; }
+  .fm-start-sub{ color:var(--mute); font-size:14px; margin:12px 0 0; padding-top:11px; border-top:1px solid var(--line); }
+  .fm-start-sub:empty{ display:none; }
+  .fm-callrow{ width:100%; text-align:left; background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--sh-1); padding:12px 14px; margin:0 0 12px; color:var(--ink); cursor:pointer; }
+  .fm-callrow-in{ display:flex; align-items:center; gap:12px; }
+  .fm-callrow-ico{ width:36px; height:36px; border-radius:10px; background:#e8f0fb; color:var(--drive); display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .fm-callrow-t{ font-size:15px; font-weight:600; }
+  .fm-callrow-s{ font-size:13px; color:var(--mute); margin-top:2px; }
+  .fm-callrow .chev{ color:var(--faint); margin-left:auto; }
+  .fm-route-setup{ background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:12px 14px; margin:0 auto 14px; text-align:left; }
+  .fm-label{ font-size:11.5px; font-weight:600; color:var(--mute); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; }
+  .fm-icon-btn{ flex:0 0 auto; width:44px; display:inline-flex; align-items:center; justify-content:center; background:var(--surface); color:var(--ink-2); border:1px solid var(--line-2); border-radius:10px; cursor:pointer; }
+  #fmStartPtNote{ display:flex; gap:10px; align-items:flex-start; font-size:13px; color:var(--mute); line-height:1.45; }
+  #fmStartPtNote .ic{ color:var(--go); margin-top:1px; }
+  .fm-chip{ display:inline-flex; align-items:center; border:1px solid var(--line-2); background:var(--surface); color:var(--ink-2); border-radius:999px; padding:7px 13px; font-size:13px; font-weight:600; cursor:pointer; margin:0 6px 6px 0; }
+  .fm-chip.on{ background:var(--brand); border-color:var(--brand); color:#fff; }
+  .fm-tiles{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
+  .fm-tile{ display:flex; flex-direction:column; align-items:flex-start; gap:10px; min-width:0; text-align:left; background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--sh-1); padding:12px; color:var(--ink); cursor:pointer; }
+  .fm-tile:active{ background:#f7f8f5; }
+  .fm-tile-ico{ width:34px; height:34px; border-radius:9px; background:var(--go-soft); color:var(--go); display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .fm-tile b{ display:block; font-size:14px; font-weight:600; }
+  .fm-tile .s{ display:block; font-size:12px; color:var(--mute); margin-top:1px; }
+  .fm-quiet{ display:inline-flex; align-items:center; justify-content:center; gap:6px; margin-top:18px; background:none; border:none; color:var(--mute); font-size:13px; font-weight:500; cursor:pointer; }
+  .fm-danger-link{ display:flex; align-items:center; justify-content:center; gap:6px; color:var(--danger) !important; font-weight:600; }
+
+  /* section screens (gear check, schedule, jobs, calls) */
+  .fm-section-title{ font-size:22px; font-weight:700; letter-spacing:-.02em; color:var(--ink); padding:18px 16px 2px; }
+  .fm-section-sub{ color:var(--mute); }
+  #fmScreenSched .fm-section-sub,#fmJobListMeta,#fmCallsMeta{ background:var(--brand); color:var(--on-brand-2) !important; font-size:13px; font-weight:500 !important; padding:0 16px 12px !important; }
+  .fm-body{ padding:14px 14px 20px; }
+
+  /* job screen: status panel stays on the brand bar */
+  .fm-progress-wrap{ background:var(--brand); color:#fff; padding:0 14px 12px; }
+  .fm-progress-meta{ color:var(--on-brand-2); }
+  .fm-progress-meta b{ color:#fff; font-weight:700; }
+  .fm-progress-meta span{ color:var(--on-brand-2); }
+  .fm-progress-bar{ height:4px; background:rgba(255,255,255,.14); }
+  .fm-progress-fill{ background:#4ade80; }
+  .fm-totals-chip{ text-align:left; color:var(--on-brand-2); font-size:12.5px; font-weight:500; margin-top:8px; }
+  .fm-totals-chip b{ color:#fff; font-weight:600; }
+  #fmCallsStrip{ border-radius:9px !important; padding:9px 11px !important; font-weight:600 !important; }
+
+  /* job card */
+  .fm-card{ background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:var(--r-lg); box-shadow:var(--sh-1); padding:18px 16px 16px; margin-top:0; }
+  .fm-card-stopno{ width:28px; height:28px; border-radius:8px; background:var(--brand); font-size:13px; font-weight:700; margin-bottom:10px; }
+  .fm-card-name{ font-size:23px; font-weight:700; letter-spacing:-.025em; color:var(--ink); }
+  .fm-card-addr{ display:flex; align-items:flex-start; gap:6px; font-size:15px; font-weight:500; color:var(--ink-2); margin-bottom:14px; }
+  .fm-card-addr .ic{ color:var(--mute); margin-top:2px; }
+  .fm-pills{ gap:6px; margin-bottom:14px; }
+  .fm-pill{ display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:600; padding:5px 9px; border-radius:7px; background:#f1f3ef; color:var(--ink-2); border:1px solid var(--line); }
+  .fm-pill .ic{ width:13px; height:13px; color:var(--mute); }
+  .fm-pill.amt{ background:var(--brand); color:#fff; border-color:var(--brand); font-size:13.5px; }
+  .fm-pill.warn{ background:var(--warn-soft); color:var(--warn); border-color:#f1dfba; }
+  .fm-pill.muted{ background:#f1f3ef; color:var(--ink-2); border-color:var(--line); }
+  .fm-note-box{ background:var(--warn-soft); border:1px solid #f1dfba; border-radius:10px; color:#5c3d08; font-size:14px; }
+  .fm-note-box b{ color:var(--warn); font-size:11px; font-weight:700; letter-spacing:.06em; }
+  .fm-card-actions{ gap:8px; }
+  .fm-secondary-row{ gap:8px; }
+  .fm-jobnav{ margin:12px 0 0; gap:8px; }
+  .fm-jobnav button{ display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:42px; min-width:0; padding:0 10px; background:var(--surface); color:var(--ink-2); border:1px solid var(--line-2); border-radius:10px; font-size:13.5px; font-weight:600; }
+  .fm-jobnav button:active{ background:#f1f3ef; transform:none; }
+  .fm-jobnav button .ic{ color:var(--mute); }
+
+  /* footer */
+  .fm-foot{ background:var(--surface); border-top:1px solid var(--line); padding:12px 14px max(12px,env(safe-area-inset-bottom)); }
+  .fm-skip{ color:var(--mute); font-weight:500; }
+  .fm-foot-row{ display:flex; gap:8px; margin-top:8px; }
+  .fm-foot-row .fm-skip{ flex:1; width:auto; margin:0; min-height:44px; display:inline-flex; align-items:center; justify-content:center; gap:6px; background:var(--surface); border:1px solid var(--line-2); border-radius:10px; color:var(--ink-2); font-size:14px; font-weight:600; }
+  .fm-foot-links{ display:flex; justify-content:center; align-items:center; gap:16px; margin-top:9px; flex-wrap:wrap; }
+  .fm-foot-links .fm-skip{ width:auto; margin:0; display:inline-flex; align-items:center; gap:5px; font-size:12.5px; }
+  .fm-skip.danger{ color:var(--danger); }
+  .fm-ver{ font-size:11px; color:var(--faint); cursor:pointer; white-space:nowrap; }
+
+  /* route done / head home */
+  .fm-done-center{ color:var(--ink); }
+  .fm-done-center > *{ max-width:420px; }
+  .fm-done-badge{ width:64px; height:64px; border-radius:50%; background:var(--go-soft); color:var(--go); display:flex; align-items:center; justify-content:center; margin:0 auto 16px; }
+  .fm-done-badge .ic{ width:30px; height:30px; stroke-width:2.2; }
+  .fm-done-title{ font-size:26px; font-weight:700; letter-spacing:-.025em; color:var(--ink); }
+  .fm-done-sub{ color:var(--mute); font-size:15px; }
+  .fm-done-stats{ gap:8px; width:100%; }
+  .fm-done-stat{ flex:1; min-width:0; background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--sh-1); padding:14px 8px; }
+  .fm-done-stat-num{ font-size:24px; font-weight:700; letter-spacing:-.02em; color:var(--ink); font-variant-numeric:tabular-nums; }
+  .fm-done-stat-lbl{ color:var(--mute); font-size:12.5px; font-weight:500; text-transform:none; letter-spacing:0; }
+  .fm-done-center .fm-btn{ width:100%; }
+
+  /* sheets + finish-job page */
+  .fm-sheet{ color:var(--ink); border-radius:18px 18px 0 0; box-shadow:0 -12px 40px rgba(0,0,0,.22); }
+  #fmCompleteSheet,#fmCompleteSheet .fm-sheet{ background:var(--bg); }
+  .fm-sheet-title{ font-size:21px; font-weight:700; letter-spacing:-.02em; color:var(--ink); }
+  .fm-sheet-sub{ color:var(--mute); }
+  .fm-block{ background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--sh-1); }
+  .fm-block-label{ font-size:11.5px; font-weight:600; letter-spacing:.06em; color:var(--mute); }
+  .fm-block-label .req{ color:var(--warn); }
+  .fm-block-label .ok{ color:var(--go); }
+  .fm-pay-amt{ font-size:30px; font-weight:700; letter-spacing:-.03em; color:var(--ink); }
+  .fm-toggle-btn{ border:1px solid var(--line-2); border-radius:10px; font-weight:600; color:var(--ink); min-height:50px; }
+  .fm-toggle-btn.pay{ background:var(--ink); border-color:var(--ink); color:#fff; }
+  .fm-toggle-btn.pay.on{ background:var(--go); border-color:var(--go); }
+  .fm-toggle-btn.cash-on{ background:#fdf3dc; border-color:#d29a2c; color:#5c3d08; }
+  .fm-toggle-btn.sent,.fm-check.on,.fm-addon-chip.on{ background:var(--go-soft); border-color:#8fcaa3; color:#0f5a2b; }
+  .fm-toggle-btn.invoice{ background:var(--drive); border-color:var(--drive); }
+  .fm-skip-reasons .fm-toggle-btn{ justify-content:flex-start; padding-left:16px; }
+  .fm-addon-chip,.fm-check{ border:1px solid var(--line-2); border-radius:10px; font-weight:600; color:var(--ink); }
+  .fm-check .box{ width:22px; height:22px; border:1.5px solid #b9c1b8; border-radius:6px; }
+  .fm-check.on .box{ background:var(--go); border-color:var(--go); }
+  .fm-textarea{ border:1px solid var(--line-2); border-radius:10px; color:var(--ink); }
+  .fm-textarea:focus{ outline:none; border-color:var(--go); box-shadow:0 0 0 3px rgba(21,128,61,.14); }
+  .fm-mini-link{ color:var(--mute); text-decoration:none; font-weight:500; }
+  .fm-sheet-ico{ width:36px; height:36px; border-radius:10px; background:var(--go-soft); color:var(--go); display:inline-flex; align-items:center; justify-content:center; }
+  #toast{ background:var(--ink); border-radius:10px; font-weight:500; }
+
+  /* PMCS module (its own <style> block further down — body-prefixed to win) */
+  body .pmcs-start-btn,body .pmcs-btn-submit{ background:var(--go); box-shadow:none; font-weight:600; }
+  /* inline styles written by the app's templates */
+  [style*="font-weight:900"],[style*="font-weight: 900"],[style*="font-weight:800"],[style*="font-weight: 800"]{ font-weight:700 !important; }
+  [style*="box-shadow:0 8px 28px"],[style*="box-shadow:0 6px 22px"],[style*="box-shadow:0 6px 20px"]{ box-shadow:none !important; }
+  /* text colours that were picked for the old dark page, where they now sit on white */
+  .fm-body [style*="color:#9ed8b1"],.fm-start-center [style*="color:#9ed8b1"],.fm-sheet [style*="color:#9ed8b1"],#fmJobListBody [style*="color:#9ed8b1"],#fmCallsBody [style*="color:#9ed8b1"]{ color:var(--mute) !important; }
+  .fm-body [style*="color:#dcfce7"],.fm-start-center [style*="color:#dcfce7"],#fmCallsBody [style*="color:#dcfce7"]{ color:var(--ink) !important; }
+  .fm-body [style*="color:#fca5a5"],.fm-start-center [style*="color:#fca5a5"],.fm-done-center [style*="color:#fca5a5"]{ color:var(--danger) !important; }
 </style>
-<script src="https://js.stripe.com/v3/"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<!-- WEAK-SIGNAL LAUNCH (2026-11-17): neither of these may hold up the first paint.
+     Fonts: loaded as a print stylesheet (never render-blocking) and switched to "all" when it
+     arrives; until then the system font in --font shows. Stripe.js: no longer a blocking
+     script tag here. It is only needed for "Card on file", so _fmLoadStripe() adds it on demand
+     (and once in the background after the app is up). -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Emoji:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'"/>
+<noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Emoji:wght@400;500&display=swap" rel="stylesheet"/></noscript>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><symbol id="i-leaf" viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></symbol><symbol id="i-chev-l" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol><symbol id="i-chev-r" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol><symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol><symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol><symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol><symbol id="i-home" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol><symbol id="i-cal" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol><symbol id="i-play" viewBox="0 0 24 24"><path d="M6 3.5v17a1 1 0 0 0 1.5.86l14-8.5a1 1 0 0 0 0-1.72l-14-8.5A1 1 0 0 0 6 3.5Z"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol><symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></symbol><symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol><symbol id="i-nav" viewBox="0 0 24 24"><path d="M3 11 22 2l-9 19-2-8-8-2z"/></symbol><symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol><symbol id="i-card" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></symbol><symbol id="i-tap" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/></symbol><symbol id="i-pencil" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></symbol><symbol id="i-map" viewBox="0 0 24 24"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></symbol><symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></symbol><symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol><symbol id="i-unlock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></symbol><symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4M12 17h.01"/></symbol><symbol id="i-octagon" viewBox="0 0 24 24"><path d="M7.86 2h8.28L22 7.86v8.28L16.14 22H7.86L2 16.14V7.86z"/><path d="m15 9-6 6M9 9l6 6"/></symbol><symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol><symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></symbol><symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol><symbol id="i-user-plus" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></symbol><symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></symbol><symbol id="i-locate" viewBox="0 0 24 24"><path d="M2 12h3M19 12h3M12 2v3M12 19v3"/><circle cx="12" cy="12" r="7"/></symbol><symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></symbol><symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol><symbol id="i-ruler" viewBox="0 0 24 24"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2M11.5 9.5l2-2M8.5 6.5l2-2M17.5 15.5l2-2"/></symbol><symbol id="i-gps" viewBox="0 0 24 24"><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/></symbol><symbol id="i-cash" viewBox="0 0 24 24"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></symbol><symbol id="i-receipt" viewBox="0 0 24 24"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 8h8M8 12h8M8 16h5"/></symbol></defs></svg>
 <div id="netBanner"></div>
 
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
-    <h1>🌿 Evergreen</h1>
+    <h1><span class="fm-mark"><svg class="ic" aria-hidden="true"><use href="#i-leaf"/></svg></span>Evergreen <small>Crew</small></h1>
     <div id="loginStep1">
       <p>Crew access — enter your work email for a login code.</p>
       <input type="email" id="emailInput" class="login-input" placeholder="Your work email" autocomplete="email" onkeydown="if(event.key==='Enter')requestCode()"/>
@@ -356,48 +568,50 @@
   <!-- START -->
   <div class="fm-screen" id="fmScreenStart">
     <div class="fm-top">
-      <button class="fm-top-exit" onclick="logout()">Sign out</button>
-      <div style="display:flex;align-items:center;gap:8px;"><button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button><div id="fmStartTimerSlot"></div></div>
+      <div class="fm-brand"><span class="fm-mark"><svg class="ic" aria-hidden="true"><use href="#i-leaf"/></svg></span>Evergreen</div>
+      <div style="display:flex;align-items:center;gap:8px;"><button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button><div id="fmStartTimerSlot"></div><button class="fm-top-exit" onclick="logout()">Sign out</button></div>
     </div>
-    <div style="display:flex;gap:8px;padding:6px 16px 2px;">
-      <button class="fm-top-exit" style="flex:1;background:rgba(255,255,255,.22);font-weight:800;" disabled>🏠 Today</button>
-      <button class="fm-top-exit" style="flex:1;" onclick="fmOpenSched()">📅 My Schedule</button>
+    <div class="fm-tabs">
+      <button class="fm-top-exit on" disabled><svg class="ic sm" aria-hidden="true"><use href="#i-home"/></svg>Today</button>
+      <button class="fm-top-exit" onclick="fmOpenSched()"><svg class="ic sm" aria-hidden="true"><use href="#i-cal"/></svg>My schedule</button>
     </div>
     <div class="fm-start-center">
       <div class="fm-start-greet" id="fmGreet">Let's go</div>
       <div class="fm-start-date" id="fmStartDate"></div>
-      <div class="fm-start-stat"><div class="fm-start-stat-num" id="fmStartCount">—</div><div class="fm-start-stat-lbl">stops today</div></div>
-      <div class="fm-start-sub" id="fmStartSub"></div>
+      <div class="fm-today">
+        <div class="fm-start-stat"><div class="fm-start-stat-num" id="fmStartCount">—</div><div class="fm-start-stat-lbl">stops today</div></div>
+        <div class="fm-start-sub" id="fmStartSub"></div>
+      </div>
       <!-- 📞 Quote Call leads assigned to this crew. Markup is built by _fmCallsBannerHtml
            so the copy of this banner on the job-list screen can't drift from this one. -->
-      <div id="fmCallsBannerSlot" style="width:100%;max-width:380px;"></div>
-      <div class="fm-route-setup" style="width:100%;max-width:380px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:14px 14px 12px;margin:6px auto 16px;text-align:left;">
+      <div id="fmCallsBannerSlot"></div>
+      <div class="fm-route-setup">
         <div id="fmCrewChips" style="display:none;margin-bottom:12px;"></div>
-        <div style="font-size:12px;font-weight:800;color:#9ed8b1;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Route start point</div>
+        <div class="fm-label">Route start point</div>
         <div style="display:flex;gap:8px;">
           <input id="fmStartAddr" class="login-input" placeholder="Type a start address…" style="margin-bottom:0;flex:1;padding:11px;font-size:14px;" onkeydown="if(event.key==='Enter'){event.preventDefault();fmApplyStartAddr();}">
-          <button onclick="fmUseMyLocation()" title="Use my current location" style="flex:0 0 auto;background:rgba(134,239,172,.16);color:#dcfce7;border:1px solid rgba(134,239,172,.3);border-radius:12px;padding:0 13px;font-size:18px;cursor:pointer;">📍</button>
+          <button onclick="fmUseMyLocation()" title="Use my current location" class="fm-icon-btn"><svg class="ic" aria-hidden="true"><use href="#i-locate"/></svg></button>
         </div>
-        <button onclick="fmApplyStartAddr()" style="width:100%;margin-top:9px;background:rgba(255,255,255,.12);color:#dcfce7;border:none;border-radius:12px;padding:11px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;">Set start &amp; optimize route</button>
-        <div id="fmStartPtNote" style="font-size:12.5px;color:#9ed8b1;margin-top:9px;line-height:1.4;"></div>
+        <button onclick="fmApplyStartAddr()" class="fm-btn fm-btn-sm fm-btn-ghost" style="margin-top:9px;">Set start &amp; optimize route</button>
+        <div id="fmStartPtNote"></div>
       </div>
-      <button class="fm-btn fm-btn-xl fm-btn-start" id="fmStartBtn" onclick="fmStartTapped()" style="min-width:260px;">🟢 Start My Route</button>
-      <button class="fm-skip" id="fmStartEndBtn" style="color:#fca5a5;display:none;margin-top:12px;" onclick="fmEmergencyEnd()">🏁 End route &amp; clock out</button>
-      <div style="display:flex;gap:10px;width:100%;max-width:380px;margin:18px auto 0;"><button onclick="pmcsOpenMenu()" style="flex:1;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:13px 8px;color:#fff;font-family:inherit;font-weight:800;font-size:13.5px;cursor:pointer;line-height:1.5;">🔧 PMCS<br><span style="font-weight:600;font-size:11px;color:#9ed8b1;">maintenance checks</span></button><button onclick="ncOpen()" style="flex:1;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:13px 8px;color:#fff;font-family:inherit;font-weight:800;font-size:13.5px;cursor:pointer;line-height:1.5;">➕ New customer<br><span style="font-weight:600;font-size:11px;color:#9ed8b1;">book on the spot</span></button></div>
+      <button class="fm-btn fm-btn-xl fm-btn-start" id="fmStartBtn" onclick="fmStartTapped()"><svg class="ic fill sm" aria-hidden="true"><use href="#i-play"/></svg>Start my route</button>
+      <button class="fm-skip fm-danger-link" id="fmStartEndBtn" style="display:none;margin-top:12px;" onclick="fmEmergencyEnd()"><svg class="ic sm" aria-hidden="true"><use href="#i-flag"/></svg>End route &amp; clock out</button>
+      <div class="fm-tiles"><button class="fm-tile" onclick="pmcsOpenMenu()"><span class="fm-tile-ico"><svg class="ic" aria-hidden="true"><use href="#i-wrench"/></svg></span><span><b>PMCS</b><span class="s">Maintenance checks</span></span></button><button class="fm-tile" onclick="ncOpen()"><span class="fm-tile-ico"><svg class="ic" aria-hidden="true"><use href="#i-user-plus"/></svg></span><span><b>New customer</b><span class="s">Book on the spot</span></span></button></div>
       <!-- Reachable when something is wrong and nobody can explain what -->
-      <button onclick="fmDiag()" style="margin-top:12px;background:none;border:none;color:#6f9b80;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;text-decoration:underline;">🩺 Something's not working — diagnostics</button>
+      <button class="fm-quiet" onclick="fmDiag()"><svg class="ic sm" aria-hidden="true"><use href="#i-activity"/></svg>Something not working? Run diagnostics</button>
     </div>
   </div>
   <!-- START-OF-ROUTE CHECKLIST -->
   <div class="fm-screen" id="fmScreenChecklist">
-    <div class="fm-top"><button class="fm-top-exit" onclick="fmBackToStart()">‹ Back</button><div id="fmStartTimerSlot2"></div></div>
+    <div class="fm-top"><button class="fm-top-exit" onclick="fmBackToStart()"><svg class="ic sm" aria-hidden="true"><use href="#i-chev-l"/></svg>Back</button><div id="fmStartTimerSlot2"></div></div>
     <div class="fm-section-title">Gear check</div>
     <div class="fm-section-sub">Tap each item to confirm before you roll out.</div>
     <div class="fm-body">
-      <div class="fm-block-label" style="color:#9ed8b1;">Who's with you today? (optional)</div>
+      <div class="fm-block-label">Who's with you today? (optional)</div>
       <div id="fmHelperList" class="fm-helper-list"></div>
       <button class="fm-check" style="justify-content:center;color:#15803d;" onclick="fmAddHelper()"><span>＋ Add a helper</span></button>
-      <div class="fm-block-label" style="color:#9ed8b1;margin-top:18px;">Gear check</div>
+      <div class="fm-block-label" style="margin-top:18px;">Gear check</div>
       <div class="fm-checklist" id="fmStartChecklist"></div>
     </div>
     <div class="fm-foot"><button class="fm-btn fm-btn-xl fm-btn-start" id="fmStartGoBtn" onclick="fmBeginRoute()" disabled>Confirm gear to start →</button></div>
@@ -405,8 +619,8 @@
   <!-- JOB -->
   <div class="fm-screen" id="fmScreenJob">
     <div class="fm-top">
-      <div style="display:flex;align-items:center;gap:8px;"><button class="fm-top-exit" onclick="fmBackToStart()">‹ Route</button><button class="fm-top-exit" onclick="fmShowJobList()" title="All of today's jobs">📋 Jobs</button></div>
-      <div style="display:flex;align-items:center;gap:8px;"><span id="fmVerTag" onclick="fmDiag()" title="Build — tap for diagnostics" style="font-size:10px;font-weight:700;color:#4d7561;letter-spacing:.02em;cursor:pointer;white-space:nowrap;">v?</span><button class="fm-refresh" onclick="fmManualRefresh(this)" title="Refresh jobs now" aria-label="Refresh jobs now">⟳</button><button class="fm-top-exit" onclick="pmcsOpenMenu()" title="PMCS / Maintenance">🔧 PMCS</button><button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button><div class="fm-top-timer" id="fmJobTimer" style="display:none;"><span class="fm-dot"></span><span id="fmJobTimerVal">0:00:00</span></div></div>
+      <div style="display:flex;align-items:center;gap:8px;"><button class="fm-top-exit" onclick="fmBackToStart()"><svg class="ic sm" aria-hidden="true"><use href="#i-chev-l"/></svg>Route</button><button class="fm-top-exit" onclick="fmShowJobList()" title="All of today's jobs"><svg class="ic sm" aria-hidden="true"><use href="#i-list"/></svg><span class="fm-xs-hide">Jobs</span></button></div>
+      <div style="display:flex;align-items:center;gap:8px;"><button class="fm-refresh" onclick="fmManualRefresh(this)" title="Refresh jobs now" aria-label="Refresh jobs now"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button><button class="fm-top-exit icon" onclick="pmcsOpenMenu()" title="PMCS / Maintenance" aria-label="PMCS"><svg class="ic sm" aria-hidden="true"><use href="#i-wrench"/></svg></button><button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button><div class="fm-top-timer" id="fmJobTimer" style="display:none;"><span class="fm-dot"></span><span id="fmJobTimerVal">0:00:00</span></div></div>
     </div>
     <div class="fm-progress-wrap">
       <div class="fm-progress-meta"><span>Stop <b id="fmStopPos">1</b> of <span id="fmStopTotal">1</span></span><span id="fmDoneCount">0 done</span></div>
@@ -414,7 +628,7 @@
       <div id="fmYardPace" style="font-size:12.5px;font-weight:700;margin-top:6px;"></div>
       <!-- 📞 leads waiting, visible mid-route. Priority, never a blocker — see _fmSyncCallsBanner -->
       <button id="fmCallsStrip" onclick="fmOpenCalls()" style="display:none;width:100%;align-items:center;gap:8px;margin-top:8px;border:none;border-radius:12px;padding:9px 12px;color:#fff;font-family:inherit;font-size:13px;font-weight:800;cursor:pointer;text-align:left;">
-        <span>📞</span><span id="fmCallsStripTxt" style="flex:1;"></span><span style="opacity:.85;">›</span>
+        <svg class="ic sm" aria-hidden="true"><use href="#i-phone"/></svg><span id="fmCallsStripTxt" style="flex:1;"></span><svg class="ic sm" aria-hidden="true"><use href="#i-chev-r"/></svg>
       </button>
       <div id="fmPlanLine" style="font-size:12.5px;font-weight:700;color:#9ed8b1;margin-top:6px;display:none;"></div>
       <div class="fm-totals-chip" id="fmTotalsChip"></div>
@@ -423,49 +637,52 @@
     <div class="fm-body" id="fmJobBody"></div>
     <div class="fm-foot">
       <button class="fm-btn fm-btn-xl fm-btn-done" id="fmDoneBtn" data-fm-press="done" onclick="fmPressAction('done')">✓ Done — Collect &amp; Next</button>
-      <div style="display:flex;gap:18px;justify-content:center;margin-top:12px;">
-        <button class="fm-skip" id="fmSkipHopBtn" style="margin-top:0;width:auto;" data-fm-press="skip" onclick="fmPressAction('skip')">Skip for now ›</button>
-        <button class="fm-skip" style="margin-top:0;width:auto;color:#fca5a5;" data-fm-press="couldnt" onclick="fmPressAction('couldnt')">⚠ Couldn't service</button>
+      <div class="fm-foot-row">
+        <button class="fm-skip" id="fmSkipHopBtn" data-fm-press="skip" onclick="fmPressAction('skip')">Skip for now<svg class="ic sm" aria-hidden="true"><use href="#i-chev-r"/></svg></button>
+        <button class="fm-skip danger" data-fm-press="couldnt" onclick="fmPressAction('couldnt')"><svg class="ic sm" aria-hidden="true"><use href="#i-alert"/></svg>Couldn't service</button>
       </div>
-      <button class="fm-skip" style="color:#fca5a5;margin-top:10px;" data-fm-press="end" onclick="fmPressAction('end')">🚨 End my route now (emergency)</button>
-      <button class="fm-skip" style="color:#6f9b80;font-size:12px;margin-top:6px;" onclick="fmDiag()">🩺 Something's not working</button>
+      <div class="fm-foot-links">
+        <button class="fm-skip danger" data-fm-press="end" onclick="fmPressAction('end')"><svg class="ic sm" aria-hidden="true"><use href="#i-octagon"/></svg>End route (emergency)</button>
+        <button class="fm-skip" onclick="fmDiag()"><svg class="ic sm" aria-hidden="true"><use href="#i-activity"/></svg>Diagnostics</button>
+        <span id="fmVerTag" class="fm-ver" onclick="fmDiag()" title="Build — tap for diagnostics">v?</span>
+      </div>
     </div>
   </div>
   <!-- DONE -->
   <div class="fm-screen" id="fmScreenDone">
-    <div class="fm-top"><button class="fm-top-exit" onclick="fmBackToStart()">‹ Start</button><button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button></div>
+    <div class="fm-top"><button class="fm-top-exit" onclick="fmBackToStart()"><svg class="ic sm" aria-hidden="true"><use href="#i-chev-l"/></svg>Start</button><button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button></div>
     <div class="fm-done-center">
-      <div class="fm-done-emoji">🎉</div>
-      <div class="fm-done-title">Route Complete!</div>
+      <div class="fm-done-badge"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></div>
+      <div class="fm-done-title">Route complete</div>
       <div class="fm-done-sub" id="fmDoneSub">Nice work today.</div>
       <div class="fm-done-stats">
         <div class="fm-done-stat"><div class="fm-done-stat-num" id="fmDoneStops">0</div><div class="fm-done-stat-lbl">stops done</div></div>
         <div class="fm-done-stat"><div class="fm-done-stat-num" id="fmDoneCash">$0</div><div class="fm-done-stat-lbl">cash collected</div></div>
         <div class="fm-done-stat" id="fmDoneBilledBox"><div class="fm-done-stat-num" id="fmDoneBilled">$0</div><div class="fm-done-stat-lbl">total billed</div></div>
       </div>
-      <div id="fmDoneSkipped" style="color:#fca5a5;font-size:14px;margin-bottom:14px;font-weight:600;min-height:18px;"></div>
-      <div id="fmClockSummary" style="color:#9ed8b1;font-size:14px;margin-bottom:20px;font-weight:600;"></div>
-      <button class="fm-btn fm-btn-xl fm-btn-start" onclick="fmEndOfDay()" style="min-width:260px;">🔧 Drop-off PMCS &amp; Clock Out →</button>
-      <button class="fm-skip" onclick="fmReviewStops()" style="margin-top:18px;">← Review stops</button>
+      <div id="fmDoneSkipped" style="color:var(--danger);font-size:14px;margin-bottom:14px;font-weight:600;min-height:18px;"></div>
+      <div id="fmClockSummary" style="color:var(--mute);font-size:14px;margin-bottom:20px;font-weight:500;"></div>
+      <button class="fm-btn fm-btn-xl fm-btn-start" onclick="fmEndOfDay()"><svg class="ic sm" aria-hidden="true"><use href="#i-wrench"/></svg>Drop-off PMCS &amp; clock out</button>
+      <button class="fm-skip" onclick="fmReviewStops()" style="margin-top:18px;display:inline-flex;align-items:center;justify-content:center;gap:4px;"><svg class="ic sm" aria-hidden="true"><use href="#i-chev-l"/></svg>Review stops</button>
     </div>
   </div>
 
   <!-- LAST YARD DONE → HEAD TO HOME BASE -->
   <div class="fm-screen" id="fmScreenReturn">
     <div class="fm-done-center">
-      <div class="fm-done-emoji">🏠</div>
-      <div class="fm-done-title">Last yard done!</div>
+      <div class="fm-done-badge"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></div>
+      <div class="fm-done-title">Last yard done</div>
       <div class="fm-done-sub" id="fmReturnSub">Head back to home base for drop-off.</div>
-      <div id="fmReturnAddr" style="color:#9ed8b1;font-size:16px;font-weight:700;margin:6px 0 22px;"></div>
-      <a class="fm-btn fm-btn-xl fm-btn-start" id="fmReturnNav" href="#" target="_blank" style="min-width:260px;display:inline-block;text-decoration:none;">🧭 Navigate to Home Base</a>
-      <button class="fm-btn fm-btn-xl" onclick="fmArrivedBase()" style="min-width:260px;margin-top:14px;background:#1d4ed8;color:#fff;">✅ I'm here — Start End-of-Day PMCS</button>
-      <div id="fmReturnGps" style="color:#6b8b7a;font-size:12.5px;margin-top:16px;">📡 I'll notice when you pull in and start it for you.</div>
+      <div id="fmReturnAddr" style="color:var(--ink-2);font-size:16px;font-weight:600;margin:6px 0 22px;"></div>
+      <a class="fm-btn fm-btn-xl fm-btn-nav" id="fmReturnNav" href="#" target="_blank" style="text-decoration:none;"><svg class="ic sm" aria-hidden="true"><use href="#i-nav"/></svg>Navigate to home base</a>
+      <button class="fm-btn fm-btn-xl fm-btn-start" onclick="fmArrivedBase()" style="margin-top:10px;"><svg class="ic sm" aria-hidden="true"><use href="#i-check"/></svg>I'm here — start end-of-day PMCS</button>
+      <div id="fmReturnGps" style="color:var(--mute);font-size:13px;margin-top:16px;">The app will notice when you pull in and start it for you.</div>
     </div>
   </div>
 
   <!-- MY SCHEDULE — employee hub tab (counts, time & areas only; no customer details) -->
   <div class="fm-screen" id="fmScreenSched">
-    <div class="fm-top"><button class="fm-top-exit" onclick="fmBackToStart()">‹ Today</button><div style="font-weight:800;font-size:15px;">📅 My Schedule</div><div style="width:64px;"></div></div>
+    <div class="fm-top"><button class="fm-top-exit" onclick="fmBackToStart()"><svg class="ic sm" aria-hidden="true"><use href="#i-chev-l"/></svg>Today</button><div class="fm-top-title">My schedule</div><div style="width:76px;"></div></div>
     <div class="fm-section-sub" style="padding-top:2px;">The next 3 weeks for your crew — stop counts, est. time &amp; areas.</div>
     <div class="fm-body" id="fmSchedBody"></div>
   </div>
@@ -484,13 +701,13 @@
       <div class="fm-block-label"><span>Photo</span><span style="color:#94a3b8;">optional</span></div>
       <div id="fmcPhotoList" class="fm-photo-grid"></div>
       <input type="file" id="fmcPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="fmPhotoSelected(this)">
-      <button class="fm-toggle-btn" id="fmcPhotoBtn" onclick="document.getElementById('fmcPhotoInput').click()" style="background:#7c3aed;color:#fff;border-color:#7c3aed;">📷 Take / Add Photo</button>
+      <button class="fm-toggle-btn" id="fmcPhotoBtn" onclick="document.getElementById('fmcPhotoInput').click()"><svg class="ic" aria-hidden="true"><use href="#i-camera"/></svg>Take or add photo</button>
     </div>
     <div class="fm-block">
       <div class="fm-block-label"><span>Notes</span><span style="color:#94a3b8;">optional</span></div>
-      <div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">🗒 This visit only — one-time note to the office</div>
+      <div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">This visit only — note to the office</div>
       <textarea class="fm-textarea" id="fmcOwnerNote" placeholder="Just about today (e.g. 'mower threw a belt, ran late')…"></textarea>
-      <div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 5px;" id="fmcCustNoteLbl">📌 Customer note — sticks on their profile until changed</div>
+      <div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 5px;" id="fmcCustNoteLbl">Customer note — stays on their profile</div>
       <textarea class="fm-textarea" id="fmcCustNote" placeholder="Gate code, dogs, sprinkler heads to avoid…"></textarea>
     </div>
     <div class="fm-block">
@@ -498,7 +715,7 @@
       <div class="fm-checklist" id="fmcChecklist"></div>
     </div>
     <div class="fm-block" style="border-top:2px solid #e2e8f0;padding-top:12px;">
-      <div class="fm-block-label"><span>💵 Payment — last step</span><span id="fmcPayState" class="req">required</span></div>
+      <div class="fm-block-label"><span>Payment — last step</span><span id="fmcPayState" class="req">required</span></div>
       <div class="fm-pay-amt" id="fmcAmt">$0</div>
       <div class="fm-pay-method" id="fmcMethod"></div>
       <div id="fmcPayControls"></div>
@@ -515,12 +732,12 @@
     <div class="fm-sheet-title" id="fmSkipTitle">Couldn't service this stop</div>
     <div class="fm-sheet-sub">The job stays open for follow-up — a note is logged for the office.</div>
     <div class="fm-skip-reasons">
-      <button class="fm-toggle-btn" onclick="fmRecordSkip('Not home')">🚪 Not home</button>
-      <button class="fm-toggle-btn" onclick="fmRecordSkip('Gate locked')">🔒 Gate locked</button>
-      <button class="fm-toggle-btn" onclick="fmRecordSkip('Dog in yard')">🐕 Dog in yard</button>
-      <button class="fm-toggle-btn" onclick="fmRecordSkip('Weather')">🌧 Weather</button>
-      <button class="fm-toggle-btn" onclick="fmRecordSkip('Yard not ready')">🌱 Yard not ready</button>
-      <button class="fm-toggle-btn" onclick="fmPromptSkipOther()">✏️ Other reason…</button>
+      <button class="fm-toggle-btn" onclick="fmRecordSkip('Not home')">Not home</button>
+      <button class="fm-toggle-btn" onclick="fmRecordSkip('Gate locked')">Gate locked</button>
+      <button class="fm-toggle-btn" onclick="fmRecordSkip('Dog in yard')">Dog in yard</button>
+      <button class="fm-toggle-btn" onclick="fmRecordSkip('Weather')">Weather</button>
+      <button class="fm-toggle-btn" onclick="fmRecordSkip('Yard not ready')">Yard not ready</button>
+      <button class="fm-toggle-btn" onclick="fmPromptSkipOther()">Other reason…</button>
     </div>
     <div class="fm-err" id="fmSkipErr"></div>
     <button class="fm-mini-link" onclick="fmCloseSkip()">Cancel</button>
@@ -530,15 +747,15 @@
 <!-- CREW / HELPER PICKER -->
 <div id="fmCrewPicker" style="display:none;position:fixed;inset:0;z-index:3200;background:rgba(0,0,0,.55);align-items:flex-end;justify-content:center;" onclick="if(event.target===this)fmCrewCancel()">
   <div class="fm-sheet" style="padding-top:20px;">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:2px;"><span style="font-size:26px;">👥</span><div class="fm-sheet-title" style="margin:0;">Today's crew</div></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:2px;"><span class="fm-sheet-ico"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg></span><div class="fm-sheet-title" style="margin:0;">Today's crew</div></div>
     <div class="fm-sheet-sub" style="margin-bottom:14px;">You're in automatically — tap anyone riding along.</div>
     <div style="background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:14px;padding:10px 12px;margin-bottom:12px;">
       <div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#15803d;margin-bottom:6px;">On the truck</div>
       <div id="fmCrewChosen" style="display:flex;flex-wrap:wrap;gap:7px;"></div>
     </div>
-    <input id="fmCrewSearch" class="login-input" placeholder="🔎 Search the roster…" style="margin-bottom:8px;border-radius:12px;" oninput="_fmRenderCrewPicker()">
+    <input id="fmCrewSearch" class="login-input" placeholder="Search the roster…" style="margin-bottom:8px;border-radius:12px;" oninput="_fmRenderCrewPicker()">
     <div id="fmCrewResults" class="fm-checklist" style="max-height:38vh;overflow-y:auto;margin-bottom:6px;border:1.5px solid #e2e8f0;border-radius:14px;padding:4px;"></div>
-    <button class="fm-mini-link" style="display:block;margin:2px auto 0;" onclick="fmCrewAddManual()">✏️ Not on the list? Add by name</button>
+    <button class="fm-mini-link" style="display:block;margin:2px auto 0;" onclick="fmCrewAddManual()">Not on the list? Add by name</button>
     <button class="fm-btn fm-btn-xl fm-btn-start" style="margin-top:12px;width:100%;" onclick="fmCrewConfirm()">Continue →</button>
     <button class="fm-mini-link" onclick="fmCrewCancel()">Cancel</button>
   </div>
@@ -546,6 +763,8 @@
 
 <div id="toast"></div>
 <script>
+/* SVG icon from the sprite under <body> — the one icon set the app uses. */
+function _ic(n,c){ return '<svg class="ic'+(c?' '+c:'')+'" aria-hidden="true"><use href="#i-'+n+'"/></svg>'; }
 /* ════════════════════════════════════════════════════════════════════
    Evergreen Field Mode — standalone PWA (Phase 2 hardening)
    ════════════════════════════════════════════════════════════════════ */
@@ -1001,14 +1220,104 @@ function _persist(opts){
     dayISO: todayISOStr(), started:_fmStarted, viewIdx:_fmViewIdx,
     clockInTime:_ciKeep, clockOutTime:_clockOutTime?_clockOutTime.toISOString():null, clockedOut:_clockedOut,
     cashTotal:_fmCashTotal, billedTotal:_fmBilledTotal, skipped:_fmSkipped, startChk:_startChkState, jobTimers:_jobTimers, helpers:_helpers, atBase:_fmAtBase,
-    routeLock:_routeLock, savedSig:_savedSig, doneSeq:_doneSeq, stopLocks:_stopLocks
+    routeLock:_routeLock, savedSig:_savedSig, doneSeq:_doneSeq, stopLocks:_stopLocks,
+    lastSeen:Date.now()   // when this phone last saved the day; shown if the shift is never clocked out
   })); }catch(e){}
+}
+/* ── FORGOTTEN CLOCK-OUT (2026-11-17) ─────────────────────────────────────────────────────
+   Opening the app on a new day used to DELETE yesterday's saved day outright. If that day
+   was clocked in and never clocked out, the only record of the shift on this phone (clock-in
+   time, helpers, cash total) went with it and nobody was told.
+   Now that shift is copied to FM_MISSED_KEY first and stays there. Today still starts clean.
+   A card on the Start screen tells the crew, with the times, until they tap "Got it" (which
+   only hides the card: the record is kept and is listed in Diagnostics for the office).
+   Deliberately NOT done here: sending a clock-out for the old shift. The end time would be a
+   guess, and the backend already closes abandoned shifts from the live-tracking heartbeats
+   and emails the owner; a second clock-out from the phone could pay the same shift twice. */
+const FM_MISSED_KEY='evg_fm_missed_clockouts_v1';
+let _fmMissedMem=null;   // fallback copy if the phone refused the write (storage full)
+function _fmMissedLoad(){
+  if(_fmMissedMem) return _fmMissedMem;   // this session's copy is the newest (and the only one if a write failed)
+  try{ const a=JSON.parse(localStorage.getItem(FM_MISSED_KEY)||'[]'); if(Array.isArray(a)&&a.length) return a.filter(function(x){ return x&&typeof x==='object'; }); }catch(e){}
+  return _fmMissedMem||[];
+}
+function _fmMissedSave(list){
+  _fmMissedMem=list;
+  const v=JSON.stringify(list);
+  try{ localStorage.setItem(FM_MISSED_KEY, v); return true; }catch(e){}
+  try{ localStorage.removeItem('evg_field_bookings'); localStorage.removeItem('evg_field_customers'); localStorage.setItem(FM_MISSED_KEY, v); return true; }catch(e){}
+  return false;
+}
+// s = a saved day whose date is not today. Keep it if it was clocked in and never clocked out.
+function _fmKeepMissedShift(s){
+  try{
+    if(!s || !s.clockInTime || s.clockedOut) return false;
+    const me=String(adminEmail||'').toLowerCase().trim();
+    const list=_fmMissedLoad();
+    if(list.some(function(x){ return x.clockIn===s.clockInTime && x.email===me; })) return true;   // already kept
+    list.push({ email:me, name:adminName||'', dayISO:s.dayISO||'', clockIn:s.clockInTime, lastSeen:(+s.lastSeen||null),
+      helpers:Array.isArray(s.helpers)?s.helpers:[], cashTotal:+s.cashTotal||0, billedTotal:+s.billedTotal||0,
+      stopsDone:Array.isArray(s.doneSeq)?s.doneSeq.length:0, foundAt:new Date().toISOString(), ack:false });
+    _fmMissedSave(list.slice(-30));   // newest 30; one phone will never have that many open
+    return true;
+  }catch(e){ return false; }
+}
+function _fmMissedMine(){ const me=String(adminEmail||'').toLowerCase().trim(); return _fmMissedLoad().filter(function(x){ return x.email===me && !x.ack; }); }
+function _fmMissedText(x){
+  const t=function(v){ try{ const d=new Date(v); return isNaN(d.getTime())?'':d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}); }catch(e){ return ''; } };
+  let day=x.dayISO||''; try{ const d=new Date(x.clockIn); if(!isNaN(d.getTime())) day=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); }catch(e){}
+  const hn=(x.helpers||[]).map(function(h){ return (typeof h==='string')?h:(h&&h.name)||''; }).filter(Boolean);
+  return 'Shift not clocked out: '+day+'. Clocked in '+(t(x.clockIn)||'?')+'.'
+    +(x.lastSeen?(' App last active '+t(x.lastSeen)+'.'):'')
+    +(x.stopsDone?(' '+x.stopsDone+' stop'+(x.stopsDone!==1?'s':'')+' done.'):'')
+    +(hn.length?(' Helpers: '+hn.join(', ')+'.'):'')
+    +(x.name?(' ('+x.name+')'):'');
+}
+function fmMissedAck(clockIn){
+  try{
+    const me=String(adminEmail||'').toLowerCase().trim();
+    const list=_fmMissedLoad(); list.forEach(function(x){ if(x.clockIn===clockIn && x.email===me){ x.ack=true; x.ackAt=new Date().toISOString(); } });
+    _fmMissedSave(list);   // kept, only hidden
+  }catch(e){}
+  _fmRenderMissedCard();
+}
+function fmMissedCopy(clockIn){
+  const x=_fmMissedLoad().filter(function(y){ return y.clockIn===clockIn; })[0]; if(!x) return;
+  const txt=_fmMissedText(x)+' My real end time was: ';
+  try{ navigator.clipboard.writeText(txt).then(function(){ showToast('\ud83d\udccb Copied \u2014 text it to the office with your end time',6000); },function(){ _fmDiagFallback(txt); }); }
+  catch(e){ try{ _fmDiagFallback(txt); }catch(_e){} }
+}
+function _fmRenderMissedCard(){
+  try{
+    const host=document.querySelector('#fmScreenStart .fm-start-center'); if(!host) return;
+    let c=document.getElementById('fmMissedCard');
+    const mine=_fmMissedMine();
+    if(!mine.length){ if(c) c.style.display='none'; return; }
+    if(!c){
+      c=document.createElement('div'); c.id='fmMissedCard';
+      c.style.cssText='display:block;box-sizing:border-box;text-align:left;margin:0 0 12px;padding:12px 14px;border-radius:12px;border:1.5px solid #fcd34d;background:#fffbeb;color:#78350f;font-size:13.5px;line-height:1.45;';
+      const anchor=document.getElementById('fmCallsBannerSlot');
+      if(anchor&&anchor.parentNode===host) host.insertBefore(c,anchor); else host.insertBefore(c,host.firstChild);
+    }
+    c.style.display='block'; c.textContent='';
+    mine.forEach(function(x,i){
+      const w=document.createElement('div'); if(i) w.style.cssText='margin-top:10px;padding-top:10px;border-top:1px solid #fde68a;';
+      const h=document.createElement('div'); h.style.cssText='font-weight:700;font-size:14.5px;margin-bottom:3px;'; h.textContent='\u23f1 '+_fmMissedText(x);
+      const d=document.createElement('div'); d.textContent='Nothing was deleted. Tell the office your real end time so your hours are right.';
+      const row=document.createElement('div'); row.style.cssText='display:flex;gap:8px;margin-top:9px;';
+      const mkBtn=function(label,fn,primary){ const b=document.createElement('button'); b.type='button'; b.textContent=label; b.onclick=fn;
+        b.style.cssText='flex:1;padding:11px 10px;border-radius:10px;font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer;'+(primary?'border:none;background:#b45309;color:#fff;':'border:1.5px solid #d97706;background:transparent;color:#78350f;'); return b; };
+      row.appendChild(mkBtn('Copy details',function(){ fmMissedCopy(x.clockIn); },true));
+      row.appendChild(mkBtn('Got it',function(){ fmMissedAck(x.clockIn); },false));
+      w.appendChild(h); w.appendChild(d); w.appendChild(row); c.appendChild(w);
+    });
+  }catch(e){}
 }
 function _restoreState(){
   try{
     const raw=localStorage.getItem(_stateKey()); if(!raw) return;
     const s=JSON.parse(raw);
-    if(s.dayISO!==todayISOStr()){ localStorage.removeItem(_stateKey()); return; }  // new day → fresh start
+    if(s.dayISO!==todayISOStr()){ _fmKeepMissedShift(s); localStorage.removeItem(_stateKey()); return; }  // new day → fresh start (a shift that was never clocked out is KEPT and flagged, see above)
     _fmStarted=!!s.started; _fmViewIdx=(s.viewIdx==null?null:s.viewIdx);
     _clockInTime=s.clockInTime?new Date(s.clockInTime):null; _clockOutTime=s.clockOutTime?new Date(s.clockOutTime):null; _clockedOut=!!s.clockedOut;
     _fmCashTotal=+s.cashTotal||0; _fmBilledTotal=+s.billedTotal||0; _fmSkipped=s.skipped||{}; _startChkState=Array.isArray(s.startChk)?s.startChk:[]; _jobTimers=s.jobTimers||{}; _helpers=Array.isArray(s.helpers)?s.helpers:[]; _fmAtBase=!!s.atBase;
@@ -1028,8 +1337,8 @@ function _fmShowVeil(msg){
     let v=document.getElementById('fmBootVeil');
     if(!v){
       v=document.createElement('div'); v.id='fmBootVeil';
-      v.style.cssText='position:fixed;inset:0;z-index:6000;background:#0b1220;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#dbe7f3;font-family:inherit;';
-      v.innerHTML='<div style="font-size:34px;">\ud83d\udee0\ufe0f</div><div id="fmBootVeilMsg" style="font-size:15px;font-weight:800;"></div><div style="width:34px;height:34px;border:3px solid #24405e;border-top-color:#38bdf8;border-radius:50%;animation:fmveilspin .8s linear infinite;"></div><div style="font-size:12px;color:#7d95ad;font-weight:700;">tap anywhere to skip</div><style>@keyframes fmveilspin{to{transform:rotate(360deg)}}</style>';
+      v.style.cssText='position:fixed;inset:0;z-index:6000;background:#0f2c1e;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#fff;font-family:inherit;';
+      v.innerHTML='<span class="fm-mark" style="width:44px;height:44px;border-radius:12px;">'+_ic('leaf')+'</span><div id="fmBootVeilMsg" style="font-size:15px;font-weight:600;"></div><div style="width:26px;height:26px;border:2.5px solid rgba(255,255,255,.18);border-top-color:#86dba2;border-radius:50%;animation:fmveilspin .8s linear infinite;"></div><div style="font-size:12px;color:rgba(255,255,255,.55);font-weight:500;">Tap anywhere to skip</div><style>@keyframes fmveilspin{to{transform:rotate(360deg)}}</style>';
       v.addEventListener('click',function(){ _fmHideVeil(); });   // always escapable
       document.body.appendChild(v);
     }
@@ -1717,7 +2026,7 @@ function fmSelectCrew(c){
 // Render the start-point note + crew chips on the start screen.
 function _fmRenderRouteSetup(){
   const note=document.getElementById('fmStartPtNote');
-  if(note){ note.innerHTML='🛰 Your route auto-optimizes from your GPS the moment you tap Start. 🔒 Locked stops always keep their exact spot.'; }
+  if(note){ note.innerHTML=_ic('gps')+'<span>Your route optimizes from your GPS when you tap Start. Locked stops keep their exact spot.</span>'; }
   // address-typing UI is gone — GPS at Start is the only origin now
   const addr=document.getElementById('fmStartAddr');
   if(addr){ const row=addr.parentElement; if(row){ row.style.display='none'; if(row.previousElementSibling) row.previousElementSibling.style.display='none'; if(row.nextElementSibling&&row.nextElementSibling.tagName==='BUTTON') row.nextElementSibling.style.display='none'; } }
@@ -1739,8 +2048,8 @@ function _fmRenderRouteSetup(){
   if(!meaningful){ wrap.style.display='none'; return; }
   wrap.style.display='';
   const eff=_crewSel||(String(adminCrews||'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean)[0])||'ALL';
-  const chip=(o)=>'<button onclick="fmSelectCrew(\''+o.v+'\')" style="border:1px solid '+(o.v===eff?'#22c55e':'rgba(255,255,255,.2)')+';background:'+(o.v===eff?'rgba(34,197,94,.22)':'rgba(255,255,255,.06)')+';color:#dcfce7;border-radius:999px;padding:7px 13px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;margin:0 6px 6px 0;">'+esc(o.label)+'</button>';
-  wrap.innerHTML='<div style="font-size:12px;font-weight:800;color:#9ed8b1;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Your crew</div>'+opts.map(chip).join('');
+  const chip=(o)=>'<button onclick="fmSelectCrew(\''+o.v+'\')" class="fm-chip'+(o.v===eff?' on':'')+'">'+esc(o.label)+'</button>';
+  wrap.innerHTML='<div class="fm-label">Your crew</div>'+opts.map(chip).join('');
 }
 
 /* ───────── Offline queue + idempotency ───────── */
@@ -1752,17 +2061,102 @@ function _fmFetchT(url,opts,ms){
   const ctrl=new AbortController(); const t=setTimeout(function(){ try{ ctrl.abort(); }catch(e){} },ms||60000);
   return fetch(url,Object.assign({},opts||{},{signal:ctrl.signal})).finally(function(){ clearTimeout(t); });
 }
-function _fmQueueLoad(){ try{ return JSON.parse(localStorage.getItem(FM_QUEUE_KEY)||'[]'); }catch(e){ return []; } }
+/* ── QUEUE SAFETY (2026-11-17) ───────────────────────────────────────────────────────────
+   The queue shares one small localStorage bucket (about 5 MB, half that on iPhone) with the
+   photos waiting to upload. Three ways it used to lose work without a word:
+     1. Storage full -> _fmQueueSave failed -> a NEW item (clock-out, skip reason, quote) was
+        simply gone; only the Complete sheet ever checked. Now anything that does not fit is
+        held in memory (_fmMemQ), sent with the rest while the app stays open, written to the
+        phone the moment there is room, and announced on a red banner that does not go away.
+     2. A queue that could not be parsed read as "empty" and the next save overwrote it. The raw
+        text is now set aside under FM_QUEUE_BAD_KEY first.
+     3. Photos could take the last of the space. A photo is only written to the phone while the
+        queue is under FM_QUEUE_PHOTO_CAP AND FM_QUEUE_RESERVE of room is left afterwards for the
+        small money / clock items. Otherwise it waits in memory (bounded by FM_MEMQ_PHOTO_CAP).
+   Nothing here changes WHAT is sent or when the backend is asked to do anything. */
+const FM_QUEUE_BAD_KEY='evg_fm_sync_queue_unreadable_v1', FM_QUEUE_PROBE_KEY='evg_fm_sync_queue_probe';
+const FM_QUEUE_PHOTO_CAP=3000000;    // chars of queue JSON on the phone above which photos stop being written to it
+const FM_QUEUE_RESERVE=150000;       // chars that must still fit after a photo is stored (hundreds of cash / clock-out items)
+const FM_MEMQ_PHOTO_CAP=12000000;    // chars of photos allowed to wait in memory before a new photo is refused (with a toast)
+const FM_STUCK_TRIES=5, FM_STUCK_AGE_MS=30*60000;   // "stuck" = failed more than 5 times, or 30+ min old while online
+let _fmMemQ=[];                      // items that are NOT on the phone's storage right now (it was full)
+let _fmQueueFullToastAt=0;
+function _fmQueueDisk(){
+  let raw=null;
+  try{ raw=localStorage.getItem(FM_QUEUE_KEY); }catch(e){ return []; }
+  if(!raw) return [];
+  try{ const q=JSON.parse(raw); if(Array.isArray(q)) return q.filter(function(x){ return x&&typeof x==='object'; }); }catch(e){}
+  // Unreadable. Never let the next save overwrite it unseen: keep the first bad copy for the office.
+  try{ if(!localStorage.getItem(FM_QUEUE_BAD_KEY)) localStorage.setItem(FM_QUEUE_BAD_KEY, raw); }catch(e){}
+  return [];
+}
+// The whole queue = what is on the phone + what is only in memory (never the same item twice).
+function _fmQueueLoad(){
+  const q=_fmQueueDisk();
+  if(!_fmMemQ.length) return q;
+  const have={}; q.forEach(function(x){ if(x&&x.idemKey) have[x.idemKey]=1; });
+  _fmMemQ.forEach(function(x){ if(x&&!have[x.idemKey]) q.push(x); });
+  return q;
+}
+function _fmQueueWrite(q){
+  let s2; try{ s2=JSON.stringify(q); }catch(e){ return false; }
+  try{ localStorage.setItem(FM_QUEUE_KEY, s2); return true; }catch(e){}
+  // The bookings/customers caches are re-downloadable, so evict them and retry before giving up.
+  try{ localStorage.removeItem('evg_field_bookings'); localStorage.removeItem('evg_field_customers'); localStorage.setItem(FM_QUEUE_KEY, s2); return true; }catch(e){}
+  return false;
+}
+function _fmItemSize(it){ try{ return JSON.stringify(it).length; }catch(e){ return 0; } }
+// Is there still FM_QUEUE_RESERVE of room on the phone? (Probe write, removed straight away.)
+let _fmProbeStr='';
+function _fmQueueHasReserve(){
+  if(!_fmProbeStr){ try{ _fmProbeStr=new Array(FM_QUEUE_RESERVE+1).join('x'); }catch(e){ return true; } }
+  const tryIt=function(){ try{ localStorage.setItem(FM_QUEUE_PROBE_KEY,_fmProbeStr); localStorage.removeItem(FM_QUEUE_PROBE_KEY); return true; }catch(e){ try{ localStorage.removeItem(FM_QUEUE_PROBE_KEY); }catch(_e){} return false; } };
+  if(tryIt()) return true;
+  try{ localStorage.removeItem('evg_field_bookings'); localStorage.removeItem('evg_field_customers'); }catch(e){}
+  return tryIt();
+}
+function _fmQueueFullWarn(mem){
+  if(!mem.length) return;
+  if(Date.now()-_fmQueueFullToastAt<60000) return;
+  _fmQueueFullToastAt=Date.now();
+  const nonPhoto=mem.filter(function(x){ return x.kind!=='photo'; }).length;
+  try{ showToast(nonPhoto
+    ? ('\u26a0\ufe0f Phone storage is FULL \u2014 '+mem.length+' item'+(mem.length!==1?'s are':' is')+' NOT saved on this phone. Keep the app OPEN and get signal so '+(mem.length!==1?'they send':'it sends')+'.')
+    : ('\u26a0\ufe0f Phone storage is full \u2014 '+mem.length+' photo'+(mem.length!==1?'s':'')+' not saved on this phone. Keep the app open until '+(mem.length!==1?'they upload':'it uploads')+'.'), 9000); }catch(_e){}
+}
 // one-time hygiene: drop legacy set_crew chasers — redundant (crew rides the booking call)
 try{ const _q0=JSON.parse(localStorage.getItem(FM_QUEUE_KEY)||'[]'); const _q1=_q0.filter(function(it){ return it&&it.kind!=='setcrew'; }); if(_q1.length!==_q0.length) localStorage.setItem(FM_QUEUE_KEY,JSON.stringify(_q1)); }catch(e){}
 // A failed save used to drop EVERY new item — cash stamps, invoices, checklists — with only a
 // toast. The bookings/customers caches are re-downloadable, so evict them and retry before giving up.
-function _fmQueueSave(q){
-  const s=JSON.stringify(q);
-  try{ localStorage.setItem(FM_QUEUE_KEY, s); return true; }catch(e){}
-  try{ localStorage.removeItem('evg_field_bookings'); localStorage.removeItem('evg_field_customers'); localStorage.setItem(FM_QUEUE_KEY, s); return true; }catch(e){}
-  try{ showToast('⚠️ Phone storage full — stay online so photos upload right away'); }catch(_e){}
-  return false;
+// q is always the WHOLE queue (callers load, change, save). Returns true only when every item
+// in q is on the phone's storage. When it does not all fit, NOTHING is dropped: what was already
+// on the phone stays there (minus anything the caller removed), items not yet on the phone are
+// fitted in one at a time with the small non-photo ones first, and whatever is left waits in
+// _fmMemQ. A photo is only fitted while the queue stays under FM_QUEUE_PHOTO_CAP and
+// FM_QUEUE_RESERVE of room is left after it. `checkPhotos` = q holds a photo that is new.
+function _fmQueueSave(q, checkPhotos){
+  q=(q||[]).filter(function(x){ return x&&typeof x==='object'; });
+  if(!_fmMemQ.length && !checkPhotos){ if(_fmQueueWrite(q)) return true; }   // the normal case
+  const disk={}; _fmQueueDisk().forEach(function(x){ if(x&&x.idemKey) disk[x.idemKey]=1; });
+  const keep=q.filter(function(x){ return disk[x.idemKey]; });
+  const over=q.filter(function(x){ return !disk[x.idemKey]; });
+  over.sort(function(a,b){ return (a.kind==='photo'?1:0)-(b.kind==='photo'?1:0); });
+  const mem=[];
+  over.forEach(function(it){
+    if(it.kind==='photo'){
+      let keepLen=0; try{ keepLen=JSON.stringify(keep).length; }catch(e){}
+      if(keepLen+_fmItemSize(it)>FM_QUEUE_PHOTO_CAP){ mem.push(it); return; }
+      if(_fmQueueWrite(keep.concat([it])) && _fmQueueHasReserve()) keep.push(it); else mem.push(it);
+    } else {
+      if(_fmQueueWrite(keep.concat([it]))) keep.push(it); else mem.push(it);
+    }
+  });
+  // Leave the phone holding exactly `keep` (also records removals / retry counts). If even that
+  // write fails the phone still has its previous copy: stale, never emptied.
+  _fmQueueWrite(keep);
+  _fmMemQ=mem;
+  _fmQueueFullWarn(mem);
+  return mem.length===0;
 }
 // Read-modify-write against STORAGE, by idemKey. The flush used to save its own copy of the queue
 // (read once, before up to 90s of awaits), which erased every item queued meanwhile — a cash stamp,
@@ -1778,7 +2172,18 @@ function _fmEnqueue(item){
   if(q.some(x=>x.idemKey===item.idemKey)) return false;
   if(item.method==='POST'){ item.body=item.body||{}; item.body.idemKey=item.idemKey; }
   else { item.params=item.params||{}; item.params.idemKey=item.idemKey; }
-  item.tries=0; q.push(item); _fmQueueSave(q); _fmUpdateSyncBadge();
+  item.tries=0; item.at=Date.now();   // `at` is bookkeeping on the queue entry only; it is never part of params/body, so it is never sent
+  q.push(item);
+  if(item.kind==='photo'){
+    // Photos are the only big items: _fmQueueSave keeps them from taking the room that cash
+    // stamps and clock-outs need. One that cannot go on the phone waits in memory, up to a limit.
+    _fmQueueSave(q, true);
+    if(_fmMemQ.indexOf(item)>=0){
+      const _memPhotos=_fmMemQ.reduce(function(n,x){ return n+(x&&x.kind==='photo'?_fmItemSize(x):0); },0);
+      if(_memPhotos>FM_MEMQ_PHOTO_CAP){ _fmMemQ=_fmMemQ.filter(function(x){ return x!==item; }); _fmUpdateSyncBadge(); return false; }   // refused: the caller toasts "photos could not be saved"
+    }
+  } else _fmQueueSave(q);
+  _fmUpdateSyncBadge();
   return true;
 }
 async function _fmFlushQueue(){
@@ -1799,6 +2204,9 @@ async function _fmFlushQueue(){
     const _blocked={};
     for(const item of _order){
       const _qi=q.indexOf(item); if(_qi<0) continue;
+      // Already confirmed by the backend (its key is in the done list) but still sitting here because
+      // the removal could not be written when the phone was full: take it out, never send it twice.
+      if(item.idemKey && _fmDoneKeys().has(item.idemKey)){ q.splice(_qi,1); _fmQueueRemoveKey(item.idemKey); continue; }
       const _base=(function(){ var p=item.params||item.body||{}, em=String(p.email||'').trim(); if(em) return em+'|'+String(p.serviceDate||''); var ri=String(p.rowIndex||''); return ri?('row:'+ri+'|'+String(p.serviceDate||'')):('idem:'+String(item.idemKey||'')); })();   // no-email walk-ups must NOT all collapse to '|date' (one bad one would block every other walk-up)
       if(_blocked[_base]) continue;
       // A job's follow-ups (cash, invoice, checklist, photos) are queued BEFORE its done call is
@@ -1806,6 +2214,8 @@ async function _fmFlushQueue(){
       if(item.after && !_fmDoneKeys().has(item.after)){ _blocked[_base]=1; continue; }
       // A done call saved before its direct send waits out that send (see fmSubmitComplete).
       if(item.holdUntil && Date.now()<item.holdUntil){ _blocked[_base]=1; continue; }
+      // A note the backend REJECTED (see below) waits out its back-off. Nothing queues behind it.
+      if(item.nextTry && Date.now()<item.nextTry && (item.kind==='note'||item.kind==='skip')) continue;
       try{
         // Always send with the CURRENT session token — queued items captured at enqueue
         // time carry a token that may have expired hours ago ("Unauthorized" forever).
@@ -1833,8 +2243,17 @@ async function _fmFlushQueue(){
         if(_crit&&item.lastErr&&item.tries===3){ try{ showToast('⚠️ '+item.kind.toUpperCase()+' not going through: '+item.lastErr+' — it will keep retrying'); }catch(e){} }
         // NO silent age-out — queued work is customer data. Items stay until they succeed
         // or someone deletes them on purpose from the queue viewer (tap the sync badge).
+        // Office notes and "couldn't service" reasons stand alone: no other item needs them to land
+        // first. The backend now REFUSES a note it cannot pin to exactly one job (email/name + date)
+        // instead of writing it on whatever row the number points at, so a rejected note must not
+        // hold this customer's checklist and photos behind it, and must not hammer the backend
+        // every 20s. It stays in the queue (visible in the sync badge) and retries on a back-off:
+        // 40s, 80s, ... capped at 15 min. Quote notes are NOT included: their order is deliberate.
+        const _solo=_isLogical && (item.kind==='note'||item.kind==='skip') && !/unauthor|^HTTP /i.test(String(item.lastErr||(netErr&&netErr.message)||''));   // a session/HTTP problem is not a verdict on the note
+        if(_solo) item.nextTry=Date.now()+Math.min(900000, 20000*Math.pow(2, Math.min(item.tries,6)));
         _fmQueuePutItem(item);
         if(!_isLogical && item.kind!=='photo') break;   // device offline / network drop — stop the pass (a slow photo just waits its turn)
+        if(_solo) continue;           // rejected note — nothing else depends on it
         _blocked[_base]=1;            // backend rejected — hold this customer's items, keep going
       }
     }
@@ -1854,9 +2273,14 @@ function fmQueueViewer(){
   const rows=q.map(function(it,i){
     const pr=it.params||it.body||{};
     const who=[pr.name,pr.email,pr.serviceDate].filter(Boolean).join(' · ');
+    const _age=it.at?Math.max(0,Math.round((Date.now()-it.at)/60000)):null;
+    const _ageTxt=(_age==null)?'':(_age<60?(_age+' min'):(_age<2880?(Math.round(_age/60)+' h'):(Math.round(_age/1440)+' days')));
+    const _inMem=_fmMemQ.indexOf(it)>=0;
     return '<div style="border:1px solid #334;border-radius:10px;padding:10px 12px;margin:8px 0;background:#101826;">'
-      +'<div style="font-weight:700;">'+(i+1)+'. '+(it.kind||'?')+' <span style="color:#8aa;">(tries: '+(it.tries||0)+')</span></div>'
+      +'<div style="font-weight:700;">'+(i+1)+'. '+(it.kind||'?')+' <span style="color:#8aa;">(tries: '+(it.tries||0)+(_ageTxt?(' \u00b7 waiting '+_ageTxt):'')+')</span></div>'
+      +(_inMem?'<div style="font-size:12px;color:#fbbf24;font-weight:700;margin-top:3px;">\u26a0 NOT saved on this phone (storage full) \u2014 keep the app open</div>':'')
       +(who?('<div style="font-size:13px;color:#cde;margin-top:3px;">'+who.replace(/</g,'&lt;')+'</div>'):'')
+      +((pr.action==='set_employee_note'&&pr.note)?('<div style="font-size:12.5px;color:#e8f0f8;margin-top:4px;white-space:pre-wrap;word-break:break-word;">\u201c'+String(pr.note).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'\u201d</div>'):'')
       +(it.lastErr?('<div style="font-size:12px;color:#f88;margin-top:3px;">last error: '+String(it.lastErr).replace(/</g,'&lt;')+'</div>'):'')
       +'<button onclick="fmQueueDrop('+i+')" style="margin-top:7px;padding:6px 12px;border-radius:8px;border:1px solid #7f1d1d;background:transparent;color:#f87171;font-weight:800;font-size:12px;">🗑 Remove this item</button>'
       +'</div>';
@@ -1870,17 +2294,71 @@ function fmQueueViewer(){
     +'<div style="font-size:12px;color:#9ab;margin:4px 0 6px;">Nothing here ever deletes itself. Items send automatically when they can.</div>'
     +rows
     +'<div style="display:flex;gap:8px;margin-top:10px;">'
-    +'<button onclick="try{navigator.clipboard.writeText(JSON.stringify(JSON.parse(localStorage.getItem(FM_QUEUE_KEY)||\'[]\'),null,1));showToast(\'Copied queue details 📋\');}catch(e){alert(\'copy failed\')}" style="flex:1;padding:10px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:700;">📋 Copy all details</button>'
+    +'<button onclick="try{navigator.clipboard.writeText(JSON.stringify(_fmQueueLoad(),null,1));showToast(\'Copied queue details 📋\');}catch(e){alert(\'copy failed\')}" style="flex:1;padding:10px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:700;">📋 Copy all details</button>'
     +'<button onclick="document.getElementById(\'fmQvOverlay\').remove()" style="flex:1;padding:10px;border-radius:10px;border:1px solid #456;background:transparent;color:#cde;font-weight:700;">Close</button>'
     +'</div></div>';
   ov.addEventListener('click',function(ev){ if(ev.target===ov) ov.remove(); });
   document.body.appendChild(ov);
 }
+// Queue health in one place: how many items, how many are STUCK (failed more than FM_STUCK_TRIES
+// times, or older than FM_STUCK_AGE_MS while the phone is online) and how many are not on the
+// phone's storage at all. Read-only.
+function _fmQueueStats(){
+  const st={ n:0, stuck:0, unsaved:0, kinds:{}, first:null };
+  try{
+    const q=_fmQueueLoad(), now=Date.now(), online=navigator.onLine!==false;
+    st.n=q.length;
+    q.forEach(function(it){
+      if(_fmMemQ.indexOf(it)>=0) st.unsaved++;
+      const failed=(it.tries||0)>FM_STUCK_TRIES;
+      if(failed || (online && it.at && now-it.at>FM_STUCK_AGE_MS)){
+        st.stuck++; const k=it.kind||'item'; st.kinds[k]=(st.kinds[k]||0)+1;
+        if(!st.first && failed && it.lastErr) st.first=it;
+      }
+    });
+  }catch(e){}
+  return st;
+}
+const _FM_KIND_LABEL={ done:'job done', quotedone:'quote done', cash:'cash payment', invoice:'invoice', addons:'add-ons', clockout:'clock-out', photo:'photo', note:'office note', skip:'skip reason', quotenote:'quote note', endchk:'checklist', custnote:'customer note' };
+function _fmStuckSummary(st){ return Object.keys(st.kinds).map(function(k){ return st.kinds[k]+' '+(_FM_KIND_LABEL[k]||k); }).join(' \u00b7 '); }
+// Big, plain card on the Start screen while anything is stuck or unsaved. Built here (not in the
+// page markup) and removed again the moment the queue is healthy.
+function _fmRenderStuckCard(st){
+  try{
+    const host=document.querySelector('#fmScreenStart .fm-start-center'); if(!host) return;
+    let c=document.getElementById('fmStuckCard');
+    if(!st.stuck && !st.unsaved){ if(c) c.style.display='none'; return; }
+    if(!c){
+      c=document.createElement('button'); c.id='fmStuckCard'; c.type='button';
+      c.style.cssText='display:block;width:100%;box-sizing:border-box;text-align:left;margin:0 0 12px;padding:12px 14px;border-radius:12px;border:1.5px solid #fca5a5;background:#fef2f2;color:#991b1b;font-family:inherit;font-size:13.5px;line-height:1.45;cursor:pointer;';
+      c.onclick=function(){ try{ fmQueueViewer(); }catch(e){} };
+      const anchor=document.getElementById('fmCallsBannerSlot');
+      if(anchor&&anchor.parentNode===host) host.insertBefore(c,anchor); else host.insertBefore(c,host.firstChild);
+    }
+    c.style.display='block';
+    const head=st.unsaved
+      ? ('\u26a0 Phone storage is FULL \u2014 '+st.unsaved+' item'+(st.unsaved!==1?'s':'')+' NOT saved on this phone')
+      : ('\u26a0 '+st.stuck+' item'+(st.stuck!==1?'s':'')+' stuck on this phone');
+    const body=(st.stuck?(_fmStuckSummary(st)+'. '):'')
+      +(st.unsaved?'Keep the app OPEN and get signal until this clears. ':'Not at the office yet. Keep the app open with signal. ')
+      +'Do not delete the app or clear its data. Tap to see the list.';
+    c.textContent='';
+    const h=document.createElement('div'); h.style.cssText='font-weight:700;font-size:14.5px;margin-bottom:3px;'; h.textContent=head;
+    const d=document.createElement('div'); d.textContent=body;
+    c.appendChild(h); c.appendChild(d);
+  }catch(e){}
+}
 function _fmUpdateSyncBadge(){
-  const _q=_fmQueueLoad(); const n=_q.length, online=navigator.onLine!==false;
-  const stuck=_q.some(function(it){ return (it.tries||0)>5; });
-  document.querySelectorAll('.fm-sync').forEach(el=>{ el.style.cursor='pointer'; el.onclick=fmQueueViewer; if(n===0){ el.style.display='none'; return; } el.style.display=''; if(!online){ el.className='fm-sync offline'; el.textContent='📴 '+n+' to sync'; } else if(stuck){ el.className='fm-sync offline'; const s1=_q.find(function(it){ return (it.tries||0)>5&&it.lastErr; }); el.textContent=('⚠ '+n+' stuck'+(s1?(' — '+s1.kind+': '+String(s1.lastErr).slice(0,48)):'')+' — keep app open'); } else { el.className='fm-sync pending'; el.textContent='⏳ Syncing '+n+'…'; } });
-  const b=document.getElementById('netBanner'); if(b){ if(navigator.onLine===false){ b.className='show'; b.textContent='📴 Offline — work is saved, syncs when you reconnect'+(n?(' · '+n+' pending'):''); } else b.className=''; }
+  const st=_fmQueueStats(); const n=st.n, online=navigator.onLine!==false;
+  const stuck=st.stuck>0;
+  // Badge text is short on purpose: the long version ran over the header. The error is one tap away in the list.
+  document.querySelectorAll('.fm-sync').forEach(el=>{ el.style.cursor='pointer'; el.onclick=fmQueueViewer; if(n===0){ el.style.display='none'; return; } el.style.display=''; if(!online){ el.className='fm-sync offline'; el.textContent='📴 '+n+' to sync'; } else if(stuck){ el.className='fm-sync offline'; const s1=st.first; el.textContent=('⚠ '+st.stuck+' stuck'+(n>st.stuck?(' of '+n):'')+' — tap'); el.title=(s1?(s1.kind+': '+String(s1.lastErr).slice(0,120)):''); } else { el.className='fm-sync pending'; el.textContent='⏳ Syncing '+n+'…'; } });
+  const b=document.getElementById('netBanner'); if(b){
+    if(navigator.onLine===false){ b.style.background=''; b.className='show'; b.textContent='📴 Offline — work is saved, syncs when you reconnect'+(n?(' · '+n+' pending'):'')+(st.unsaved?(' · \u26a0 '+st.unsaved+' NOT saved (storage full): keep app open'):''); }
+    else if(st.unsaved){ b.style.background='#b91c1c'; b.className='show'; b.textContent='\u26a0 Phone storage FULL \u2014 '+st.unsaved+' item'+(st.unsaved!==1?'s':'')+' not saved on this phone. Keep the app OPEN.'; }
+    else { b.style.background=''; b.className=''; }
+  }
+  _fmRenderStuckCard(st);
 }
 
 /* ───────── Timers + clock ───────── */
@@ -1942,16 +2420,16 @@ function _fmHeartbeat(){
 function _renderSyncStatus(){
   const el=document.getElementById('fmSyncStatus'); if(!el) return;
   if(!_fmStarted){ el.textContent=''; return; }
-  if(_lastSync.ts===0){ el.textContent='📡 Live tracking: starting…'; el.style.color='#9ed8b1'; return; }
+  if(_lastSync.ts===0){ el.textContent='Live tracking: starting…'; el.style.color='#9ed8b1'; return; }
   const m=_lastSync.msg||'';
   const secs=Math.max(0,Math.round((Date.now()-_lastSync.ts)/1000));
   const ago=secs<60?(secs+'s ago'):(Math.floor(secs/60)+'m ago');
   const _dataAge=Math.round((Date.now()-_lastLoadTs)/60000);
   if(_lastLoadTs&&_dataAge>=4){ el.textContent='⚠️ Schedule last updated '+_dataAge+'m ago — changes from the office may be missing'; el.style.color='#fbbf24'; return; }
-  if(_lastSync.ok){ el.textContent='📡 Live tracking on · synced '+ago; el.style.color='#86efac'; }
-  else if(m==='sending'){ el.textContent='📡 sending…'; el.style.color='#9ed8b1'; }
+  if(_lastSync.ok){ el.textContent='Live tracking on · synced '+ago; el.style.color='#86efac'; }
+  else if(m==='sending'){ el.textContent='Sending…'; el.style.color='#9ed8b1'; }
   else if(/missing required|unknown|not a function|no function|unexpected response/i.test(m)){ el.textContent='⚠ Live tracking OFF — redeploy the backend (Apps Script)'; el.style.color='#fca5a5'; }
-  else { el.textContent='📡 sync issue: '+m+' · '+ago; el.style.color='#fbbf24'; }
+  else { el.textContent='Sync issue: '+m+' · '+ago; el.style.color='#fbbf24'; }
 }
 function _startTimers(){
   if(_fmTimerInt) clearInterval(_fmTimerInt);
@@ -2151,14 +2629,16 @@ function _fmSyncCallsBanner(){
       const oldest=calls.reduce(function(m,b){ const a=_fmLeadAgeDays(b); return (a!==null&&a>m)?a:m; },0);
       const t=document.getElementById('fmCallsStripTxt');
       if(t) t.textContent=n+' lead'+(n!==1?'s':'')+' to call today'+(retry?(' · '+retry+' call back'):'');
-      strip.style.background=(oldest>=14)?'linear-gradient(135deg,#b45309,#d97706)':'linear-gradient(135deg,#0e7490,#0891b2)';
+      strip.style.background=(oldest>=14)?'#a15c07':'#1b5fc1';
     }
   }
 }
 function _fmCallsBannerHtml(id){
-  return '<button id="'+id+'" onclick="fmOpenCalls()" style="display:none;width:100%;max-width:380px;margin:2px auto 14px;text-align:left;background:linear-gradient(135deg,#0e7490,#0891b2);border:1px solid rgba(165,243,252,.35);border-radius:16px;padding:14px 16px;color:#fff;font-family:inherit;cursor:pointer;">'
-    +'<div style="font-size:15px;font-weight:800;">📞 Calls to make</div>'
-    +'<div id="'+id+'Sub" style="font-size:12.5px;font-weight:600;color:#cffafe;margin-top:3px;"></div></button>';
+  return '<button id="'+id+'" class="fm-callrow" onclick="fmOpenCalls()" style="display:none;"><span class="fm-callrow-in">'
+    +'<span class="fm-callrow-ico">'+_ic('phone')+'</span>'
+    +'<span style="min-width:0;"><span class="fm-callrow-t" style="display:block;">Calls to make</span>'
+    +'<span id="'+id+'Sub" class="fm-callrow-s" style="display:block;"></span></span>'
+    +_ic('chev-r','chev')+'</span></button>';
 }
 
 /* ───────── The call list ───────── */
@@ -2173,7 +2653,7 @@ function _fmRenderCalls(){
   let scr=document.getElementById('fmScreenCalls');
   if(!scr){
     scr=document.createElement('div'); scr.className='fm-screen'; scr.id='fmScreenCalls';
-    scr.innerHTML='<div class="fm-top"><button class="fm-top-exit" onclick="fmCallsBack()">‹ Back</button><div style="font-weight:800;font-size:15px;color:#dcfce7;">📞 Calls to make</div><button class="fm-refresh" onclick="fmManualRefresh(this)" title="Refresh leads now" aria-label="Refresh leads now">⟳</button></div>'
+    scr.innerHTML='<div class="fm-top"><button class="fm-top-exit" onclick="fmCallsBack()"><svg class="ic sm" aria-hidden="true"><use href="#i-chev-l"/></svg>Back</button><div class="fm-top-title">Calls to make</div><button class="fm-refresh" onclick="fmManualRefresh(this)" title="Refresh leads now" aria-label="Refresh leads now"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button></div>'
       +'<div id="fmCallsMeta" style="padding:10px 16px 2px;font-size:13px;font-weight:700;color:#9ed8b1;"></div>'
       +'<div id="fmCallsBody" style="padding:8px 14px 24px;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch;"></div>';
     document.getElementById('fieldMode').appendChild(scr);
@@ -2184,7 +2664,7 @@ function _fmRenderCalls(){
   if(meta) meta.textContent=calls.length?(calls.length+' to ring · set up a day for their free quote'):'All caught up.';
   const body=document.getElementById('fmCallsBody'); if(!body) return;
   if(!calls.length){
-    body.innerHTML='<div style="text-align:center;color:#9ed8b1;padding:44px 20px;font-size:14px;font-weight:700;line-height:1.6;">📞 No calls waiting.<br><span style="font-size:12.5px;font-weight:600;opacity:.8;">New estimate requests show up here once the office puts them on your crew.</span></div>';
+    body.innerHTML='<div style="text-align:center;color:#68726c;padding:44px 20px;font-size:14px;font-weight:600;line-height:1.6;">No calls waiting.<br><span style="font-size:12.5px;font-weight:600;opacity:.8;">New estimate requests show up here once the office puts them on your crew.</span></div>';
     return;
   }
   const B='font-size:10.5px;font-weight:800;letter-spacing:.06em;border-radius:6px;padding:2px 8px;white-space:nowrap;';
@@ -2579,31 +3059,31 @@ function _fmRenderSched(){
   });
   const allDays={}; Object.keys(days).forEach(function(d){ allDays[d]=1; }); Object.keys(exp).forEach(function(d){ allDays[d]=1; }); Object.keys(qts).forEach(function(d){ allDays[d]=1; });
   const keys=Object.keys(allDays).sort().filter(function(d){ return d>=today&&d<=capISO; });
-  const chip=function(txt,bg,col){ return '<span style="font-size:11.5px;font-weight:800;padding:4px 10px;border-radius:999px;background:'+bg+';color:'+col+';white-space:nowrap;">'+txt+'</span>'; };
+  const chip=function(txt,bg,col){ return '<span style="font-size:12px;font-weight:600;padding:4px 9px;border-radius:7px;background:'+bg+';color:'+col+';white-space:nowrap;">'+txt+'</span>'; };
   const dayCard=function(d){
     const list=days[d]||[];
     const mins=list.reduce(function(s,b){ return s+mowMinutes(b); },0)+Math.max(0,list.length-1)*12;
     const areas={}; list.forEach(function(b){ areas[ZIP_CITY[b.zip]||b.zip||'—']=1; });
     const dt=new Date(d+'T12:00:00');
     const isToday=d===today;
-    return '<div style="display:flex;gap:13px;align-items:stretch;background:rgba(255,255,255,'+(isToday?'.10':'.05')+');border:1px solid rgba(255,255,255,'+(isToday?'.35':'.10')+');border-left:4px solid '+(isToday?'#4ade80':(list.length?'rgba(74,222,128,.45)':'rgba(255,255,255,.18)'))+';border-radius:14px;padding:12px 14px;margin-bottom:9px;">'
-      +'<div style="text-align:center;min-width:46px;align-self:center;"><div style="font-size:11px;font-weight:800;color:rgba(255,255,255,.55);text-transform:uppercase;">'+dt.toLocaleDateString('en-US',{weekday:'short'})+'</div><div style="font-size:22px;font-weight:800;line-height:1.1;">'+dt.getDate()+'</div><div style="font-size:10px;color:rgba(255,255,255,.45);">'+dt.toLocaleDateString('en-US',{month:'short'})+'</div></div>'
+    return '<div style="display:flex;gap:13px;align-items:stretch;background:#fff;border:1px solid '+(isToday?'#8fcaa3':'#e1e4de')+';border-left:4px solid '+(isToday?'#15803d':(list.length?'#8fcaa3':'#e1e4de'))+';border-radius:12px;padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 2px rgba(16,24,20,.05);color:#151d18;">'
+      +'<div style="text-align:center;min-width:46px;align-self:center;"><div style="font-size:11px;font-weight:600;color:#68726c;text-transform:uppercase;letter-spacing:.04em;">'+dt.toLocaleDateString('en-US',{weekday:'short'})+'</div><div style="font-size:22px;font-weight:700;line-height:1.1;">'+dt.getDate()+'</div><div style="font-size:10px;color:#9aa39d;">'+dt.toLocaleDateString('en-US',{month:'short'})+'</div></div>'
       +'<div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:6px;">'
       +'<div style="display:flex;gap:6px;flex-wrap:wrap;">'
-      +(list.length?chip('✅ '+list.length+' booked','rgba(74,222,128,.16)','#4ade80'):'')
-      +(exp[d]?chip('🔮 '+exp[d]+' expected','rgba(125,211,252,.14)','#7dd3fc'):'')
-      +(qts[d]?chip('📋 '+qts[d]+' quote'+(qts[d]!==1?'s':'')+' possible','rgba(253,186,116,.16)','#fdba74'):'')
-      +(!list.length&&!exp[d]&&!qts[d]?chip('—','rgba(255,255,255,.08)','rgba(255,255,255,.4)'):'')
+      +(list.length?chip(list.length+' booked','#e7f3eb','#15803d'):'')
+      +(exp[d]?chip(exp[d]+' expected','#e8f0fb','#1b5fc1'):'')
+      +(qts[d]?chip(qts[d]+' quote'+(qts[d]!==1?'s':'')+' possible','#fdf6e7','#9a5a06'):'')
+      +(!list.length&&!exp[d]&&!qts[d]?chip('—','#f1f3ef','#9aa39d'):'')
       +'</div>'
-      +(list.length?'<div style="color:rgba(255,255,255,.6);font-size:12.5px;">'+(_fmIsOwner()?('⏱ ~'+Math.floor(mins/60)+'h '+String(mins%60).padStart(2,'0')+'m with drive · '):'')+'📍 '+Object.keys(areas).join(' · ')+'</div>':(exp[d]?'<div style="color:rgba(255,255,255,.45);font-size:12.5px;">recurring plans due back around this day</div>':''))
+      +(list.length?'<div style="color:#68726c;font-size:12.5px;">'+(_fmIsOwner()?('~'+Math.floor(mins/60)+'h '+String(mins%60).padStart(2,'0')+'m with drive · '):'')+Object.keys(areas).join(' · ')+'</div>':(exp[d]?'<div style="color:#68726c;font-size:12.5px;">recurring plans due back around this day</div>':''))
       +'</div></div>';
   };
   const tabBtn=function(id,lab){
     const on=_fmSchedTab===id;
-    return '<button onclick="fmSchedTab(\''+id+'\')" style="flex:1;padding:9px 0;border-radius:11px;border:1px solid rgba(255,255,255,'+(on?'.4':'.14')+');background:'+(on?'rgba(74,222,128,.18)':'rgba(255,255,255,.05)')+';color:'+(on?'#4ade80':'rgba(255,255,255,.6)')+';font-weight:800;font-size:13.5px;cursor:pointer;">'+lab+'</button>';
+    return '<button onclick="fmSchedTab(\''+id+'\')" style="flex:1;padding:9px 0;border-radius:8px;border:none;background:'+(on?'#fff':'transparent')+';color:'+(on?'#151d18':'#68726c')+';font-weight:600;font-size:13.5px;cursor:pointer;'+(on?'box-shadow:0 1px 2px rgba(16,24,20,.12);':'')+'">'+lab+'</button>';
   };
-  const tabs='<div style="display:flex;gap:8px;margin-bottom:13px;">'+tabBtn('weekly','📆 Weekly')+tabBtn('monthly','🗓 Monthly')+'</div>';
-  if(!keys.length){ body.innerHTML=tabs+'<div style="text-align:center;color:rgba(255,255,255,.55);padding:44px 20px;">Nothing on the schedule ahead yet.</div>'; return; }
+  const tabs='<div style="display:flex;gap:4px;margin-bottom:14px;padding:3px;background:#e6e9e3;border-radius:10px;">'+tabBtn('weekly','Weekly')+tabBtn('monthly','Monthly')+'</div>';
+  if(!keys.length){ body.innerHTML=tabs+'<div style="text-align:center;color:#68726c;padding:44px 20px;">Nothing on the schedule ahead yet.</div>'; return; }
   if(_fmSchedTab==='monthly'){
     // Per-week rollups (Sun–Sat) — tap a week to drop into its day cards.
     const wk={};
@@ -2617,15 +3097,15 @@ function _fmRenderSched(){
       const w0=new Date(w+'T12:00:00'); const w1=new Date(w0); w1.setDate(w1.getDate()+6);
       const open=_fmSchedWkSel===w;
       const lbl=w0.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' – '+w1.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-      return '<div onclick="fmSchedWk(\''+w+'\')" style="cursor:pointer;background:rgba(255,255,255,'+(open?'.10':'.05')+');border:1px solid rgba(255,255,255,'+(open?'.35':'.12')+');border-radius:14px;padding:13px 15px;margin-bottom:9px;">'
-        +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><div style="font-weight:800;font-size:14.5px;">'+lbl+'</div><div style="color:rgba(255,255,255,.5);font-size:13px;">'+(open?'▾':'▸')+'</div></div>'
+      return '<div onclick="fmSchedWk(\''+w+'\')" style="cursor:pointer;background:#fff;border:1px solid '+(open?'#8fcaa3':'#e1e4de')+';border-radius:12px;padding:13px 15px;margin-bottom:8px;box-shadow:0 1px 2px rgba(16,24,20,.05);color:#151d18;">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><div style="font-weight:600;font-size:14.5px;">'+lbl+'</div><div style="color:#9aa39d;font-size:13px;">'+(open?'▾':'▸')+'</div></div>'
         +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">'
-        +(bkd?chip('✅ '+bkd+' booked','rgba(74,222,128,.16)','#4ade80'):'')
-        +(ex?chip('🔮 '+ex+' expected','rgba(125,211,252,.14)','#7dd3fc'):'')
-        +(qu?chip('📋 '+qu+' quote'+(qu!==1?'s':'')+' possible','rgba(253,186,116,.16)','#fdba74'):'')
-        +(!bkd&&!ex&&!qu?chip('—','rgba(255,255,255,.08)','rgba(255,255,255,.4)'):'')
+        +(bkd?chip(bkd+' booked','#e7f3eb','#15803d'):'')
+        +(ex?chip(ex+' expected','#e8f0fb','#1b5fc1'):'')
+        +(qu?chip(qu+' quote'+(qu!==1?'s':'')+' possible','#fdf6e7','#9a5a06'):'')
+        +(!bkd&&!ex&&!qu?chip('—','#f1f3ef','#9aa39d'):'')
         +'</div>'
-        +((bkd&&_fmIsOwner())?'<div style="color:rgba(255,255,255,.55);font-size:12.5px;margin-top:7px;">⏱ ~'+Math.floor(mins/60)+'h '+String(mins%60).padStart(2,'0')+'m booked work with drive</div>':'')
+        +((bkd&&_fmIsOwner())?'<div style="color:#68726c;font-size:12.5px;margin-top:7px;">~'+Math.floor(mins/60)+'h '+String(mins%60).padStart(2,'0')+'m booked work with drive</div>':'')
         +'</div>'
         +(open?'<div style="margin:2px 0 10px 10px;">'+ds.map(dayCard).join('')+'</div>':'');
     }).join('');
@@ -2701,10 +3181,10 @@ function _fmRenderJobList(stops){
   let scr=document.getElementById('fmScreenJobs');
   if(!scr){
     scr=document.createElement('div'); scr.className='fm-screen'; scr.id='fmScreenJobs';
-    scr.innerHTML='<div class="fm-top"><button class="fm-top-exit" onclick="fmBackToStart()">‹ Route</button><div style="font-weight:800;font-size:15px;color:#dcfce7;">Today\'s Jobs</div><button class="fm-refresh" onclick="fmManualRefresh(this)" title="Refresh jobs now" aria-label="Refresh jobs now">⟳</button></div>'
+    scr.innerHTML='<div class="fm-top"><button class="fm-top-exit" onclick="fmBackToStart()"><svg class="ic sm" aria-hidden="true"><use href="#i-chev-l"/></svg>Route</button><div class="fm-top-title">Today\'s jobs</div><button class="fm-refresh" onclick="fmManualRefresh(this)" title="Refresh jobs now" aria-label="Refresh jobs now"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button></div>'
       +'<div id="fmJobListMeta" style="padding:10px 16px 2px;font-size:13px;font-weight:700;color:#9ed8b1;"></div>'
       // mid-route the Start screen is gone, so the calls banner needs a second home here
-      +'<div style="padding:6px 14px 0;">'+_fmCallsBannerHtml('fmCallsBannerList')+'</div>'
+      +'<div style="padding:12px 14px 0;">'+_fmCallsBannerHtml('fmCallsBannerList')+'</div>'
       +'<div id="fmJobListBody" style="padding:8px 14px 24px;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch;"></div>';
     document.getElementById('fieldMode').appendChild(scr);
   }
@@ -2725,12 +3205,12 @@ function _fmRenderJobList(stops){
     const bk=st.bk, dn=isDone(bk), sk=!dn&&_fmIsSkipped(bk), nx=(i===nextIdx);
     const badge = dn ? '<span style="'+B+'color:#15803d;background:#f0fdf4;border:1px solid #bbf7d0;">DONE</span>'
                 : sk ? '<span style="'+B+'color:#92400e;background:#fffbeb;border:1px solid #fde68a;">SKIPPED</span>'
-                : nx ? '<span style="'+B+'color:#166534;background:#dcfce7;border:1px solid #4ade80;">▶ NEXT</span>'
+                : nx ? '<span style="'+B+'color:#fff;background:#15803d;border:1px solid #15803d;">NEXT</span>'
                      : '<span style="'+B+'color:#334155;background:#f8fafc;border:1px solid #e2e8f0;">OPEN</span>';
     const lockN=+((_stopLocks&&_stopLocks[_stopKey(bk)])||0);
     const lock=lockN>0?('<div style="display:inline-block;margin-top:6px;background:#fefce8;border:1.5px solid #fde047;border-radius:8px;padding:2px 9px;font-size:11.5px;font-weight:800;color:#854d0e;">🔒 HQ locked #'+lockN+'</div>'):'';
-    return '<button onclick="fmOpenJob('+i+')" style="display:block;width:100%;text-align:left;background:'+(dn?'rgba(22,163,74,.10)':'#fff')+';border:'+(nx?'2.5px solid #22c55e':('1.5px solid '+(dn?'#bbf7d0':(sk?'#fde68a':'#dbe6ef'))))+';border-radius:14px;padding:13px 14px;margin-bottom:9px;font-family:inherit;cursor:pointer;'+(dn?'opacity:.75;':'')+(nx?'box-shadow:0 0 0 3px rgba(34,197,94,.18);':'')+'">'
-      +'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;"><span style="font-size:16px;font-weight:800;color:#14532d;">'+(i+1)+'. '+esc(bk.name||'?')+'</span>'+badge+'</div>'
+    return '<button onclick="fmOpenJob('+i+')" style="display:block;width:100%;text-align:left;background:'+(dn?'rgba(22,163,74,.10)':'#fff')+';border:'+(nx?'2px solid #15803d':('1px solid '+(dn?'#cfe6d6':(sk?'#f1dfba':'#e1e4de'))))+';border-radius:12px;padding:13px 14px;margin-bottom:8px;font-family:inherit;cursor:pointer;'+(dn?'opacity:.7;':'')+'box-shadow:0 1px 2px rgba(16,24,20,.05);">'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;"><span style="font-size:16px;font-weight:600;color:#151d18;">'+(i+1)+'. '+esc(bk.name||'?')+'</span>'+badge+'</div>'
       +'<div style="font-size:12.5px;color:#64748b;margin-top:3px;">'+esc(bk.address||'')+(_seeMoney(bk)&&bk.price?(' · '+esc(String(bk.price))):'')+'</div>'
       +((!dn&&_fmOwes(bk))?('<div style="display:inline-block;margin-top:7px;background:#b91c1c;color:#fff;border-radius:8px;padding:4px 10px;font-size:13px;font-weight:900;letter-spacing:.02em;">💰 OWES $'+_fmOwes(bk).amt.toFixed(0)+' from '+esc(_fmShortDate(_fmOwes(bk).since))+'</div>'):'')
       +lock
@@ -2743,19 +3223,21 @@ function _fmRenderStart(){
   _fmShow('fmScreenStart');
   const hr=new Date().getHours(); const greet=hr<12?'Good morning':hr<17?'Good afternoon':'Good evening';
   document.getElementById('fmGreet').textContent=greet+', '+((adminName||'').split(' ')[0]||'crew');
-  document.getElementById('fmStartDate').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})+' · 👤 '+String(adminRole||'employee').replace(/_/g,' ');
+  document.getElementById('fmStartDate').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})+' · '+String(adminRole||'employee').replace(/_/g,' ');
   const raw=_fmTodayRawJobs(), n=raw.length;
   document.getElementById('fmStartCount').textContent=n;
   const total=raw.reduce((s,b)=>s+_fmAmt(b),0), cashN=raw.filter(b=>_payType(b)==='cash').length;
   const moneyPart=_isMoneyRole()?('~$'+total.toFixed(0)+' on the books'):(n+' stop'+(n!==1?'s':''));
   document.getElementById('fmStartSub').textContent=n?(moneyPart+(cashN?' · '+cashN+' cash stop'+(cashN!==1?'s':''):'')):'No jobs scheduled'+(adminCrews?(' for crew '+adminCrews):'')+' today.';
-  const btn=document.getElementById('fmStartBtn'); if(btn){ btn.style.display=n?'':'none'; btn.textContent=_clockInTime&&!_clockedOut?'▶ Continue Route':'🟢 Start My Route'; }
+  const btn=document.getElementById('fmStartBtn'); if(btn){ btn.style.display=n?'':'none'; btn.innerHTML=_ic('play','fill sm')+(_clockInTime&&!_clockedOut?'Continue route':'Start my route'); }
   const _eb=document.getElementById('fmStartEndBtn'); if(_eb) _eb.style.display=(_clockInTime&&!_clockedOut)?'':'none';
   const _cs=document.getElementById('fmCallsBannerSlot');
   if(_cs&&!document.getElementById('fmCallsBanner')) _cs.innerHTML=_fmCallsBannerHtml('fmCallsBanner');
   _fmSyncCallsBanner();
   _fmRenderRouteSetup();
   _fmSyncTimerSlots();
+  _fmRenderMissedCard();   // shift left clocked in on an earlier day
+  try{ _fmRenderStuckCard(_fmQueueStats()); }catch(e){}
 }
 
 /* ───────── Start-of-route checklist ───────── */
@@ -2792,11 +3274,11 @@ function _fmLoading(on,msg){
   if(!on){ if(ov) ov.style.display='none'; return; }
   if(!ov){
     ov=document.createElement('div'); ov.id='fmLoadingOv';
-    ov.innerHTML='<div style="text-align:center;"><div style="width:46px;height:46px;border:4px solid rgba(255,255,255,.25);border-top-color:#4ade80;border-radius:50%;margin:0 auto 16px;animation:fmspin .8s linear infinite;"></div><div id="fmLoadingMsg" style="color:#e7f6ec;font-weight:800;font-size:16px;letter-spacing:.02em;"></div></div>';
+    ov.innerHTML='<div style="text-align:center;"><div style="width:30px;height:30px;border:2.5px solid rgba(255,255,255,.18);border-top-color:#86dba2;border-radius:50%;margin:0 auto 14px;animation:fmspin .8s linear infinite;"></div><div id="fmLoadingMsg" style="color:#fff;font-weight:600;font-size:15px;"></div></div>';
     const st=document.createElement('style'); st.textContent='@keyframes fmspin{to{transform:rotate(360deg)}}'; document.head.appendChild(st);
     document.body.appendChild(ov);
   }
-  ov.style.cssText='position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;background:rgba(7,26,15,.92);backdrop-filter:blur(4px);';
+  ov.style.cssText='position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;background:rgba(15,44,30,.94);backdrop-filter:blur(4px);';
   const m=document.getElementById('fmLoadingMsg'); if(m) m.textContent=msg||'Loading…';
 }
 async function _fmStep(msg,ms){ _fmLoading(true,msg); await new Promise(function(r){ setTimeout(r,ms||500); }); _fmLoading(false); }
@@ -2897,7 +3379,14 @@ async function fmDiag(){
   try{
     const q=_fmQueueLoad();
     add('last error', window.__FM_LAST_ERR ? (window.__FM_LAST_ERR.what+' — '+window.__FM_LAST_ERR.msg+' @'+window.__FM_LAST_ERR.at) : '(none)');
+  try{ _fmMissedLoad().forEach(function(x){ add('missed clockout', (x.ack?'[seen] ':'[OPEN] ')+_fmMissedText(x)+' in='+x.clockIn+(x.lastSeen?(' lastSeen='+new Date(x.lastSeen).toISOString()):'')+' cash=$'+(+x.cashTotal||0).toFixed(2)); }); }catch(_e){}
   add('queue', q.length+' item(s)');
+    try{
+      const _st=_fmQueueStats(); let _kb=0; try{ _kb=Math.round((localStorage.getItem(FM_QUEUE_KEY)||'').length/1024); }catch(_e){}
+      add('queue health', _st.stuck+' stuck, '+_st.unsaved+' not on phone storage, '+_kb+' KB on phone');
+      let _bad=''; try{ _bad=localStorage.getItem(FM_QUEUE_BAD_KEY)||''; }catch(_e){}
+      if(_bad) add('queue backup', 'an UNREADABLE queue ('+_bad.length+' chars) is kept under '+FM_QUEUE_BAD_KEY+' — send this phone to the office');
+    }catch(_e){}
     q.slice(0,8).forEach(function(it,i){
       out.push('   ['+(i+1)+'] '+it.kind+'  tries='+(it.tries||0)+'  err='+(it.lastErr||'(none yet)'));
     });
@@ -2963,8 +3452,8 @@ function _fmRenderCrewPicker(){
   const list=document.getElementById('fmCrewResults'); if(!list) return;
   const q=((document.getElementById('fmCrewSearch')||{}).value||'').toLowerCase();
   _crewPickerView=_crewListAll.filter(c=>!_fmHelperHas(c.name) && (!q||String(c.name||'').toLowerCase().includes(q)));
-  if(!_crewListAll.length){ list.innerHTML='<div style="padding:12px;color:#9ed8b1;font-size:13px;">No saved crew list'+(navigator.onLine===false?' (offline)':'')+'. Tap "Add by name" below.</div>'; return; }
-  if(!_crewPickerView.length){ list.innerHTML='<div style="padding:12px;color:#9ed8b1;font-size:13px;">Everyone added — or no match.</div>'; return; }
+  if(!_crewListAll.length){ list.innerHTML='<div style="padding:12px;color:#68726c;font-size:13px;">No saved crew list'+(navigator.onLine===false?' (offline)':'')+'. Tap "Add by name" below.</div>'; return; }
+  if(!_crewPickerView.length){ list.innerHTML='<div style="padding:12px;color:#68726c;font-size:13px;">Everyone added — or no match.</div>'; return; }
   list.innerHTML=_crewPickerView.map((c,idx)=>{ const role=({helper:'Helper',crew_leader:'Crew Leader',manager:'Manager'})[c.role]||c.role||''; const rate=c.hourlyRate?(' · $'+c.hourlyRate+'/hr'):''; return '<button class="fm-check" onclick="fmCrewPick('+idx+')"><span class="box" style="color:#15803d;">＋</span><span>'+esc(c.name)+' <span style="color:#94a3b8;font-size:12px;font-weight:600;">'+esc(role)+esc(rate)+'</span></span></button>'; }).join('');
 }
 function fmCrewPick(idx){ const c=_crewPickerView[idx]; if(!c) return; if(!_fmHelperHas(c.name)){ _helpers.push({name:c.name,hourlyRate:c.hourlyRate||0}); _persist(); } _fmRenderCrewPicker(); _renderHelpers(); }
@@ -3030,13 +3519,13 @@ function _fmYardPaceTick(){
     const plan=(_savedDrive&&_savedDrive[k]>0)?_savedDrive[k]:12;
     const left=plan-(Date.now()-dp.t0)/60000;
     if(left<=0){ _fmDriveArrive(k); return; }                      // countdown done — yard clock starts
-    el.innerHTML='<span style="color:#7dd3fc;">🚗 Drive time — '+Math.ceil(left)+'m to arrival</span>';
+    el.innerHTML='<span style="color:#9cc8f5;">Driving — '+Math.ceil(left)+'m to arrival</span>';
     return;
   }
   const mins=(Date.now()-new Date(t0).getTime())/60000, exp=mowMinutes(bk), m=Math.floor(mins);
-  if(mins<=exp) el.innerHTML='<span style="color:#4ade80;">⏱ '+m+'m on this yard · ~'+exp+'m expected — good pace</span>';
-  else if(mins<=exp*1.5) el.innerHTML='<span style="color:#fbbf24;">⏱ '+m+'m — past the ~'+exp+'m estimate, tighten up</span>';
-  else el.innerHTML='<span style="color:#f87171;font-weight:800;">🔴 '+m+'m — way over the ~'+exp+'m estimate</span>';
+  if(mins<=exp) el.innerHTML='<span style="color:#4ade80;">'+m+'m on this yard · ~'+exp+'m expected — good pace</span>';
+  else if(mins<=exp*1.5) el.innerHTML='<span style="color:#fbbf24;">'+m+'m — past the ~'+exp+'m estimate, tighten up</span>';
+  else el.innerHTML='<span style="color:#f87171;font-weight:800;">● '+m+'m — way over the ~'+exp+'m estimate</span>';
   // Display-only by owner's call — no buzzing, no toasts. The bar says it all.
 }
 function _fmPace(stops){
@@ -3072,9 +3561,9 @@ function _fmRenderJob(stops,idx){
     const t19=new Date(); t19.setHours(19,0,0,0);
     const late=Math.round((p.fin.getTime()-t19.getTime())/60000);
     const slip=p.behind>10?' <span style="opacity:.7;">· '+p.behind+'m slower than plan</span>':'';
-    const chip=late<=0?'<span style="color:#4ade80;font-weight:800;">🟢 on track · ~'+finStr+' finish</span>'
-             :late<=60?'<span style="color:#fbbf24;font-weight:800;">🟡 finishing ~'+finStr+' — '+late+'m past 7p</span>'
-             :'<span style="color:#f87171;font-weight:800;">🔴 finishing ~'+finStr+' — '+(late>=120?(Math.round(late/6)/10+'h'):late+'m')+' past 7p</span>';
+    const chip=late<=0?'<span style="color:#4ade80;font-weight:800;">● on track · ~'+finStr+' finish</span>'
+             :late<=60?'<span style="color:#fbbf24;font-weight:800;">● finishing ~'+finStr+' — '+late+'m past 7p</span>'
+             :'<span style="color:#f87171;font-weight:800;">● finishing ~'+finStr+' — '+(late>=120?(Math.round(late/6)/10+'h'):late+'m')+' past 7p</span>';
     el.innerHTML=base+' · '+chip+slip;
   })();
   document.getElementById('fmProgressFill').style.width=Math.round(((doneCount+skippedCount)/total)*100)+'%';
@@ -3093,8 +3582,8 @@ function _fmRenderJob(stops,idx){
   if(_isQuoteJob(bk)) pills+='<span class="fm-pill" style="background:#7c3aed;color:#fff;font-weight:900;">\ud83d\udccb QUOTE \u2014 no '+'mow'+'</span>';
   else if(bk.frequency) pills+='<span class="fm-pill muted">'+esc(bk.frequency)+'</span>';
   if(bk.crew) pills+='<span class="fm-pill muted">Crew '+esc(bk.crew)+'</span>';
-  if(lotM) pills+='<span class="fm-pill">📐 '+lotM[1]+' ac</span>';
-  pills+='<span class="fm-pill muted">⏱ ~'+mow+'m</span>';
+  if(lotM) pills+='<span class="fm-pill">'+_ic('ruler')+lotM[1]+' ac</span>';
+  pills+='<span class="fm-pill muted">'+_ic('clock')+'~'+mow+'m</span>';
   if(done) pills+='<span class="fm-pill">✓ Done</span>'; else if(skipped) pills+='<span class="fm-pill warn">⤼ Skipped</span>';
   const em=String(bk.email||'').toLowerCase().trim();
   const cust=(allCustomers||[]).find(c=>String(c.Email||'').toLowerCase().trim()===em);
@@ -3104,22 +3593,22 @@ function _fmRenderJob(stops,idx){
   const noteHtml=(custNotes?'<div class="fm-note-box"><b>Customer notes</b>'+esc(custNotes)+'</div>':'')
     +(jobNotes&&jobNotes!==custNotes?'<div class="fm-note-box"><b>Job notes</b>'+esc(jobNotes)+'</div>':'');
   const phone=String(bk.phone||'').trim(), phoneDigits=phone.replace(/[^0-9+]/g,'');
-  const phoneRow=phone?('<a class="fm-btn fm-btn-sm fm-btn-ghost" href="tel:'+esc(phoneDigits)+'">📞 Call</a><a class="fm-btn fm-btn-sm fm-btn-ghost" href="sms:'+esc(phoneDigits)+'">💬 Text</a>'):'';
+  const phoneRow=phone?('<a class="fm-btn fm-btn-sm fm-btn-ghost" href="tel:'+esc(phoneDigits)+'">'+_ic('phone')+'Call</a><a class="fm-btn fm-btn-sm fm-btn-ghost" href="sms:'+esc(phoneDigits)+'">'+_ic('msg')+'Text</a>'):'';
   window._fmCurBk=bk;
   const _navBtn=done
-    ? '<button class="fm-btn fm-btn-lg" style="background:#64748b;color:#e2e8f0;cursor:not-allowed;" disabled>✓ Completed — no need to drive</button>'
-    : '<button class="fm-btn fm-btn-lg fm-btn-nav" onclick="fmNavigate('+idx+')">🧭 Navigate Here</button>';
+    ? '<button class="fm-btn fm-btn-lg" style="background:#eef0ec;color:#68726c;cursor:not-allowed;" disabled>'+_ic('check')+'Completed — no need to drive</button>'
+    : '<button class="fm-btn fm-btn-lg fm-btn-nav" onclick="fmNavigate('+idx+')">'+_ic('nav')+'Navigate</button>';
   try{ _fmSyncCallsBanner(); }catch(e){}
   try{ _fmWireTapCounter(); }catch(e){}
   document.getElementById('fmJobBody').innerHTML=
     '<div class="fm-card" style="'+(done?'opacity:.5;filter:grayscale(.6);':'')+'"><div class="fm-card-stopno">'+(idx+1)+'</div><div class="fm-card-name">'+esc(bk.name||'Customer')+'</div>'+
-    '<div class="fm-card-addr">📍 '+esc(bk.address||'—')+(bk.zip?', '+esc(bk.zip):'')+'</div>'+(!done?_fmOwesBanner(bk):'')+(_isQuoteJob(bk)&&!done&&!skipped?'<div style="margin:10px 0;padding:13px 14px;border-radius:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;"><div style="font-size:16px;font-weight:900;letter-spacing:.02em;">\ud83d\udccb QUOTE VISIT \u2014 DO NOT MOW</div><div style="font-size:12.5px;font-weight:700;opacity:.92;margin-top:3px;">No equipment. Walk it with the customer, then tap \u201cBuild Estimate\u201d and Book / Email / Declined.</div></div>':'')+'<div class="fm-pills">'+pills+'</div>'+noteHtml+
+    '<div class="fm-card-addr">'+_ic('pin')+'<span>'+esc(bk.address||'—')+(bk.zip?', '+esc(bk.zip):'')+'</span></div>'+(!done?_fmOwesBanner(bk):'')+(_isQuoteJob(bk)&&!done&&!skipped?'<div style="margin:10px 0;padding:13px 14px;border-radius:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;"><div style="font-size:16px;font-weight:900;letter-spacing:.02em;">\ud83d\udccb QUOTE VISIT \u2014 DO NOT MOW</div><div style="font-size:12.5px;font-weight:700;opacity:.92;margin-top:3px;">No equipment. Walk it with the customer, then tap \u201cBuild Estimate\u201d and Book / Email / Declined.</div></div>':'')+'<div class="fm-pills">'+pills+'</div>'+noteHtml+
     '<div class="fm-card-actions">'+_navBtn+
-    '<div class="fm-secondary-row">'+phoneRow+'<button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#635bff;color:#4f46e5;" onclick="fmTapToPay(window._fmCurBk)">📲 Tap to Pay</button><button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#60a5fa;color:#1d4ed8;" onclick="fmCardOpen(window._fmCurBk)">💳 Card on file</button>'+(_isQuoteJob(bk)&&isDone(bk)&&_qjBookedStore[_stopKey(bk)]?'<button class="fm-btn fm-btn-sm fm-btn-ghost" style="border-color:#fdba74;color:#9a3412;" onclick="fmQuoteCloser(window._fmCurBk)">✏️ Edit booked plan</button>':'')+(_fmIsBoss()?'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmEditNotes()">✏️ Notes</button><button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmRemainingMap()">🗺 Remaining</button>':'')+'</div></div></div>'+
-    '<div class="fm-jobnav"><button onclick="fmPrevStop()" '+(idx===0?'disabled':'')+'>‹ Prev</button>'
-    +'<button onclick="fmRerouteFromHere()" title="Re-optimize remaining stops from where you are now">📍 Re-route</button>'
-    +(_fmIsOwner()?'<button onclick="fmLockStop()" title="Pin this stop to an exact position — the optimizer routes around it">'+((_stopLocks&&_stopLocks[_stopKey(bk)])?('🔒 #'+_stopLocks[_stopKey(bk)]):'🔓 Lock')+'</button>':'')
-    +(_fmIsBoss()?'<button onclick="fmNextStop()" '+(idx>=total-1?'disabled':'')+'>Next ›</button>':'')
+    '<div class="fm-secondary-row">'+phoneRow+'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmTapToPay(window._fmCurBk)">'+_ic('tap')+'Tap to Pay</button><button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmCardOpen(window._fmCurBk)">'+_ic('card')+'Card on file</button>'+(_isQuoteJob(bk)&&isDone(bk)&&_qjBookedStore[_stopKey(bk)]?'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmQuoteCloser(window._fmCurBk)">'+_ic('pencil')+'Edit booked plan</button>':'')+(_fmIsBoss()?'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmEditNotes()">'+_ic('pencil')+'Notes</button><button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmRemainingMap()">'+_ic('map')+'Remaining</button>':'')+'</div></div></div>'+
+    '<div class="fm-jobnav"><button onclick="fmPrevStop()" '+(idx===0?'disabled':'')+'>'+_ic('chev-l','sm')+'Prev</button>'
+    +'<button onclick="fmRerouteFromHere()" title="Re-optimize remaining stops from where you are now">'+_ic('route','sm')+'Re-route</button>'
+    +(_fmIsOwner()?'<button onclick="fmLockStop()" title="Pin this stop to an exact position — the optimizer routes around it">'+((_stopLocks&&_stopLocks[_stopKey(bk)])?(_ic('lock','sm')+'#'+_stopLocks[_stopKey(bk)]):(_ic('unlock','sm')+'Lock'))+'</button>':'')
+    +(_fmIsBoss()?'<button onclick="fmNextStop()" '+(idx>=total-1?'disabled':'')+'>Next'+_ic('chev-r','sm')+'</button>':'')
     +'</div>';
   // plan line: done-by time from the owner's push + on-track status
   (function(){
@@ -3133,14 +3622,14 @@ function _fmRenderJob(stops,idx){
     });
     if(doneBy==null){ el.style.display='none'; return; }
     const h=Math.floor(doneBy/60)%24, m=doneBy%60;
-    let line='🏁 Done by ~'+((h%12)||12)+':'+String(m).padStart(2,'0')+(h<12?' AM':' PM');
+    let line='Done by ~'+((h%12)||12)+':'+String(m).padStart(2,'0')+(h<12?' AM':' PM');
     const curT=_savedTimes[_stopKey(bk)];
     if(curT&&!done&&!skipped){
       const hm2=curT.split(':'); const plan=(+hm2[0])*60+(+hm2[1]||0);
       const now=new Date(); const nowM=now.getHours()*60+now.getMinutes();
       const diff=nowM-plan;
-      if(diff>15) line+=' · <span style="color:#fbbf24;">⏰ ~'+diff+'m behind</span>';
-      else line+=' · <span style="color:#86efac;">✅ on track</span>';
+      if(diff>15) line+=' · <span style="color:#fbbf24;">~'+diff+'m behind</span>';
+      else line+=' · <span style="color:#86efac;">on track</span>';
     }
     el.innerHTML=line; el.style.display='';
   })();
@@ -3148,7 +3637,7 @@ function _fmRenderJob(stops,idx){
   const doneBtn=document.getElementById('fmDoneBtn'); if(doneBtn){ doneBtn.style.display=(done||skipped)?'none':''; if(_isQuoteJob(bk)){ doneBtn.textContent='📝 Build Estimate →'; doneBtn.style.background='#2563eb'; } else { doneBtn.textContent=_fmIsFinalOpenStop()?'✓ Done — Finish Route':'✓ Done — Next Stop'; doneBtn.style.background=''; } }
   _fmSyncTimerSlots(); _fmHeartbeat();
 }
-function _fmUpdateTotalsChip(){ const el=document.getElementById('fmTotalsChip'); if(!el) return; const dm=_fmDriveLeftMin(); const drv=(dm!=null)?(' · 🚗 ~'+(dm>=60?(Math.floor(dm/60)+'h '+String(dm%60).padStart(2,'0')+'m'):(dm+'m'))+' drive left'):''; el.innerHTML='Collected <b>$'+(_fmCashTotal||0).toFixed(0)+'</b> cash'+(_isMoneyRole()?(' · Billed <b>$'+(_fmBilledTotal||0).toFixed(0)+'</b> today'):'')+drv; }
+function _fmUpdateTotalsChip(){ const el=document.getElementById('fmTotalsChip'); if(!el) return; const dm=_fmDriveLeftMin(); const drv=(dm!=null)?(' · ~'+(dm>=60?(Math.floor(dm/60)+'h '+String(dm%60).padStart(2,'0')+'m'):(dm+'m'))+' drive left'):''; el.innerHTML='Collected <b>$'+(_fmCashTotal||0).toFixed(0)+'</b> cash'+(_isMoneyRole()?(' · Billed <b>$'+(_fmBilledTotal||0).toFixed(0)+'</b> today'):'')+drv; }
 // Reliable external-link open for installed PWAs — window.open can be blocked or open a
 // dead blank tab in standalone mode; a transient anchor click hands off to the Maps app.
 function _fmOpenUrl(url){ try{ const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; document.body.appendChild(a); a.click(); a.remove(); }catch(e){ try{ window.open(url,'_blank'); }catch(_e){ location.href=url; } } }
@@ -3407,7 +3896,7 @@ function fmRecordSkip(reason){
   const bk=stop.bk, rowIndex=bk._rowIndex||((allBookings||[]).indexOf(bk)+2), svcDate=dateOf(bk);
   const today=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
   const note=(String(bk.employeeNotes||'').trim()?bk.employeeNotes+' | ':'')+"⚠️ Couldn't service ("+reason+') — '+today+' by '+(adminName||'crew');
-  _fmEnqueue({ kind:'skip', idemKey:'skip:'+rowIndex+':'+svcDate+':'+_uuid(), method:'GET', params:{ action:'set_employee_note', rowIndex, email:bk.email||'', serviceDate:svcDate, note, adminToken } });
+  _fmEnqueue({ kind:'skip', idemKey:'skip:'+rowIndex+':'+svcDate+':'+_uuid(), method:'GET', params:{ action:'set_employee_note', rowIndex, email:bk.email||'', name:bk.name||'', serviceDate:svcDate, note, adminToken } });   // name = identity for no-email customers; the backend finds the row by email/name + date, rowIndex is only a hint
   _fmFlushQueue(); bk.employeeNotes=note; _fmSkipped[_stopKey(bk)]=reason; _fmMarkSeq(bk); _persist(); setTimeout(function(){ try{ if(_fmStarted&&_fmOpenStops().length>2) _fmAutoRoute(); }catch(e){} },1500);
   fmCloseSkip(); showToast('⤼ Skipped: '+reason); _fmViewIdx=null; _fmRender();
 }
@@ -3442,8 +3931,8 @@ function fmOpenComplete(){
     // Crews can READ the sticky profile note but not rewrite it — only the
     // one-time note to the office is theirs. Owners/managers still edit.
     const _lbl=document.getElementById('fmcCustNoteLbl');
-    if(!_fmIsBoss()){ cn.disabled=true; cn.style.background='#f1f5f9'; cn.style.color='#475569'; if(_lbl) _lbl.textContent='📌 Customer note (view only — put changes in the note to the office above)'; }
-    else { cn.disabled=false; cn.style.background=''; cn.style.color=''; if(_lbl) _lbl.textContent='📌 Customer note — sticks on their profile until changed'; }
+    if(!_fmIsBoss()){ cn.disabled=true; cn.style.background='#f1f5f9'; cn.style.color='#475569'; if(_lbl) _lbl.textContent='Customer note (view only — put changes in the office note above)'; }
+    else { cn.disabled=false; cn.style.background=''; cn.style.color=''; if(_lbl) _lbl.textContent='Customer note — stays on their profile'; }
     cn.disabled=!em0;
     cn.placeholder=em0?'Gate code, dogs, sprinkler heads to avoid…':'(needs a customer email on file)';
   })();
@@ -3467,7 +3956,7 @@ function _fmcRenderAmount(){
   amtEl.style.display=see?'':'none';
   if(see) amtEl.textContent='$'+_fmcGrand().toFixed(0);
   const addTot=_fmcAddonTotal();
-  const m={ cash:'💵 Cash — collect from the customer.', autopay:'💳 On autopay — completing charges the card on file automatically.', invoice:'🧾 Card / pay-after — send an invoice to collect.' }[_fmcPayType];
+  const m={ cash:'Cash — collect from the customer.', autopay:'On autopay — completing charges the card on file automatically.', invoice:'Card / pay-after — send an invoice to collect.' }[_fmcPayType];
   document.getElementById('fmcMethod').textContent=m+(see&&addTot?' (incl. $'+addTot.toFixed(0)+' add-ons)':'');
   (function(){   // 💰 old balance — shown next to today's amount for EVERY pay type
     const meth=document.getElementById('fmcMethod'); if(!meth) return;
@@ -3495,28 +3984,28 @@ function _fmcRenderPay(){
   }
   // ── On-the-spot method switch — crew can change how THIS job is paid, right now ──
   const methods=[
-    {k:'cash',   lbl:'💵 Cash'},
-    {k:'autopay',lbl:'💳 Card'+(_l4?(' ••'+_l4.slice(-4)):(hasCard?' on file':'')), dis:!hasCard, tip:'No card on file — collect cash or send an invoice'},
-    {k:'invoice',lbl:'🧾 Invoice'}
+    {k:'cash',   lbl:_ic('cash','sm')+'Cash'},
+    {k:'autopay',lbl:_ic('card','sm')+'Card'+(_l4?(' ••'+_l4.slice(-4)):(hasCard?' on file':'')), dis:!hasCard, tip:'No card on file — collect cash or send an invoice'},
+    {k:'invoice',lbl:_ic('receipt','sm')+'Invoice'}
   ];
   const bar='<div style="display:flex;gap:7px;margin-bottom:10px;">'+methods.map(function(m){ const on=_fmcPayType===m.k;
-    return '<button '+(m.dis?('disabled title="'+m.tip+'"'):('onclick="fmcSetMethod(\''+m.k+'\')"'))+' style="flex:1;padding:11px 4px;border-radius:11px;border:2px solid '+(on?'#16a34a':'#cbd5e1')+';background:'+(on?'#dcfce7':'#f8fafc')+';color:'+(m.dis?'#94a3b8':(on?'#15803d':'#14361f'))+';font-weight:800;font-size:13.5px;'+(m.dis?'opacity:.55;':'cursor:pointer;')+'">'+m.lbl+'</button>';
+    return '<button '+(m.dis?('disabled title="'+m.tip+'"'):('onclick="fmcSetMethod(\''+m.k+'\')"'))+' style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 4px;border-radius:10px;border:1px solid '+(on?'#15803d':'#cfd5cd')+';background:'+(on?'#e7f3eb':'#fff')+';color:'+(m.dis?'#9aa39d':(on?'#0f5a2b':'#151d18'))+';font-weight:600;font-size:13.5px;'+(on?'box-shadow:inset 0 0 0 1px #15803d;':'')+(m.dis?'opacity:.55;':'cursor:pointer;')+'">'+m.lbl+'</button>';
   }).join('')+'</div>';
   let ctrl='';
   if(_fmcPayType==='autopay'){
-    ctrl='<button class="fm-toggle-btn pay'+(_fmcChargeChosen?' on':'')+'" onclick="fmToggleCharge()">'+(_fmcChargeChosen?('✓ Will charge'+(see?(' $'+grand.toFixed(0)):'')+' to card on complete — tap to undo'):('💳 Charge'+(see?(' $'+grand.toFixed(0)):'')+' to card on file'))+'</button>';
+    ctrl='<button class="fm-toggle-btn pay'+(_fmcChargeChosen?' on':'')+'" onclick="fmToggleCharge()">'+(_fmcChargeChosen?('✓ Will charge'+(see?(' $'+grand.toFixed(0)):'')+' to card on complete — tap to undo'):(_ic('card','sm')+'Charge'+(see?(' $'+grand.toFixed(0)):'')+' to card on file'))+'</button>';
   } else if(_fmcPayType==='cash'){
     const _ow=_fmOwes(bk);
     if(_ow && !_fmcCash){
       // Two explicit choices. The combined button is the ONLY thing that turns the old-balance tick on.
-      ctrl='<button class="fm-toggle-btn pay" style="background:#b91c1c;border-color:#7f1d1d;color:#fff;" onclick="fmCashCollect(true)">💵 Collect $'+(grand+_ow.amt).toFixed(0)+' cash — today $'+grand.toFixed(0)+' + owed $'+_ow.amt.toFixed(0)+'</button>'
-          +'<button class="fm-toggle-btn pay" style="margin-top:8px;" onclick="fmCashCollect(false)">💵 Today only — $'+grand.toFixed(0)+'</button>';
+      ctrl='<button class="fm-toggle-btn pay" style="background:#b91c1c;border-color:#7f1d1d;color:#fff;" onclick="fmCashCollect(true)">'+_ic('cash','sm')+'Collect $'+(grand+_ow.amt).toFixed(0)+' cash — today $'+grand.toFixed(0)+' + owed $'+_ow.amt.toFixed(0)+'</button>'
+          +'<button class="fm-toggle-btn pay" style="margin-top:8px;" onclick="fmCashCollect(false)">'+_ic('cash','sm')+'Today only — $'+grand.toFixed(0)+'</button>';
     } else {
-      ctrl='<button class="fm-toggle-btn pay'+(_fmcCash?' on':'')+'" onclick="fmToggleCash()">'+(_fmcCash?'✓ Collected $'+(grand+(_ow&&_fmcCollectOld?_ow.amt:0)).toFixed(0)+' cash — tap to undo':'💵 Collect $'+grand.toFixed(0)+' cash')+'</button>';
+      ctrl='<button class="fm-toggle-btn pay'+(_fmcCash?' on':'')+'" onclick="fmToggleCash()">'+(_fmcCash?'✓ Collected $'+(grand+(_ow&&_fmcCollectOld?_ow.amt:0)).toFixed(0)+' cash — tap to undo':_ic('cash','sm')+'Collect $'+grand.toFixed(0)+' cash')+'</button>';
       if(_ow && _fmcCash) ctrl+='<label style="display:flex;align-items:center;gap:10px;margin-top:9px;padding:10px 12px;border-radius:12px;border:2px solid '+(_fmcCollectOld?'#b91c1c':'#cbd5e1')+';background:'+(_fmcCollectOld?'#fef2f2':'#f8fafc')+';font-weight:800;font-size:14px;color:#7f1d1d;"><input type="checkbox" '+(_fmcCollectOld?'checked':'')+' onchange="fmToggleCollectOld(this.checked)" style="width:22px;height:22px;">Also collected the old $'+_ow.amt.toFixed(0)+' ('+_ow.n+' visit'+(_ow.n!==1?'s':'')+')</label>';
     }
   } else {
-    ctrl='<button class="fm-toggle-btn pay'+(_fmcInvoiceSent?' on':'')+'" onclick="fmToggleInvoice()">'+(_fmcInvoiceSent?('✓ Will invoice'+(see?(' $'+grand.toFixed(0)):'')+' on complete — tap to undo'):('🧾 Invoice'+(see?(' $'+grand.toFixed(0)):'')+' on complete →'))+'</button>';
+    ctrl='<button class="fm-toggle-btn pay'+(_fmcInvoiceSent?' on':'')+'" onclick="fmToggleInvoice()">'+(_fmcInvoiceSent?('✓ Will invoice'+(see?(' $'+grand.toFixed(0)):'')+' on complete — tap to undo'):(_ic('receipt','sm')+'Invoice'+(see?(' $'+grand.toFixed(0)):'')+' on complete →'))+'</button>';
   }
   wrap.innerHTML=bar+ctrl;
   if(state){ const ok=_fmcPayResolved(); state.textContent=ok?'✓ done':'required'; state.className=ok?'ok':'req'; }
@@ -3582,7 +4071,7 @@ function fmPhotoSelected(input){
   reader.readAsDataURL(file); input.value='';
 }
 function fmRemovePhoto(i){ _fmcPhotos.splice(i,1); _fmcRenderPhotos(); }
-function _fmcRenderPhotos(){ const list=document.getElementById('fmcPhotoList'); if(!list) return; list.innerHTML=_fmcPhotos.map((p,i)=>'<div class="fm-photo-cell"><img src="'+p.dataUrl+'"><button class="fm-photo-x" onclick="fmRemovePhoto('+i+')">×</button></div>').join(''); const btn=document.getElementById('fmcPhotoBtn'); if(btn) btn.textContent=_fmcPhotos.length?'📷 Add another photo':'📷 Take / Add Photo'; }
+function _fmcRenderPhotos(){ const list=document.getElementById('fmcPhotoList'); if(!list) return; list.innerHTML=_fmcPhotos.map((p,i)=>'<div class="fm-photo-cell"><img src="'+p.dataUrl+'"><button class="fm-photo-x" onclick="fmRemovePhoto('+i+')">×</button></div>').join(''); const btn=document.getElementById('fmcPhotoBtn'); if(btn) btn.innerHTML=_ic('camera')+(_fmcPhotos.length?'Add another photo':'Take or add photo'); }
 
 async function fmSubmitComplete(){
   const bk=_fmcStop&&_fmcStop.bk; const errEl=document.getElementById('fmcErr'); const submitBtn=document.getElementById('fmcSubmitBtn');
@@ -3612,7 +4101,7 @@ async function fmSubmitComplete(){
   });
   if(_fmcPayType==='invoice' && _fmcInvoiceSent && !String(email||'').includes('@')){ try{ showToast('⚠️ No email on file — invoice NOT sent. Collect their email and invoice from HQ.',9000); }catch(e){} }
   if(_fmcPayType==='invoice' && _fmcInvoiceSent && String(email||'').includes('@')) extra.push({ kind:'invoice', idemKey:'invoice:'+base, method:'GET', params:{ action:'send_invoice', rowIndex, email, serviceDate:svcDate, amount:grand.toFixed(2), description:(['Lawn service $'+(_fmcBase||0).toFixed(0)].concat((_fmcAddons||[]).filter(a=>a.on&&a.price>0).map(a=>a.name+' $'+(+a.price).toFixed(0))).join(' + ')), adminToken } });
-  if(ownerNote){ const noteLine='📝 '+ownerNote+' — '+(adminName||'crew'); extra.push({ kind:'note', idemKey:'note:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex, email, serviceDate:svcDate, note:(String(bk.employeeNotes||'').trim()?bk.employeeNotes+' | ':'')+noteLine, adminToken } }); }
+  if(ownerNote){ const noteLine='📝 '+ownerNote+' — '+(adminName||'crew'); extra.push({ kind:'note', idemKey:'note:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex, email, name:bk.name||'', serviceDate:svcDate, note:(String(bk.employeeNotes||'').trim()?bk.employeeNotes+' | ':'')+noteLine, adminToken } }); }
   // Sticky customer note — only sent when actually changed; REPLACES the profile note.
   (function(){
     const cn=document.getElementById('fmcCustNote'); if(!cn||cn.disabled) return;
@@ -3654,7 +4143,9 @@ async function fmSubmitComplete(){
   // Each follow-up waits in the queue (item.after) until its done call is confirmed.
   extra.forEach(function(it){ it.after=doneItem.idemKey; });
   const _money=extra.filter(function(it){ return it.kind!=='photo'; }), _pics=extra.filter(function(it){ return it.kind==='photo'; });
-  const _missing=function(items){ if(_fmSandbox) return []; const qk=new Set(_fmQueueLoad().map(function(x){ return x.idemKey; })), dk=_fmDoneKeys(); return items.filter(function(it){ return !qk.has(it.idemKey) && !dk.has(it.idemKey); }); };
+  // diskOnly: count an item as saved only if it is on the phone's storage. Money items held in
+  // memory alone (storage full) are NOT saved as far as this sheet is concerned, exactly as before.
+  const _missing=function(items, diskOnly){ if(_fmSandbox) return []; const qk=new Set((diskOnly?_fmQueueDisk():_fmQueueLoad()).map(function(x){ return x.idemKey; })), dk=_fmDoneKeys(); return items.filter(function(it){ return !qk.has(it.idemKey) && !dk.has(it.idemKey); }); };
   const _dropFollowUps=function(){ _fmQueueSave(_fmQueueLoad().filter(function(x){ return x.after!==doneItem.idemKey; })); _fmUpdateSyncBadge(); };
   const _storageFull=function(n){
     errEl.textContent='⚠️ Phone storage is full — this job did NOT save ('+n+' item'+(n!==1?'s':'')+'). Free up space or get back online, then tap Complete again.';
@@ -3662,7 +4153,7 @@ async function fmSubmitComplete(){
     try{ showToast('⚠️ NOT saved — storage full. Don\'t leave; retry.',9000); }catch(e){}
   };
   _money.forEach(_fmEnqueue);
-  const _lostMoney=_missing(_money);
+  const _lostMoney=_missing(_money, true);
   if(_lostMoney.length){ _dropFollowUps(); _storageFull(_lostMoney.length); return; }
   _pics.forEach(_fmEnqueue);
   if(_missing(_pics).length){ try{ showToast('⚠️ Photos could not be saved (phone storage full) — the job and payment still will be.',9000); }catch(e){} }
@@ -3945,6 +4436,30 @@ function fmTapToPay(bk){
    token, which is exactly what autopay already charges. Never add a plain card-number input. */
 const FM_STRIPE_PK='pk_live_51TLrat4J18msjfgfYqm9zvDa2pkr5ZPv6s10bl5UwMIYnAqpJbXEU14YXFlS6sEA3H0VgsLPTxHuPWD6YutUy1J000mzhTGL1N';
 let _fmStripe=null,_fmCardEl=null,_fmCardBk=null;
+/* Stripe.js used to be a blocking script tag in the page head: on one bar of signal the whole app waited
+   on js.stripe.com before it could paint. It is loaded here instead, on demand. Returns a promise
+   that resolves once window.Stripe exists; a failed or stalled load rejects and the NEXT call
+   tries again (the dead script tag is removed), so a dead zone never poisons the session. */
+let _fmStripeP=null;
+function _fmLoadStripe(ms){
+  if(typeof Stripe==='function') return Promise.resolve();
+  if(_fmStripeP) return _fmStripeP;
+  _fmStripeP=new Promise(function(resolve,reject){
+    let done=false, sc=null;
+    const fail=function(why){ if(done) return; done=true; clearTimeout(t); _fmStripeP=null; try{ if(sc&&sc.parentNode) sc.parentNode.removeChild(sc); }catch(e){} reject(new Error(why)); };
+    const t=setTimeout(function(){ fail('Stripe.js not loaded \u2014 check the connection'); }, ms||20000);
+    try{
+      sc=document.createElement('script'); sc.src='https://js.stripe.com/v3/'; sc.async=true;
+      sc.onload=function(){ if(done) return; if(typeof Stripe==='function'){ done=true; clearTimeout(t); resolve(); } else fail('Stripe.js not loaded \u2014 check the connection'); };
+      sc.onerror=function(){ fail('Stripe.js not loaded \u2014 check the connection'); };
+      document.head.appendChild(sc);
+    }catch(e){ fail('Stripe.js not loaded \u2014 check the connection'); }
+  });
+  return _fmStripeP;
+}
+// Warm it in the background once the app is up and online, so the card form opens instantly.
+// async script = never blocks paint or taps; a failure here is silent and retried on demand.
+try{ setTimeout(function(){ try{ if(navigator.onLine!==false) _fmLoadStripe(30000).catch(function(){}); }catch(e){} }, 12000); }catch(e){}
 /* The Save button is GATED on the consent tick — it starts ticked (the crew reads it to the
    customer at the door) but untick it and Save goes dead, so a customer who says no can't be
    pushed through by a mis-tap. fmCardSave keeps its own check as the real guard. */
@@ -3984,17 +4499,34 @@ function fmCardOpen(bk){
     +'</div>';
   document.body.appendChild(ov);
   _fmCardGate();
-  try{
-    if(typeof Stripe!=='function') throw new Error('Stripe.js not loaded — check the connection');
+  // Stripe.js loads on demand now. Until the card box is mounted there is no card to save, so
+  // _fmCardEl stays null and fmCardSave refuses (it re-tries the load instead of throwing).
+  _fmCardEl=null;
+  _fmCardMount(ov);
+}
+// Mount the Stripe card box into THIS overlay once Stripe.js is in. `ov` guards against the
+// sheet having been closed (or reopened for another customer) while the script was loading.
+function _fmCardMount(ov){
+  const live=function(){ return !!ov && document.getElementById('fmCardOv')===ov; };
+  const say=function(t,col){ const m=document.getElementById('fmCardMsg'); if(m&&live()){ m.style.color=col||'#dc2626'; m.textContent=t; } };
+  if(typeof Stripe!=='function') say('Loading secure card form\u2026','#64748b');
+  return _fmLoadStripe().then(function(){
+    if(!live()) return false;
+    if(_fmCardEl) return true;                      // already mounted in this sheet
     if(!_fmStripe) _fmStripe=Stripe(FM_STRIPE_PK);
     _fmCardEl=_fmStripe.elements().create('card',{hidePostalCode:false});
     _fmCardEl.mount('#fmCardEl');
-  }catch(e){ const m=document.getElementById('fmCardMsg'); if(m) m.textContent='⚠ '+e.message; }
+    const m=document.getElementById('fmCardMsg'); if(m){ m.style.color='#dc2626'; if(m.textContent.indexOf('Loading secure card form')===0) m.textContent=''; }
+    return true;
+  }).catch(function(e){ say('\u26a0 '+((e&&e.message)||'Stripe.js not loaded \u2014 check the connection')+'. Tap Save to try again.'); return false; });
 }
 async function fmCardSave(){
   const bk=_fmCardBk; if(!bk) return;
   const msg=document.getElementById('fmCardMsg'), btn=document.getElementById('fmCardSaveBtn');
   if(!document.getElementById('fmCardConsent').checked){ msg.textContent='Tick the consent box with the customer present.'; return; }
+  // No card box yet (Stripe.js still loading, or it failed on a weak signal): nothing has been
+  // typed, so there is nothing to save. Try the load again and stop; never call Stripe half-loaded.
+  if(!_fmStripe||!_fmCardEl){ _fmCardMount(document.getElementById('fmCardOv')); return; }
   // Email typed here (quote stops that had none) becomes the customer's email — it's what
   // getOrCreateStripeCustomer keys on, so autopay and the receipt both hang off it.
   let em=String(bk.email||'').trim().toLowerCase();
@@ -4112,7 +4644,7 @@ async function qjOutcome(kind){
     // marked the WRONG job done and left the quote open (2026-07-14).
     (function(){
       const _noteWon='Quote WON — booked '+_qjFreqLabel()+' $'+price+ogNote+' ('+desc+')'+(_qjNote()?(' | 📝 '+_qjNote()):'');
-      _fmEnqueue({ kind:'quotenote', idemKey:'qn:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), note:_noteWon, markedBy:adminName||'Crew', adminToken } });
+      _fmEnqueue({ kind:'quotenote', idemKey:'qn:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex:(bk._rowIndex||0), email:bk.email||'', name:bk.name||'', serviceDate:dateOf(bk), note:_noteWon, markedBy:adminName||'Crew', adminToken } });
       _fmEnqueue({ kind:'quotedone', idemKey:'qd:'+base, method:'GET', params:{ action:'mark_done', rowIndex:(bk._rowIndex||0), email:bk.email||'', name:bk.name||'', serviceDate:dateOf(bk), amount:'0', markedBy:adminName||'Crew', adminToken } });
     })();
     _fmEnqueue({ kind:'quotebook', idemKey:'qb:'+base, method:'GET', params:{ action:'manual_schedule', name:bk.name||'', email:bk.email||'', phone:String(bk.phone||''), address:bk.address||'', zip:String(bk.zip||''), frequency:_qjFreqLabel(), price:String(promo?price:firstPrice), firstMowPromo:(promo?'true':''), firstMowPrice:(promo?String(promoPrice):''), serviceDate:date, notes:'Booked at quote visit — '+desc+ogNote+((og&&ogFee>0&&_qj.freq!=='onetime')?(' · First mow: $'+firstPrice+'. Following: $'+price):'')+(_qjNote()?(' | 📝 '+_qjNote()):'')+' — by '+(adminName||'crew'), payMethod:'card', crew:_fmMyCrew(), adminToken } });
@@ -4182,7 +4714,7 @@ function _qjFinish(toastMsg,note,skipQueue,offerCard){
   // Note goes FIRST so it resolves onto the still-open QUOTE row — marking done
   // first (or a same-day booking shifting rows) could land it on the wrong job.
   if(!skipQueue){
-    _fmEnqueue({ kind:'quotenote', idemKey:'qn:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex:(bk._rowIndex||0), email:bk.email||'', serviceDate:dateOf(bk), note:note, markedBy:adminName||'Crew', adminToken } });
+    _fmEnqueue({ kind:'quotenote', idemKey:'qn:'+base, method:'GET', params:{ action:'set_employee_note', rowIndex:(bk._rowIndex||0), email:bk.email||'', name:bk.name||'', serviceDate:dateOf(bk), note:note, markedBy:adminName||'Crew', adminToken } });
     _fmEnqueue({ kind:'quotedone', idemKey:'qd:'+base, method:'GET', params:{ action:'mark_done', rowIndex:(bk._rowIndex||0), email:bk.email||'', name:bk.name||'', serviceDate:dateOf(bk), amount:'0', markedBy:adminName||'Crew', adminToken } });
   }
   _fmFlushQueue();
