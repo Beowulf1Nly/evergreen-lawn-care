@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- GROWTH 2027 funnel page. OFF until BOTH switches are on:
+       1. window.EVG_GROWTH_FUNNEL below = true   (this file, needs a site push)
+       2. Script Property EVG_FLAG_INSTANT_PRICE = on (backend; self-booking and photo quotes have their own flags)
+     While off, the page only shows "call us" and sends nothing but one read-only growth_config request.
+     Not linked from any page yet. See GROWTH-BUILD.md. -->
+<script>window.EVG_GROWTH_FUNNEL = false;</script>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex, nofollow"/>
+<title>Your Lawn Mowing Price | Evergreen Lawn Care</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico"/>
+<!-- No web font request on this page: the funnel test requires that nothing loads from outside but the backend and Stripe.
+     Headings use Bricolage Grotesque / Inter only if the visitor already has them, otherwise the system sans. -->
+<meta name="theme-color" content="#0C2318"/>
+<style>
+  /* site-2027 look v3 (Bricolage Grotesque + Inter, ink #0C2318, lime #C9F25B). Styling only: ids, classes and scripts unchanged. */
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{--g:#0C2318;--gb:#12402A;--gp:#F3F5EE;--t:#0C2318;--m:#4D5E53;--line:#DDE3D6;--warn:#8a5a00;--lime:#C9F25B;--green:#2F8F4E;--h:'Bricolage Grotesque',system-ui,sans-serif}
+  body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--gp);color:var(--t);line-height:1.5}
+  header{background:var(--g);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(201,242,91,.12)}
+  header a{color:#fff;text-decoration:none;font-weight:600}
+  header img{height:40px;width:auto;display:block}
+  main{max-width:640px;margin:0 auto;padding:28px 16px 60px}
+  h1,h2{font-family:var(--h);letter-spacing:-.018em;line-height:1.08}
+  h1{font-size:2.1rem;font-weight:800;margin-bottom:8px}
+  .sub{color:var(--m);margin-bottom:18px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:22px;padding:22px;margin-bottom:16px}
+  label{display:block;font-weight:600;margin:12px 0 6px}
+  input[type=text],input[type=email],input[type=tel],select,textarea{width:100%;padding:13px 14px;border:1px solid var(--line);background:var(--gp);border-radius:12px;font-size:1rem;font-family:inherit;color:var(--t)}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--green);outline-offset:1px}
+  .row{display:flex;gap:10px}.row>*{flex:1}
+  .q{margin-top:14px}.q p{font-weight:600;margin-bottom:6px}
+  .seg{display:flex;gap:8px}.seg label{flex:1;margin:0;border:1px solid var(--line);border-radius:12px;padding:11px;text-align:center;font-weight:500;cursor:pointer;background:#fff}
+  .seg input{position:absolute;opacity:0;pointer-events:none}.seg input:checked+span{font-weight:700;color:var(--g)}
+  .seg label:has(input:checked){border-color:var(--g);background:var(--lime)}
+  button{width:100%;margin-top:18px;padding:16px;min-height:56px;border:0;border-radius:12px;background:var(--lime);color:var(--g);font-size:1.05rem;font-weight:700;cursor:pointer;font-family:inherit}
+  button:hover{background:#B8E641}
+  button[disabled]{opacity:.55;cursor:wait}
+  .price{font-family:var(--h);font-size:3.4rem;line-height:1;font-weight:800;letter-spacing:-.018em;color:var(--g);margin:6px 0}.price small{font-family:Inter,system-ui,sans-serif;font-size:1rem;color:var(--m);font-weight:600;letter-spacing:0}
+  .facts{list-style:none;margin:12px 0}.facts li{padding:5px 0 5px 32px;position:relative}
+  .facts li::before{content:"";position:absolute;left:0;top:6px;width:22px;height:22px;border-radius:999px;background:var(--g) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23C9F25B' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6L9 17l-5-5'/%3E%3C/svg%3E") center/12px no-repeat}
+  .muted{color:var(--m);font-size:.92rem}
+  .err{color:#b00020;margin-top:10px;font-weight:600}
+  .meas{margin-top:8px;font-size:.9rem;color:var(--m);border-top:1px solid var(--line);padding-top:10px}
+  .meas img{display:block;width:100%;max-width:480px;border-radius:14px;margin-bottom:6px}
+  .meas a{font-weight:700;color:var(--gb)}
+  .over{margin-top:8px;padding:12px;border-radius:14px;background:#fff8e6;border:1px solid #f0d9a0}.over p{margin:0 0 4px}
+  .terms{font-size:.88rem;color:var(--m);background:var(--gp);border-radius:12px;padding:12px;margin-top:10px}
+  .chk{display:flex;gap:8px;align-items:flex-start;font-weight:500;margin-top:12px}.chk input{margin-top:4px;accent-color:var(--green)}
+  .hide{display:none}
+  .thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.thumbs img{width:72px;height:72px;object-fit:cover;border-radius:10px}
+  a{color:var(--gb)}
+  a.call{display:block;text-align:center;margin-top:14px;font-weight:700;color:var(--g);border:2px solid var(--g);border-radius:999px;padding:13px;text-decoration:none}
+</style>
+</head>
+<body>
+<header><a href="/" aria-label="Evergreen Lawn Care home"><picture><source srcset="/img/site-2027/logo-96.webp" type="image/webp"><img src="/img/site-2027/logo-96.png" width="70" height="40" alt="Evergreen Lawn Care"></picture></a><a href="tel:+13524620627">(352) 462-0627</a></header>
+<main>
+  <!-- OFF / unavailable -->
+  <section id="v-off" class="card">
+    <h1>Lawn mowing prices</h1>
+    <p class="sub">Online pricing is coming soon. Call or text us and we will give you a price today.</p>
+    <a class="call" href="tel:+13524620627">Call (352) 462-0627</a>
+  </section>
+
+  <!-- STEP 1: address + 2 screening questions -->
+  <section id="v-start" class="hide">
+    <h1>See your monthly price</h1>
+    <p class="sub">Citrus Springs, Dunnellon and Beverly Hills. One flat price every month, mowing all year.</p>
+    <form id="f-price" class="card" novalidate>
+      <label for="addr">Street address</label>
+      <input id="addr" type="text" autocomplete="street-address" placeholder="1234 W Example Dr" required/>
+      <label for="zip">ZIP code</label>
+      <input id="zip" type="text" inputmode="numeric" maxlength="5" autocomplete="postal-code" placeholder="34434" required/>
+      <div class="q"><p>Is the grass very overgrown right now (over about 8 inches)?</p>
+        <div class="seg"><label><input type="radio" name="overgrown" value="yes"/><span>Yes</span></label><label><input type="radio" name="overgrown" value="no"/><span>No</span></label></div></div>
+      <div id="e-price" class="err" role="alert"></div>
+      <button id="b-price" type="submit">Show my price</button>
+    </form>
+  </section>
+
+  <!-- STEP 2a: instant price + self-booking -->
+  <section id="v-instant" class="hide">
+    <div class="card">
+      <p class="muted" id="i-lot"></p>
+      <p id="i-yard" class="hide" style="font-weight:700;margin-bottom:2px"></p>
+      <p id="i-grass" class="muted hide" style="margin-bottom:6px"></p>
+      <div class="price"><span id="i-price"></span> <small>/ month</small></div>
+      <!-- Overgrown lawn (backend flag EVG_FLAG_OVERGROWN_WEB with per-yard pricing): same monthly price plus the one-time catch-up line, like the phone -->
+      <div id="i-overgrown" class="over hide"><p id="i-over-line"></p><p class="muted">After you sign up, our crew lead will ask for a few photos to confirm the catch-up fee before your first cut. Nothing is charged until then.</p></div>
+      <div id="i-meas" class="meas hide">
+        <img id="i-map" class="hide" alt="Satellite view at the county parcel point"/>
+        <p id="i-meas-txt"></p>
+        <a href="#" id="i-notmine">Not your lawn, or looks off? Send photos instead</a>
+      </div>
+      <p id="i-plan" style="font-weight:700;margin-top:4px"></p>
+      <p id="i-assume" class="muted hide" style="margin-top:6px">Priced for a lawn that is not overgrown right now. Grass over about 8 inches? <a href="#" id="i-assume-fix">Change my answer</a></p>
+      <ul class="facts">
+        <li id="i-sched"></li>
+        <li>Same price every month, charged automatically to your card</li>
+        <li>Mow, trim and blow off hard surfaces. Mowing only</li>
+        <li id="i-percut"></li>
+        <li><b>No charge until your first cut</b></li>
+        <li id="i-catch">Overgrown at the first visit? A one-time catch-up fee applies, starting at $49, confirmed with photos before charging, added to your first month only.</li>
+      </ul>
+    </div>
+    <form id="f-book" class="card hide" novalidate>
+      <h2 style="font-size:1.2rem">Start service</h2>
+      <label for="b-name">Name</label><input id="b-name" type="text" autocomplete="name"/>
+      <div class="row"><div><label for="b-email">Email</label><input id="b-email" type="email" autocomplete="email"/></div>
+      <div><label for="b-phone">Mobile phone</label><input id="b-phone" type="tel" autocomplete="tel"/></div></div>
+      <label for="b-start">When would you like to start?</label>
+      <select id="b-start"><option>As soon as possible</option><option>Next week</option><option>In 2 weeks or later</option></select>
+      <label for="b-ref">Who referred you? (optional)</label>
+      <input id="b-ref" type="text" maxlength="80" placeholder="Neighbor's name or referral code"/>
+      <label for="b-access">Fenced backyard? Gate code or access notes (optional)</label>
+      <input id="b-access" type="text" maxlength="300" placeholder="Gate code 1234, side gate on the left, dog inside"/>
+      <label class="chk"><input id="b-autopay" type="checkbox" checked/><span><b>Enroll in autopay</b> (card on file, charged automatically each month)</span></label>
+      <p class="muted hide" id="b-invnote" style="margin-top:6px">No card needed. We email your invoice each month to the address above, due in 7 days. We may also text it to your mobile.</p>
+      <div class="terms" id="b-terms"></div>
+      <label class="chk"><input id="b-agree" type="checkbox"/><span>I agree to the plan terms above, including automatic monthly renewal until I cancel.</span></label>
+      <div id="e-book" class="err" role="alert"></div>
+      <button id="b-book" type="submit">Save my card, no charge today</button>
+      <p class="muted" id="b-cardnote" style="margin-top:8px;text-align:center">No charge until your first cut. Card details are entered on Stripe's secure page.</p>
+    </form>
+    <div id="i-callbook" class="card hide"><p>Like this price? Call or text and we will set you up.</p><a class="call" href="tel:+13524620627">Call (352) 462-0627</a></div>
+  </section>
+
+  <!-- STEP 2b: photo quote -->
+  <section id="v-photo" class="hide">
+    <form id="f-photo" class="card" novalidate>
+      <h1 style="font-size:1.35rem">Send us a few photos for your price</h1>
+      <p class="sub" id="p-why"></p>
+      <label for="p-files">Photos of the front and back yard (up to 4)</label>
+      <input id="p-files" type="file" accept="image/*" multiple/>
+      <div class="thumbs" id="p-thumbs"></div>
+      <label for="p-name">Name</label><input id="p-name" type="text" autocomplete="name"/>
+      <div class="row"><div><label for="p-email">Email</label><input id="p-email" type="email" autocomplete="email"/></div>
+      <div><label for="p-phone">Mobile phone</label><input id="p-phone" type="tel" autocomplete="tel"/></div></div>
+      <label for="p-access">Fenced backyard? Gate code or access notes (optional)</label>
+      <input id="p-access" type="text" maxlength="300"/>
+      <label for="p-notes">Anything else we should know? (dogs, problem spots)</label>
+      <textarea id="p-notes" rows="3" maxlength="1000"></textarea>
+      <div id="e-photo" class="err" role="alert"></div>
+      <button id="b-photo" type="submit">Send photos</button>
+    </form>
+    <div id="p-callonly" class="card hide"><p>This yard needs a custom price. Call or text and we will quote it today.</p><a class="call" href="tel:+13524620627">Call (352) 462-0627</a></div>
+  </section>
+
+  <section id="v-photo-done" class="card hide">
+    <h1 style="font-size:1.35rem">Photos received</h1>
+    <p>Our crew lead will price your yard and reach out within one business day. Reference <b id="pd-id"></b>.</p>
+  </section>
+
+  <section id="v-inv-done" class="card hide">
+    <h1 style="font-size:1.35rem">You are signed up!</h1>
+    <p id="ivd-msg"></p>
+    <p class="muted" style="margin-top:8px">Questions? Call or text (352) 462-0627.</p>
+  </section>
+
+  <section id="v-out" class="card hide">
+    <h1 style="font-size:1.35rem">Outside our mowing area</h1>
+    <p>We mow in Citrus Springs, Dunnellon and Beverly Hills. If you think that is a mistake, call (352) 462-0627.</p>
+  </section>
+</main>
+<script>
+(function () {
+  'use strict';
+  var API = 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
+  if (window.EVG_GROWTH_API) API = window.EVG_GROWTH_API;   // tests only
+  var REASON = {
+    overgrown: 'Overgrown lawns need a first cut that is priced separately.',
+    lot_too_big: 'Your lot is larger than our standard sizes, so we price it from photos.',
+    lot_too_small: 'We could not confirm the mowable area from county records.',
+    lookup_failed: 'We could not find this lot in county records.',
+    no_house_number: 'We need the house number to look up the lot.',
+    // Parcel safety (backend flag EVG_FLAG_PARCEL_CHECK): the county record could not be trusted for an instant price.
+    address_mismatch: 'The county record we found does not match your address exactly, so we price it from photos instead of guessing.',
+    multiple_parcels: 'The county shows more than one lot at this address, so we price it from photos.',
+    adjacent_same_owner: 'The county shows more than one lot at this address, so we price it from photos.',
+    not_single_family: 'The county lists this property as something other than a single-family home, so we price it from photos.',
+    grass_estimate_unsure: 'We could not get a reliable grass measurement from the county record, so we price it from photos.',
+    customer_says_off: 'Send a few photos and our crew lead will price your actual lawn.'
+  };
+  var S = { flags: null, quote: null, address: '', zip: '', overgrown: '', reason: '', acres: '', photos: [] };
+  var $ = function (id) { return document.getElementById(id); };
+  function show(id) { ['v-off', 'v-start', 'v-instant', 'v-photo', 'v-photo-done', 'v-inv-done', 'v-out'].forEach(function (v) { $(v).classList.toggle('hide', v !== id); }); window.scrollTo(0, 0); }
+  function money(n) { return '$' + (Math.round(n) === n ? n : n.toFixed(2)); }
+  function get(params) {
+    var u = API + '?' + new URLSearchParams(params).toString();
+    return fetch(u, { method: 'GET' }).then(function (r) { return r.json(); });
+  }
+  function rid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 10); }
+  // Ad and referral attribution: the page's own URL parameters ride along on the price request and the page-view beacon,
+  // so the backend can tell Google Ads / LSA / Meta / voice / referral from direct (it stores only the source code).
+  var ATTR = (function () {
+    var q = new URLSearchParams(location.search), o = {};
+    ['gclid', 'gbraid', 'wbraid', 'fbclid', 'utm_source', 'utm_medium', 'utm_campaign', 'src', 'ref'].forEach(function (k) {
+      var v = (q.get(k) || '').trim(); if (v) o[k] = v.slice(0, 120);
+    });
+    return o;
+  })();
+  function withAttr(o) { Object.keys(ATTR).forEach(function (k) { if (!(k in o)) o[k] = ATTR[k]; }); return o; }
+  // Hand-off from the address form on the home and city pages: get-price.html?address=...&zip=...[&overgrown=yes|no]
+  // prefills the form; once the backend says instant pricing is on, the price is fetched without another tap.
+  var PF = (function () {
+    var q = new URLSearchParams(location.search), og = (q.get('overgrown') || '').trim().toLowerCase();
+    return { address: (q.get('address') || '').trim().slice(0, 200), zip: (q.get('zip') || '').replace(/\D/g, '').slice(0, 5), overgrown: /^(yes|no)$/.test(og) ? og : '' };
+  })();
+  var AUTO = false;
+
+  // (retell-2027's prefill() for the phone agent's emailed link is covered by PF above: same ?address=&zip=.)
+  // Front-end switch first: while false NOTHING is requested, not even the config.
+  if (window.EVG_GROWTH_FUNNEL !== true) { show('v-off'); return; }
+  if (PF.address) $('addr').value = PF.address;
+  if (PF.zip) $('zip').value = PF.zip;
+  if (PF.overgrown) document.querySelector('input[name=overgrown][value=' + PF.overgrown + ']').checked = true;
+  // Page-view beacon (counted only while EVG_FLAG_FUNNEL_EVENTS is on; otherwise the backend answers "off"). Fire and forget.
+  try { get(withAttr({ action: 'growth_track', event: 'page_view', page: 'get-price' })).catch(function () {}); } catch (eT) {}
+  // Existing per-cut customer switching to the plan: opt-in link made by the owner (get-price.html?switch=<token>).
+  var SW = (new URLSearchParams(location.search).get('switch') || '').trim();
+  var REF = (new URLSearchParams(location.search).get('ref') || '').trim().slice(0, 40);
+  if (REF) $('b-ref').value = REF;   // referral link: get-price.html?ref=CODE
+  if (/^[0-9a-f]{40}$/.test(SW)) {
+    get({ action: 'growth_switch_offer', switch: SW }).then(function (r) {
+      if (!r || !r.success) { $('v-off').querySelector('p').textContent = (r && r.error) || 'This link is not available. Call (352) 462-0627.'; show('v-off'); return; }
+      S.flags = { instantPrice: true, selfBook: true };
+      renderInstant(r);
+      $('b-name').value = r.name || ''; $('b-email').value = r.email || ''; $('b-email').readOnly = true; $('b-phone').value = r.phone || '';
+      $('i-lot').textContent = 'Switch to the monthly plan \u00b7 ' + $('i-lot').textContent + '. Your current service and billing continue until your first plan cut.';
+      // "Cheaper per cut" only where it is true for this customer; otherwise no per-cut line at all.
+      if (r.cheaper) $('i-percut').textContent = 'In the summer months that works out to about $' + r.summerPerCut + ' a cut (you pay $' + r.currentPerCut + ' a cut today)';
+      else $('i-percut').classList.add('hide');
+      $('i-catch').classList.add('hide');   // no catch-up fee for existing customers who switch
+    }).catch(function () { show('v-off'); });
+    return;
+  }
+  get({ action: 'growth_config' }).then(function (c) {
+    S.flags = (c && c.flags) || {};
+    if (S.flags.instantPrice) { show('v-start'); autoPrice(); } else show('v-off');
+  }).catch(function () { show('v-off'); });
+  // Address and ZIP came from the site's address form: ask for the price right away. If the overgrown question was
+  // not answered, the price is for a lawn that is not overgrown, and the result says so with a link to change it.
+  function autoPrice() {
+    if (!PF.address || !/^\d{5}$/.test(PF.zip)) return;
+    if (!document.querySelector('input[name=overgrown]:checked')) { document.querySelector('input[name=overgrown][value=no]').checked = true; AUTO = true; }
+    var f = $('f-price');
+    if (f.requestSubmit) f.requestSubmit(); else f.dispatchEvent(new Event('submit', { cancelable: true }));
+  }
+  $('i-assume-fix').addEventListener('click', function (ev) {
+    ev.preventDefault();
+    Array.prototype.forEach.call(document.querySelectorAll('input[name=overgrown]'), function (i) { i.checked = false; });
+    S.assumed = false; show('v-start'); $('addr').focus();
+  });
+
+  $('f-price').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var e = $('e-price'); e.textContent = '';
+    var addr = $('addr').value.trim(), zip = $('zip').value.trim();
+    var o = document.querySelector('input[name=overgrown]:checked');
+    if (!addr || !/^\d{5}$/.test(zip)) { e.textContent = 'Enter your street address and 5 digit ZIP.'; return; }
+    if (!o) { e.textContent = 'Tell us whether the grass is overgrown.'; return; }
+    S.address = addr; S.zip = zip; S.overgrown = o.value; S.assumed = AUTO; AUTO = false;
+    var b = $('b-price'); b.disabled = true; b.textContent = 'Looking up your lot...';
+    get(withAttr({ action: 'growth_price', address: addr, zip: zip, overgrown: o.value })).then(function (r) {
+      b.disabled = false; b.textContent = 'Show my price';
+      if (!r) throw new Error('x');
+      if (r.route === 'instant') return renderInstant(r);
+      if (r.route === 'photo_quote') return renderPhoto(r);
+      if (r.route === 'out_of_area') return show('v-out');
+      if (r.route === 'off') return show('v-off');
+      e.textContent = r.error || 'Something went wrong. Call (352) 462-0627.';
+    }).catch(function () { b.disabled = false; b.textContent = 'Show my price'; e.textContent = 'Could not reach us. Try again or call (352) 462-0627.'; });
+  });
+
+  function renderInstant(r) {
+    S.quote = r; var p = r.plans[0];
+    $('i-lot').textContent = r.town + ' \u00b7 ' + r.acres + ' acre lot \u00b7 ' + r.band.label;
+    // Per-yard price (backend flag EVG_FLAG_YARD_PRICING): one price for this lawn, from the county parcel record.
+    var y = r.yard && r.yard.monthly ? r.yard : null;
+    $('i-yard').classList.toggle('hide', !y); $('i-grass').classList.toggle('hide', !y);
+    if (y) {
+      $('i-lot').textContent = r.town;
+      $('i-yard').textContent = money(y.monthly) + '/mo for your lawn at ' + (S.address || 'this address');
+      $('i-grass').textContent = y.grassSqft ? 'About ' + Number(y.grassSqft).toLocaleString('en-US') + ' sq ft of grass, from the county parcel record.' : '';
+    }
+    $('i-assume').classList.toggle('hide', !S.assumed);
+    $('i-price').textContent = money(p.monthly);
+    // Overgrown (EVG_FLAG_OVERGROWN_WEB): the backend sends the catch-up line; the generic catch-up bullet is then not repeated.
+    var og = r.overgrown && r.overgrown.line ? r.overgrown : null;
+    $('i-overgrown').classList.toggle('hide', !og);
+    if (og) $('i-over-line').textContent = og.line;
+    $('i-catch').classList.toggle('hide', !!og);
+    // Parcel safety (backend flag EVG_FLAG_PARCEL_CHECK): show what the price was measured from, with a way out to a photo quote.
+    var ms = r.measured || null;
+    $('i-meas').classList.toggle('hide', !ms); $('i-map').classList.add('hide');
+    if (ms) {
+      $('i-meas-txt').textContent = 'What we measured: ' + (ms.situs || 'your parcel') + ' \u00b7 ' + ms.acres + ' acre lot \u00b7 about ' + Number(ms.grassSqft || 0).toLocaleString('en-US') + ' sq ft of grass, from the county parcel record. Our crew confirms it at your first visit.';
+      if (/^data:image\/jpeg;base64,/.test(String(ms.mapImg || ''))) { $('i-map').src = ms.mapImg; $('i-map').classList.remove('hide'); }
+    }
+    $('i-plan').textContent = p.name;
+    $('i-sched').textContent = p.schedule + ' (about ' + p.cutsPerYear + ' cuts a year)';
+    $('i-percut').textContent = 'Works out to about ' + money(p.perCut) + ' a cut over the year';
+    S.terms = r.terms || ''; S.termsInvoice = r.termsInvoice || r.terms || '';
+    $('b-autopay').checked = true; setAutopay();
+    $('f-book').classList.toggle('hide', !r.selfBook);
+    $('i-callbook').classList.toggle('hide', !!r.selfBook);
+    show('v-instant');
+  }
+  // "Enroll in autopay" (checked by default). Unchecked: no card at all, invoice me monthly by email (and text later).
+  function setAutopay() {
+    var on = $('b-autopay').checked;
+    $('b-terms').textContent = on ? S.terms : S.termsInvoice;
+    $('b-cardnote').classList.toggle('hide', !on);
+    $('b-invnote').classList.toggle('hide', on);
+    $('b-book').textContent = on ? 'Save my card, no charge today' : 'Sign up, invoice me monthly';
+  }
+  $('b-autopay').addEventListener('change', setAutopay);
+  $('i-notmine').addEventListener('click', function (ev) {
+    ev.preventDefault();
+    renderPhoto({ reason: 'customer_says_off', photoQuote: !!(S.flags && S.flags.photoQuote), acres: S.quote && S.quote.acres });
+  });
+  function niceDate(iso) { var p = String(iso || '').split('-'); if (p.length !== 3) return ''; return new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); }
+  $('f-book').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var e = $('e-book'); e.textContent = '';
+    var name = $('b-name').value.trim(), email = $('b-email').value.trim(), phone = $('b-phone').value.trim();
+    if (!name || !/^\S+@\S+\.\S+$/.test(email) || phone.replace(/\D/g, '').length < 10) { e.textContent = 'Enter your name, email and a 10 digit phone number.'; return; }
+    if (!$('b-agree').checked) { e.textContent = 'Please accept the plan terms.'; return; }
+    var auto = $('b-autopay').checked;
+    var b = $('b-book'); b.disabled = true; b.textContent = auto ? 'Opening checkout...' : 'Signing you up...';
+    get({ action: 'growth_checkout', quoteId: S.quote.quoteId, plan: S.quote.plans[0].id, name: name, email: email, phone: phone, start: $('b-start').value, access: $('b-access').value.trim(), referredBy: $('b-ref').value.trim(), agree: 'yes', autopay: auto ? 'yes' : 'no' }).then(function (r) {
+      if (auto && r && r.success && /^https:\/\/checkout\.stripe\.com\//.test(r.url)) { window.location.assign(r.url); return; }
+      if (!auto && r && r.success && r.invoice) {
+        var when = r.firstCut ? 'Your first cut is ' + niceDate(r.firstCut) + (r.routeDay ? ' (we mow your street on ' + r.routeDay + 's)' : '') + '. ' : 'We will text you to set your first mow day. ';
+        $('ivd-msg').textContent = (r.plan || 'Year-Round Lawn Plan') + ' at $' + r.monthly + ' a month. ' + when + 'Nothing is due today. On the day of your first cut we email your first invoice, due in 7 days.';
+        show('v-inv-done'); return;
+      }
+      b.disabled = false; setAutopay();
+      if (r && r.expired) { e.textContent = 'Your price expired. Check it again.'; setTimeout(function () { show('v-start'); }, 1500); return; }
+      e.textContent = (r && r.error) || 'Could not open checkout. Call (352) 462-0627.';
+    }).catch(function () { b.disabled = false; setAutopay(); e.textContent = 'Could not reach us. Nothing was charged. Try again or call (352) 462-0627.'; });
+  });
+
+  function renderPhoto(r) {
+    S.reason = r.reason || ''; S.acres = r.acres || '';
+    $('p-why').textContent = REASON[S.reason] || 'This yard needs a custom price.';
+    var on = !!(r.photoQuote && S.flags && S.flags.photoQuote);
+    $('f-photo').classList.toggle('hide', !on);
+    $('p-callonly').classList.toggle('hide', on);
+    S.idem = rid();
+    show('v-photo');
+  }
+  // Shrink each photo in the browser to at most 1600px JPEG so uploads stay small on cell data.
+  function shrink(file) {
+    return new Promise(function (res, rej) {
+      var img = new Image(), url = URL.createObjectURL(file);
+      img.onload = function () {
+        var k = Math.min(1, 1600 / Math.max(img.width, img.height));
+        var c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+        var d = c.toDataURL('image/jpeg', 0.72);
+        res({ type: 'image/jpeg', data: d.split(',')[1], preview: d });
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); rej(new Error('bad image')); };
+      img.src = url;
+    });
+  }
+  $('p-files').addEventListener('change', function () {
+    var files = Array.prototype.slice.call(this.files || [], 0, 4); var e = $('e-photo'); e.textContent = '';
+    Promise.all(files.map(shrink)).then(function (arr) {
+      S.photos = arr; $('p-thumbs').innerHTML = '';
+      arr.forEach(function (p) { var i = document.createElement('img'); i.src = p.preview; i.alt = 'yard photo'; $('p-thumbs').appendChild(i); });
+    }).catch(function () { e.textContent = 'One of those files is not a photo we can read. Try JPG or PNG.'; });
+  });
+  $('f-photo').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var e = $('e-photo'); e.textContent = '';
+    var name = $('p-name').value.trim(), email = $('p-email').value.trim(), phone = $('p-phone').value.trim();
+    if (!S.photos.length) { e.textContent = 'Add at least one photo of the yard.'; return; }
+    if (!name || !/^\S+@\S+\.\S+$/.test(email) || phone.replace(/\D/g, '').length < 10) { e.textContent = 'Enter your name, email and a 10 digit phone number.'; return; }
+    var b = $('b-photo'); b.disabled = true; b.textContent = 'Sending...';
+    var body = { action: 'growth_photo_quote', idemKey: S.idem, name: name, email: email, phone: phone, address: S.address, zip: S.zip,
+      reason: S.reason, access: $('p-access').value.trim(), overgrown: S.overgrown, acres: S.acres, notes: $('p-notes').value,
+      photos: S.photos.map(function (p) { return { type: p.type, data: p.data }; }) };
+    // text/plain keeps this a "simple" request (no CORS preflight, which Apps Script cannot answer).
+    fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json(); }).then(function (r) {
+        if (r && r.success) { $('pd-id').textContent = r.quoteId; show('v-photo-done'); return; }
+        b.disabled = false; b.textContent = 'Send photos'; e.textContent = (r && r.error) || 'Could not send. Call (352) 462-0627.';
+      }).catch(function () { b.disabled = false; b.textContent = 'Send photos'; e.textContent = 'Could not reach us. Try again or call (352) 462-0627.'; });
+  });
+})();
+</script>
+</body>
+</html>
