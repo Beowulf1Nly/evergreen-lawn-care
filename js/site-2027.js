@@ -1,9 +1,7 @@
-/* Evergreen Lawn Care public site, 2027 look. Shared by index.html and the city pages.
-   Everything follows the growth funnel switch in /js/growth-flag.js:
-     window.EVG_GROWTH_FUNNEL === true  -> address form and "See your price" go to /get-price.html
-                                           (address, zip and the ad tags ride along; get-price fetches the price)
-     anything else (as shipped)         -> today's free-estimate path: the estimate form on the home page
-                                           (prefilled with the address and ZIP), /index.html?quote=1 elsewhere.
+/* Evergreen public site (2027 look). Follows the switch in /js/growth-flag.js; wording and behaviour flip together.
+   ON: [data-flag=on] wording ("See your price"), CTAs and the address form go to /get-price.html (ad tags kept).
+   OFF (as shipped): [data-flag=off] wording ("Get my free quote"); CTAs land on the address form (#price here, /#price
+   elsewhere) below the sticky header with the address focused; the form opens the free-estimate form, prefilled.
    Nothing here can start a plan signup or a checkout while the switch is off. */
 (function () {
   var on = window.EVG_GROWTH_FUNNEL === true;
@@ -14,6 +12,17 @@
   } catch (e) {}
   var carry = keep.toString();
   var priceUrl = '/get-price.html' + (carry ? '?' + carry : '');
+  var i, el, fl = document.querySelectorAll('[data-flag]');
+  for (i = 0; i < fl.length; i++) fl[i].hidden = (fl[i].getAttribute('data-flag') === 'on') !== on;
+  var form = document.querySelector('form[data-addr-form]');
+  if (on && form && form.getAttribute('data-aria-on')) form.setAttribute('aria-label', form.getAttribute('data-aria-on'));
+  // address form fully in view below the sticky header, street address focused
+  function toForm() {
+    var hd = document.querySelector('.s27-hd'), top = form.getBoundingClientRect().top + window.pageYOffset - (hd ? hd.offsetHeight : 0) - 16;
+    window.scrollTo(0, Math.max(0, top));
+    try { form.elements.address.focus({ preventScroll: true }); } catch (e) {}
+  }
+  function goForm(e) { if (form) { e.preventDefault(); toForm(); } }
   function openEstimate(addr, zip) {
     if (typeof window.openQuoteModal !== 'function') return false;
     window.openQuoteModal();
@@ -25,17 +34,21 @@
     return true;
   }
 
-  // "See your price" links
-  var ctas = document.querySelectorAll('a[data-cta="price"]');
-  for (var i = 0; i < ctas.length; i++) {
-    var a = ctas[i];
-    if (on) { a.href = priceUrl; a.setAttribute('data-cta-mode', 'price'); continue; }
-    a.href = '/index.html?quote=1';
-    a.setAttribute('data-cta-mode', 'estimate');
-    a.addEventListener('click', function (e) { if (openEstimate('', '')) e.preventDefault(); });
+  // CTA links (header, closing band, footer, sticky bar, faq/about/404/free-lawn) and in-page "#price" buttons
+  var ctas = document.querySelectorAll('a[data-cta="price"], a[href="#price"]');
+  for (i = 0; i < ctas.length; i++) {
+    el = ctas[i];
+    if (el.getAttribute('data-cta') === 'price') {
+      if (on) { el.href = priceUrl; el.setAttribute('data-cta-mode', 'price'); continue; }
+      el.setAttribute('href', form ? '#price' : (carry ? '/?' + carry : '/') + '#price');
+      el.setAttribute('data-cta-mode', 'quote');
+    }
+    el.addEventListener('click', goForm);
   }
+  // arriving on /#price (from a page without the form): land the form below the header, focused
+  if (form && location.hash === '#price') { toForm(); window.addEventListener('load', toForm); }
 
-  // Address forms (home hero, city heroes): street address + ZIP + "See my price"
+  // Address forms (home hero, city heroes): street address + ZIP + "Get my free quote" ("See my price" when ON)
   var forms = document.querySelectorAll('form[data-addr-form]');
   for (var j = 0; j < forms.length; j++) (function (f) {
     var hid = f.querySelector('input[name="quote"]');
@@ -71,15 +84,16 @@
     });
   })(forms[j]);
 
-  // Home page opened from a city page's form with the switch OFF: /index.html?quote=1&prefill_address=...&prefill_zip=...
-  // The page's own ?quote=1 handler opens the estimate form on DOMContentLoaded; fill it right after.
+  // /index.html?quote=1 (city form with the switch OFF, old links): the page opens the estimate form; prefill and focus it
   var sp = new URLSearchParams(location.search);
-  if (sp.get('quote') === '1' && (sp.get('prefill_address') || sp.get('prefill_zip'))) {
+  if (sp.get('quote') === '1') {
     document.addEventListener('DOMContentLoaded', function () {
       setTimeout(function () {
         var a = document.getElementById('q-address'), z = document.getElementById('q-zip');
         if (a && sp.get('prefill_address')) a.value = sp.get('prefill_address').slice(0, 200);
         if (z && sp.get('prefill_zip')) z.value = sp.get('prefill_zip').replace(/\D/g, '').slice(0, 5);
+        var n = document.getElementById(a && a.value && z && z.value ? 'lq-name' : 'q-address');
+        if (n && n.offsetParent) try { n.focus({ preventScroll: true }); } catch (e) {}
       }, 0);
     });
   }
