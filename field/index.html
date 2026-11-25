@@ -1,7 +1,62 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-perf-page="field" data-perf-url="https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec">
 <head>
 <meta charset="UTF-8"/>
+<!-- PERF 2027 switch (front end). false (as shipped) = this page sends exactly the requests it always did.
+     true = one perf_bootstrap request at the top of <head> answers the on-load reads, and the update check revalidates
+     (304, ~0 KB) instead of re-downloading the whole page. Turn on ONLY after Script Property EVG_FLAG_PERF = on. -->
+<script>window.EVG_PERF = false;</script>
+<!-- PERF-BOOT-SHIM -->
+<script>
+/* PERF 2027 boot shim (EVG_PERF). Inlined by tools/perf/inline-shim.py into field/index.html and hq/index.html between the
+   PERF-BOOT-SHIM markers; edit THIS file and re-run the inliner. Does nothing unless window.EVG_PERF === true.
+   ON: as soon as <head> is parsed (long before the 500+ KB page finishes parsing), ONE perf_bootstrap request starts.
+   The page's own on-load GETs for those actions are then answered from that one response, each at most once and only
+   within 20 s, only for the same token (and the same date for get_route). Anything missing, failed or different goes
+   to the network exactly as before. Writes (POST, or any action not listed) are never touched. */
+(function () {
+  if (window.EVG_PERF !== true) return;
+  try {
+    if (/[?&]test=1\b/.test(location.search)) return;
+    var page = document.documentElement.getAttribute('data-perf-page');
+    var URL0 = document.documentElement.getAttribute('data-perf-url');
+    var ACT = { field: { get_checklist_config: 1, bookings: 1, customers_list: 1, get_route: 1, get_schedule_config: 1 },
+                hq: { version: 1, get_route: 1, get_field_status: 1, bookings: 1, get_crew_pay: 1 } }[page];
+    if (!ACT || !URL0 || !window.fetch) return;
+    var s = JSON.parse(localStorage.getItem('eg_staff_session') || 'null');
+    var exp = s && (s.expiry || s.exp);
+    if (!s || !s.token || !exp || new Date() > new Date(exp)) return;
+    if (page === 'hq' && !/^(owner|manager)$/i.test(String(s.role || ''))) return;
+    var t = new Date(), day = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+    var rf = window.fetch.bind(window), t0 = Date.now(), used = {};
+    var boot = rf(URL0 + '?action=perf_bootstrap&page=' + page + '&date=' + day + '&adminToken=' + encodeURIComponent(s.token))
+      .then(function (r) { return r.json(); })
+      .then(function (d) { return (d && d.success === true && d.perf === 1 && d.parts) ? d.parts : null; })
+      .catch(function () { return null; });
+    var q = function (url, k) { var m = url.match(new RegExp('[?&]' + k + '=([^&]*)')); return m ? decodeURIComponent(m[1]) : ''; };
+    window.fetch = function (u, o) {
+      var url = String(u && u.url ? u.url : u);
+      var isGet = !o || !o.method || String(o.method).toUpperCase() === 'GET';
+      if (isGet && url.indexOf(URL0 + '?') === 0 && Date.now() - t0 < 20000) {
+        var a = q(url, 'action');
+        var same = q(url, 'adminToken') === String(s.token) || a === 'version';
+        if (a === 'get_route' && (q(url, 'date') !== day || q(url, 'crew'))) same = false;
+        if (a === 'bookings' && q(url, 'includeCompleted') !== 'false') same = false;
+        if (ACT[a] && same && !used[a]) {
+          used[a] = 1;
+          return boot.then(function (parts) {
+            var p = parts && parts[a];
+            if (p && typeof p === 'object') return new Response(JSON.stringify(p), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            return rf(u, o);
+          });
+        }
+      }
+      return rf(u, o);
+    };
+  } catch (e) {}
+})();
+</script>
+<!-- /PERF-BOOT-SHIM -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"/>
 <!-- Tell the browser to revalidate the HTML instead of serving a stale cached copy -->
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate"/>
@@ -11,14 +66,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-11-17.2 */
+/* APP_VER:2026-11-20.3 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-11-17.2'; window.__APP_VER=V;
+  var V='2026-11-20.3'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -26,7 +81,7 @@
   // per version and then sit still — never a flicker loop. No controllerchange reload.
   function check(){
     if(document.hidden) return;
-    fetch('index.html?_='+Date.now(),{cache:'no-store'})
+    fetch(window.EVG_PERF===true?'index.html':'index.html?_='+Date.now(),{cache:window.EVG_PERF===true?'no-cache':'no-store'})
       .then(function(r){ return r.ok ? r.text() : null; })
       .then(function(html){
         if(!html) return;
@@ -312,6 +367,7 @@
   .fm-check .box{ width:24px; height:24px; border-radius:7px; border:2px solid #cbd5e1; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:14px; color:transparent; }
   .fm-check.on .box{ background:#16a34a; border-color:#16a34a; color:#fff; }
   .fm-skip-reasons{ display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+  @media (max-height:700px){ .fm-skip-reasons{ display:grid; grid-template-columns:1fr 1fr; } }   /* P0: 7 reasons fit a small phone without scrolling */
   .fm-sync{ font-size:12px; font-weight:700; padding:5px 10px; border-radius:999px; border:none; font-family:inherit; cursor:pointer; }
   .fm-sync.pending{ background:rgba(251,191,36,.2); color:#fbbf24; }
   .fm-sync.offline{ background:rgba(248,113,113,.2); color:#fca5a5; }
@@ -670,8 +726,226 @@
      arrives; until then the system font in --font shows. Stripe.js: no longer a blocking
      script tag here. It is only needed for "Card on file", so _fmLoadStripe() adds it on demand
      (and once in the background after the app is up). -->
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Emoji:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'"/>
-<noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Emoji:wght@400;500&display=swap" rel="stylesheet"/></noscript>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&family=Noto+Emoji:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'"/>
+<noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&family=Noto+Emoji:wght@400;500&display=swap" rel="stylesheet"/></noscript>
+<style id="evg-theme-2026">
+/* ═══ EVERGREEN 2026 FIELD THEME ═══════════════════════════════════════
+   Look-only layer for the crew app. Matches the website + HQ: evergreen ink,
+   lime for the main action on every screen, Bricolage Grotesque for headings
+   and numbers, Inter for everything else. Light surfaces on purpose: they
+   stay readable in full Florida sun. Loaded last; no logic depends on it.
+   ═════════════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#EEF1EA; --surface:#FFFFFF; --ink:#0C2318; --ink-2:#34473B; --mute:#5D7064; --faint:#94A398;
+  --line:#DEE4D9; --line-2:#C9D3C4;
+  --brand:#0C2318; --brand-2:#123A26; --on-brand-2:rgba(255,255,255,.72); --on-brand-line:rgba(255,255,255,.14);
+  --lime:#C9F25B; --lime-press:#B5E03F; --lime-soft:#EEF8D3; --lime-line:#C5DE8A;
+  --go:#1C6B3A; --go-press:#0C2318; --go-soft:#EEF8D3;
+  --drive:#0C2318; --drive-press:#000;
+  --danger:#C0341D; --warn:#875700; --warn-soft:#FFF5DC;
+  --r:14px; --r-lg:20px;
+  --sh-1:0 1px 2px rgba(12,35,24,.06),0 4px 14px rgba(12,35,24,.05);
+  --sh-2:0 2px 4px rgba(12,35,24,.06),0 14px 34px rgba(12,35,24,.10);
+  --display:'Bricolage Grotesque','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  /* older names still read by PMCS + inline markup */
+  --green-deep:#0C2318; --green:#1C6B3A; --green-mid:#1C6B3A; --green-pale:#EEF8D3; --border:#DEE4D9; --text:#0C2318; --text-muted:#5D7064; --red:#C0341D;
+}
+body{ background:var(--brand); color:var(--ink); }
+
+/* ── shared pieces ── */
+.fm-mark{ width:34px; height:34px; border-radius:11px; background:var(--lime); color:var(--ink); }
+.fm-mark .ic{ width:19px; height:19px; }
+.fm-btn{ border-radius:var(--r); font-weight:700; letter-spacing:-.005em; }
+.fm-btn:active{ transform:scale(.985); }
+.fm-btn-xl{ min-height:60px; font-size:17.5px; border-radius:16px; }
+.fm-btn-lg{ min-height:54px; font-size:16.5px; }
+.fm-btn-sm{ min-height:46px; font-size:14px; border-radius:12px; }
+.fm-btn-start,.fm-btn-done{ background:var(--lime); color:var(--ink); box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 6px 18px rgba(130,170,30,.28); }
+.fm-btn-start:active,.fm-btn-done:active{ background:var(--lime-press); }
+.fm-btn-start .ic,.fm-btn-done .ic{ color:var(--ink); }
+.fm-btn-nav{ background:var(--ink); color:#fff; box-shadow:0 6px 18px rgba(12,35,24,.22); }
+.fm-btn-nav .ic{ color:var(--lime); }
+.fm-btn-nav:active{ background:#000; }
+.fm-btn-ghost{ background:var(--surface); color:var(--ink); border:1px solid var(--line-2); }
+.fm-btn-ghost .ic{ color:var(--ink-2); }
+.fm-btn-ghost:active{ background:#F3F6EF; }
+.fm-btn:disabled{ opacity:.42; box-shadow:none; }
+#toast{ background:var(--ink); color:#fff; border-radius:999px; padding:13px 20px; font-weight:600; box-shadow:0 12px 30px rgba(0,0,0,.3); bottom:calc(88px + env(safe-area-inset-bottom)); }
+
+/* ── login ── */
+#loginScreen{ background:radial-gradient(700px 420px at 0% 0%, rgba(47,143,78,.35), rgba(47,143,78,0) 60%), var(--brand); }
+.login-card{ border-radius:24px; padding:30px 24px 26px; box-shadow:0 30px 70px rgba(0,0,0,.4); }
+.login-card h1{ font-family:var(--display); font-size:24px; font-weight:800; letter-spacing:-.02em; gap:12px; margin-bottom:16px; }
+.login-card h1 .fm-mark{ background:var(--lime); }
+.login-card h1 small{ font-family:Inter,sans-serif; font-size:13px; font-weight:600; color:var(--go); background:var(--lime-soft); border:1px solid var(--lime-line); padding:3px 9px; border-radius:999px; }
+.login-card p{ font-size:14.5px; color:var(--mute); }
+.login-input{ border:1.5px solid var(--line-2); border-radius:14px; padding:15px 16px; font-size:16px; background:#FAFBF8; }
+.login-input:focus{ border-color:var(--ink); background:#fff; box-shadow:0 0 0 4px rgba(201,242,91,.45); }
+.login-btn{ background:var(--lime); color:var(--ink); border-radius:14px; font-weight:700; min-height:56px; font-size:16.5px; }
+.login-btn:active{ background:var(--lime-press); }
+
+/* ── app bar ── */
+#fieldMode{ background:var(--bg); }
+.fm-top{ background:var(--brand); min-height:60px; padding:max(12px,env(safe-area-inset-top)) 14px 12px; }
+.fm-brand{ font-family:var(--display); font-size:19px; font-weight:800; letter-spacing:-.02em; gap:10px; }
+.fm-top-title{ font-family:var(--display); font-size:18px; font-weight:700; letter-spacing:-.015em; }
+.fm-top-exit,.fm-refresh{ height:38px; border-radius:999px; padding:0 14px; background:rgba(255,255,255,.08); border:1px solid var(--on-brand-line); font-weight:600; }
+.fm-refresh,.fm-top-exit.icon{ width:38px; padding:0; }
+.fm-top-exit:active,.fm-refresh:active{ background:rgba(255,255,255,.18); }
+.fm-top-timer{ height:34px; border-radius:999px; padding:0 12px; background:rgba(201,242,91,.12); border:1px solid rgba(201,242,91,.3); color:#E6FAB0; font-weight:700; }
+.fm-dot{ background:var(--lime); }
+.fm-sync.pending{ background:rgba(242,182,61,.18); color:#F7D48A; }
+.fm-sync.offline{ background:rgba(240,113,112,.2); color:#FBC0BF; }
+/* app bar never overlaps: the two button groups wrap to a second row (and the right group wraps
+   inside itself) before anything is squeezed. Buttons, the sync pill and the timer never shrink. */
+.fm-top{ flex-wrap:wrap; row-gap:8px; }
+.fm-top > div{ flex-wrap:wrap; row-gap:8px; min-width:auto; max-width:100%; }
+.fm-top > div:nth-child(2):last-child{ margin-left:auto; justify-content:flex-end; }
+.fm-top button,.fm-top .fm-top-timer,.fm-top .fm-sync{ flex-shrink:0; white-space:nowrap; }
+.fm-sync{ display:inline-flex; align-items:center; height:34px; padding:0 12px; line-height:1; }
+@media (max-width:430px){ #fmScreenJob .fm-top .fm-xs-hide{ display:none; } }
+
+/* ── start screen ── */
+.fm-start-center{ padding:0 16px 24px; }
+.fm-start-center > .fm-hero{ max-width:none; width:auto; margin:0 -16px 16px; }
+.fm-hero{ background:var(--brand); color:#fff; padding:10px 20px 22px; border-radius:0 0 28px 28px; }
+.fm-hero > *{ max-width:520px; margin-left:auto; margin-right:auto; }
+.fm-hero .fm-start-greet{ font-family:var(--display); font-size:30px; font-weight:800; letter-spacing:-.025em; color:#fff; line-height:1.1; margin-bottom:4px; }
+.fm-hero .fm-start-date{ color:var(--on-brand-2); font-size:14.5px; margin-bottom:18px; }
+.fm-hero .fm-today{ background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12); box-shadow:none; border-radius:20px; padding:18px 18px 16px; margin:0 auto; }
+.fm-hero .fm-start-stat{ gap:10px; }
+.fm-hero .fm-start-stat-num{ font-family:var(--display); font-size:56px; font-weight:800; letter-spacing:-.04em; color:var(--lime); }
+.fm-hero .fm-start-stat-lbl{ color:#fff; font-size:17px; font-weight:600; }
+.fm-hero .fm-start-sub{ color:var(--on-brand-2); border-top:1px solid rgba(255,255,255,.12); margin-top:14px; padding-top:12px; }
+.fm-route-setup{ border-radius:var(--r-lg); padding:16px; box-shadow:var(--sh-1); }
+.fm-label{ font-size:12px; font-weight:700; color:var(--mute); letter-spacing:.07em; }
+.fm-route-setup .login-input{ border-radius:12px; background:#FAFBF8; }
+.fm-icon-btn{ width:48px; border-radius:12px; color:var(--ink); }
+#fmStartPtNote{ margin-top:10px; }
+#fmStartPtNote .ic{ color:var(--go); }
+.fm-chip{ border-radius:999px; padding:8px 14px; font-weight:600; }
+.fm-chip.on{ background:var(--ink); border-color:var(--ink); color:#fff; }
+.fm-callrow{ border-radius:var(--r-lg); padding:14px 16px; }
+.fm-callrow-ico{ background:var(--lime-soft); color:var(--go); border-radius:12px; }
+.fm-quiet{ margin-top:22px; color:var(--mute); }
+.fm-section-title{ font-family:var(--display); font-weight:800; }
+
+/* bottom tab bar (Today / Schedule / PMCS / New customer) */
+.fm-tabbar{ flex-shrink:0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:2px; background:var(--surface); border-top:1px solid var(--line); padding:8px 6px max(10px,env(safe-area-inset-bottom)); }
+.fm-tab{ display:flex; flex-direction:column; align-items:center; gap:4px; min-height:54px; padding:4px 2px 2px; background:none; border:none; color:var(--mute); font-family:inherit; font-size:11.5px; font-weight:600; cursor:pointer; -webkit-appearance:none; appearance:none; }
+.fm-tab .fm-tab-ico{ width:56px; height:30px; border-radius:999px; display:flex; align-items:center; justify-content:center; transition:background .15s; }
+.fm-tab .ic{ width:21px; height:21px; }
+.fm-tab.on{ color:var(--ink); font-weight:700; cursor:default; }
+.fm-tab.on .fm-tab-ico{ background:var(--lime); }
+.fm-tab:active:not(.on) .fm-tab-ico{ background:#EEF1EA; }
+
+/* ── job screen ── */
+.fm-progress-wrap{ background:var(--brand); padding:2px 16px 16px; border-radius:0 0 24px 24px; }
+.fm-progress-meta{ font-size:13.5px; }
+.fm-progress-meta b{ font-family:var(--display); font-size:17px; font-weight:800; }
+.fm-progress-bar{ height:7px; background:rgba(255,255,255,.12); }
+.fm-progress-fill{ background:var(--lime); }
+.fm-totals-chip{ color:var(--on-brand-2); }
+.fm-body{ padding:16px 14px 20px; }
+.fm-card{ border-radius:24px; border:1px solid var(--line); box-shadow:var(--sh-2); padding:20px 18px 18px; }
+.fm-card-stopno{ width:36px; height:36px; border-radius:12px; background:var(--lime); color:var(--ink); font-family:var(--display); font-size:17px; font-weight:800; margin-bottom:12px; }
+.fm-card-name{ font-family:var(--display); font-size:28px; font-weight:800; letter-spacing:-.025em; line-height:1.08; margin-bottom:6px; }
+.fm-card-addr{ font-size:15.5px; color:var(--ink-2); margin-bottom:16px; }
+.fm-card-addr .ic{ color:var(--go); }
+.fm-pills{ gap:6px; margin-bottom:16px; }
+.fm-pill{ border-radius:999px; padding:6px 11px; font-size:12.5px; background:#F1F4ED; border-color:var(--line); color:var(--ink-2); }
+.fm-pill.amt{ background:var(--ink); border-color:var(--ink); color:var(--lime); font-weight:700; font-size:13.5px; }
+.fm-pill.muted{ background:#F1F4ED; }
+.fm-pill.warn{ background:var(--warn-soft); border-color:#F1DDA8; color:var(--warn); }
+.fm-note-box{ border-radius:16px; padding:13px 15px; background:var(--warn-soft); border:1px solid #F1DDA8; color:#4F3604; font-size:14.5px; }
+.fm-note-box b{ color:var(--warn); }
+.fm-card-actions{ gap:10px; }
+.fm-secondary-row{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+.fm-jobnav button{ border-radius:999px; min-height:44px; background:var(--surface); border-color:var(--line-2); color:var(--ink-2); }
+.fm-foot{ border-top:1px solid var(--line); padding:12px 14px max(12px,env(safe-area-inset-bottom)); box-shadow:0 -8px 24px rgba(12,35,24,.06); }
+.fm-foot-row .fm-skip{ border-radius:12px; min-height:46px; color:var(--ink-2); }
+.fm-foot-row .fm-skip.danger{ color:var(--danger); border-color:#EBC7BF; background:#FFF8F6; }
+.fm-skip.danger{ color:var(--danger); }
+#fmJobListBody > button,#fmJobListBody > div > button{ border-radius:18px !important; box-shadow:var(--sh-1) !important; }
+
+/* ── checklist / gear ── */
+#fmScreenChecklist .fm-section-title{ padding-top:20px; font-size:26px; }
+.fm-block-label{ font-size:12px; font-weight:700; letter-spacing:.07em; color:var(--mute); }
+.fm-check,.fm-addon-chip{ border:1.5px solid var(--line); border-radius:14px; min-height:56px; padding:14px 16px; background:var(--surface); box-shadow:0 1px 2px rgba(12,35,24,.04); }
+.fm-check .box{ width:26px; height:26px; border:2px solid var(--line-2); border-radius:8px; }
+.fm-check.on,.fm-addon-chip.on,.fm-toggle-btn.sent{ background:var(--lime-soft); border-color:var(--lime-line); color:var(--ink); }
+.fm-check.on .box{ background:var(--ink); border-color:var(--ink); color:var(--lime); }
+
+/* ── sheets (finish job, couldn't service, crew, day) ── */
+.fm-sheet{ border-radius:28px 28px 0 0; padding:26px 18px max(26px,env(safe-area-inset-bottom)); }
+#fmCompleteSheet .fm-sheet{ border-radius:0; }
+.fm-sheet-title{ font-family:var(--display); font-size:25px; font-weight:800; letter-spacing:-.02em; }
+.fm-sheet-sub{ font-size:14.5px; }
+.fm-sheet-ico{ background:var(--lime); color:var(--ink); border-radius:12px; }
+.fm-block{ border-radius:var(--r-lg); border:1px solid var(--line); padding:16px; box-shadow:var(--sh-1); }
+.fm-pay-amt{ font-family:var(--display); font-size:40px; font-weight:800; letter-spacing:-.03em; }
+.fm-toggle-btn{ border:1.5px solid var(--line); border-radius:14px; min-height:54px; font-weight:600; }
+.fm-toggle-btn.pay{ background:var(--ink); border-color:var(--ink); color:#fff; }
+.fm-toggle-btn.pay.on{ background:var(--lime); border-color:var(--lime); color:var(--ink); }
+.fm-toggle-btn.invoice{ background:var(--ink); border-color:var(--ink); color:#fff; }
+.fm-toggle-btn.cash-on{ background:#FFF1CF; border-color:#E2B24D; color:#4F3604; }
+.fm-skip-reasons .fm-toggle-btn{ padding-left:18px; font-size:15.5px; }
+.fm-textarea{ border:1.5px solid var(--line); border-radius:14px; background:#FAFBF8; }
+.fm-textarea:focus{ border-color:var(--ink); background:#fff; box-shadow:0 0 0 4px rgba(201,242,91,.45); }
+.fm-photo-cell{ border-radius:14px; width:84px; height:84px; }
+.fm-mini-link{ font-size:14px; }
+button[onclick="fmcCheckAll()"]{ background:var(--ink) !important; border-color:var(--ink) !important; color:var(--lime) !important; border-radius:999px !important; padding:6px 13px !important; }
+#fmCrewPicker > .fm-sheet > div[style*="background:#f0fdf4"]{ background:var(--lime-soft) !important; border-color:var(--lime-line) !important; }
+#fmCrewPicker > .fm-sheet > div[style*="background:#f0fdf4"] > div:first-child{ color:var(--go) !important; }
+#fmCrewResults{ border-color:var(--line) !important; border-radius:16px !important; }
+
+/* ── done / return ── */
+.fm-done-badge{ width:84px; height:84px; background:var(--lime); color:var(--ink); box-shadow:0 0 0 10px rgba(201,242,91,.25); margin-bottom:22px; }
+.fm-done-badge .ic{ width:38px; height:38px; stroke-width:2.6; }
+.fm-done-title{ font-family:var(--display); font-size:32px; font-weight:800; letter-spacing:-.025em; }
+.fm-done-stat{ border-radius:var(--r-lg); padding:16px 8px; }
+.fm-done-stat-num{ font-family:var(--display); font-size:28px; font-weight:800; }
+
+/* ── schedule ── */
+.cal-h{ font-family:var(--display); font-weight:800; letter-spacing:-.02em; }
+.cal-ib,.cal-tb{ border-radius:999px; }
+.cal-tb.on{ background:var(--lime); border-color:var(--lime); color:var(--ink); }
+.cal-seg{ background:#E2E7DD; border-radius:999px; }
+.cal-seg button{ border-radius:999px; }
+.cal-card,.cal-wcol{ border-radius:20px; }
+.today > .cal-num,.today .cal-whead .cal-num{ background:var(--ink); color:var(--lime); }
+.cal-cnt{ background:var(--lime-soft); color:var(--go); }
+.cal-wcol.today{ border-color:var(--lime-line); box-shadow:0 0 0 2px var(--lime-line),var(--sh-1); }
+.cal-chip.on{ background:var(--ink) !important; border-color:var(--ink) !important; color:#fff !important; }
+.cal-st.booked{ background:var(--lime-soft); color:var(--go); }
+.cal-row{ border-radius:16px; }
+.cal-sh-kicker{ color:var(--go); }
+.cal-close{ border-radius:14px; }
+
+/* ── PMCS (styles injected by script; body prefix wins) ── */
+body .pmcs-card{ border:1px solid var(--line); border-radius:20px; box-shadow:var(--sh-1); }
+body .pmcs-card-name,body .pmcs-head-title{ font-family:var(--display); font-weight:800; color:var(--ink); }
+body .pmcs-head-title{ font-size:21px; }
+body .pmcs-start-btn,body .pmcs-btn-submit{ background:var(--lime); color:var(--ink); border-radius:14px; font-weight:700; min-height:50px; }
+body .pmcs-start-btn.allok{ background:var(--surface); color:var(--go); border:1.5px solid var(--lime-line); }
+body .pmcs-overlay{ background:var(--bg); }
+body .pmcs-head{ border-bottom:1px solid var(--line); border-radius:0; }
+body .pmcs-head-close{ background:#EEF1EA; border-radius:999px; }
+body .pmcs-badge.ok{ background:var(--lime-soft); color:var(--go); border-color:var(--lime-line); }
+body .pmcs-item-toggle{ border-radius:9px; border-color:var(--line-2); }
+body .pmcs-section-title{ color:var(--mute); letter-spacing:.07em; }
+
+/* ── New customer sheet (built inline by script) ── */
+#ncOverlay > div{ border-radius:28px 28px 0 0 !important; color:var(--ink) !important; }
+#ncOverlay > div > div:first-child > div > div:first-child{ font-family:var(--display); font-size:22px !important; font-weight:800 !important; }
+#ncOverlay input,#ncOverlay select,#ncOverlay textarea{ border:1.5px solid var(--line) !important; border-radius:14px !important; background:#FAFBF8 !important; padding:14px !important; }
+#ncOverlay input:focus,#ncOverlay select:focus,#ncOverlay textarea:focus{ outline:none; border-color:var(--ink) !important; box-shadow:0 0 0 4px rgba(201,242,91,.45); }
+#ncOverlay button[onclick="ncClose()"]{ border-radius:999px !important; }
+#ncSubmitBtn{ background:var(--lime) !important; color:var(--ink) !important; border-radius:16px !important; min-height:58px; font-weight:700 !important; }
+
+/* loading veil */
+#fmLoadingOv{ background:rgba(12,35,24,.94) !important; }
+</style>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><symbol id="i-leaf" viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></symbol><symbol id="i-chev-l" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol><symbol id="i-chev-r" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol><symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol><symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol><symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol><symbol id="i-home" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol><symbol id="i-cal" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol><symbol id="i-play" viewBox="0 0 24 24"><path d="M6 3.5v17a1 1 0 0 0 1.5.86l14-8.5a1 1 0 0 0 0-1.72l-14-8.5A1 1 0 0 0 6 3.5Z"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol><symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></symbol><symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol><symbol id="i-nav" viewBox="0 0 24 24"><path d="M3 11 22 2l-9 19-2-8-8-2z"/></symbol><symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol><symbol id="i-card" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></symbol><symbol id="i-tap" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/></symbol><symbol id="i-pencil" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></symbol><symbol id="i-map" viewBox="0 0 24 24"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></symbol><symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></symbol><symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol><symbol id="i-unlock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></symbol><symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4M12 17h.01"/></symbol><symbol id="i-octagon" viewBox="0 0 24 24"><path d="M7.86 2h8.28L22 7.86v8.28L16.14 22H7.86L2 16.14V7.86z"/><path d="m15 9-6 6M9 9l6 6"/></symbol><symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol><symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></symbol><symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol><symbol id="i-user-plus" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></symbol><symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></symbol><symbol id="i-locate" viewBox="0 0 24 24"><path d="M2 12h3M19 12h3M12 2v3M12 19v3"/><circle cx="12" cy="12" r="7"/></symbol><symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></symbol><symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol><symbol id="i-ruler" viewBox="0 0 24 24"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2M11.5 9.5l2-2M8.5 6.5l2-2M17.5 15.5l2-2"/></symbol><symbol id="i-gps" viewBox="0 0 24 24"><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/></symbol><symbol id="i-cash" viewBox="0 0 24 24"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></symbol><symbol id="i-receipt" viewBox="0 0 24 24"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 8h8M8 12h8M8 16h5"/></symbol></defs></svg>
@@ -704,16 +978,14 @@
       <div class="fm-brand"><span class="fm-mark"><svg class="ic" aria-hidden="true"><use href="#i-leaf"/></svg></span>Evergreen</div>
       <div style="display:flex;align-items:center;gap:8px;"><button class="fm-sync" onclick="_fmFlushQueue()" style="display:none;"></button><div id="fmStartTimerSlot"></div><button class="fm-top-exit" onclick="logout()">Sign out</button></div>
     </div>
-    <div class="fm-tabs">
-      <button class="fm-top-exit on" disabled><svg class="ic sm" aria-hidden="true"><use href="#i-home"/></svg>Today</button>
-      <button class="fm-top-exit" onclick="fmOpenSched()"><svg class="ic sm" aria-hidden="true"><use href="#i-cal"/></svg>My schedule</button>
-    </div>
     <div class="fm-start-center">
+      <div class="fm-hero">
       <div class="fm-start-greet" id="fmGreet">Let's go</div>
       <div class="fm-start-date" id="fmStartDate"></div>
       <div class="fm-today">
         <div class="fm-start-stat"><div class="fm-start-stat-num" id="fmStartCount">—</div><div class="fm-start-stat-lbl">stops today</div></div>
         <div class="fm-start-sub" id="fmStartSub"></div>
+      </div>
       </div>
       <!-- 📞 Quote Call leads assigned to this crew. Markup is built by _fmCallsBannerHtml
            so the copy of this banner on the job-list screen can't drift from this one. -->
@@ -730,10 +1002,11 @@
       </div>
       <button class="fm-btn fm-btn-xl fm-btn-start" id="fmStartBtn" onclick="fmStartTapped()"><svg class="ic fill sm" aria-hidden="true"><use href="#i-play"/></svg>Start my route</button>
       <button class="fm-skip fm-danger-link" id="fmStartEndBtn" style="display:none;margin-top:12px;" onclick="fmEmergencyEnd()"><svg class="ic sm" aria-hidden="true"><use href="#i-flag"/></svg>End route &amp; clock out</button>
-      <div class="fm-tiles"><button class="fm-tile" onclick="pmcsOpenMenu()"><span class="fm-tile-ico"><svg class="ic" aria-hidden="true"><use href="#i-wrench"/></svg></span><span><b>PMCS</b><span class="s">Maintenance checks</span></span></button><button class="fm-tile" onclick="ncOpen()"><span class="fm-tile-ico"><svg class="ic" aria-hidden="true"><use href="#i-user-plus"/></svg></span><span><b>New customer</b><span class="s">Book on the spot</span></span></button></div>
+      
       <!-- Reachable when something is wrong and nobody can explain what -->
       <button class="fm-quiet" onclick="fmDiag()"><svg class="ic sm" aria-hidden="true"><use href="#i-activity"/></svg>Something not working? Run diagnostics</button>
     </div>
+    <nav class="fm-tabbar" aria-label="Main"><button type="button" class="fm-tab on" aria-current="page" disabled><span class="fm-tab-ico"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></span>Today</button><button type="button" class="fm-tab" onclick="fmOpenSched()"><span class="fm-tab-ico"><svg class="ic" aria-hidden="true"><use href="#i-cal"/></svg></span>Schedule</button><button type="button" class="fm-tab" onclick="pmcsOpenMenu()"><span class="fm-tab-ico"><svg class="ic" aria-hidden="true"><use href="#i-wrench"/></svg></span>PMCS</button><button type="button" class="fm-tab" onclick="ncOpen()"><span class="fm-tab-ico"><svg class="ic" aria-hidden="true"><use href="#i-user-plus"/></svg></span>New customer</button></nav>
   </div>
   <!-- START-OF-ROUTE CHECKLIST -->
   <div class="fm-screen" id="fmScreenChecklist">
@@ -817,6 +1090,7 @@
   <div class="fm-screen" id="fmScreenSched">
     <div class="fm-top"><button class="fm-top-exit" onclick="fmBackToStart()"><svg class="ic sm" aria-hidden="true"><use href="#i-chev-l"/></svg>Back</button><div class="fm-top-title">My schedule</div><div style="width:76px;"></div></div>
     <div class="fm-body" id="fmSchedBody"></div>
+    <nav class="fm-tabbar" aria-label="Main"><button type="button" class="fm-tab" onclick="fmBackToStart()"><span class="fm-tab-ico"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></span>Today</button><button type="button" class="fm-tab on" aria-current="page" disabled><span class="fm-tab-ico"><svg class="ic" aria-hidden="true"><use href="#i-cal"/></svg></span>Schedule</button><button type="button" class="fm-tab" onclick="pmcsOpenMenu()"><span class="fm-tab-ico"><svg class="ic" aria-hidden="true"><use href="#i-wrench"/></svg></span>PMCS</button><button type="button" class="fm-tab" onclick="ncOpen()"><span class="fm-tab-ico"><svg class="ic" aria-hidden="true"><use href="#i-user-plus"/></svg></span>New customer</button></nav>
   </div>
 </div>
 
@@ -831,6 +1105,11 @@
     <div class="fm-block" id="fmcAddonsBlock" style="display:none;">
       <div class="fm-block-label">Extra services done today?</div>
       <div id="fmcAddons" class="fm-addon-row"></div>
+    </div>
+    <div class="fm-block" id="fmcYardBlock" style="display:none;">
+      <div class="fm-block-label"><span>Yard check (first visit)</span><span id="fmcYardState" class="req">required</span></div>
+      <div id="fmcYard"></div>
+      <input type="file" id="fmcYardPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="fmYardPhotoSelected(this)">
     </div>
     <div class="fm-block">
       <div class="fm-block-label"><span>Photo</span><span style="color:#94a3b8;">optional</span></div>
@@ -867,11 +1146,12 @@
     <div class="fm-sheet-title" id="fmSkipTitle">Couldn't service this stop</div>
     <div class="fm-sheet-sub">The job stays open for follow-up — a note is logged for the office.</div>
     <div class="fm-skip-reasons">
-      <button class="fm-toggle-btn" onclick="fmRecordSkip('Not home')">Not home</button>
-      <button class="fm-toggle-btn" onclick="fmRecordSkip('Gate locked')">Gate locked</button>
-      <button class="fm-toggle-btn" onclick="fmRecordSkip('Dog in yard')">Dog in yard</button>
-      <button class="fm-toggle-btn" onclick="fmRecordSkip('Weather')">Weather</button>
-      <button class="fm-toggle-btn" onclick="fmRecordSkip('Yard not ready')">Yard not ready</button>
+      <button class="fm-toggle-btn" onclick="fmRecordSkip('Gate locked','gate_locked')">Gate locked</button>
+      <button class="fm-toggle-btn" onclick="fmRecordSkip('Dog in yard','dog')">Dog in yard</button>
+      <button class="fm-toggle-btn" onclick="fmRecordSkip('Customer asked to skip','customer_asked')">Customer asked to skip</button>
+      <button class="fm-toggle-btn" onclick="fmRecordSkip('Rain','rain')">Rain</button>
+      <button class="fm-toggle-btn" onclick="fmRecordSkip('No access / not home','no_access')">No access / not home</button>
+      <button class="fm-toggle-btn" onclick="fmRecordSkip('Yard not ready','other')">Yard not ready</button>
       <button class="fm-toggle-btn" onclick="fmPromptSkipOther()">Other reason…</button>
     </div>
     <div class="fm-err" id="fmSkipErr"></div>
@@ -958,6 +1238,7 @@ function _fmIsOwner(){ return String(adminRole||'').toLowerCase().trim()==='owne
 let _fmBooted=false;   // false until the crew taps Start/Continue → land on the Start screen on every fresh app open (never auto-drop into a job)
 // complete-sheet state
 let _fmcCollectOld=false; // cash only: also collect the customer's OLD balance (balanceRows) with today's job
+let _fmcYard=null;   // PARCEL SAFETY: first-cut yard check for a monthly-plan customer (backend EVG_FLAG_PARCEL_CHECK). null = not asked
 let _fmcPrepaid=false;   // this visit is already settled (prepaid / charged from HQ) — nothing to collect
 let _fmcStop=null, _fmcRowIdx=-1, _fmcPayType='invoice', _fmcCash=false, _fmcInvoiceSent=false, _fmcChargeChosen=false, _fmcBase=0, _fmcAddons=[], _fmcPhotos=[], _fmcEndChk={}, _fmcCustNote0='';
 
@@ -1587,6 +1868,7 @@ async function _loadDataInner(refreshToast){
     if(refreshToast) showToast('↻ Jobs updated');
   }catch(e){ _hydrateFromCache(); }
   _fmApplyNotePins();   // re-assert any note edit the sheet hasn't confirmed yet
+  _fmDaySnapTake(allBookings);   // remember today's stops: a done visit whose row moves on stays on today (_fmDoneCarried)
   if(!_anySheetOpen()) _fmRender();   // data is fresh either way; never repaint under an open sheet
 }
 /* ── 📌 Note pins — the ~30s poll replaces allBookings wholesale, so a refresh
@@ -1612,7 +1894,7 @@ function _fmApplyNotePins(){
   });
   if(changed){ try{ localStorage.setItem('evg_fm_notepins',JSON.stringify(_fmNotePins)); }catch(e){} }
 }
-function _hydrateFromCache(){ try{ const b=localStorage.getItem('evg_field_bookings'); if(b) allBookings=JSON.parse(b); const c=localStorage.getItem('evg_field_customers'); if(c) allCustomers=JSON.parse(c); if(!(_savedOrderKeys&&_savedOrderKeys.length)) _optOrderKeys=_loadOptOrderCache(); _fmApplyNotePins(); }catch(e){} }
+function _hydrateFromCache(){ try{ const b=localStorage.getItem('evg_field_bookings'); if(b) allBookings=JSON.parse(b); const c=localStorage.getItem('evg_field_customers'); if(c) allCustomers=JSON.parse(c); if(!(_savedOrderKeys&&_savedOrderKeys.length)) _optOrderKeys=_loadOptOrderCache(); _fmApplyNotePins(); _fmDaySnapTake(allBookings); }catch(e){} }
 // Build an ordered list of stop keys (email|serviceDate) from a get_route response, if present.
 function _extractRouteKeys(rRes){
   try{
@@ -2334,7 +2616,9 @@ async function _fmFlushQueue(){
     // network drop stops the pass entirely (retries next flush).
     // Money first, photos last: a big photo upload that keeps timing out on a weak
     // signal used to sit ahead of every later job's cash/invoice and block them all day.
-    const _rank=function(it){ return it.kind==='done'?0:(it.kind==='cash'||it.kind==='invoice'||it.kind==='addons')?1:it.kind==='photo'?3:2; };
+    // A crew-added NEW CUSTOMER goes before everything: the job done / cash for that stop needs the booking to exist.
+    // (2026-11-20.3) done ran first and was refused "Could not find this job", which held the new customer behind it forever.
+    const _rank=function(it){ return it.kind==='newcust'?-1:it.kind==='done'?0:(it.kind==='cash'||it.kind==='invoice'||it.kind==='addons')?1:it.kind==='photo'?3:2; };
     const _order=q.slice().sort(function(a,b){ return _rank(a)-_rank(b); });
     const _blocked={};
     for(const item of _order){
@@ -2350,7 +2634,7 @@ async function _fmFlushQueue(){
       // A done call saved before its direct send waits out that send (see fmSubmitComplete).
       if(item.holdUntil && Date.now()<item.holdUntil){ _blocked[_base]=1; continue; }
       // A note the backend REJECTED (see below) waits out its back-off. Nothing queues behind it.
-      if(item.nextTry && Date.now()<item.nextTry && (item.kind==='note'||item.kind==='skip')) continue;
+      if(item.nextTry && Date.now()<item.nextTry && (item.kind==='note'||item.kind==='skip'||item.kind==='visitev')) continue;
       try{
         // Always send with the CURRENT session token — queued items captured at enqueue
         // time carry a token that may have expired hours ago ("Unauthorized" forever).
@@ -2371,11 +2655,14 @@ async function _fmFlushQueue(){
         if(_j.success===false){ item.lastErr=String(_j.error||'rejected'); throw new Error('backend: '+item.lastErr); }   // queue rejections show in the badge — they never log anyone out
         if(item.kind==='done' && _j.charged===false){ try{ showToast('⚠️ Card declined for '+((item.params&&item.params.email)||'a completed job')+' — office emailed. Collect cash/invoice if you can.',9000); }catch(_te){} }   // field_complete returns success:true,charged:false on a decline — crew never heard about it before
         _fmMarkKeyDone(item.idemKey); q.splice(q.indexOf(item),1); _fmQueueRemoveKey(item.idemKey);
+        if(item.kind==='newcust'){ try{ const _nn=(item.params&&item.params.name)||'New customer'; showToast(_j.duplicate?('\u2139\ufe0f '+_nn+' was already on file \u2014 not added twice. Office notified.'):('\u2705 '+_nn+' added \u2014 on the schedule'),6000); }catch(_te){} }   // the backend confirmed it: only now say "added"
       }catch(netErr){
         const _isLogical=/^backend:|^HTTP \d/.test(String((netErr&&netErr.message)||''));
         item.tries=(item.tries||0)+1;
-        const _crit=(item.kind==='photo'||item.kind==='done'||item.kind==='invoice'||item.kind==='cash'||item.kind==='addons'||item.kind==='quoteest');   // estimates are customer data — never silently dropped
-        if(_crit&&item.lastErr&&item.tries===3){ try{ showToast('⚠️ '+item.kind.toUpperCase()+' not going through: '+item.lastErr+' — it will keep retrying'); }catch(e){} }
+        const _crit=(item.kind==='photo'||item.kind==='done'||item.kind==='invoice'||item.kind==='cash'||item.kind==='addons'||item.kind==='quoteest'||item.kind==='yardcheck'||item.kind==='newcust');   // estimates are customer data — never silently dropped
+        // A new customer the backend REFUSED is said out loud the first time (the crew is usually still in the driveway).
+        if(item.kind==='newcust'&&_isLogical&&item.lastErr&&!item.errToasted){ item.errToasted=1; try{ showToast('\u26a0\ufe0f NEW CUSTOMER '+((item.params&&item.params.name)||'')+' NOT added: '+item.lastErr+' \u2014 it stays on this phone and keeps retrying. Tap the red badge.',10000); }catch(e){} }
+        if(_crit&&item.kind!=='newcust'&&item.lastErr&&item.tries===3){ try{ showToast('⚠️ '+item.kind.toUpperCase()+' not going through: '+item.lastErr+' — it will keep retrying'); }catch(e){} }
         // NO silent age-out — queued work is customer data. Items stay until they succeed
         // or someone deletes them on purpose from the queue viewer (tap the sync badge).
         // Office notes and "couldn't service" reasons stand alone: no other item needs them to land
@@ -2384,7 +2671,7 @@ async function _fmFlushQueue(){
         // hold this customer's checklist and photos behind it, and must not hammer the backend
         // every 20s. It stays in the queue (visible in the sync badge) and retries on a back-off:
         // 40s, 80s, ... capped at 15 min. Quote notes are NOT included: their order is deliberate.
-        const _solo=_isLogical && (item.kind==='note'||item.kind==='skip') && !/unauthor|^HTTP /i.test(String(item.lastErr||(netErr&&netErr.message)||''));   // a session/HTTP problem is not a verdict on the note
+        const _solo=_isLogical && (item.kind==='note'||item.kind==='skip'||item.kind==='visitev') && !/unauthor|^HTTP /i.test(String(item.lastErr||(netErr&&netErr.message)||''));   // a session/HTTP problem is not a verdict on the note
         if(_solo) item.nextTry=Date.now()+Math.min(900000, 20000*Math.pow(2, Math.min(item.tries,6)));
         _fmQueuePutItem(item);
         if(!_isLogical && item.kind!=='photo') break;   // device offline / network drop — stop the pass (a slow photo just waits its turn)
@@ -2392,7 +2679,45 @@ async function _fmFlushQueue(){
         _blocked[_base]=1;            // backend rejected — hold this customer's items, keep going
       }
     }
-  } finally { _fmFlushing=false; _fmUpdateSyncBadge(); }
+  } finally { _fmFlushing=false; _fmUpdateSyncBadge(); try{ _fmQueueReport(false); }catch(e){} }
+}
+/* ── STUCK ITEMS REPORT (2026-11-20.3) ── items still on this phone after 30 min (any new customer, done or cash item,
+   or anything that failed more than FM_STUCK_TRIES times) go to the backend (field_queue_report -> 'Field Queue' tab,
+   owner alert for a stuck new customer / done / cash). Sent directly, never through the queue; each item at most
+   once per 2 hours unless the crew taps "Send stuck list to office". Nothing is removed from the queue. */
+const FM_QREP_KEY='evg_fm_qrep_v1', FM_QREP_AGE_MS=30*60000, FM_QREP_EVERY_MS=2*3600000;
+let _fmQRepBusy=false, _fmQRepFailAt=0;   // a failed report (old backend answers "Missing required fields") waits 10 min before the next automatic try
+function _fmQueueReportItems(){
+  const now=Date.now();
+  return _fmQueueLoad().filter(function(it){ return it&&it.at&&now-it.at>FM_QREP_AGE_MS&&(it.kind==='newcust'||it.kind==='done'||it.kind==='cash'||(it.tries||0)>FM_STUCK_TRIES); }).slice(0,40).map(function(it){
+    const p=it.params||it.body||{};
+    return { kind:String(it.kind||''), idemKey:String(it.idemKey||''), name:String(p.name||''), email:String(p.email||''), serviceDate:String(p.serviceDate||p.date||''), action:String(p.action||''), tries:it.tries||0, lastErr:String(it.lastErr||'').slice(0,160), ageMin:Math.round((now-it.at)/60000) };
+  });
+}
+async function _fmQueueReport(force){
+  if(_fmQRepBusy||!adminToken||navigator.onLine===false) return false;
+  if(!force&&_fmQRepFailAt&&Date.now()-_fmQRepFailAt<600000) return false;
+  const items=_fmQueueReportItems();
+  if(!items.length){ if(force){ try{ showToast('Nothing stuck to report'); }catch(e){} } return false; }
+  let sent={}; try{ sent=JSON.parse(localStorage.getItem(FM_QREP_KEY)||'{}')||{}; }catch(e){ sent={}; }
+  const now=Date.now();
+  const fresh=force?items:items.filter(function(x){ return !sent[x.idemKey]||now-sent[x.idemKey]>FM_QREP_EVERY_MS; });
+  if(!fresh.length) return false;
+  _fmQRepBusy=true;
+  try{
+    const av=(typeof window!=='undefined'&&window.__APP_VER)?String(window.__APP_VER):'';
+    const res=await _fmFetchT(SCRIPT_URL+'?'+new URLSearchParams({ action:'field_queue_report', items:JSON.stringify(fresh), appVer:av, adminToken:adminToken }).toString(), {}, 30000);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    let j=null; try{ j=JSON.parse(await res.text()); }catch(_e){}
+    if(!j||j.success===false) throw new Error((j&&j.error)||'no reply');
+    _fmQRepFailAt=0;
+    const keep={}; const live=new Set(items.map(function(x){ return x.idemKey; }));
+    Object.keys(sent).forEach(function(k){ if(live.has(k)) keep[k]=sent[k]; }); fresh.forEach(function(x){ keep[x.idemKey]=now; });
+    try{ localStorage.setItem(FM_QREP_KEY, JSON.stringify(keep)); }catch(e){}
+    if(force){ try{ showToast('\ud83d\udce4 Stuck list sent to the office ('+fresh.length+')'); }catch(e){} }
+    return true;
+  }catch(e){ _fmQRepFailAt=Date.now(); if(force){ try{ showToast('Could not send the list: '+e.message); }catch(_e){} } return false; }
+  finally{ _fmQRepBusy=false; }
 }
 function fmQueueDrop(i){
   try{
@@ -2431,7 +2756,9 @@ function fmQueueViewer(){
     +'<div style="display:flex;gap:8px;margin-top:10px;">'
     +'<button onclick="try{navigator.clipboard.writeText(JSON.stringify(_fmQueueLoad(),null,1));showToast(\'Copied queue details 📋\');}catch(e){alert(\'copy failed\')}" style="flex:1;padding:10px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:700;">📋 Copy all details</button>'
     +'<button onclick="document.getElementById(\'fmQvOverlay\').remove()" style="flex:1;padding:10px;border-radius:10px;border:1px solid #456;background:transparent;color:#cde;font-weight:700;">Close</button>'
-    +'</div></div>';
+    +'</div>'
+    +'<button onclick="_fmQueueReport(true)" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;border:1px solid #b45309;background:transparent;color:#fbbf24;font-weight:700;">\ud83d\udce4 Send stuck list to office</button>'
+    +'</div>';
   ov.addEventListener('click',function(ev){ if(ev.target===ov) ov.remove(); });
   document.body.appendChild(ov);
 }
@@ -2445,16 +2772,17 @@ function _fmQueueStats(){
     st.n=q.length;
     q.forEach(function(it){
       if(_fmMemQ.indexOf(it)>=0) st.unsaved++;
-      const failed=(it.tries||0)>FM_STUCK_TRIES;
+      const failed=(it.tries||0)>FM_STUCK_TRIES || (it.kind==='newcust'&&!!it.lastErr);   // a refused new customer is red from the FIRST refusal
+      if(it.kind==='newcust'&&(failed||(online&&it.at&&now-it.at>FM_STUCK_AGE_MS))) st.newcust=(st.newcust||0)+1;
       if(failed || (online && it.at && now-it.at>FM_STUCK_AGE_MS)){
         st.stuck++; const k=it.kind||'item'; st.kinds[k]=(st.kinds[k]||0)+1;
-        if(!st.first && failed && it.lastErr) st.first=it;
+        if(failed && it.lastErr && (!st.first || (it.kind==='newcust'&&st.first.kind!=='newcust'))) st.first=it;
       }
     });
   }catch(e){}
   return st;
 }
-const _FM_KIND_LABEL={ done:'job done', quotedone:'quote done', cash:'cash payment', invoice:'invoice', addons:'add-ons', clockout:'clock-out', photo:'photo', note:'office note', skip:'skip reason', quotenote:'quote note', endchk:'checklist', custnote:'customer note' };
+const _FM_KIND_LABEL={ newcust:'new customer NOT added', done:'job done', quotedone:'quote done', cash:'cash payment', invoice:'invoice', addons:'add-ons', clockout:'clock-out', photo:'photo', note:'office note', skip:'skip reason', quotenote:'quote note', endchk:'checklist', custnote:'customer note' };
 function _fmStuckSummary(st){ return Object.keys(st.kinds).map(function(k){ return st.kinds[k]+' '+(_FM_KIND_LABEL[k]||k); }).join(' \u00b7 '); }
 // Big, plain card on the Start screen while anything is stuck or unsaved. Built here (not in the
 // page markup) and removed again the moment the queue is healthy.
@@ -2487,7 +2815,7 @@ function _fmUpdateSyncBadge(){
   const st=_fmQueueStats(); const n=st.n, online=navigator.onLine!==false;
   const stuck=st.stuck>0;
   // Badge text is short on purpose: the long version ran over the header. The error is one tap away in the list.
-  document.querySelectorAll('.fm-sync').forEach(el=>{ el.style.cursor='pointer'; el.onclick=fmQueueViewer; if(n===0){ el.style.display='none'; return; } el.style.display=''; if(!online){ el.className='fm-sync offline'; el.textContent='📴 '+n+' to sync'; } else if(stuck){ el.className='fm-sync offline'; const s1=st.first; el.textContent=('⚠ '+st.stuck+' stuck'+(n>st.stuck?(' of '+n):'')+' — tap'); el.title=(s1?(s1.kind+': '+String(s1.lastErr).slice(0,120)):''); } else { el.className='fm-sync pending'; el.textContent='⏳ Syncing '+n+'…'; } });
+  document.querySelectorAll('.fm-sync').forEach(el=>{ el.style.cursor='pointer'; el.onclick=fmQueueViewer; if(n===0){ el.style.display='none'; return; } el.style.display=''; if(!online){ el.className='fm-sync offline'; el.textContent='📴 '+n+' to sync'; } else if(stuck){ el.className='fm-sync offline'; const s1=st.first; el.textContent=(st.newcust?('⚠ New customer not added — tap'):('⚠ '+st.stuck+' stuck'+(n>st.stuck?(' of '+n):'')+' — tap')); el.title=(s1?(s1.kind+': '+String(s1.lastErr).slice(0,120)):''); } else { el.className='fm-sync pending'; el.textContent='⏳ Syncing '+n+'…'; } });
   const b=document.getElementById('netBanner'); if(b){
     if(navigator.onLine===false){ b.style.background=''; b.className='show'; b.textContent='📴 Offline — work is saved, syncs when you reconnect'+(n?(' · '+n+' pending'):'')+(st.unsaved?(' · \u26a0 '+st.unsaved+' NOT saved (storage full): keep app open'):''); }
     else if(st.unsaved){ b.style.background='#b91c1c'; b.className='show'; b.textContent='\u26a0 Phone storage FULL \u2014 '+st.unsaved+' item'+(st.unsaved!==1?'s':'')+' not saved on this phone. Keep the app OPEN.'; }
@@ -2672,7 +3000,60 @@ function _fmAddLocalSameDay(nb,anchorKey){
 }
 
 function _isQuoteCall(b){ return /quote call/i.test(String((b&&(b.service||b.serviceType))||'')); } // office phone lead — not a crew stop
-function _fmTodayRawJobs(){ const ds=todayISOStr(); return (allBookings||[]).filter(b=>!b.rowCancelled&&!_isQuoteCall(b)&&dateOf(b)===ds&&_crewMatch(b)); } // completed jobs stay so progress counts them as done; Quote Calls are never route stops — see _fmMyCalls
+function _fmTodayRawJobs(){ const ds=todayISOStr(); const live=(allBookings||[]).filter(b=>!b.rowCancelled&&!_isQuoteCall(b)&&dateOf(b)===ds&&_crewMatch(b)); return live.concat(_fmDoneCarried(ds)); } // completed jobs stay so progress counts them as done (incl. ones whose row moved on, see _fmDoneCarried); Quote Calls are never route stops — see _fmMyCalls
+/* ── ✅ DONE TODAY, ROW MOVED ON (2026-11-20.1) ───────────────────────────────────────────
+   A recurring visit that is completed AND paid is archived to Completed Jobs, and the
+   customer's next visit is a row with the NEXT date. The app pulls bookings with
+   includeCompleted=false, so today's row simply vanished from the day: "2 jobs" while 3
+   were done (Justin Peterson done 11/18, his row now 12/01). Fix, front end only:
+   keep a per-day snapshot of every stop for today this phone has seen (live pull, cache,
+   local completion). A snapshot stop that is GONE from the live pull stays on today's list
+   as done, only with proof it was completed today: seen done (incl. ghost-done), finished
+   in this phone's done order (not a skip), or the customer's Last Completed is today
+   (customers_list). A gone stop without proof (rescheduled / cancelled) is NOT carried.
+   Any row still in allBookings for that stop key today (any crew, even cancelled) wins,
+   so a done row that stayed on today (Fess Rose) is never counted twice. ── */
+const _FM_DAYSNAP_KEY='evg_fm_daysnap_v1';
+let _fmDaySnap={date:'',rows:{}}; try{ const _ds0=JSON.parse(localStorage.getItem(_FM_DAYSNAP_KEY)||'null'); if(_ds0&&_ds0.rows&&typeof _ds0.date==='string') _fmDaySnap=_ds0; }catch(e){}
+function _fmDaySnapTake(list){
+  try{
+    const ds=todayISOStr(); let dirty=false;
+    if(_fmDaySnap.date!==ds){ _fmDaySnap={date:ds,rows:{}}; dirty=true; }   // new day: yesterday's stops are dropped
+    (list||[]).forEach(function(b){
+      if(!b||b.rowCancelled||b._localTemp||b._doneCarried||_isQuoteCall(b)||dateOf(b)!==ds) return;
+      const k=_stopKey(b), c=JSON.parse(JSON.stringify(b)); c._snapDone=isDone(b);   // latest look wins
+      const prev=_fmDaySnap.rows[k]; if(prev&&JSON.stringify(prev)===JSON.stringify(c)) return;
+      _fmDaySnap.rows[k]=c; dirty=true;
+    });
+    if(dirty) localStorage.setItem(_FM_DAYSNAP_KEY,JSON.stringify(_fmDaySnap));
+  }catch(e){}
+}
+function _fmDoneTodayProof(k,b,ds){
+  if(b._snapDone) return true;
+  try{ if(_fmGhostDone[k]) return true; }catch(e){}
+  try{ if((_doneSeq||[]).indexOf(k)>=0&&!_fmSkipped[k]) return true; }catch(e){}
+  try{
+    const em=_nkNorm(b.email); if(!em) return false;
+    const c=(allCustomers||[]).find(function(x){ return _nkNorm(x&&x.Email)===em; });
+    const lc=c&&String(c['Last Completed']||'').trim();
+    if(lc&&dateOf({serviceDate:lc})===ds) return true;
+  }catch(e){}
+  return false;
+}
+function _fmDoneCarried(ds){
+  try{
+    if(_fmDaySnap.date!==ds) return [];
+    const keys=Object.keys(_fmDaySnap.rows||{}); if(!keys.length) return [];
+    const have={}; (allBookings||[]).forEach(function(b){ if(b&&dateOf(b)===ds) have[_stopKey(b)]=1; });
+    const out=[];
+    keys.forEach(function(k){
+      const b=_fmDaySnap.rows[k]; if(!b||have[k]||!_crewMatch(b)||!_fmDoneTodayProof(k,b,ds)) return;
+      b._doneCarried=true; if(!isDone(b)) b.done='✓ Done';   // same object every call, so a selected stop stays selected
+      out.push(b);
+    });
+    return out;
+  }catch(e){ return []; }
+}
 
 /* ═══════════ 📞 CALL CUSTOMER — leads the crew lead rings from the truck ═══════════
    handleXLQuoteVisit drops a "Quote Call" row on the board for every estimate
@@ -2706,6 +3087,10 @@ function _fmLeadAgeLabel(b){
   return 'came in '+n+' days ago';
 }
 function _fmCallTries(b){ return (String((b&&b.notes)||'').match(/Left voicemail|No answer/gi)||[]).length; }   // a voicemail IS an attempt — both labels must count
+/* 🏡 ON-SITE QUOTE (2026-11-20.2, backend EVG_FLAG_ONSITE_QUOTE): a Quote Call whose notes carry "[ONSITE OQ-...]" came from a
+   yard that got no instant price (website or phone agent). The tag rides along to the quote visit this sheet books, so the
+   quoter can price the monthly plan on site and text the sign-up link (qjOnsite*, growth_onsite_price). No tag = nothing changes. */
+function _fmOnsiteId(b){ const m=String((b&&b.notes)||'').match(/\[ONSITE (OQ-[0-9A-F]{10})\]/); return m?m[1]:''; }
 
 /* The 30s poll replaces allBookings wholesale, so a flag set on the row OBJECT is
    gone by the next refresh and a lead the crew just handled pops back onto the
@@ -2817,7 +3202,7 @@ function _fmRenderCalls(){
       +'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;"><span style="font-size:16px;font-weight:800;color:#0e4f5e;">'+esc(b.name||'?')+'</span>'+badge+'</div>'
       +'<div style="font-size:12.5px;color:#64748b;margin-top:3px;">'+esc(b.address||'—')+(b.zip?(' · '+esc(String(b.zip))):'')+'</div>'
       +'<div style="font-size:13px;font-weight:700;color:'+(ph?'#0891b2':'#b45309')+';margin-top:5px;">'+(ph?('📞 '+esc(ph)):'⚠ No phone on file')+'</div>'
-      +'<div style="font-size:11.5px;font-weight:700;color:'+(stale?'#b91c1c':'#94a3b8')+';margin-top:3px;">🌐 Website estimate request · '+esc(_fmLeadAgeLabel(b))+'</div>'
+      +'<div style="font-size:11.5px;font-weight:700;color:'+(stale?'#b91c1c':'#94a3b8')+';margin-top:3px;">'+(_fmOnsiteId(b)?'🏡 Free on-site quote request · ':'🌐 Website estimate request · ')+esc(_fmLeadAgeLabel(b))+'</div>'
       +'</button>';
   }).join('');
 }
@@ -2865,7 +3250,7 @@ function _qcRender(){
   (function(){
     const el=document.getElementById('qc-prov'); if(!el) return;
     const age=_fmLeadAgeDays(b), stale=(age!==null&&age>=14);
-    el.textContent='🌐 Asked for a free estimate on the website · '+_fmLeadAgeLabel(b);
+    el.textContent=(_fmOnsiteId(b)?'🏡 Asked for a free on-site quote (no instant price) · ':'🌐 Asked for a free estimate on the website · ')+_fmLeadAgeLabel(b);
     el.style.color=stale?'#b91c1c':'#64748b';
     el.style.fontWeight=stale?'800':'600';
   })();
@@ -3031,7 +3416,7 @@ async function qcBook(){
     action:'manual_schedule', name:b.name||'', email:b.email||'', phone:b.phone||'', address:b.address||'',
     zip:String(b.zip||''), frequency:freq, price:price, serviceDate:_qcPick, payMethod:pay||'card',
     crew:_qcCrew||_fmMyCrew(),
-    notes:(note?note+' — ':'')+(isSvc?'Sold on the phone by ':'Quote booked on the phone by ')+(adminName||'crew'),
+    notes:(note?note+' — ':'')+(isSvc?'Sold on the phone by ':'Quote booked on the phone by ')+(adminName||'crew')+(_fmOnsiteId(b)?' [ONSITE '+_fmOnsiteId(b)+']':''),
     adminToken:adminToken } });
 
   /* Commission. Closing a website/office lead over the phone is the same work as
@@ -3815,20 +4200,44 @@ function fmBeginRoute(){
 // projects the finish from the remaining stops. Crews see it on every job screen.
 function _fmLoadMins(){ return (new Date().getDay()===1?45:25); }   // PMCS/load (Mon 30/else 10) + 15m ⛽ gas block
 let _fmDrivePhase={}; try{ _fmDrivePhase=JSON.parse(localStorage.getItem('evg_fm_drive')||'{}'); }catch(e){}
+/* HQ overhaul P0 (2026-11-18): visit capture for the dispatch history. Rides on log_checklist
+   (backend appends any type + JSON to FieldLog, no backend change). Arrival, drive start, crew size
+   and GPS come from state the app already keeps (_jobTimers, _fmDrivePhase, _helpers, _lastPos):
+   no extra GPS request, no extra network call on the tap, no extra tap. Saved on the phone per stop
+   (evg_fm_visitcap, purged by day like the other per-stop stores) so a reload keeps it. */
+let _fmVisitCap={}; try{ _fmVisitCap=JSON.parse(localStorage.getItem('evg_fm_visitcap')||'{}')||{}; }catch(e){}
+const FM_SKIP_CODES=['gate_locked','dog','customer_asked','rain','no_access','other'];
+function _fmCapSave(){ try{ localStorage.setItem('evg_fm_visitcap',JSON.stringify(_fmVisitCap)); }catch(e){} }
+function _fmPosNow(){ const p=_lastPos; return (p&&p.lat!=null&&p.lon!=null&&isFinite(p.lat)&&isFinite(p.lon))?{lat:Math.round(p.lat*1e5)/1e5,lon:Math.round(p.lon*1e5)/1e5}:{lat:null,lon:null}; }
+function _fmVisitFields(bk,k){
+  const c=_fmVisitCap[k]||{}, dp=_fmDrivePhase[k];
+  return { v:1, email:bk.email||'', name:bk.name||'', crew:String(bk.crew||'').toUpperCase().trim(), crewSize:1+((_helpers||[]).length||0),
+    arrivedAt:c.arrivedAt||_jobTimers[k]||null, driveStartedAt:c.driveStartedAt||((dp&&dp.t0)?new Date(dp.t0).toISOString():null) };
+}
+function _fmLogArrive(k,bk,dp){
+  if(!bk) return;
+  const p=_fmPosNow();
+  _fmVisitCap[k]={ driveStartedAt:(dp&&dp.t0)?new Date(dp.t0).toISOString():null, arrivedAt:_jobTimers[k]||new Date().toISOString(), arriveLat:p.lat, arriveLon:p.lon };
+  _fmCapSave();
+  const d=_fmVisitFields(bk,k); d.lat=p.lat; d.lon=p.lon;
+  _fmEnqueue({ kind:'visitev', idemKey:'arrive:'+k, method:'GET', params:{ action:'log_checklist', type:'arrive', date:dateOf(bk), rowIndex:bk._rowIndex||((allBookings||[]).indexOf(bk)+2), email:bk.email||'', name:bk.name||'', by:adminName||'Crew', items:JSON.stringify(d), adminToken } });   // sent with the next flush, never on its own
+}
 // 🧹 per-stop stores purge old days at boot
 (function(){ try{
   const tod=todayISOStr();
-  [['evg_fm_addonsel',_fmAddonSel],['evg_fm_insafter',_fmInsertAfter],['evg_fm_drive',_fmDrivePhase]].forEach(function(pair){
+  [['evg_fm_addonsel',_fmAddonSel],['evg_fm_insafter',_fmInsertAfter],['evg_fm_drive',_fmDrivePhase],['evg_fm_visitcap',_fmVisitCap]].forEach(function(pair){
     const key=pair[0], obj=pair[1]; if(!obj) return; let dirty=false;
     Object.keys(obj).forEach(function(k){ const d=String(k).split('|')[1]||''; if(d&&d<tod){ delete obj[k]; dirty=true; } });
     if(dirty) try{ localStorage.setItem(key,JSON.stringify(obj)); }catch(e){}
   });
 }catch(e){} })();
-function _fmDriveArrive(k){
+function _fmDriveArrive(k,bk){
+  const dp=_fmDrivePhase[k], fresh=!_jobTimers[k];
   delete _fmDrivePhase[k];
-  if(!_jobTimers[k]) _jobTimers[k]=new Date().toISOString();   // yard clock starts NOW — drive time never counts as yard time
+  if(fresh) _jobTimers[k]=new Date().toISOString();   // yard clock starts NOW — drive time never counts as yard time
   try{ localStorage.setItem('evg_fm_drive',JSON.stringify(_fmDrivePhase)); }catch(e){}
   _persist();
+  if(fresh) try{ _fmLogArrive(k,bk,dp); }catch(e){}   // P0 capture: type 'arrive' event
 }
 let _fmYardNudged={};
 // ⏱ Live per-yard pace: elapsed on THIS yard vs its expected minutes. Crews get
@@ -3846,7 +4255,7 @@ function _fmYardPaceTick(){
     // Planned = the route's per-leg minutes from the last ⚡, else the flat 12.
     const plan=(_savedDrive&&_savedDrive[k]>0)?_savedDrive[k]:12;
     const left=plan-(Date.now()-dp.t0)/60000;
-    if(left<=0){ _fmDriveArrive(k); return; }                      // countdown done — yard clock starts
+    if(left<=0){ _fmDriveArrive(k,bk); return; }                      // countdown done — yard clock starts
     el.innerHTML='<span style="color:#9cc8f5;">Driving — '+Math.ceil(left)+'m to arrival</span>';
     return;
   }
@@ -3909,6 +4318,8 @@ function _fmRenderJob(stops,idx){
   if(amt){ if(_seeMoney(bk)) pills+='<span class="fm-pill amt">$'+amt.toFixed(0)+' '+(pt==='cash'?'cash':pt==='autopay'?'autopay':'invoice')+'</span>'; else pills+='<span class="fm-pill muted">'+(pt==='autopay'?'Autopay':'Invoice')+'</span>'; }
   if(_isQuoteJob(bk)) pills+='<span class="fm-pill" style="background:#7c3aed;color:#fff;font-weight:900;">\ud83d\udccb QUOTE \u2014 no '+'mow'+'</span>';
   else if(bk.frequency) pills+='<span class="fm-pill muted">'+esc(bk.frequency)+'</span>';
+  // GROWTH 2027: a monthly-plan visit held for non-payment. The backend refuses Done on it too.
+  if(/ON HOLD: unpaid/i.test(String(bk.notes||''))) pills+='<span class="fm-pill" style="background:#b91c1c;color:#fff;font-weight:900;">On hold: unpaid. Do not mow</span>';
   if(bk.crew) pills+='<span class="fm-pill muted">Crew '+esc(bk.crew)+'</span>';
   if(lotM) pills+='<span class="fm-pill">'+_ic('ruler')+lotM[1]+' ac</span>';
   pills+='<span class="fm-pill muted">'+_ic('clock')+'~'+mow+'m</span>';
@@ -4218,13 +4629,15 @@ function _fmNeedStop(){
 }
 function fmOpenSkip(){ const stop=_fmNeedStop(); if(!stop) return; document.getElementById('fmSkipErr').style.display='none'; document.getElementById('fmSkipTitle').textContent="Couldn't service "+(stop.bk.name||'this stop'); document.getElementById('fmSkipSheet').style.display='flex'; fmMarkSheetOpened(); }
 function fmCloseSkip(){ document.getElementById('fmSkipSheet').style.display='none'; }
-function fmPromptSkipOther(){ const r=prompt("Reason you couldn't service this stop:"); if(r&&r.trim()) fmRecordSkip(r.trim()); }
-function fmRecordSkip(reason){
+function fmPromptSkipOther(){ const r=prompt("Reason you couldn't service this stop:"); if(r&&r.trim()) fmRecordSkip(r.trim(),'other'); }
+function fmRecordSkip(reason,code){
   const stop=_fmCurrentStop(); if(!stop){ fmCloseSkip(); return; }
   const bk=stop.bk, rowIndex=bk._rowIndex||((allBookings||[]).indexOf(bk)+2), svcDate=dateOf(bk);
   const today=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
   const note=(String(bk.employeeNotes||'').trim()?bk.employeeNotes+' | ':'')+"⚠️ Couldn't service ("+reason+') — '+today+' by '+(adminName||'crew');
   _fmEnqueue({ kind:'skip', idemKey:'skip:'+rowIndex+':'+svcDate+':'+_uuid(), method:'GET', params:{ action:'set_employee_note', rowIndex, email:bk.email||'', name:bk.name||'', serviceDate:svcDate, note, adminToken } });   // name = identity for no-email customers; the backend finds the row by email/name + date, rowIndex is only a hint
+  try{ const _sk=_stopKey(bk), d=_fmVisitFields(bk,_sk), p=_fmPosNow(); d.reasonCode=FM_SKIP_CODES.indexOf(code)>=0?code:'other'; d.reason=reason; d.skippedAt=new Date().toISOString(); d.lat=p.lat; d.lon=p.lon;
+    _fmEnqueue({ kind:'visitev', idemKey:'skipev:'+rowIndex+':'+svcDate+':'+_uuid(), method:'GET', params:{ action:'log_checklist', type:'skip', date:svcDate, rowIndex, email:bk.email||'', name:bk.name||'', by:adminName||'Crew', items:JSON.stringify(d), adminToken } }); }catch(e){}   // P0 capture: structured skip reason
   _fmFlushQueue(); bk.employeeNotes=note; _fmSkipped[_stopKey(bk)]=reason; _fmMarkSeq(bk); _persist(); setTimeout(function(){ try{ if(_fmStarted&&_fmOpenStops().length>2) _fmAutoRoute(); }catch(e){} },1500);
   fmCloseSkip(); showToast('⤼ Skipped: '+reason); _fmViewIdx=null; _fmRender();
 }
@@ -4264,8 +4677,81 @@ function fmOpenComplete(){
     cn.disabled=!em0;
     cn.placeholder=em0?'Gate code, dogs, sprinkler heads to avoid…':'(needs a customer email on file)';
   })();
+  _fmcYard=null; _fmcRenderYard();
   _fmcRenderAddons(); _fmcRenderPhotos(); _fmcRenderAmount(); _fmcRenderPay(); _fmcRenderEndChk();
   document.getElementById('fmCompleteSheet').style.display='flex'; fmMarkSheetOpened();
+  _fmYardLookup(bk);
+}
+/* ───────── Yard check at a plan customer's first cut (PARCEL SAFETY) ─────────
+   Only for a monthly-plan visit ("Monthly plan SUB-..." on the visit) and only when the backend says this signup still needs it
+   (growth_yard_check_status answers only while EVG_FLAG_PARCEL_CHECK is on). The crew taps Matches / Smaller / Bigger and adds
+   1 to 2 photos; Complete is blocked until it is done. Billing for month 1 waits for it on the backend. */
+function _fmYardSignupId(bk){ const m=String((bk&&bk.payMethod)||'').match(/Monthly plan (SUB-[0-9A-F]{12})\b/); return m?m[1]:''; }
+async function _fmYardLookup(bk){
+  const id=_fmYardSignupId(bk); if(!id||navigator.onLine===false) return;
+  try{
+    const res=await _fmFetchT(SCRIPT_URL+'?'+new URLSearchParams({ action:'growth_yard_check_status', signupId:id, adminToken }).toString(), {}, 8000);
+    if(!res.ok) return; const j=await res.json();
+    if(!j||j.success!==true||j.needed!==true) return;
+    if(!_fmcStop||_fmcStop.bk!==bk) return;   // sheet moved on to another stop
+    _fmcYard={ signupId:id, record:+j.recordGrassSqft||0, biggerPct:+j.biggerPct||15, min:+j.photosMin||1, max:+j.photosMax||2, verdict:'', sqft:'', photos:[] };
+    _fmcRenderYard(); _fmcUpdateSubmit();
+  }catch(e){ /* offline / slow: no yard check asked; the office sees "WAITING: crew yard check" on the billing queue */ }
+}
+function _fmYardReady(y){
+  if(!y) return true;
+  if(['matches','smaller','bigger'].indexOf(y.verdict)<0) return false;
+  if(!(y.photos.length>=y.min&&y.photos.length<=y.max)) return false;
+  if(y.verdict==='matches') return true;
+  const n=parseInt(String(y.sqft).replace(/[^\d]/g,''),10)||0;
+  if(!(n>=500&&n<=60000)) return false;
+  if(y.record&&y.verdict==='smaller'&&n>=y.record) return false;
+  if(y.record&&y.verdict==='bigger'&&n<=y.record) return false;
+  return true;
+}
+// The queued request for a finished yard check (sent after the Done call, like every follow-up).
+function _fmYardItem(y, svcDate, by){
+  return { kind:'yardcheck', idemKey:'yardchk:'+y.signupId, method:'POST', body:{ action:'growth_yard_check', signupId:y.signupId, verdict:y.verdict,
+    crewSqft:(y.verdict==='matches'?'':String(parseInt(String(y.sqft).replace(/[^\d]/g,''),10)||'')), serviceDate:svcDate, markedBy:by,
+    photos:y.photos.map(function(p){ return { type:p.type, data:p.data }; }), adminToken } };
+}
+function _fmcRenderYard(){
+  const blk=document.getElementById('fmcYardBlock'), wrap=document.getElementById('fmcYard'), st=document.getElementById('fmcYardState');
+  if(!blk||!wrap) return;
+  const y=_fmcYard; if(!y){ blk.style.display='none'; wrap.innerHTML=''; return; }
+  blk.style.display='';
+  const btn=function(k,l){ const on=y.verdict===k; return '<button onclick="fmYardVerdict(\''+k+'\')" style="flex:1;min-height:44px;border-radius:10px;border:1px solid '+(on?'#15803d':'#cfd5cd')+';background:'+(on?'#e7f3eb':'#fff')+';font-weight:700;font-size:14px;cursor:pointer;">'+(on?'✓ ':'')+l+'</button>'; };
+  let h='<div style="font-size:14px;margin-bottom:8px;">'+(y.record?('County record: about <b>'+y.record.toLocaleString('en-US')+' sq ft</b> of grass.'):'County record grass area not on file.')+' Does the lawn match?</div>'
+    +'<div style="display:flex;gap:7px;margin-bottom:8px;">'+btn('matches','Matches')+btn('smaller','Smaller')+btn('bigger','Bigger')+'</div>';
+  if(y.verdict==='smaller'||y.verdict==='bigger') h+='<label style="display:block;font-size:13px;font-weight:700;margin-bottom:4px;">Your estimate of the grass area (sq ft)</label>'
+    +'<input id="fmcYardSqft" type="number" inputmode="numeric" min="500" max="60000" value="'+esc(String(y.sqft||''))+'" oninput="fmYardSqft(this.value)" style="width:100%;min-height:44px;font-size:16px;border-radius:10px;border:1px solid #cfd5cd;padding:0 10px;margin-bottom:8px;">'
+    +(y.verdict==='bigger'?'<div style="font-size:12px;color:#64748b;margin-bottom:8px;">More than '+y.biggerPct+'% bigger: nothing is charged, the office reviews the price with the customer.</div>':'<div style="font-size:12px;color:#64748b;margin-bottom:8px;">Smaller: the customer\'s price goes down automatically.</div>');
+  h+='<div class="fm-photo-grid">'+y.photos.map(function(p,i){ return '<div class="fm-photo-cell"><img src="'+p.dataUrl+'"><button class="fm-photo-x" onclick="fmYardRemovePhoto('+i+')">×</button></div>'; }).join('')+'</div>';
+  if(y.photos.length<y.max) h+='<button class="fm-toggle-btn" onclick="document.getElementById(\'fmcYardPhotoInput\').click()">'+_ic('camera')+'Lawn photo '+(y.photos.length+1)+' of '+y.max+(y.photos.length>=y.min?' (optional)':'')+'</button>';
+  wrap.innerHTML=h;
+  const ok=_fmYardReady(y); if(st){ st.textContent=ok?'✓ done':'required'; st.className=ok?'ok':'req'; }
+}
+function fmYardVerdict(k){ if(!_fmcYard) return; _fmcYard.verdict=k; if(k==='matches') _fmcYard.sqft=''; _fmcRenderYard(); _fmcUpdateSubmit(); }
+function fmYardSqft(v){ if(!_fmcYard) return; _fmcYard.sqft=String(v||''); const st=document.getElementById('fmcYardState'); const ok=_fmYardReady(_fmcYard); if(st){ st.textContent=ok?'✓ done':'required'; st.className=ok?'ok':'req'; } _fmcUpdateSubmit(); }
+function fmYardRemovePhoto(i){ if(!_fmcYard) return; _fmcYard.photos.splice(i,1); _fmcRenderYard(); _fmcUpdateSubmit(); }
+function fmYardPhotoSelected(input){
+  const file=input.files&&input.files[0]; input.value=''; if(!file||!_fmcYard) return;
+  const y=_fmcYard, reader=new FileReader();
+  reader.onload=function(e){
+    const img=new Image();
+    img.onload=function(){
+      try{
+        const MAX=1200; let w=img.width,h=img.height; if(w>MAX||h>MAX){ const k=Math.min(MAX/w,MAX/h); w=Math.round(w*k); h=Math.round(h*k); }
+        const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h);
+        const d=c.toDataURL('image/jpeg',0.72);
+        if(_fmcYard!==y||y.photos.length>=y.max) return;
+        y.photos.push({ type:'image/jpeg', data:d.split(',')[1], dataUrl:d }); _fmcRenderYard(); _fmcUpdateSubmit();
+      }catch(err){ showToast('Could not read that photo. Try again.'); }
+    };
+    img.onerror=function(){ showToast('Could not read that photo. Try again.'); };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 function fmCloseComplete(){ document.getElementById('fmCompleteSheet').style.display='none'; }
 function _fmcAddonTotal(){ return (_fmcAddons||[]).filter(a=>a.on).reduce((s,a)=>s+(+a.price||0),0); }
@@ -4365,12 +4851,12 @@ function _fmcRenderEndChk(){
 function fmcCheckAll(){ Object.keys(_fmcEndChk).forEach(function(l){ if(l!=='Collected cash') _fmcEndChk[l]=true; }); _fmcRenderEndChk(); }
 function fmToggleEndChk(label){ _fmcEndChk[label]=!_fmcEndChk[label]; if(label==='Collected cash') _fmcCash=_fmcEndChk[label], _fmcRenderPay(); _fmcRenderEndChk(); }
 function _fmcEndChkDone(){ return Object.keys(_fmcEndChk).every(l=>_fmcEndChk[l]); }
-function _fmcCanFinish(){ return _fmcPayResolved()&&_fmcEndChkDone(); }
+function _fmcCanFinish(){ return _fmcPayResolved()&&_fmcEndChkDone()&&_fmYardReady(_fmcYard); }
 function _fmcUpdateSubmit(){
   const btn=document.getElementById('fmcSubmitBtn'); if(!btn) return;
   const ok=_fmcCanFinish(); btn.disabled=!ok;
   const last=_fmIsFinalOpenStop(); // last OPEN stop, not last by position (skipped stops stay open)
-  btn.textContent=ok?(last?'✓ Complete & Finish Route':'✓ Complete & Go to Next House'):(!_fmcPayResolved()?'Take payment to finish':'Finish the checklist');
+  btn.textContent=ok?(last?'✓ Complete & Finish Route':'✓ Complete & Go to Next House'):(!_fmcPayResolved()?'Take payment to finish':(!_fmYardReady(_fmcYard)?'Finish the yard check':'Finish the checklist'));
 }
 function fmPhotoSelected(input){
   const file=input.files[0]; if(!file) return;
@@ -4404,7 +4890,7 @@ function _fmcRenderPhotos(){ const list=document.getElementById('fmcPhotoList');
 async function fmSubmitComplete(){
   const bk=_fmcStop&&_fmcStop.bk; const errEl=document.getElementById('fmcErr'); const submitBtn=document.getElementById('fmcSubmitBtn');
   if(!bk){ fmCloseComplete(); return; }
-  if(!_fmcCanFinish()){ errEl.textContent='Take payment and finish the checklist first.'; errEl.style.display='block'; return; }
+  if(!_fmcCanFinish()){ errEl.textContent=_fmYardReady(_fmcYard)?'Take payment and finish the checklist first.':'Finish the yard check first: Matches / Smaller / Bigger and a lawn photo.'; errEl.style.display='block'; return; }
   submitBtn.disabled=true; submitBtn.textContent='Saving…'; errEl.style.display='none';
   const _liveIdx=(allBookings||[]).indexOf(bk);   // fresh, not the index captured when the sheet opened
   // The idempotency base was rowIndex+date. Row numbers shift every time a paid job archives out of
@@ -4415,7 +4901,9 @@ async function fmSubmitComplete(){
   const selAddons=(_fmcAddons||[]).filter(a=>a.on&&a.price>0).map(a=>({name:a.name,price:a.price}));
   const grand=_fmcGrand(), ownerNote=String(document.getElementById('fmcOwnerNote').value||'').trim();
   // Done action: autopay uses field_complete (marks done + charges + emails owner on fail); others mark_done.
-  const doneAction=(_fmcPayType==='autopay'&&!_fmcPrepaid)?'field_complete':'mark_done';
+  // Plan customer's first cut with a yard check: field_complete, so the backend records the first cut (it never charges per cut).
+  const _yc=(_fmcYard&&_fmYardReady(_fmcYard))?_fmcYard:null;
+  const doneAction=_yc?'field_complete':((_fmcPayType==='autopay'&&!_fmcPrepaid)?'field_complete':'mark_done');
   const doneItem={ kind:'done', idemKey:'done:'+base, method:'GET', params:{ action:doneAction, rowIndex, email, name:bk.name||'', serviceDate:svcDate, amount:grand.toFixed(2), addons:(selAddons.length?JSON.stringify(selAddons):''), markedBy:adminName||adminEmail||'Staff', adminToken } };
   const extra=[];
   if(selAddons.length && _fmcPayType!=='autopay'){ const tag=selAddons.map(a=>a.name+'='+a.price).join(','); extra.push({ kind:'addons', idemKey:'addons:'+base+':'+tag, method:'GET', params:{ action:'apply_job_addons', rowIndex, email, serviceDate:svcDate, addons:JSON.stringify(selAddons), adminToken } }); } // autopay applies extras inside field_complete so the charge includes them
@@ -4438,9 +4926,12 @@ async function fmSubmitComplete(){
     extra.push({ kind:'custnote', idemKey:'cn:'+base+':'+_uuid(), method:'GET', params:{ action:'set_customer_note', email, notes:newNote, by:adminName||'Crew', adminToken } });
     try{ const em2=String(email||'').toLowerCase().trim(); const c2=(allCustomers||[]).find(x=>String(x.Email||'').toLowerCase().trim()===em2); if(c2){ c2.Notes=newNote; localStorage.setItem('evg_field_customers', JSON.stringify(allCustomers)); } }catch(e){}
   })();
+  if(_yc) extra.push(_fmYardItem(_yc, svcDate, adminName||'Crew'));   // waits for the Done call like every follow-up; must be saved (not a photo item)
   const _jk=_stopKey(bk); const _jStart=_jobTimers[_jk]; const _jEnd=new Date().toISOString();
   const _jMin=_jStart?Math.max(0,Math.round((Date.now()-new Date(_jStart).getTime())/60000)):null;
-  extra.push({ kind:'endchk', idemKey:'endck:'+base, method:'GET', params:{ action:'log_checklist', type:'job_complete', date:svcDate, rowIndex, email, name:bk.name||'', by:adminName||'Crew', items:JSON.stringify({checklist:Object.keys(_fmcEndChk), jobMinutes:_jMin, startedAt:_jStart||null, completedAt:_jEnd}), adminToken } });
+  const _jCap=Object.assign({checklist:Object.keys(_fmcEndChk), jobMinutes:_jMin, startedAt:_jStart||null, completedAt:_jEnd}, (function(){ try{ const f=_fmVisitFields(bk,_jk), p=_fmPosNow(), c=_fmVisitCap[_jk]||{}; f.email=email||''; f.arrivedAt=f.arrivedAt||_jStart||null; f.lat=p.lat; f.lon=p.lon; f.arriveLat=(c.arriveLat!=null)?c.arriveLat:null; f.arriveLon=(c.arriveLon!=null)?c.arriveLon:null; return f; }catch(e){ return {}; } })());   // P0 capture
+  extra.push({ kind:'endchk', idemKey:'endck:'+base, method:'GET', params:{ action:'log_checklist', type:'job_complete', date:svcDate, rowIndex, email, name:bk.name||'', by:adminName||'Crew', items:JSON.stringify(_jCap), adminToken } });
+  delete _fmVisitCap[_jk]; _fmCapSave();
   delete _jobTimers[_jk]; try{ delete _fmDrivePhase[_jk]; localStorage.setItem('evg_fm_drive',JSON.stringify(_fmDrivePhase)); }catch(e){}
   _fmcPhotos.forEach((p,i)=>extra.push({ kind:'photo', idemKey:'photo:'+base+':'+_uuid(), method:'POST', body:{ action:'upload_job_photo', base64Data:p.b64, fileName:p.fileName, mimeType:p.mimeType, rowIndex, email, serviceDate:svcDate, jobLabel:(bk.name||'')+' - '+svcDate+(_fmcPhotos.length>1?' ('+(i+1)+')':''), markedBy:adminName||'Crew', adminToken } }));
 
@@ -4456,7 +4947,7 @@ async function fmSubmitComplete(){
     if(_wi<0){ const _em=String(bk.email||'').toLowerCase().trim(), _dt=dateOf(bk); _wi=(allBookings||[]).findIndex(function(x){ return dateOf(x)===_dt && (_em?String(x.email||'').toLowerCase().trim()===_em:String(x.name||'')===String(bk.name||'')); }); }
     const _tgt=(_wi>=0?allBookings[_wi]:bk);
     _tgt.done='✓ Done — '+lbl; _tgt.markedBy=adminName; if(selAddons.length) _tgt.price='$'+grand.toFixed(0);
-    _fmGhostMark(bk);
+    _fmGhostMark(bk); _fmDaySnapTake([_tgt]);
     if(_fmcPayType==='cash'&&!_fmcPrepaid&&_fmcCash) _fmCashTotal+=grand+(_oldCash?_oldCash.amt:0);
     if(_oldCash) _fmClearOwes(bk);
     if(!chargeFailed) _fmBilledTotal+=grand;   // a declined autopay charge must not inflate "total billed today"
@@ -4486,7 +4977,12 @@ async function fmSubmitComplete(){
   _pics.forEach(_fmEnqueue);
   if(_missing(_pics).length){ try{ showToast('⚠️ Photos could not be saved (phone storage full) — the job and payment still will be.',9000); }catch(e){} }
 
-  const online=navigator.onLine!==false;
+  // A stop added from the truck whose NEW CUSTOMER call has not landed yet has no booking on the backend: a direct
+  // done call is refused ("Could not find this job") and the cash stamp / invoice went with it. Queue the done call
+  // behind the new customer instead (2026-11-20.3); the queue sends the new customer first, then this.
+  const _ncPend=(function(){ try{ const em=String(email||'').toLowerCase().trim(), nm=_nkNorm(bk.name); return _fmQueueLoad().find(function(x){ const p=x&&x.kind==='newcust'&&x.params; return !!p&&String(p.serviceDate||'')===svcDate&&(em?String(p.email||'').toLowerCase().trim()===em:_nkNorm(p.name)===nm); })||null; }catch(e){ return null; } })();
+  if(_ncPend&&!doneItem.after) doneItem.after=_ncPend.idemKey;
+  const online=navigator.onLine!==false&&!_ncPend;
   // Save the DONE call to the phone too, BEFORE sending it. It used to be queued only after the direct
   // call failed — if iOS killed the app mid-send, nothing ever re-sent it and this job's cash/invoice/
   // checklist sat in the queue forever behind "after: done". It is held for 60s so the background sync
@@ -4506,7 +5002,9 @@ async function fmSubmitComplete(){
       _fmQueueRemoveKey(doneItem.idemKey);
       // field_complete reports success even when the CHARGE fails (owner is emailed) —
       // tell the crew too, so they can collect another way while still at the door.
-      const _chargeWarn=(data && doneAction==='field_complete' && data.charged===false);
+      // GROWTH 2027: a monthly-plan subscriber is never charged per cut. charged:false is expected; never tell the crew to collect.
+      const _chargeWarn=(data && doneAction==='field_complete' && data.charged===false && !data.subscriber);
+      if(data && data.subscriber) setTimeout(function(){ showToast(data.held?'On hold: unpaid. Do not mow this yard; the office releases it once it is paid.':('Monthly plan customer: nothing to collect today.'+(data.billing==='failed'?' Billing needs the office (it is on the billing queue).':(data.billing==='yard_check'?' Billing starts once the yard check syncs.':(data.billing==='price_review'?' The office reviews the price with the customer.':'')))),9000); },1500);
       _fmMarkKeyDone(doneItem.idemKey); _fmFlushQueue(); finish(false, _chargeWarn);
       if(_chargeWarn) setTimeout(function(){ showToast('⚠️ Card charge FAILED'+(data.chargeError?(' ('+data.chargeError+')'):'')+' — office was emailed. Collect cash or invoice if you can.',12000); },1500);
       return;
@@ -4692,9 +5190,9 @@ function ncSubmit(){
   if(date===todayISOStr()){
     const cur=(function(){ try{ const st=_fmStops(); return st[_fmViewIdx]?_stopKey(st[_fmViewIdx].bk):null; }catch(e){ return null; } })();
     _fmAddLocalSameDay({ name:name, email:email, phone:phone, address:addr, zip:zip, frequency:freq, price:(price?('$'+price):''), serviceDate:date, notes:'Added on route (same-day)', crew:'', jobTime:'', payMethod:pay||'card' }, cur);
-    ncClose(); showToast('✅ '+name+' added — slotted in as your next stop');
+    ncClose(); showToast('💾 '+name+' saved — syncing. Slotted in as your next stop; you will see "added" when the office has it.',6000);
   } else {
-    ncClose(); showToast('✅ '+name+' added — they’ll show up on the schedule');
+    ncClose(); showToast('💾 '+name+' saved — syncing. You will see "added" when the office has it.',6000);
   }
 }
 
@@ -4895,6 +5393,7 @@ function fmQuoteCloser(bk){
       +'<button onclick="qjClose()" style="background:#f3f4f6;border:none;font-size:22px;color:#374151;cursor:pointer;line-height:1;padding:8px 14px;border-radius:12px;">×</button></div>'
       +'<div style="overflow-y:auto;flex:1;padding:14px 16px 6px;">'
       +'<div id="qjEditBanner" style="display:none;margin:0 0 10px;padding:10px 13px;background:#fff7ed;border:1.5px solid #fdba74;border-radius:12px;font-size:12.5px;font-weight:700;color:#9a3412;">✏️ Editing the booked plan — saving overrides this customer\'s plan &amp; price only. Nothing else is touched.</div>'
+      +'<div id="qjOnsite" style="display:none;"></div>'
       +'<div id="qjBuilder"></div>'
       +'<div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 6px;">📝 Quote notes (internal)</div>'
       +'<textarea id="qjNotes" oninput="_qjNoteSave()" placeholder="Gate code, dogs, overgrown spots, what they care about…" style="width:100%;box-sizing:border-box;min-height:60px;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:12px;font-family:inherit;font-size:14px;resize:vertical;"></textarea>'
@@ -4929,10 +5428,64 @@ function fmQuoteCloser(bk){
   const _dt=document.getElementById('qjDate'); if(_dt) _dt.style.display=_qjEditMode?'none':'';
   const _es=document.getElementById('qjEstBtn'); if(_es) _es.style.display=_qjEditMode?'none':'';
   const _nb=document.getElementById('qjNoBtn'); if(_nb) _nb.style.display=_qjEditMode?'none':'';
+  try{ _qjOnsiteRender(bk); }catch(e){}
   qjRefresh();
   document.getElementById('qjOverlay').style.display='flex';
 }
 function qjClose(){ const o=document.getElementById('qjOverlay'); if(o) o.style.display='none'; }
+/* 🏡 ON-SITE QUOTE: the quoter types the monthly plan price on site; growth_onsite_price locks it for the address and hands
+   back the normal sign-up link (get-price.html?onsite=...). The backend sends the customer nothing: the quoter texts or emails
+   the link from this phone. Needs signal (the link comes back from the office), so it is not queued. */
+let _qjOs=null;
+function _qjOnsiteRender(bk){
+  const el=document.getElementById('qjOnsite'); if(!el) return;
+  const id=_fmOnsiteId(bk);
+  if(!id||_qjEditMode){ el.style.display='none'; el.innerHTML=''; _qjOs=null; return; }
+  if(!_qjOs||_qjOs.id!==id) _qjOs={id:id,link:null};
+  const L=_qjOs.link, B='display:block;width:100%;box-sizing:border-box;text-align:center;text-decoration:none;padding:13px;border-radius:12px;font-family:inherit;font-size:14.5px;font-weight:800;cursor:pointer;margin-top:8px;';
+  let h='<div style="margin:0 0 12px;padding:13px 14px;border-radius:14px;border:2px solid #16a34a;background:#f0fdf4;">'
+    +'<div style="font-size:15px;font-weight:900;color:#15803d;">🏡 Free on-site quote · Year-Round Lawn Plan</div>'
+    +'<div style="font-size:12.5px;color:#166534;margin:3px 0 10px;line-height:1.45;">No instant price online, so they asked us to come out. Type the monthly price, get their sign-up link and text it to them. Nothing is charged until the first cut.</div>';
+  if(!L){
+    h+='<div style="display:flex;gap:8px;align-items:center;"><span style="font-size:22px;font-weight:900;color:#0f172a;">$</span>'
+      +'<input id="qjOsPrice" type="number" inputmode="numeric" placeholder="per month" style="flex:1;min-width:0;padding:12px;border:1.5px solid #86efac;border-radius:10px;font-size:18px;font-weight:800;font-family:inherit;">'
+      +'<span style="font-size:14px;font-weight:800;color:#166534;">/ month</span></div>'
+      +'<button id="qjOsBtn" onclick="qjOnsiteLink()" style="'+B+'border:none;background:#16a34a;color:#fff;">Get sign-up link</button>'
+      +'<div id="qjOsMsg" style="font-size:12.5px;color:#b91c1c;font-weight:700;margin-top:6px;min-height:16px;"></div>';
+  } else {
+    const ph=String(L.phone||bk.phone||'').replace(/[^0-9+]/g,''), em=String(L.email||bk.email||'').trim();
+    h+='<div style="font-size:20px;font-weight:900;color:#0f172a;">$'+esc(String(L.monthly))+' / month · link ready</div>'
+      +'<div style="font-size:12px;color:#475569;word-break:break-all;margin:4px 0 2px;">'+esc(L.url)+'</div>'
+      +'<div style="font-size:11.5px;color:#64748b;">Works until '+esc(String(L.expires||''))+'. Nothing was sent yet.</div>'
+      +(ph?'<a href="sms:'+esc(ph)+'?&body='+encodeURIComponent(L.textBody||L.url)+'" style="'+B+'background:#0891b2;color:#fff;">💬 Text the link</a>':'')
+      +(em?'<a href="mailto:'+esc(em)+'?subject='+encodeURIComponent(L.emailSubject||'Your Evergreen Lawn Care price')+'&body='+encodeURIComponent(L.emailBody||L.url)+'" style="'+B+'background:#ecfeff;color:#0e7490;border:1.5px solid #a5f3fc;">✉️ Email the link</a>':'')
+      +'<button onclick="qjOnsiteCopy()" style="'+B+'background:#fff;color:#334155;border:1.5px solid #cbd5e1;">Copy link</button>'
+      +'<button onclick="qjOnsiteDone()" style="'+B+'border:none;background:#16a34a;color:#fff;">✅ Done, close this quote</button>';
+  }
+  el.innerHTML=h+'</div>';
+  el.style.display='block';
+}
+async function qjOnsiteLink(){
+  const bk=_qjBk; if(!bk||!_qjOs) return;
+  const msg=document.getElementById('qjOsMsg'), say=function(t){ if(msg) msg.textContent=t; };
+  const m=Math.round(parseFloat(String((document.getElementById('qjOsPrice')||{}).value||'')));
+  if(!(m>=50&&m<=999)){ say('Type the monthly price ($50 to $999).'); return; }
+  if(navigator.onLine===false){ say('Needs signal to make the link. Try again when you have bars.'); return; }
+  if(!_tapConfirm('qjOsBtn','Tap again: $'+m+' a month')) return;
+  const btn=document.getElementById('qjOsBtn'); if(btn){ btn.disabled=true; btn.textContent='Making the link…'; }
+  const d=await _fmFetchJ(SCRIPT_URL+'?'+new URLSearchParams({ action:'growth_onsite_price', requestId:_qjOs.id, monthly:String(m), adminToken:adminToken }).toString());
+  if(_qjBk!==bk) return;
+  if(!d||!d.success){ if(btn){ btn.disabled=false; btn.textContent='Get sign-up link'; } say('⚠ '+((d&&d.error)||'Could not reach the office. Try again.')); return; }
+  _qjOs.link=d; _qjOnsiteRender(bk);
+}
+function qjOnsiteCopy(){
+  const L=_qjOs&&_qjOs.link; if(!L) return;
+  try{ navigator.clipboard.writeText(L.url).then(function(){ showToast('Link copied'); },function(){ showToast(L.url,8000); }); }catch(e){ showToast(L.url,8000); }
+}
+function qjOnsiteDone(){
+  const L=_qjOs&&_qjOs.link; if(!_qjBk||!L) return;
+  _qjFinish('✅ '+(_qjBk.name||'Quote')+' priced at $'+L.monthly+'/mo · sign-up link ready', 'On-site quote '+_qjOs.id+': Year-Round Lawn Plan $'+L.monthly+'/mo, sign-up link sent by '+(adminName||'crew'));
+}
 function qjRefresh(){
   qjRenderBuilder();
   const el=document.getElementById('qjPriceShow'); if(el) el.textContent='$'+qjPriceVal();
@@ -6147,6 +6700,824 @@ function eodCancel(){
   if(typeof _eodResolve==='function'){ const r=_eodResolve; _eodResolve=null; r(false); }
 }
 
+</script>
+<script>/* PMCS2-SCRIPT: PMCS v2 (PMCS-REBUILD.md). Built from Website/pmcs2/ by tools/pmcs2-inline.py. Inactive unless switched on. */
+/* PMCS2-CORE:BEGIN */
+// PMCS v2 shared core (fleet register, model checklists, hour-meter math, service due, deadline status).
+// ONE source of truth: Website/pmcs2/pmcs2-core.js. tools/pmcs2-inline.py copies it byte for byte into
+// apps-script.txt, field/index.html, invoice.html, hq/index.html and hq-index.html; tests fail if a copy drifts.
+// Pure functions only: no network, no storage, no DOM. Behind EVG_FLAG_PMCS_V2 (backend) and the field switch.
+var PMCS2 = (function(){
+  // Manuals, read 2026-11-18 (PMCS-REBUILD.md section 3 has the per-model table). "p." = page printed in the manual.
+  var S = {
+    TC:  'Scag Tiger Cat II operator manual 03517 (2023): https://www.scag.com/wp-content/uploads/2020/04/2023-STCII_Book_03517.pdf',
+    VR:  'Scag V-Ride II operator manual 03511 Rev03 (2023): https://www.scag.com/wp-content/uploads/2020/04/2023-SVRII_Book_03511_Rev03.pdf',
+    KF:  'Kawasaki FX730V-EFI owner manual: https://kawasakienginesusa-com.netlify.app/sites/default/files/manuals/FX730V-EFI-English-Spanish.pdf',
+    KT:  'Kawasaki FT730V-EFI owner manual: https://kawasakienginesusa-com.netlify.app/sites/default/files/manuals/FT730V-EFI-English-Spanish.pdf',
+    PB:  'Echo PB-580 H/T operator manual: https://www.echo-usa.com/EchoUSA/files/63/635dc4ab-cbe0-4f87-8125-07cdcd4b25cc.pdf',
+    SRM: 'Echo SRM-2620 operator manual: https://www.echo-usa.com/getattachment/d09c4cfb-3588-426e-acee-2098a1dfa61d/filev2_',
+    OWN: 'owner practice (2026-11-18): grease every fitting about every 40 h',
+    DEF: 'default, verify against your unit\'s manual'
+  };
+  // Page numbers per manual for the same section (Tiger Cat II 03517 / V-Ride II 03511).
+  var PG = {
+    TC: { chart:'sec 7.1 p.34-35', lube:'sec 7.2 p.35-36', hyd:'sec 7.3 p.37-39', hydFilter:'sec 7.3 p.39', oil:'sec 7.4 p.39', fuel:'sec 7.5 p.40', air:'sec 7.6 p.40', battery:'sec 7.1 chart p.34 and 7.7 p.41', belts:'sec 7.8 p.41-42', blades:'sec 7.9 p.42-43', tires:'sec 7.10 p.43, spec p.13', pto:'sec 6.8', interlock:'sec 4.4', guards:'sec 2.6', leaks:'sec 2.7', hydSpec:'p.13 and p.37 (4 qt reservoir)', parts:'parts list p.47 (deck), p.59 (pump belt), p.67 (hyd filter)' },
+    VR: { chart:'sec 7.1 p.36-37', lube:'sec 7.2 p.37, fig 7-1 p.38', hyd:'sec 7.3 p.39', hydFilter:'sec 7.3 p.40', oil:'sec 7.4 p.40-41', fuel:'sec 7.5 p.41', air:'sec 7.6 p.42', battery:'sec 7.7 p.43 (no battery row in the V-Ride chart)', belts:'sec 7.8 p.43', blades:'sec 7.9 p.44-45', tires:'sec 7.10 p.45, spec sec 3.3 p.12', pto:'sec 6.7 p.33', interlock:'sec 2.4 p.4-5 and 4.4 p.17', guards:'sec 2.6 p.7', leaks:'sec 2.5', hydSpec:'sec 7.3 p.39', parts:'parts list p.50 (deck belt), p.51 (blade), p.67 (hyd filter)' }
+  };
+  var OWNER_GREASE_H = 40;   // owner 2026-11-18: hit every grease point about every 40 hours
+  // it(id, phase, label, deadline, src). Phases: B before-ops, A after-ops, W weekly.
+  function it(id, ph, label, dl, src){ return { id:id, ph:ph, label:label, dl:!!dl, src:src||S.DEF }; }
+  // sv(id, label, every, orDays, opts). every = engine hours (mowers) or miles (truck); orDays = calendar backstop.
+  // opts.man = { every, orDays } is the manual's own interval when the default differs (owner practice is more frequent).
+  function sv(id, label, every, orDays, o){ o=o||{}; return { id:id, label:label, every:every||0, orDays:orDays||0, part:o.part||'', spec:o.spec||'', src:o.src||S.DEF, verify:!!o.verify, kaw:!!o.kaw, first:o.first||0,
+    group:o.group||'', fittings:o.fittings||0, man:o.man||null, note:o.note||'' }; }
+  var KAW = 'Kawasaki default, confirm against your engine\'s model plate';
+  // Engine family from the register's Engine field: FT730V uses a foam pre-cleaner + paper element; FX730V a primary +
+  // secondary element. Unknown engine: the FX set (Scag 52V-23FX), tagged K until the owner enters the engine plate.
+  function engFam(u){ var e = String((u && u.engine) || '').toUpperCase(); return /FT\s*\d|\bFT\b|24FT|26FT/.test(e) ? 'FT' : (/FX\s*\d|\bFX\b|23FX|22FX|27FX/.test(e) ? 'FX' : ''); }
+  // Kawasaki engine services shared by both Scag models (owner 2026-11-18: both mowers are Kawasaki, model number TBD).
+  function kawServices(m, u){
+    var src = S[m], pg = PG[m], fam = engFam(u), K = fam === 'FT' ? S.KT : S.KF, known = !!fam;
+    var oilDays = m === 'TC' ? 14 : 30, airDays = m === 'TC' ? 14 : 30;
+    var out = [
+      sv('eng_oil', 'Change engine oil', 100, oilDays, { first:20, kaw:!known, spec:'API SJ or SL, SAE 10W-40; 1.9 US qt (2.2 qt with filter)', src:src+' '+pg.oil+' (first 20 h, then 100 h or '+(m === 'TC' ? 'bi-weekly' : 'monthly')+'); '+(fam === 'FT' ? S.KT+' p.21-25 (100 h, grade, capacity)' : S.KF+' p.12/14/24/26 (100 h or 1 year, grade, capacity)') }),
+      sv('oil_filter', 'Replace engine oil filter', 200, 30, { first:20, kaw:!known, spec:'Kawasaki filter for your engine model (Scag lists it as an engine-maker part)', src:src+' '+pg.oil+' (first 20 h, then 200 h or monthly); '+K+(fam === 'FT' ? ' p.22/26 (200 h)' : ' p.24/28 (200 h)') }),
+      sv('air_clean', 'Inspect and clean air cleaner', 100, airDays, { kaw:!known, src:src+' '+pg.air+' (100 h or '+(m === 'TC' ? 'bi-weekly' : 'monthly')+'; daily in extreme dust)' })
+    ];
+    if (fam === 'FT') out.push(
+      sv('air_foam', 'Clean air cleaner foam pre-cleaner', 50, 0, { src:S.KT+' p.21/26-27 (50 h)' }),
+      sv('air_primary', 'Replace air cleaner paper element', 250, 365, { spec:'Kawasaki element for FT730V', src:S.KT+' p.22/28 (250 h or yearly)' }));
+    else out.push(
+      sv('air_primary', 'Replace air cleaner primary element', 250, 0, { kaw:!known, spec:'Kawasaki element for your engine model', src:S.KF+' p.24/29 (250 h)' }),
+      sv('air_secondary', 'Replace air cleaner secondary element', 500, 0, { kaw:!known, spec:'Kawasaki element for your engine model', src:S.KF+' p.25/29 (500 h, sooner if dirty)' }));
+    out.push(
+      sv('spark_plug', 'Clean or replace spark plugs, reset gap', 100, 0, { kaw:!known, spec:'NGK BPR4ES, gap 0.030 in (0.75 mm), 16 ft-lb', src:(fam === 'FT' ? S.KT+' p.11/22/29-30' : S.KF+' p.11/24/32')+' (100 h)' }),
+      sv('cool_fins', 'Clean cooling fins and shrouds', 100, 0, { kaw:!known, src:(fam === 'FT' ? S.KT+' p.21/31-34' : S.KF+' p.24/34')+' (100 h)' }),
+      sv('fuel_filter', 'Replace in-line fuel filter', 500, 365, { spec:'Engine-maker part (Scag lists no part number)', src:src+' '+pg.fuel+' (500 h or yearly); Kawasaki: replace if clogged' }));
+    return out;
+  }
+  // Grease points, from the lubrication chart (sec 7.2) of each Scag manual. The default interval is the more
+  // frequent of the manual's and the owner's 40 h; the calendar backstop is the manual's. man = the manual's own figure.
+  function greasePoints(m){
+    var src = S[m], pg = PG[m].lube, CH = 'Scag Premium Chassis Grease 486257', SP = 'Scag Premium Spindle Grease 486258';
+    function gp(id, label, fit, every, days, part, note){ return sv(id, label + ' (' + fit + ' fittings)', Math.min(every, OWNER_GREASE_H), days, { group:'grease', fittings:fit, part:part, man:{ every:every, orDays:days },
+      src:src + ' ' + pg + ' (manual: ' + every + ' h or ' + ({ 7:'weekly', 14:'bi-weekly', 30:'monthly', 365:'yearly' }[days] || days + ' days') + ')' + (every > OWNER_GREASE_H ? '; ' + S.OWN : ''), note:note || '' }); }
+    return [
+      gp('grease_caster_pvt', 'Grease front caster pivots', 2, 500, 365, CH, m === 'TC' ? 'Pivot has a cap and plug, not a zerk: remove cap 484195 and plug 482028-01, fit a zerk, grease until it shows at the top of the caster extension, refit cap (tool 47007).' : ''),
+      gp('grease_caster_brg', 'Grease caster wheel bearings', 2, 100, 30, CH),
+      gp('grease_bellcrank', 'Grease cutter deck bellcranks', 4, 100, 14, CH),
+      gp('grease_pusharm', 'Grease cutter deck pusharms', 2, 100, 14, CH),
+      gp('grease_spindle', 'Grease blade spindles', 3, 40, 7, SP, '52 in deck: 3 spindles.')
+    ];
+  }
+  function scagChassis(m, o){
+    var src = S[m], pg = PG[m];
+    return greasePoints(m).concat([
+      sv('hyd_oil', 'Drain and replace hydraulic oil', 500, 365, { spec:'SAE 20W-50 motor oil' + (m === 'TC' ? ', 4 qt reservoir' : ''), part:'Scag 486255 (qt) / 486254 (gal)', src:src+' '+pg.hyd+' (500 h or yearly, sooner if black, milky or rancid)' }),
+      sv('hyd_filter', 'Replace hydraulic oil filter', 500, 365, { part:'Scag 48462-01', src:src+' '+pg.hydFilter+' and '+pg.parts+' (500 h or yearly)' }),
+      sv('belts_check', 'Check belts, idlers and tensioner for alignment and wear', 40, 7, { src:src+' '+pg.belts+' (after 2, 4, 8, 10 h, then 40 h or weekly)', note:'No grease fitting on the deck idler pivots or belt tensioner in this manual: check them here.' }),
+      sv('deck_belt', 'Replace cutter deck belt (as needed)', 0, 0, { part:o.deckBelt, src:src+' '+pg.parts }),
+      sv('pump_belt', 'Replace pump drive belt', 400, 730, { part:o.pumpBelt||'', verify:!o.pumpBelt, src:src+' '+pg.belts+' (400 h or 2 years)' }),
+      sv('pto_gap', 'Check electric PTO clutch air gap (0.015 in)', 500, 365, { src:src+' '+pg.pto+' (500 h or yearly)' }),
+      sv('blade_replace', 'Replace blades (as worn)', 0, 0, { part:o.blade, spec:'Replace at 1/2 original thickness or if bent, cracked or gouged. Sharpen top edge only, at the original bevel, not past 1/3 of the width. Balance to 1.5 oz-in. Torque 75 ft-lb.', src:src+' '+pg.blades })
+    ]).concat(kawServices(m, o.u));
+  }
+  // DAILY (B) is cut to the bone (owner 2026-11-18: 6 to 8 items for a full crew kit, under 90 seconds).
+  // Everything else is Weekly (W, one Monday session) or service-by-hours/days (H), shown only when due.
+  // After-ops (A) is not a checklist: hour meter per mower + one "anything broken or low?" tap.
+  // Handheld B items are ONE shared item for every handheld on the crew (blower, trimmers, edger).
+  var HANDHELD_B = it('hh_daily', 'B', 'Handhelds: fueled, guards and shields on, throttle snaps back to idle', true, S.SRM + ' p.13/34; ' + S.PB + ' p.34 (daily)');
+  function mowerItems(p, m){ var src = S[m], pg = PG[m]; return [
+      it(p + '_ready', 'B', 'Oil and fuel OK, no leaks', false, src + ' ' + pg.oil + ' (engine oil every 8 h or daily), ' + pg.leaks),
+      it(p + '_safe', 'B', 'Blades tight and not cracked, blade-kill safety switch works', true, src + ' ' + pg.interlock + ' (test the interlock before each use), ' + pg.blades),
+      it(p + '_hyd', 'W', 'Hydraulic oil level (2 to 2-1/4 in below the filler neck, cold)', false, src + ' ' + pg.hyd + ' (manual: every 200 h or monthly after break-in; weekly here)'),
+      it(p + '_tirep', 'W', 'Drive tires 12 psi with a gauge (front casters are flat-free)', false, src + ' ' + pg.tires + ' (manual: every 8 h or daily; weekly here, plus the daily walk-around)'),
+      it(p + '_guards', 'W', m === 'TC' ? 'Chute or mulch plate, belt covers, ROPS and seat belt OK' : 'Chute or mulch plate, belt covers, platform and presence switch OK', false, src + ' ' + pg.guards),
+      it(p + '_screen', 'W', 'Engine intake screen and cooling area clear', false, S.KF + ' p.24/34 (intake screen daily, fins 100 h)'),
+      it(p + '_batt', 'W', 'Battery posts and cables clean and tight', false, src + ' ' + pg.battery + (m === 'TC' ? ' (chart row sits in the 40 h group)' : '')),
+      it(p + '_hw', 'W', 'Hardware tight (deck, wheels, controls)', false, src + ' ' + pg.chart)
+  ]; }
+  var TYPES = {
+    tigercat2: { label:'Scag Tiger Cat II (52 in)', short:'Tiger Cat II', icon:'ZT', meter:'hours', kind:'mower', items:mowerItems('tc', 'TC'), services: function(u){ return scagChassis('TC', { u:u, blade:'Scag 482878 (18 in, 52V deck)', deckBelt:'Scag 486284 (52V)', pumpBelt:'Scag 485649' }); } },
+    vride2: { label:'Scag V-Ride II (52 in)', short:'V-Ride II', icon:'SO', meter:'hours', kind:'mower', items:mowerItems('vr', 'VR'), services: function(u){ return scagChassis('VR', { u:u, blade:'Scag 482878 (18 in, 52V deck)', deckBelt:'Scag 484100 (52V)', pumpBelt:'' }); } },
+    blower: { label:'Echo backpack blower', short:'Blower', icon:'BL', meter:'none', kind:'handheld', items:[
+      it('bl_air', 'W', 'Air filter clean, harness and straps intact, screws tight', false, S.PB+' p.34 (daily)')
+    ], services: function(){ return [
+      sv('air_filter', 'Replace air filter', 0, 90, { part:'Echo tune-up kit for your model', src:S.PB+' p.34-36 (3 months; inspect and clean daily)' }),
+      sv('spark_plug', 'Inspect, clean or replace spark plug', 0, 90, { spec:'PB-580: NGK BPM8Y, gap 0.026 in, 130-150 in-lb', src:S.PB+' p.35/37 (3 months)' }),
+      sv('spark_arrester', 'Clean muffler spark arrester screen', 0, 90, { src:S.PB+' p.30/35/39 (3 months; about every 40 h of use)' }),
+      sv('fuel_filter', 'Inspect fuel filter (replace yearly)', 0, 90, { part:'Echo tune-up kit for your model', src:S.PB+' p.35 (inspect 3 months, replace yearly)' }),
+      sv('exhaust_port', 'Inspect and de-carbon exhaust port', 0, 90, { src:S.PB+' p.35 (3 months)' }),
+      sv('cap_gasket', 'Replace fuel cap gasket', 0, 365, { src:S.PB+' p.35 (yearly)' })
+    ]; } },
+    trimmer: { label:'Echo string trimmer', short:'Trimmer', icon:'TR', meter:'none', kind:'handheld', items:[
+      it('tr_air', 'W', 'Air filter clean, head and line good, screws tight', false, S.SRM+' p.34/44')
+    ], services: function(){ return [
+      sv('air_filter', 'Replace air filter', 0, 90, { part:'Echo tune-up kit for your model', src:S.SRM+' p.34/36 (3 months; inspect and clean daily)' }),
+      sv('spark_plug', 'Inspect, clean or replace spark plug', 0, 90, { spec:'SRM-2620: NGK CMR7H, gap 0.026 in', src:S.SRM+' p.34/37 (3 months)' }),
+      sv('spark_arrester', 'Inspect and clean spark arrester screen', 0, 90, { src:S.SRM+' p.34/39 (3 months)' }),
+      sv('fuel_filter', 'Inspect fuel filter (replace yearly)', 0, 90, { part:'Echo tune-up kit for your model', src:S.SRM+' p.34/36 (inspect 3 months, replace yearly)' }),
+      sv('gear_grease', 'Grease gear case (if it has a grease plug)', 0, 90, { group:'grease', fittings:1, spec:'Lithium-based grease, do not overfill', man:{ every:50, orDays:90 }, src:S.SRM+' p.34 footnote 2 and p.42 (every 50 h of use, listed under 3 months)' })
+    ]; } },
+    edger: { label:'Echo edger', short:'Edger', icon:'ED', meter:'none', kind:'handheld', items:[
+      it('ed_air', 'W', 'Air filter clean, blade not badly worn, screws tight', false, S.DEF)
+    ], services: function(){ return [
+      sv('air_filter', 'Replace air filter', 0, 90, { verify:true, part:'Echo tune-up kit for your model', src:S.SRM+' p.34 (trimmer chart, verify for your edger)' }),
+      sv('spark_plug', 'Inspect, clean or replace spark plug', 0, 90, { verify:true, src:S.SRM+' p.34 (trimmer chart, verify for your edger)' }),
+      sv('spark_arrester', 'Inspect and clean spark arrester screen', 0, 90, { verify:true, src:S.SRM+' p.34 (trimmer chart, verify for your edger)' }),
+      sv('gear_grease', 'Grease edger gear case', 0, 90, { verify:true, group:'grease', fittings:1, spec:'Lithium-based grease', src:S.DEF }),
+      sv('edger_blade', 'Replace edger blade (as worn)', 0, 0, { verify:true, src:S.DEF })
+    ]; } },
+    truck: { label:'Work truck', short:'Truck', icon:'TK', meter:'miles', kind:'vehicle', items:[
+      it('t_walk', 'B', 'Walk-around: tires, lights and signals, nothing leaking', true, S.DEF),
+      it('t_fluids', 'W', 'Oil, coolant, washer fluid on the marks', false, S.DEF),
+      it('t_tread', 'W', 'Tire tread and pressure with a gauge (door-jamb sticker psi)', false, S.DEF),
+      it('t_glass', 'W', 'Wipers, horn, mirrors, battery terminals', false, S.DEF),
+      it('t_docs', 'W', 'Registration and insurance in the glovebox', false, S.DEF)
+    ], services: function(){ return [
+      sv('oil', 'Change engine oil and filter', 5000, 180, { verify:true, spec:'Per your truck owner manual' }),
+      sv('rotate', 'Rotate tires', 7500, 0, { verify:true }),
+      sv('air_filter', 'Replace engine air filter', 15000, 365, { verify:true }),
+      sv('lug', 'Check wheel lug torque', 0, 30, { verify:true })
+    ]; } },
+    trailer: { label:'Equipment trailer', short:'Trailer', icon:'TL', meter:'none', kind:'vehicle', items:[
+      it('r_hitch', 'B', 'Hitch locked, chains crossed, breakaway clipped, lights work, load strapped, gate latched', true, S.DEF),
+      it('r_tires', 'W', 'Tires: pressure (sidewall max or VIN plate), tread, lugs all there', false, S.DEF),
+      it('r_bear', 'W', 'Hubs not hot, no wheel play', false, S.DEF),
+      it('r_floor', 'W', 'Floor, ramp and frame solid, no cracks', false, S.DEF)
+    ], services: function(){ return [
+      sv('bearings', 'Repack or grease wheel bearings', 0, 365, { verify:true, group:'grease' }),
+      sv('lug', 'Check lug nut torque', 0, 30, { verify:true }),
+      sv('jack', 'Lube coupler and jack', 0, 90, { verify:true })
+    ]; } }
+  };
+  var ORDER = ['tigercat2', 'vride2', 'blower', 'trimmer', 'edger', 'truck', 'trailer'];
+
+  function n(v){ var x = parseFloat(String(v == null ? '' : v).replace(/,/g, '')); return isFinite(x) ? x : NaN; }
+  function iso(d){ return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function dayNum(s){ var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || '')); return m ? Math.round(Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000) : NaN; }
+  function days(a, b){ var x = dayNum(a), y = dayNum(b); return (isNaN(x) || isNaN(y)) ? NaN : y - x; }
+  function weekStart(s){ var d = dayNum(s); if (isNaN(d)) return ''; var dow = (new Date(d * 86400000).getUTCDay() + 6) % 7; var w = new Date((d - dow) * 86400000); return w.getUTCFullYear() + '-' + ('0' + (w.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + w.getUTCDate()).slice(-2); }
+  function type(u){ return TYPES[(u && u.type) || ''] || null; }
+  function meter(u){ var t = type(u); return (u && u.meter) || (t ? t.meter : 'none'); }
+
+  // Unit services = model template, with the owner's per-unit overrides ({ id: { every, orDays, part, spec } }).
+  function services(u){
+    var t = type(u); if (!t) return [];
+    var ov = (u && u.intervals) || {};
+    return t.services(u).map(function(s){
+      var o = ov[s.id]; if (!o) return s;
+      var c = {}; for (var k in s) c[k] = s[k];
+      if (o.every !== undefined && o.every !== '' && !isNaN(n(o.every))) c.every = n(o.every);
+      if (o.orDays !== undefined && o.orDays !== '' && !isNaN(n(o.orDays))) c.orDays = n(o.orDays);
+      if (o.part) c.part = String(o.part); if (o.spec) c.spec = String(o.spec);
+      c.custom = true; c.kaw = false; c.verify = false; c.src = s.src + '; owner override in the fleet register';
+      return c;
+    });
+  }
+  // Service due by hours (or miles) and/or calendar days, whichever comes first. "soon" at 90% of the interval used.
+  // Never-done services count from the unit's baseline (reading and date when registered), not from zero, unless
+  // the service has a run-in "first" figure and the unit was registered below it.
+  function due(u, today){
+    var r = n(u && u.reading), base = n(u && u.baseReading), last = (u && u.lastSvc) || {};
+    var baseDate = (u && (u.baseDate || u.readingDate)) || today;
+    return services(u).map(function(s){
+      var L = last[s.id] || null, lastAt = L ? n(L.at) : NaN, lastDate = L ? L.date : '';
+      var o = { id:s.id, label:s.label, part:s.part, spec:s.spec, src:s.src, verify:s.verify, kaw:s.kaw, custom:!!s.custom, every:s.every, orDays:s.orDays,
+        lastAt: isNaN(lastAt) ? null : lastAt, lastDate: lastDate || '', nextAt:null, left:null, daysLeft:null, frac:0, state:'ok', noRecord:!L,
+        group:s.group || '', fittings:s.fittings || 0, man:s.man || null, note:s.note || '' };
+      if (s.every > 0 && !isNaN(r)) {
+        var from = !isNaN(lastAt) ? lastAt : (!isNaN(base) ? base : r);
+        var every = s.every;
+        if (!L && s.first && !isNaN(base) && base < s.first) { from = 0; every = s.first; }
+        o.nextAt = Math.round((from + every) * 10) / 10; o.left = Math.round((o.nextAt - r) * 10) / 10;
+        o.frac = Math.max(o.frac, (r - from) / every);
+      }
+      if (s.orDays > 0) {
+        var dd = days(lastDate || baseDate, today);
+        if (!isNaN(dd)) { o.daysLeft = s.orDays - dd; o.frac = Math.max(o.frac, dd / s.orDays); }
+      }
+      if (!(s.every > 0) && !(s.orDays > 0)) o.state = 'asneeded';
+      else o.state = o.frac >= 1 ? 'due' : (o.frac >= 0.9 ? 'soon' : 'ok');
+      return o;
+    });
+  }
+  // ── BLADES: calendar, not hours (owner 2026-11-18: fresh blades about every other working day) ─────────────
+  // Per unit in the register: intervals.blades = { everyWorkDays (default 2), workDays ('12345' = Mon-Fri, ISO 1-7),
+  // sets (blade sets in rotation, default 3: one on the deck + spares) }. lastSvc.blades = { date, at, by, sharp, dull,
+  // sharpDate }. The set on the deck is neither sharp nor dull in the counts: sharp + dull + 1 = sets.
+  var BLADE_DEF = { everyWorkDays:2, workDays:'12345', sets:3 };
+  function bladeCfg(u){
+    var o = (u && u.intervals && u.intervals.blades) || {}, e = n(o.everyWorkDays), st = n(o.sets), wd = String(o.workDays || '').replace(/[^1-7]/g, '');
+    return { everyWorkDays: e >= 1 ? Math.round(e) : BLADE_DEF.everyWorkDays, workDays: wd || BLADE_DEF.workDays, sets: st >= 1 ? Math.round(st) : BLADE_DEF.sets, custom: !!(o.everyWorkDays || o.workDays || o.sets) };
+  }
+  function isoDow(d){ return ((new Date(d * 86400000).getUTCDay() + 6) % 7) + 1; }
+  // Working days in [from, to): the day the set went on counts, today does not (it is the day you would swap).
+  function workDaysBetween(from, to, wd){ var a = dayNum(from), b = dayNum(to), c = 0; if (isNaN(a) || isNaN(b)) return NaN; for (var d = a; d < b && c < 999; d++) if (String(wd || '12345').indexOf(String(isoDow(d))) >= 0) c++; return c; }
+  function bladeRec(u){ var L = (u && u.lastSvc && u.lastSvc.blades) || null, c = bladeCfg(u);
+    var sharp = L && L.sharp !== undefined && L.sharp !== '' && !isNaN(n(L.sharp)) ? n(L.sharp) : c.sets - 1, dull = L && L.dull !== undefined && L.dull !== '' && !isNaN(n(L.dull)) ? n(L.dull) : 0;
+    return { L:L, cfg:c, sharp:Math.max(0, sharp), dull:Math.max(0, dull) }; }
+  function bladeState(u, today){
+    var t = type(u); if (!t || t.kind !== 'mower') return null;
+    var r = bladeRec(u), from = (r.L && r.L.date) || (u && (u.baseDate || u.readingDate)) || today, used = workDaysBetween(from, today, r.cfg.workDays);
+    if (isNaN(used)) used = 0;
+    var dueNow = used >= r.cfg.everyWorkDays, wk = weekStart(today);
+    var sharpenDue = r.dull > 0 && (r.sharp === 0 || !(r.L && r.L.sharpDate && r.L.sharpDate >= wk));
+    return { id:'blades', label:'Swap blades', cal:true, every:r.cfg.everyWorkDays, workDays:r.cfg.workDays, sets:r.cfg.sets, used:used, wdLeft:r.cfg.everyWorkDays - used, left:null, daysLeft:null, frac:used / r.cfg.everyWorkDays, state: dueNow ? 'due' : 'ok',
+      lastDate:(r.L && r.L.date) || '', lastBy:(r.L && r.L.by) || '', noRecord:!(r.L && r.L.date), sharp:r.sharp, dull:r.dull, noSharp:r.sharp === 0, sharpenDue:sharpenDue, sharpDate:(r.L && r.L.sharpDate) || '',
+      src:(t === TYPES.tigercat2 ? S.TC + ' ' + PG.TC.blades : S.VR + ' ' + PG.VR.blades) + ' (how to sharpen and when to replace); every ' + r.cfg.everyWorkDays + ' working days is owner practice (2026-11-18), set per unit' };
+  }
+  // Service done. 'blades' = a swap: the set on the deck goes to the dull pile and a sharp set goes on.
+  function logService(u, ids, at, date, by){
+    u.lastSvc = u.lastSvc || {};
+    (ids || []).forEach(function(id){
+      id = String(id);
+      if (id === 'blades') { var r = bladeRec(u), o = {}; for (var k in (r.L || {})) o[k] = r.L[k];
+        o.at = at; o.date = date; o.by = by; o.sharp = Math.max(0, r.sharp - 1); o.dull = Math.min(r.cfg.sets - 1, r.dull + 1); u.lastSvc.blades = o; return; }
+      u.lastSvc[id] = { at:at, date:date, by:by };
+    });
+    return u;
+  }
+  function sharpen(u, k, date, by){
+    var r = bladeRec(u), o = {}; for (var x in (r.L || {})) o[x] = r.L[x];
+    k = Math.max(0, Math.min(r.dull, Math.round(n(k) || 0)));
+    if (!o.date) o.date = (u && (u.baseDate || u.readingDate)) || date;
+    o.sharp = r.sharp + k; o.dull = r.dull - k; o.sharpDate = date; o.sharpBy = by;
+    u.lastSvc = u.lastSvc || {}; u.lastSvc.blades = o; return k;
+  }
+  // What the crew and the owner see: due() with every grease point folded into ONE line ("Grease all fittings"),
+  // one Done tap logs every point, plus the blade swap (calendar). Each grease point keeps its own interval.
+  function dueList(u, today){
+    var all = due(u, today), out = [], g = all.filter(function(x){ return x.group === 'grease'; });
+    all.forEach(function(x){ if (x.group !== 'grease') out.push(x); });
+    if (g.length > 1) {
+      var w = g.slice().sort(function(a, b){ return b.frac - a.frac; })[0], hl = g.filter(function(x){ return x.left !== null; }), dl = g.filter(function(x){ return x.daysLeft !== null; });
+      var fit = g.reduce(function(s, x){ return s + (x.fittings || 0); }, 0), dueN = g.filter(function(x){ return x.state === 'due'; }).length;
+      out.push({ id:'grease', ids:g.map(function(x){ return x.id; }), label:'Grease all fittings (' + fit + ')', points:g, group:'grease', state:w.state, frac:w.frac, dueCount:dueN,
+        left: hl.length ? Math.min.apply(null, hl.map(function(x){ return x.left; })) : null, daysLeft: dl.length ? Math.min.apply(null, dl.map(function(x){ return x.daysLeft; })) : null,
+        part: g.map(function(x){ return x.part; }).filter(function(v, i, a){ return v && a.indexOf(v) === i; }).join(' + '), spec:'', verify:g.some(function(x){ return x.verify; }), kaw:false, noRecord:g.some(function(x){ return x.noRecord; }), src:g[0].src });
+    } else g.forEach(function(x){ out.push(x); });
+    var b = bladeState(u, today); if (b) out.push(b);
+    return out;
+  }
+  // Hour meter / odometer sanity. Never backward. More than 14 h (500 mi) per elapsed day needs a confirm.
+  var PER_DAY = { hours:14, miles:500 };
+  function checkReading(prev, prevDate, next, nextDate, m){
+    var a = n(prev), b = n(next);
+    if (isNaN(b) || b < 0) return { ok:false, confirm:false, msg:'Enter the number on the meter.' };
+    if (isNaN(a)) return { ok:true, confirm:false, msg:'' };
+    if (b < a) return { ok:false, confirm:false, msg:'Meter can\'t go backward (last ' + a + '). Check the number, or ask the owner to correct it in HQ.' };
+    var dd = days(prevDate, nextDate); dd = (isNaN(dd) || dd < 1) ? 1 : dd;
+    var lim = (PER_DAY[m] || 14) * dd;
+    if (b - a > lim) return { ok:true, confirm:true, msg:'That is ' + (Math.round((b - a) * 10) / 10) + ' since the last entry (' + a + ', ' + (prevDate || 'unknown date') + '). More than ' + lim + ' in ' + dd + ' day' + (dd === 1 ? '' : 's') + '. Sure?' };
+    return { ok:true, confirm:false, msg:'' };
+  }
+  var OPEN = { open:1, parts:1, fixed:1 };
+  function openFaults(u, faults){ return (faults || []).filter(function(f){ return f && f.unitId === u.id && OPEN[f.status || 'open']; }); }
+  function isDown(u, faults){ return !!(u && (u.down === true || u.down === 'TRUE' || openFaults(u, faults).some(function(f){ return f.severity === 'deadline'; }))); }
+  // Fleet board color: red = not mission capable, amber = open non-deadline fault or service due or soon, green = ready.
+  function status(u, faults, today){
+    var why = [], f = openFaults(u, faults), d = due(u, today), bl = bladeState(u, today);
+    if (isDown(u, faults)) { f.filter(function(x){ return x.severity === 'deadline'; }).forEach(function(x){ why.push('DEADLINE: ' + (x.item || x.description || 'fault')); }); if (u.down === true || u.down === 'TRUE') why.push('Marked down in HQ'); return { color:'red', why:why, due:d, faults:f, blades:bl }; }
+    f.forEach(function(x){ why.push('Fault: ' + (x.item || x.description || '')); });
+    dueList(u, today).forEach(function(x){ if (x.state === 'due') why.push(x.label + ' due'); else if (x.state === 'soon') why.push(x.label + ' due soon'); });
+    return { color: why.length ? 'amber' : 'green', why:why, due:d, faults:f, blades:bl };
+  }
+  function crewList(s){ return String(s || '').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean); }
+  function forCrew(fleet, crews){
+    var want = crewList(crews);
+    return (fleet || []).filter(function(u){ if (!u || u.active === false || u.active === 'FALSE') return false; var c = crewList(u.crew); return c.some(function(x){ return want.indexOf(x) >= 0; }); });
+  }
+  // Old v1 logs (equipKey truck/trailer/mower/edger/whacker) -> unit types. A legacy row maps to a unit only when the
+  // fleet has exactly ONE active unit of those types; otherwise it stays as history with no unit.
+  var LEGACY = { truck:['truck'], trailer:['trailer'], mower:['tigercat2', 'vride2'], edger:['edger'], whacker:['trimmer'], trimmer:['trimmer'], blower:['blower'] };
+  var LEGACY_PH = { daily:'B', weekly:'W', monthly:'W' };
+  function mapLegacy(fleet, equipKey){
+    var ts = LEGACY[String(equipKey || '').toLowerCase()] || [];
+    var hits = (fleet || []).filter(function(u){ return u && u.active !== false && u.active !== 'FALSE' && ts.indexOf(u.type) >= 0; });
+    return hits.length === 1 ? hits[0].id : '';
+  }
+  // Average use per day from the readings (for "needed this week"); 6 h/day default when there's no history yet.
+  function perDay(u){
+    var r = n(u.reading), b = n(u.baseReading), dd = days(u.baseDate, u.readingDate);
+    if (!isNaN(r) && !isNaN(b) && dd >= 7 && r > b) return (r - b) / dd;
+    return meter(u) === 'miles' ? 60 : 6;
+  }
+  // Parts and fluids needed this week: every service due now, or projected due within `horizon` days.
+  function needed(fleet, today, horizon){
+    horizon = horizon || 7; var out = [];
+    (fleet || []).forEach(function(u){
+      if (!u || u.active === false || u.active === 'FALSE') return;
+      var pd = perDay(u);
+      due(u, today).forEach(function(d){
+        if (d.state === 'asneeded') return;
+        var soon = d.state === 'due' || d.state === 'soon' || (d.left !== null && d.left <= pd * horizon * 5 / 7) || (d.daysLeft !== null && d.daysLeft <= horizon);
+        if (!soon) return;
+        // grease points that share a grease on one unit fold into one line ("Grease 4 points, 10 fittings")
+        var g = d.group === 'grease' && d.fittings ? out.filter(function(x){ return x.unitId === u.id && x.part === d.part && x.points; })[0] : null;
+        if (g) { g.points++; g.fittings += d.fittings; g.service = 'Grease ' + g.points + ' points, ' + g.fittings + ' fittings'; if (d.state === 'due') g.state = 'due'; g.left = Math.min(g.left === null ? 1e9 : g.left, d.left === null ? 1e9 : d.left); if (g.left === 1e9) g.left = null; return; }
+        var o = { unitId:u.id, unit:u.name || u.id, service:d.label, part:d.part, spec:d.spec, state:d.state, left:d.left, daysLeft:d.daysLeft, verify:d.verify || d.kaw };
+        if (d.group === 'grease' && d.fittings) { o.points = 1; o.fittings = d.fittings; }
+        out.push(o);
+      });
+    });
+    return out;
+  }
+  function blankUnit(typeKey, id, crew){
+    var t = TYPES[typeKey];
+    return { id:id, type:typeKey, name:(t ? t.short : typeKey), model:'', engine:'', serial:'', crew:crew || '', meter:t ? t.meter : 'none', reading:'', readingDate:'', baseReading:'', baseDate:'', intervals:{}, lastSvc:{}, down:false, active:true, notes:'' };
+  }
+  // The Before-ops gate for a crew: one card per vehicle and mower, ONE card for all handhelds together.
+  // Returns [{ key, units:[unit], items:[B items] }]. Down units are listed but can't be cleared.
+  function gateCards(units){
+    var cards = [], hh = [];
+    (units || []).forEach(function(u){ var t = type(u); if (!t) return; if (t.kind === 'handheld') { hh.push(u); return; }
+      var b = t.items.filter(function(i){ return i.ph === 'B'; }); if (b.length) cards.push({ key:u.id, units:[u], items:b }); });
+    var rank = { truck:0, trailer:1, tigercat2:2, vride2:3 };
+    cards.sort(function(a, b){ var ra = a.units[0].type in rank ? rank[a.units[0].type] : 9, rb = b.units[0].type in rank ? rank[b.units[0].type] : 9; return ra - rb || String(a.key).localeCompare(String(b.key)); });
+    if (hh.length) cards.push({ key:'HANDHELDS', units:hh, items:[HANDHELD_B] });
+    return cards;
+  }
+  function itemsFor(u, ph){ var t = type(u); if (!t) return []; if (ph === 'B' && t.kind === 'handheld') return [HANDHELD_B]; return t.items.filter(function(i){ return i.ph === ph; }); }
+  return { VERSION:'2026-11-18.2', SRC:S, KAW:KAW, TYPES:TYPES, HANDHELD_B:HANDHELD_B, gateCards:gateCards, itemsFor:itemsFor, ORDER:ORDER, services:services, due:due, checkReading:checkReading, isDown:isDown, openFaults:openFaults,
+    status:status, dueList:dueList, bladeState:bladeState, bladeCfg:bladeCfg, workDaysBetween:workDaysBetween, logService:logService, sharpen:sharpen, OWNER_GREASE_H:OWNER_GREASE_H, PG:PG, engFam:engFam, forCrew:forCrew, crewList:crewList, mapLegacy:mapLegacy, LEGACY_PH:LEGACY_PH, needed:needed, perDay:perDay, days:days, weekStart:weekStart, iso:iso, meter:meter, num:n, blankUnit:blankUnit };
+})();
+/* PMCS2-CORE:END */
+/* PMCS2-FIELD:BEGIN */
+// PMCS v2 crew screens (PMCS-REBUILD.md): Before-ops gate (B), fault report (D), After-ops (A), weekly (W) and
+// service-by-hours (H) only when due, blade swaps by the calendar, and the owner/manager fleet status screen (S).
+// Field-app switch EVG_FLAG_PMCS_V2 below, default false.
+// SWITCH OFF: this block returns on its first line. Nothing is wrapped, fetched, stored or drawn: the v1 PMCS above
+// runs exactly as before (tests/field/pmcs2.test.js proves it). Pilot on one phone: localStorage evg_flag_pmcs_v2 = on.
+// SWITCH ON but the backend flag OFF (or the crew not in the fleet register yet): every entry point hands over to v1.
+(function(){
+  var EVG_FLAG_PMCS_V2 = false;
+  var on = EVG_FLAG_PMCS_V2; if (!on) { try { on = localStorage.getItem('evg_flag_pmcs_v2') === 'on'; } catch (e) {} }
+  if (!on) return;
+  var V1 = { gate: window.pmcsGateForClockIn, menu: window.pmcsOpenMenu, eod: window.endOfDayGate, tab: window.initPmcsTab, editor: window.pmcsOpenEditor, saveCfg: window.pmcsSaveConfig };
+  var CK = 'evg_pmcs2_cache_v1';
+  var F = { v2:false, fleet:[], faults:[], last:{}, today:'', loaded:false, pending:[] };
+  function h(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
+  function today(){ try { if (typeof todayISOStr === 'function') return todayISOStr(); } catch (e) {} return PMCS2.iso(new Date()); }
+  function g(n){ try { return window[n] !== undefined ? window[n] : eval(n); } catch (e) { return undefined; } }
+  function crews(){ var c = g('adminCrews'); return c == null ? '' : String(c); }
+  function me(){ return g('adminName') || g('adminEmail') || ''; }
+  function boss(){ var r = String(g('adminRole') || '').toLowerCase(); return r === 'owner' || r === 'manager'; }
+  function crewLabel(){ try { if (typeof _pmcsCrewLabel === 'function') return _pmcsCrewLabel(); } catch (e) {} return me(); }
+  function now(){ var d = new Date(); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+  function uid(p){ return p + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
+  function toast(m){ try { if (typeof showToast === 'function') showToast(m); } catch (e) {} }
+  function save(){ try { localStorage.setItem(CK, JSON.stringify({ v2:F.v2, fleet:F.fleet, faults:F.faults, last:F.last, today:F.today, pending:F.pending })); } catch (e) {} }
+  function restore(){ try { var c = JSON.parse(localStorage.getItem(CK) || 'null'); if (c) { F.v2 = !!c.v2; F.fleet = c.fleet || []; F.faults = c.faults || []; F.last = c.last || {}; F.today = c.today || ''; F.pending = c.pending || []; } } catch (e) {} }
+  function allFaults(){ return F.faults.concat(F.pending); }
+  async function load(force){
+    if (F.loaded && !force) return F;
+    restore();
+    try {
+      var ctrl = new AbortController(), t = setTimeout(function(){ ctrl.abort(); }, 6000);
+      var r = await fetch(g('SCRIPT_URL') + '?action=pmcs2_fleet&adminToken=' + encodeURIComponent(g('adminToken') || ''), { signal: ctrl.signal });
+      clearTimeout(t); var d = await r.json();
+      if (d && d.success && d.v2) {
+        F.v2 = true; F.fleet = d.fleet || []; F.faults = d.faults || []; F.last = d.last || {}; F.today = d.today || today(); F.role = d.role || '';
+        // a fault reported offline stays local until the backend lists it
+        F.pending = F.pending.filter(function(p){ return !F.faults.some(function(f){ return f.unitId === p.unitId && f.description === p.description; }); });
+        reapplyLocal();
+      } else if (d) { F.v2 = false; }
+    } catch (e) { /* offline: last known register */ }
+    F.loaded = true; save(); return F;
+  }
+  // Readings and checks done on this phone but not yet synced survive a reload of the register.
+  var LK = 'evg_pmcs2_local_v1';
+  function local(){ try { return JSON.parse(localStorage.getItem(LK) || '{}') || {}; } catch (e) { return {}; } }
+  function setLocal(fn){ var l = local(); fn(l); try { localStorage.setItem(LK, JSON.stringify(l)); } catch (e) {} }
+  function reapplyLocal(){
+    var l = local();
+    Object.keys(l.readings || {}).forEach(function(id){ var u = unit(id), r = l.readings[id]; if (u && (u.reading === '' || +r.v > +u.reading)) { u.reading = +r.v; u.readingDate = r.d; } });
+    Object.keys(l.last || {}).forEach(function(id){ F.last[id] = F.last[id] || {}; Object.keys(l.last[id]).forEach(function(ph){ var c = F.last[id][ph]; if (!c || l.last[id][ph].date > c.date) F.last[id][ph] = l.last[id][ph]; }); });
+  }
+  function unit(id){ for (var i = 0; i < F.fleet.length; i++) if (F.fleet[i].id === id) return F.fleet[i]; return null; }
+  function mine(){ return boss() && !PMCS2.forCrew(F.fleet, crews()).length ? F.fleet.filter(function(u){ return u.active !== false; }) : PMCS2.forCrew(F.fleet, crews()); }
+  function down(u){ return PMCS2.isDown(u, allFaults()); }
+  function lastPh(u, ph){ return (F.last[u.id] || {})[ph] || null; }
+  function doneToday(u, ph){ var l = lastPh(u, ph); return !!(l && l.date >= today()); }
+  function weeklyDue(u){ var l = lastPh(u, 'W'), t = PMCS2.TYPES[u.type]; return !!(t && t.items.some(function(i){ return i.ph === 'W'; })) && !(l && l.date >= PMCS2.weekStart(today())); }
+  // Before-ops asks for mower hours only when the last After-ops entry was missed (worked yesterday, no reading since).
+  function needHoursAtB(u){ if (PMCS2.meter(u) !== 'hours') return false; var b = lastPh(u, 'B'); if (!b || b.date >= today()) return false; return !(u.readingDate && u.readingDate >= b.date); }
+  function dues(u){ return PMCS2.dueList(u, today()).filter(function(x){ return x.state !== 'asneeded'; }).sort(function(a, b){ return b.frac - a.frac; }); }
+  function nextSvc(u){ return dues(u)[0] || null; }
+  function dueTxt(x){ if (!x) return '';
+    if (x.cal) return x.state === 'due' ? 'Blades: swap today (' + x.used + ' working day' + (x.used === 1 ? '' : 's') + ' on this set)' : 'Blades: swap in ' + x.wdLeft + ' working day' + (x.wdLeft === 1 ? '' : 's'); if (x.left !== null && (x.daysLeft === null || x.left / 6 <= x.daysLeft)) return x.left < 0 ? x.label + ': OVERDUE ' + Math.abs(x.left) + ' h' : x.left === 0 ? x.label + ': due now' : x.label + ': due in ' + x.left + ' h'; if (x.daysLeft !== null) return x.daysLeft < 0 ? x.label + ': OVERDUE ' + Math.abs(x.daysLeft) + ' d' : x.daysLeft === 0 ? x.label + ': due today' : x.label + ': due in ' + x.daysLeft + ' d'; return x.label; }
+  function send(kind, method, payload){
+    if (typeof _fmTestMode !== 'undefined' && _fmTestMode) { try { console.log('[TEST] blocked PMCS2', payload.action); } catch (e) {} return; }
+    payload.adminToken = g('adminToken') || '';
+    var item = { kind:kind, idemKey:payload.idemKey, method:method };
+    if (method === 'POST') item.body = payload; else item.params = payload;
+    try { if (typeof _fmEnqueue === 'function') { _fmEnqueue(item); if (typeof _fmFlushQueue === 'function') _fmFlushQueue(); return; } } catch (e) {}
+    try { if (method === 'POST') fetch(g('SCRIPT_URL'), { method:'POST', body:JSON.stringify(payload) }).catch(function(){}); else fetch(g('SCRIPT_URL') + '?' + new URLSearchParams(payload).toString()).catch(function(){}); } catch (e) {}
+  }
+  function logPh(u, ph, items, result, reading, confirm, services, note, sharpened){
+    var q = { action:'pmcs2_log', idemKey:uid('pm2'), unitId:u.id, phase:ph, date:today(), result:result || 'GO', items:JSON.stringify(items || {}),
+      reading: reading === undefined ? '' : String(reading), confirm: confirm ? '1' : '', services:JSON.stringify(services || []), by:me(), crew:crewLabel(), note:note || '' };
+    if (sharpened) q.sharpened = String(sharpened);
+    send('pmcs2', 'GET', q);
+    var mark = { date:today(), by:me(), t:now() };
+    F.last[u.id] = F.last[u.id] || {}; F.last[u.id][ph] = mark;
+    setLocal(function(l){ l.last = l.last || {}; l.last[u.id] = l.last[u.id] || {}; l.last[u.id][ph] = mark; if (reading !== undefined && reading !== '') { l.readings = l.readings || {}; l.readings[u.id] = { v:+reading, d:today() }; } });
+    if (reading !== undefined && reading !== '') { u.reading = +reading; u.readingDate = today(); }
+    if (services && services.length) PMCS2.logService(u, services, u.reading, today(), me());   // same rule as the backend
+    if (sharpened) PMCS2.sharpen(u, sharpened, today(), me());
+    save();
+  }
+  function css(){
+    if (document.getElementById('pm2Style')) return;
+    var s = document.createElement('style'); s.id = 'pm2Style';
+    s.textContent = '.pm2-ov{display:none;position:fixed;inset:0;z-index:3400;background:#EEF1EA;justify-content:center}.pm2-ov.open{display:flex}'
+      + '.pm2-p{background:#EEF1EA;width:100%;max-width:640px;height:100dvh;display:flex;flex-direction:column;font-family:inherit;color:#0C2318}'
+      + '.pm2-hd{padding:max(12px,env(safe-area-inset-top)) 16px 12px;background:#fff;border-bottom:1px solid #DEE4D9}.pm2-t{font-family:var(--display,inherit);font-size:21px;font-weight:800;letter-spacing:-.015em;display:flex;justify-content:space-between;align-items:center;gap:8px}'
+      + '.pm2-sub{font-size:13.5px;color:#5D7064;margin-top:4px}.pm2-x{background:#EEF1EA;border:none;border-radius:999px;font-size:22px;padding:6px 14px;color:#0C2318}'
+      + '.pm2-b{flex:1;overflow-y:auto;padding:12px 12px 20px}.pm2-ft{padding:12px 14px calc(12px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid #DEE4D9;box-shadow:0 -8px 24px rgba(12,35,24,.06)}'
+      + '.pm2-card{background:#fff;border:1.5px solid #DEE4D9;border-radius:20px;padding:14px;margin-bottom:12px;box-shadow:0 1px 2px rgba(12,35,24,.06),0 4px 14px rgba(12,35,24,.05)}.pm2-card.ok{border-color:#C5DE8A;background:#EEF8D3}.pm2-card.bad{border-color:#dc2626;background:#fff5f5}.pm2-card.amber{border-color:#f59e0b}'
+      + '.pm2-ct{display:flex;align-items:center;gap:10px}.pm2-ic{flex:0 0 auto;width:40px;height:40px;border-radius:12px;background:#0C2318;color:#C9F25B;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center}'
+      + '.pm2-cn{font-family:var(--display,inherit);font-weight:800;font-size:17px;letter-spacing:-.01em}.pm2-cs{font-size:12.5px;color:#5D7064;margin-top:1px}.pm2-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}'
+      + '.pm2-chip{font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;background:#F1F4ED;color:#34473B}.pm2-chip.due{background:#fef2f2;color:#b91c1c}.pm2-chip.soon{background:#fffbeb;color:#92400e}.pm2-chip.dl{background:#dc2626;color:#fff}'
+      + '.pm2-row{display:flex;gap:8px;margin-top:10px}.pm2-btn{flex:1;min-height:52px;border-radius:14px;border:1.5px solid #C9D3C4;background:#fff;font:inherit;font-size:16px;font-weight:700;color:#0C2318}'
+      + '.pm2-btn.go{background:#C9F25B;border-color:#C9F25B;color:#0C2318;box-shadow:0 6px 18px rgba(130,170,30,.28)}.pm2-btn.no{border-color:#fca5a5;color:#b91c1c}.pm2-btn.red{background:#dc2626;border-color:#dc2626;color:#fff}.pm2-btn:disabled{opacity:.42;box-shadow:none}'
+      + '.pm2-it{display:flex;align-items:center;gap:8px;padding:9px 2px;border-top:1px solid #DEE4D9;font-size:14.5px;font-weight:600}.pm2-it span{flex:1}.pm2-it .dl{font-size:10px;font-weight:800;color:#dc2626;display:block}'
+      + '.pm2-pf{width:48px;height:48px;border-radius:12px;border:1.5px solid #C9D3C4;background:#fff;font-size:20px;font-weight:800;color:#94A398}.pm2-pf.on.p{background:#C9F25B;border-color:#C9F25B;color:#0C2318}.pm2-pf.on.f{background:#dc2626;border-color:#dc2626;color:#fff}'
+      + '.pm2-in{width:100%;box-sizing:border-box;padding:13px 14px;border:1.5px solid #C9D3C4;border-radius:14px;font:inherit;font-size:17px;margin-top:8px;background:#FAFBF8}.pm2-in:focus{outline:none;border-color:#0C2318;background:#fff;box-shadow:0 0 0 4px rgba(201,242,91,.45)}'
+      + '.pm2-msg{font-size:13px;font-weight:700;margin-top:6px}.pm2-msg.err{color:#b91c1c}.pm2-msg.warn{color:#92400e}.pm2-ban{border-radius:12px;padding:12px;font-weight:800;font-size:14px;margin-bottom:11px}'
+      + '.pm2-ban.red{background:#dc2626;color:#fff}.pm2-ban.amb{background:#fffbeb;color:#92400e;border:1.5px solid #fde68a}.pm2-ban.grn{background:#EEF8D3;color:#1C6B3A;border:1.5px solid #C5DE8A}'
+      + '.pm2-chip.ok{background:#EEF8D3;color:#1C6B3A}.pm2-sum{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:6px}.pm2-sum div{background:#fff;border:1.5px solid #DEE4D9;border-radius:14px;padding:8px 4px;text-align:center;font-size:11px;font-weight:700;color:#5D7064;line-height:1.2}'
+      + '.pm2-sum b{display:block;font-family:var(--display,inherit);font-size:21px;font-weight:800;color:#0C2318}.pm2-sum .r{border-color:#fca5a5}.pm2-sum .r b{color:#dc2626}.pm2-sum .y b{color:#b45309}.pm2-sum .g b{color:#1C6B3A}.pm2-crew{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 8px}'
+      + '.pm2-fr{display:flex;gap:9px;align-items:flex-start;padding:8px 0 2px;border-top:1px solid #DEE4D9;margin-top:8px}.pm2-th{width:64px;height:64px;object-fit:cover;border-radius:10px;border:1.5px solid #DEE4D9;background:#F1F4ED;flex:0 0 auto;display:block}'
+      + '.pm2-th.big{width:96px;height:96px}.pm2-th.none{display:flex;align-items:center;justify-content:center;font-size:10px;color:#94A398;text-align:center}'
+      + '.pm2-lbl{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#5D7064;margin:14px 2px 4px}';
+    document.head.appendChild(s);
+  }
+  function overlay(id){
+    css(); var o = document.getElementById(id);
+    if (!o) { o = document.createElement('div'); o.id = id; o.className = 'pm2-ov pmcs-overlay'; document.body.appendChild(o); }
+    o.classList.add('open'); return o;
+  }
+  function close(id){ var o = document.getElementById(id); if (o) { o.classList.remove('open'); o.innerHTML = ''; } }
+  function chips(u){
+    var out = '', faults = PMCS2.openFaults(u, allFaults());
+    if (down(u)) out += '<span class="pm2-chip dl">DOWN</span>';
+    if (PMCS2.meter(u) !== 'none' && u.reading !== '' && u.reading != null) out += '<span class="pm2-chip">' + h(u.reading) + (PMCS2.meter(u) === 'hours' ? ' h' : ' mi') + '</span>';
+    var n = nextSvc(u); if (n && n.state !== 'ok') out += '<span class="pm2-chip ' + n.state + '">' + h(dueTxt(n)) + '</span>';
+    else if (n && n.left !== null) out += '<span class="pm2-chip">' + h(dueTxt(n)) + '</span>';
+    if (weeklyDue(u)) out += '<span class="pm2-chip soon">Weekly due</span>';
+    faults.filter(function(f){ return f.severity !== 'deadline'; }).forEach(function(f){ out += '<span class="pm2-chip soon">Fault: ' + h(f.item || f.description).slice(0, 40) + '</span>'; });
+    return out;
+  }
+  function head(id, title, sub, closeFn){ return '<div class="pm2-hd"><div class="pm2-t"><span>' + h(title) + '</span><button class="pm2-x" onclick="' + closeFn + '" aria-label="Close">&times;</button></div><div class="pm2-sub">' + sub + '</div></div>'; }
+  function cardHead(units, sub){ var u = units[0]; var t = PMCS2.TYPES[u.type] || {}; var name = units.length > 1 ? 'Handhelds' : (u.id + ' ' + (u.name || t.short || '')); var ic = units.length > 1 ? 'HH' : (t.icon || '?');
+    return '<div class="pm2-ct"><div class="pm2-ic">' + h(ic) + '</div><div style="flex:1;min-width:0"><div class="pm2-cn">' + h(name) + '</div><div class="pm2-cs">' + sub + '</div></div></div>'; }
+
+  // ── BEFORE-OPS GATE (B) ──────────────────────────────────────────────────────────────────────────────────
+  var G = null;
+  function gate(){
+    return new Promise(async function(resolve){
+      try { await load(false); } catch (e) {}
+      var units = F.v2 ? mine() : [];
+      if (!F.v2 || !units.length) { resolve(V1.gate ? await V1.gate() : true); return; }
+      var cards = PMCS2.gateCards(units).filter(function(c){ return c.units.some(function(u){ return !doneToday(u, 'B'); }); });
+      if (!cards.length) { resolve(true); return; }
+      G = { cards:cards, st:{}, open:{}, items:{}, hours:{}, conf:{}, blades:{}, resolve:resolve };
+      renderGate();
+    });
+  }
+  function mowersOf(units){ return units.filter(function(u){ return (PMCS2.TYPES[u.type] || {}).kind === 'mower'; }); }
+  function noMower(){ var m = mowersOf(mine()); return m.length > 0 && m.every(down); }
+  function cardDown(c){ return c.units.every(down); }
+  function cardReady(c){
+    if (cardDown(c)) return true;
+    var s = G.st[c.key]; if (s !== 'ok' && s !== 'items') return false;
+    if (s === 'items' && c.items.some(function(i){ var v = G.items[c.key + '|' + i.id]; return v !== 'P' && v !== 'F'; })) return false;
+    return c.units.every(function(u){ if (!needHoursAtB(u)) return true; var ck = hoursCheck(u, G.hours[u.id]); return ck.ok && (!ck.confirm || G.conf[u.id]); });
+  }
+  function hoursCheck(u, v){ if (v === undefined || v === '') return { ok:false, confirm:false, msg:'' }; return PMCS2.checkReading(u.reading, u.readingDate, v, today(), PMCS2.meter(u)); }
+  function renderGate(){
+    var o = overlay('pm2Gate'), done = G.cards.filter(cardReady).length, b = '';
+    if (noMower()) {
+      var dm = mowersOf(mine()).map(function(u){ var f = PMCS2.openFaults(u, allFaults()).filter(function(x){ return x.severity === 'deadline'; })[0]; return u.id + ' ' + (u.name || '') + (f ? ': ' + (f.item || f.description) + (f.id ? ' (' + f.id + ')' : '') : ''); });
+      b += '<div class="pm2-ban red">No mower is mission capable. Call the owner before you roll.<div style="font-weight:600;font-size:13px;margin-top:6px">' + dm.map(h).join('<br>') + '</div></div>';
+    }
+    if (mine().some(weeklyDue) && new Date(today() + 'T12:00:00').getDay() === 1) b += '<div class="pm2-ban amb">Monday: weekly checks are due. Do them from the PMCS menu (about 5 min).</div>';
+    G.cards.forEach(function(c){
+      var dn = cardDown(c), s = G.st[c.key], ready = cardReady(c);
+      var sub = c.units.length > 1 ? c.units.map(function(u){ return u.id; }).join(', ') : chips(c.units[0]);
+      b += '<div class="pm2-card ' + (dn ? 'bad' : ready ? 'ok' : '') + '" id="pm2c_' + h(c.key) + '">' + cardHead(c.units, c.units.length > 1 ? h(sub) : '<div class="pm2-chips" style="margin-top:2px">' + sub + '</div>');
+      if (dn) { b += '<div class="pm2-msg err">Not mission capable. Do not use. ' + (c.units.length > 1 ? '' : 'Fault is open in HQ.') + '</div></div>'; return; }
+      b += '<div class="pm2-cs" style="margin-top:8px;font-size:14px;color:#14361f;font-weight:600">' + c.items.map(function(i){ return h(i.label); }).join('<br>') + '</div>';
+      c.units.forEach(function(u){ if (G.blades[u.id]) { b += '<div class="pm2-it"><span>&#10003; Blades swapped</span></div>'; return; } b += bladeRow(u); });
+      c.units.forEach(function(u){ if (!needHoursAtB(u)) return; var ck = hoursCheck(u, G.hours[u.id]);
+        b += '<div class="pm2-lbl">' + h(u.id) + ' hour meter (yesterday\'s After-ops was missed)</div><input class="pm2-in" inputmode="decimal" type="number" step="0.1" placeholder="Last ' + h(u.reading) + ' h" value="' + h(G.hours[u.id] || '') + '" oninput="__pmcs2.gHours(\'' + h(u.id) + '\',this.value)">'
+          + (ck.msg ? '<div class="pm2-msg ' + (ck.ok ? 'warn' : 'err') + '">' + h(ck.msg) + (ck.confirm ? ' <label><input type="checkbox" ' + (G.conf[u.id] ? 'checked' : '') + ' onchange="__pmcs2.gConf(\'' + h(u.id) + '\',this.checked)"> Yes, it\'s right</label>' : '') + '</div>' : ''); });
+      if (s === 'items') {
+        c.items.forEach(function(i){ var k = c.key + '|' + i.id, v = G.items[k];
+          b += '<div class="pm2-it"><span>' + h(i.label) + (i.dl ? '<b class="dl">DEADLINE IF FAILED</b>' : '') + '</span><button class="pm2-pf p ' + (v === 'P' ? 'on' : '') + '" onclick="__pmcs2.gItem(\'' + h(c.key) + '\',\'' + i.id + '\',\'P\')">&#10003;</button><button class="pm2-pf f ' + (v === 'F' ? 'on' : '') + '" onclick="__pmcs2.gItem(\'' + h(c.key) + '\',\'' + i.id + '\',\'F\')">&#10005;</button></div>'; });
+      } else b += '<div class="pm2-row"><button class="pm2-btn ' + (s === 'ok' ? 'go' : '') + '" onclick="__pmcs2.gOk(\'' + h(c.key) + '\')">' + (s === 'ok' ? '&#10003; All good' : 'All good') + '</button><button class="pm2-btn no" style="flex:0 0 34%" onclick="__pmcs2.gProblem(\'' + h(c.key) + '\')">Problem</button></div>';
+      b += '</div>';
+    });
+    var all = done === G.cards.length && !noMower();
+    o.innerHTML = '<div class="pm2-p">' + head('pm2Gate', 'Before-ops (B)', 'Tap <b>All good</b> per unit. Open a unit only to flag a problem.', '__pmcs2.gCancel()') + '<div class="pm2-b">' + b + '</div>'
+      + '<div class="pm2-ft"><button class="pm2-btn go" style="width:100%" ' + (all ? '' : 'disabled') + ' onclick="__pmcs2.gSubmit()">' + (noMower() ? 'Call the owner' : (all ? 'Done: start the day' : done + ' of ' + G.cards.length + ' cleared')) + '</button></div></div>';
+  }
+  function gOk(k){ G.st[k] = G.st[k] === 'ok' ? '' : 'ok'; renderGate(); }
+  function gProblem(k){ G.st[k] = 'items'; renderGate(); }
+  function gItem(k, id, v){
+    G.items[k + '|' + id] = v; var c = G.cards.filter(function(x){ return x.key === k; })[0], item = c && c.items.filter(function(x){ return x.id === id; })[0];
+    if (v === 'F' && c) { faultForm({ units:c.units, item:item, after:function(){ renderGate(); } }); return; }
+    renderGate();
+  }
+  function gHours(id, v){ G.hours[id] = v; G.conf[id] = false; var o = document.activeElement, pos = o && o.selectionStart; renderGate(); var el = document.querySelector('#pm2c_' + CSS.escape(cardOf(id)) + ' input.pm2-in'); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) {} } }
+  function cardOf(id){ var k = ''; G.cards.forEach(function(c){ if (c.units.some(function(u){ return u.id === id; })) k = c.key; }); return k; }
+  function gConf(id, v){ G.conf[id] = !!v; renderGate(); }
+  function gSubmit(){
+    if (noMower()) { gCancel(); return; }
+    G.cards.forEach(function(c){
+      if (cardDown(c)) return;
+      c.units.forEach(function(u){
+        if (down(u)) return;
+        var items = {}, fault = false; c.items.forEach(function(i){ var v = G.st[c.key] === 'ok' ? 'P' : (G.items[c.key + '|' + i.id] || 'P'); items[i.id] = v; if (v === 'F') fault = true; });
+        logPh(u, 'B', items, down(u) ? 'NO-GO' : (fault ? 'GO-FAULT' : 'GO'), needHoursAtB(u) ? G.hours[u.id] : '', !!G.conf[u.id]);
+      });
+    });
+    close('pm2Gate'); var r = G.resolve; G = null; if (r) r(true);
+  }
+  function gCancel(){ close('pm2Gate'); var r = G && G.resolve; G = null; if (r) r(false); }
+
+  // ── FAULT REPORT (D), 5988-E style ───────────────────────────────────────────────────────────────────────
+  var FF = null;
+  function faultForm(o){
+    o = o || {}; var units = o.units || mine();
+    FF = { units:units, unitId: units.length === 1 ? units[0].id : '', item: o.item || null, sev: o.item ? (o.item.dl ? 'deadline' : 'non-deadline') : '', desc:'', photo:null, after:o.after || null, err:'' };
+    renderFault();
+  }
+  function renderFault(){
+    var o = overlay('pm2Fault'), u = unit(FF.unitId), items = u ? (PMCS2.TYPES[u.type] || { items:[] }).items.concat(PMCS2.itemsFor(u, 'B')) : [];
+    var seen = {}; items = items.filter(function(i){ if (seen[i.id]) return false; seen[i.id] = 1; return true; });
+    var b = '<div class="pm2-lbl">Unit</div><div class="pm2-chips">' + FF.units.map(function(x){ return '<button class="pm2-btn ' + (x.id === FF.unitId ? 'go' : '') + '" style="flex:0 0 auto;min-height:46px;padding:0 14px;font-size:14px" onclick="__pmcs2.fUnit(\'' + h(x.id) + '\')">' + h(x.id + ' ' + (x.name || '')) + '</button>'; }).join('') + '</div>';
+    b += '<div class="pm2-lbl">What failed</div><select class="pm2-in" onchange="__pmcs2.fItem(this.value)"><option value="">Something else (describe below)</option>' + items.map(function(i){ return '<option value="' + i.id + '"' + (FF.item && FF.item.id === i.id ? ' selected' : '') + '>' + h(i.label) + '</option>'; }).join('') + '</select>';
+    b += '<div class="pm2-lbl">Can the unit still be used safely?</div><div class="pm2-row" style="margin-top:4px"><button class="pm2-btn ' + (FF.sev === 'deadline' ? 'red' : '') + '" onclick="__pmcs2.fSev(\'deadline\')">NO: deadline</button><button class="pm2-btn ' + (FF.sev === 'non-deadline' ? 'go' : '') + '" onclick="__pmcs2.fSev(\'non-deadline\')">Yes: fix later</button></div>';
+    b += '<div class="pm2-lbl">Describe it</div><textarea class="pm2-in" rows="3" placeholder="What you see, where, how bad" oninput="__pmcs2.fDesc(this.value)">' + h(FF.desc) + '</textarea>';
+    b += '<div class="pm2-lbl">Photo' + (FF.sev === 'deadline' ? ' (required for a deadline fault)' : ' (optional)') + '</div><label class="pm2-btn" style="display:flex;align-items:center;justify-content:center;cursor:pointer">' + (FF.photo ? '&#10003; Photo attached (tap to retake)' : 'Take photo') + '<input type="file" accept="image/*" capture="environment" style="display:none" onchange="__pmcs2.fPhoto(this)"></label>'
+      + (FF.photo ? '<img src="' + FF.photo.dataUrl + '" style="width:100%;max-height:180px;object-fit:cover;border-radius:12px;margin-top:8px">' : '');
+    if (FF.sev === 'deadline') b += '<div class="pm2-ban red" style="margin-top:12px">Deadline: the unit is marked DOWN for every crew until the owner verifies the fix.</div>';
+    if (FF.err) b += '<div class="pm2-msg err">' + h(FF.err) + '</div>';
+    o.innerHTML = '<div class="pm2-p">' + head('pm2Fault', 'Report a fault', 'Logged to HQ like a 5988-E: unit, fault, severity, photo, who.', '__pmcs2.fCancel()') + '<div class="pm2-b">' + b + '</div><div class="pm2-ft"><button class="pm2-btn go" style="width:100%" onclick="__pmcs2.fSubmit()">Send fault</button></div></div>';
+  }
+  function fUnit(id){ FF.unitId = id; FF.item = null; renderFault(); }
+  function fItem(id){ var u = unit(FF.unitId); var all = u ? (PMCS2.TYPES[u.type] || { items:[] }).items.concat(PMCS2.itemsFor(u, 'B')) : []; FF.item = all.filter(function(i){ return i.id === id; })[0] || null; if (FF.item && !FF.sev) FF.sev = FF.item.dl ? 'deadline' : 'non-deadline'; renderFault(); }
+  function fSev(s){ FF.sev = s; renderFault(); }
+  function fDesc(v){ FF.desc = v; }
+  function fPhoto(inp){
+    var f = inp.files && inp.files[0]; if (!f) return; var rd = new FileReader();
+    rd.onload = function(){ var img = new Image(); img.onload = function(){ var m = 1280, sc = Math.min(1, m / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); var url = c.toDataURL('image/jpeg', 0.72); FF.photo = { type:'image/jpeg', data:url.split(',')[1], dataUrl:url }; renderFault(); }; img.src = rd.result; };
+    rd.readAsDataURL(f);
+  }
+  function faultProblems(ff){
+    var p = [];
+    if (!ff.unitId) p.push('Pick the unit.');
+    if (!ff.sev) p.push('Pick deadline or fix later.');
+    if (!String(ff.desc || '').trim()) p.push('Describe the fault.');
+    if (ff.sev === 'deadline' && !ff.photo) p.push('A deadline fault needs a photo.');
+    return p;
+  }
+  function faultPayload(ff){
+    return { action:'pmcs2_fault', idemKey:uid('pm2f'), unitId:ff.unitId, itemId: ff.item ? ff.item.id : '', item: ff.item ? ff.item.label : String(ff.desc).slice(0, 80), severity:ff.sev,
+      description:String(ff.desc).trim(), photo: ff.photo ? { type:ff.photo.type, data:ff.photo.data } : null, date:today(), by:me(), crew:crewLabel() };
+  }
+  function fSubmit(){
+    var p = faultProblems(FF); if (p.length) { FF.err = p.join(' '); renderFault(); return; }
+    var pl = faultPayload(FF); send('pmcs2fault', 'POST', pl);
+    F.pending.push({ id:'(sending)', unitId:pl.unitId, item:pl.item, severity:pl.severity, status:'open', description:pl.description, opened:pl.date, by:pl.by }); save();
+    toast(pl.severity === 'deadline' ? pl.unitId + ' marked DOWN. Owner notified.' : 'Fault logged for ' + pl.unitId);
+    var a = FF.after; close('pm2Fault'); FF = null; if (a) a(); else rerender();
+  }
+  function fCancel(){ var a = FF && FF.after; close('pm2Fault'); FF = null; if (a) a(); }
+
+  // ── MENU: unit cards, weekly (W), service done (H), report fault (D), after-ops (A) ───────────────────────
+  async function menu(){
+    try { await load(true); } catch (e) {}
+    if (!F.v2 || (!mine().length && !boss())) { if (V1.menu) return V1.menu(); return; }
+    if (boss()) { renderStatus(); return; }   // owner / manager: the whole fleet (crew screens one tap away)
+    renderMenu();
+  }
+  function renderMenu(){
+    var o = overlay('pm2Menu'), b = '<div class="pm2-row" style="margin-top:0;margin-bottom:12px"><button class="pm2-btn red" onclick="__pmcs2.faultForm()">Report a fault</button><button class="pm2-btn" onclick="__pmcs2.after(true)">After-ops</button></div>';
+    mine().forEach(function(u){
+      var st = PMCS2.status(u, allFaults(), today()), t = PMCS2.TYPES[u.type] || {};
+      var lb = lastPh(u, 'B'); b += '<div class="pm2-card ' + (st.color === 'red' ? 'bad' : st.color === 'amber' ? 'amber' : 'ok') + '">' + cardHead([u], h((u.model || t.label || '') + (lb ? ' / last B ' + lb.date + ' ' + (lb.by || '') : ''))) + '<div class="pm2-chips">' + chips(u) + '</div>';
+      if (!down(u)) b += svcRows(u, false);
+      if (weeklyDue(u) && !down(u)) b += '<div class="pm2-row"><button class="pm2-btn" onclick="__pmcs2.weekly(\'' + h(u.id) + '\')">Weekly checks (' + t.items.filter(function(i){ return i.ph === 'W'; }).length + ')</button></div>';
+      b += '</div>';
+    });
+    o.innerHTML = '<div class="pm2-p">' + head('pm2Menu', 'PMCS', 'Your crew\'s units. Service and weekly items show only when due.', '__pmcs2.mClose()') + '<div class="pm2-b">' + b + '</div></div>';
+  }
+  function mClose(){ close('pm2Menu'); }
+  function isOpen(id){ var o = document.getElementById(id); return !!(o && o.classList.contains('open')); }
+  function rerender(){ if (isOpen('pm2Menu')) renderMenu(); if (G) renderGate(); if (isOpen('pm2Status')) renderStatus(); if (isOpen('pm2Unit') && SU) renderUnit(SU); }
+  // Service rows for a unit: what is due or due soon (all=false), or every tracked service (all=true, owner detail).
+  // Grease is ONE row for every point (one Done logs them all); blades are a one-tap calendar swap.
+  function svcRows(u, all){
+    var b = '';
+    dues(u).forEach(function(d){
+      if (d.cal) { if (d.state === 'due' || all) b += bladeRow(u, all); return; }
+      if (!all && d.state !== 'due' && d.state !== 'soon') return;
+      b += '<div class="pm2-it"><span>' + h(dueTxt(d)) + (d.part || d.spec ? '<b class="dl" style="color:#5b6b61">' + h([d.part, d.spec].filter(Boolean).join(' / ')) + '</b>' : '')
+        + (d.points && (all || d.state !== 'ok') ? '<b class="dl" style="color:#5b6b61;font-weight:600">' + d.points.map(function(x){ return h(x.label.replace(/^Grease /, '') + ': ' + ptTxt(x)); }).join('<br>') + '</b>' : '')
+        + '</span><button class="pm2-btn" style="flex:0 0 auto;padding:0 12px;font-size:14px;min-height:46px" onclick="__pmcs2.svcDone(\'' + h(u.id) + '\',\'' + d.id + '\')">Done</button></div>';
+    });
+    var bl = PMCS2.bladeState(u, today());
+    if (bl && bl.sharpenDue) b += '<div class="pm2-it"><span>Sharpen dull blade sets<b class="dl" style="color:' + (bl.noSharp ? '#dc2626' : '#5b6b61') + '">' + bl.dull + ' dull, ' + bl.sharp + ' sharp' + (bl.noSharp ? ': NO SHARP SET LEFT' : '') + '</b></span><button class="pm2-btn" style="flex:0 0 auto;padding:0 12px;font-size:14px;min-height:46px" onclick="__pmcs2.sharpen(\'' + h(u.id) + '\')">Sharpened</button></div>';
+    return b;
+  }
+  function ptTxt(x){ var a = []; if (x.left !== null) a.push(x.left < 0 ? 'OVERDUE ' + Math.abs(x.left) + ' h' : 'next at ' + x.nextAt + ' h'); if (x.daysLeft !== null) a.push(x.daysLeft < 0 ? 'OVERDUE ' + Math.abs(x.daysLeft) + ' d' : 'in ' + x.daysLeft + ' d');
+    return a.join(' or ') + (x.man && x.man.every > x.every && x.every > 0 ? ' (manual ' + x.man.every + ' h)' : ''); }
+  function bladeRow(u, all){
+    var bl = PMCS2.bladeState(u, today()); if (!bl || (bl.state !== 'due' && !all)) return '';
+    return '<div class="pm2-it"><span>' + h(dueTxt(bl)) + '<b class="dl" style="color:' + (bl.noSharp ? '#dc2626' : '#5b6b61') + '">' + bl.sharp + ' sharp, ' + bl.dull + ' dull' + (bl.noSharp ? ': no sharp set left' : '') + ' / every ' + bl.every + ' working days' + (bl.lastDate ? ' / last ' + h(bl.lastDate) + ' ' + h(bl.lastBy) : '') + '</b></span>'
+      + (bl.state === 'due' || all ? '<button class="pm2-btn ' + (bl.state === 'due' ? 'go' : '') + '" style="flex:0 0 auto;padding:0 12px;font-size:14px;min-height:46px" onclick="__pmcs2.blades(\'' + h(u.id) + '\')">Blades swapped</button>' : '') + '</div>';
+  }
+  function blades(id){
+    var u = unit(id); if (!u) return; logPh(u, 'H', {}, 'GO', '', false, ['blades']);
+    if (G) G.blades[id] = true; toast('Blades swapped on ' + id); rerender();
+  }
+  function sharpen(id){
+    var u = unit(id), bl = u && PMCS2.bladeState(u, today()); if (!bl) return;
+    var k = prompt('How many dull blade sets did you sharpen for ' + id + '? (' + bl.dull + ' dull)', String(bl.dull)); if (k === null) return;
+    k = Math.max(0, Math.min(bl.dull, parseInt(k, 10) || 0)); if (!k) return;
+    logPh(u, 'H', {}, 'GO', '', false, [], 'sharpened ' + k + ' blade set' + (k === 1 ? '' : 's'), k); toast(k + ' blade set' + (k === 1 ? '' : 's') + ' sharpened for ' + id); rerender();
+  }
+  function svcDone(id, sid, reading){
+    var u = unit(id); if (!u) return false; var d = PMCS2.dueList(u, today()).concat(PMCS2.due(u, today())).filter(function(x){ return x.id === sid; })[0]; if (!d) return false;
+    var ids = d.ids || [sid], r = '';
+    if (PMCS2.meter(u) !== 'none') { r = reading !== undefined ? String(reading) : prompt(d.label + ' on ' + u.id + '.\nHour meter / odometer now:', u.reading == null ? '' : String(u.reading)); if (r === null) return false; var ck = PMCS2.checkReading(u.reading, u.readingDate, r, today(), PMCS2.meter(u)); if (!ck.ok) { alert(ck.msg); return false; } if (ck.confirm && !confirm(ck.msg)) return false; }
+    else if (reading === undefined && !confirm('Mark "' + d.label + '" done on ' + u.id + ' today?')) return false;
+    logPh(u, 'H', {}, 'GO', r, true, ids); toast(d.label.replace(/ \(\d+\)$/, '') + ' logged for ' + u.id + (r !== '' ? ' at ' + r + (PMCS2.meter(u) === 'hours' ? ' h' : ' mi') : '')); rerender(); return true;
+  }
+  var WK = null;
+  function weekly(id){ var u = unit(id); WK = { u:u, items:(PMCS2.TYPES[u.type] || { items:[] }).items.filter(function(i){ return i.ph === 'W'; }), st:{} }; renderWeekly(); }
+  function renderWeekly(){
+    var o = overlay('pm2Week'), b = '<div class="pm2-row" style="margin-top:0"><button class="pm2-btn go" onclick="__pmcs2.wAll()">All good</button></div>';
+    WK.items.forEach(function(i){ var v = WK.st[i.id]; b += '<div class="pm2-it"><span>' + h(i.label) + '</span><button class="pm2-pf p ' + (v === 'P' ? 'on' : '') + '" onclick="__pmcs2.wSet(\'' + i.id + '\',\'P\')">&#10003;</button><button class="pm2-pf f ' + (v === 'F' ? 'on' : '') + '" onclick="__pmcs2.wSet(\'' + i.id + '\',\'F\')">&#10005;</button></div>'; });
+    var ok = WK.items.every(function(i){ return WK.st[i.id]; });
+    o.innerHTML = '<div class="pm2-p">' + head('pm2Week', 'Weekly (W): ' + WK.u.id, 'Once a week. Tap All good, or X an item to report it.', '__pmcs2.wClose()') + '<div class="pm2-b">' + b + '</div><div class="pm2-ft"><button class="pm2-btn go" style="width:100%" ' + (ok ? '' : 'disabled') + ' onclick="__pmcs2.wSubmit()">Save weekly</button></div></div>';
+  }
+  function wAll(){ WK.items.forEach(function(i){ WK.st[i.id] = 'P'; }); renderWeekly(); }
+  function wSet(id, v){ WK.st[id] = v; if (v === 'F') { faultForm({ units:[WK.u], item:WK.items.filter(function(i){ return i.id === id; })[0], after:renderWeekly }); return; } renderWeekly(); }
+  function wSubmit(){ var items = {}; WK.items.forEach(function(i){ items[i.id] = WK.st[i.id]; }); logPh(WK.u, 'W', items, 'GO'); close('pm2Week'); WK = null; toast('Weekly logged'); renderMenu(); }
+  function wClose(){ close('pm2Week'); WK = null; }
+
+  // ── AFTER-OPS (A): hour meter per mower (+ truck odometer) and one "anything broken or low?" tap ───────────
+  var A = null;
+  function after(fromMenu){
+    return new Promise(async function(resolve){
+      try { await load(false); } catch (e) {}
+      var units = F.v2 ? mine() : [];
+      if (!F.v2 || !units.length) { resolve(null); return; }
+      A = { units:units, metered:units.filter(function(u){ return PMCS2.meter(u) !== 'none'; }), v:{}, conf:{}, broken:null, resolve:resolve, fromMenu:!!fromMenu };
+      renderAfter();
+    });
+  }
+  function renderAfter(){
+    var o = overlay('pm2After'), b = '', ok = A.broken !== null;
+    A.metered.forEach(function(u){
+      var ck = A.v[u.id] === undefined || A.v[u.id] === '' ? { ok:false, msg:'' } : PMCS2.checkReading(u.reading, u.readingDate, A.v[u.id], today(), PMCS2.meter(u));
+      if (!ck.ok || (ck.confirm && !A.conf[u.id])) ok = false;
+      b += '<div class="pm2-card">' + cardHead([u], '<div class="pm2-chips" style="margin-top:2px">' + chips(u) + '</div>') + '<input class="pm2-in" id="pm2a_' + h(u.id) + '" type="number" inputmode="decimal" step="0.1" placeholder="' + (PMCS2.meter(u) === 'hours' ? 'Hour meter now' : 'Odometer now') + (u.reading !== '' && u.reading != null ? ' (last ' + h(u.reading) + ')' : '') + '" value="' + h(A.v[u.id] || '') + '" oninput="__pmcs2.aVal(\'' + h(u.id) + '\',this.value)">'
+        + (ck.msg ? '<div class="pm2-msg ' + (ck.ok ? 'warn' : 'err') + '">' + h(ck.msg) + (ck.confirm ? ' <label><input type="checkbox" ' + (A.conf[u.id] ? 'checked' : '') + ' onchange="__pmcs2.aConf(\'' + h(u.id) + '\',this.checked)"> Yes, it\'s right</label>' : '') + '</div>' : '') + '</div>';
+    });
+    b += '<div class="pm2-card"><div class="pm2-cn">Anything broken or low?</div><div class="pm2-row"><button class="pm2-btn ' + (A.broken === false ? 'go' : '') + '" onclick="__pmcs2.aBroken(false)">No, all good</button><button class="pm2-btn ' + (A.broken === true ? 'red' : 'no') + '" onclick="__pmcs2.aBroken(true)">Yes: report it</button></div></div>';
+    o.innerHTML = '<div class="pm2-p">' + head('pm2After', 'After-ops (A)', 'Meters, then one tap. Then the usual drop-off and clock-out.', '__pmcs2.aCancel()') + '<div class="pm2-b">' + b + '</div><div class="pm2-ft"><button class="pm2-btn go" style="width:100%" ' + (ok ? '' : 'disabled') + ' onclick="__pmcs2.aSubmit()">Save After-ops</button></div></div>';
+  }
+  function aVal(id, v){ A.v[id] = v; A.conf[id] = false; renderAfter(); var el = document.getElementById('pm2a_' + id); if (el) { el.focus(); var n = String(v).length; try { el.setSelectionRange(n, n); } catch (e) {} } }
+  function aConf(id, v){ A.conf[id] = !!v; renderAfter(); }
+  function aBroken(v){ A.broken = v; if (v) { faultForm({ units:A.units, after:renderAfter }); return; } renderAfter(); }
+  function aSubmit(){
+    var truckMi = '';
+    A.units.forEach(function(u){ var r = A.v[u.id]; if (r !== undefined && r !== '' && PMCS2.meter(u) === 'miles') truckMi = r; logPh(u, 'A', { anythingBroken: A.broken ? 'Y' : 'N' }, 'GO', r === undefined ? '' : r, !!A.conf[u.id]); });
+    try { if (truckMi !== '' && typeof _eodOdo !== 'undefined') _eodOdo = String(truckMi); } catch (e) {}   // prefill the drop-off odometer
+    close('pm2After'); var r = A.resolve; A = null; if (r) r(true);
+  }
+  function aCancel(){ close('pm2After'); var r = A && A.resolve; A = null; if (r) r(false); }
+  async function eod(){
+    var r = await after(false);
+    if (r === false) return false;           // backed out: stay clocked in, exactly like cancelling the drop-off sheet
+    return V1.eod ? V1.eod() : true;         // then the usual drop-off clean-up + clock-out sheet
+  }
+
+  // ── OWNER / MANAGER STATUS (S): the whole fleet on the phone. Same pmcs2_fleet answer and the same core as the
+  // HQ fleet board, so HQ and the phone always agree. Owner and manager roles only (crews get their PMCS menu).
+  var SU = null;
+  var FNEXT = { open:[['parts', 'Parts ordered'], ['fixed', 'Fixed']], parts:[['fixed', 'Fixed']], fixed:[['verified', 'Verify']] };
+  function active(){ return F.fleet.filter(function(u){ return u && u.active !== false && u.active !== 'FALSE'; }); }
+  function thumb(url){ var m = /\/d\/([\w-]{10,})/.exec(String(url || '')) || /[?&]id=([\w-]{10,})/.exec(String(url || '')); return m ? 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w320' : String(url || ''); }
+  function when(l){ if (!l) return ''; return (l.date === today() ? (l.t || 'today') : l.date.slice(5)) + ' ' + (l.by || ''); }
+  function phChip(u, ph){ var l = lastPh(u, ph), ok = !!(l && l.date >= today());
+    return '<span class="pm2-chip ' + (ok ? 'ok' : (ph === 'B' ? 'due' : '')) + '">' + ph + (ok ? ' &#10003; ' + h(when(l)) : ph === 'W' ? (l ? ' ' + h(when(l)) : ' -') : ' not done') + '</span>'; }
+  function crewKey(u){ return PMCS2.crewList(u.crew)[0] || '-'; }
+  function stOf(u){ return PMCS2.status(u, allFaults(), today()); }
+  function faultRow(f, big){
+    var img = f.photoUrl ? '<a href="' + h(f.photoUrl) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()"><img class="pm2-th' + (big ? ' big' : '') + '" src="' + h(thumb(f.photoUrl)) + '" alt="fault photo" loading="lazy"></a>' : '<div class="pm2-th none">no photo</div>';
+    var acts = big ? (FNEXT[f.status] || []).map(function(n){ return '<button class="pm2-btn ' + (n[0] === 'verified' ? 'go' : '') + '" style="min-height:44px;font-size:14px" onclick="__pmcs2.sFault(\'' + h(f.id) + '\',\'' + n[0] + '\')">' + n[1] + '</button>'; }).join('') : '';
+    return '<div class="pm2-fr">' + img + '<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:13.5px">' + (f.severity === 'deadline' ? '<span class="pm2-chip dl" style="padding:1px 6px">DEADLINE</span> ' : '') + h(f.id || '') + ' <span class="pm2-chip">' + h(f.status || 'open') + '</span></div>'
+      + '<div style="font-size:13px;font-weight:600;margin-top:2px">' + h(f.item || '') + '</div>' + (f.description ? '<div class="pm2-cs">' + h(f.description) + '</div>' : '') + '<div class="pm2-cs">' + h((f.by || '') + ' ' + (f.opened || '')) + '</div>'
+      + (acts ? '<div class="pm2-row" style="flex-wrap:wrap">' + acts + '</div>' : '') + '</div></div>';
+  }
+  function dueChips(u){ return dues(u).filter(function(d){ return d.state === 'due' || d.state === 'soon'; }).map(function(d){ return '<span class="pm2-chip ' + d.state + '">' + h(d.cal ? (d.state === 'due' ? 'Blades: swap due' : '') : d.id === 'grease' ? 'Grease ' + (d.state === 'due' ? 'due' : 'soon') + ' (' + d.points.filter(function(x){ return x.state !== 'ok'; }).length + ' of ' + d.points.length + ' points)' : dueTxt(d)) + '</span>'; }).join(''); }
+  function status(){
+    if (!boss()) { toast('Fleet status is for the owner and managers.'); return false; }
+    renderStatus(); return true;
+  }
+  function renderStatus(){
+    var o = overlay('pm2Status'), t = today(), units = active(), n = { red:0, amber:0, green:0 }, nDue = 0, nF = 0, groups = {}, b = '';
+    units.forEach(function(u){ var st = stOf(u); n[st.color]++; nF += st.faults.length; nDue += dues(u).filter(function(d){ return d.state === 'due'; }).length; (groups[crewKey(u)] = groups[crewKey(u)] || []).push({ u:u, st:st }); });
+    var bTot = units.filter(function(u){ return PMCS2.TYPES[u.type]; }).length, bDone = units.filter(function(u){ return doneToday(u, 'B'); }).length;
+    b += '<div class="pm2-sum"><div class="r"><b>' + n.red + '</b>down</div><div class="y"><b>' + nF + '</b>open faults</div><div class="y"><b>' + nDue + '</b>service due</div><div class="' + (bDone === bTot ? 'g' : 'y') + '"><b>' + bDone + '/' + bTot + '</b>B today</div></div>';
+    Object.keys(groups).sort().forEach(function(k){
+      var g = groups[k].sort(function(a, c){ var r = { red:0, amber:1, green:2 }; return r[a.st.color] - r[c.st.color] || String(a.u.id).localeCompare(String(c.u.id)); });
+      var bd = g.filter(function(x){ return doneToday(x.u, 'B'); }), ad = g.filter(function(x){ return doneToday(x.u, 'A'); }), lb = bd.map(function(x){ return lastPh(x.u, 'B'); }).sort(function(a, c){ return String(c.t || '').localeCompare(String(a.t || '')); })[0];
+      b += '<div class="pm2-lbl" style="display:flex;justify-content:space-between"><span>Crew ' + h(k) + '</span><span>' + g.length + ' units</span></div>'
+        + '<div class="pm2-crew"><span class="pm2-chip ' + (bd.length === g.length ? 'ok' : 'due') + '">Before-ops ' + (bd.length === g.length ? 'done' : bd.length + '/' + g.length) + (lb ? ' / ' + h(when(lb)) : '') + '</span><span class="pm2-chip ' + (ad.length === g.length ? 'ok' : '') + '">After-ops ' + (ad.length === g.length ? 'done' : ad.length + '/' + g.length) + '</span></div>';
+      g.forEach(function(x){
+        var u = x.u, st = x.st, tt = PMCS2.TYPES[u.type] || {}, df = st.faults;
+        b += '<div class="pm2-card ' + (st.color === 'red' ? 'bad' : st.color === 'amber' ? 'amber' : 'ok') + '" style="padding:10px 11px" onclick="__pmcs2.sUnit(\'' + h(u.id) + '\')" id="pm2s_' + h(u.id) + '">'
+          + cardHead([u], '<span class="pm2-chip ' + (st.color === 'red' ? 'dl' : st.color === 'amber' ? 'soon' : 'ok') + '">' + (st.color === 'red' ? 'DOWN' : st.color === 'amber' ? 'ATTENTION' : 'READY') + '</span>' + (PMCS2.meter(u) !== 'none' && u.reading !== '' && u.reading != null ? ' ' + h(u.reading) + (PMCS2.meter(u) === 'hours' ? ' h' : ' mi') : ''))
+          + '<div class="pm2-chips">' + phChip(u, 'B') + phChip(u, 'A') + dueChips(u) + '</div>'
+          + df.map(function(f){ return faultRow(f, false); }).join('') + '</div>';
+      });
+    });
+    var nd = PMCS2.needed(units, t, 7), by = {};
+    nd.forEach(function(x){ var k = x.part || x.spec || x.service; (by[k] = by[k] || []).push(x); });
+    b += '<div class="pm2-lbl">Parts and fluids needed this week (' + nd.length + ')</div><div class="pm2-card">' + (Object.keys(by).length ? Object.keys(by).map(function(k){ var l = by[k];
+      return '<div class="pm2-it" style="display:block"><div>' + h(k) + (l.some(function(x){ return x.verify; }) ? ' <span class="pm2-chip soon">verify</span>' : '') + '</div><div class="pm2-cs">' + l.map(function(x){ return h(x.unitId + ': ' + x.service.replace(/ \(\d+ fittings\)$/, '') + (x.state === 'due' ? ' (due now)' : x.left !== null ? ' (' + x.left + ' h left)' : x.daysLeft !== null ? ' (' + x.daysLeft + ' d left)' : '')); }).join('<br>') + '</div></div>'; }).join('') : '<div class="pm2-cs">Nothing coming due in the next 7 days.</div>') + '</div>';
+    o.innerHTML = '<div class="pm2-p">' + head('pm2Status', 'Fleet status', h(t) + ' &middot; <span class="pm2-chip ok">' + n.green + ' ready</span> <span class="pm2-chip soon">' + n.amber + ' attention</span> <span class="pm2-chip dl">' + n.red + ' down</span>', '__pmcs2.sClose()')
+      + '<div class="pm2-b">' + b + '</div><div class="pm2-ft"><div class="pm2-row" style="margin-top:0"><button class="pm2-btn" onclick="__pmcs2.sRefresh()">Refresh</button><button class="pm2-btn" onclick="__pmcs2.sCrew()">Crew screens</button></div></div></div>';
+  }
+  function sUnit(id){ if (!boss()) return false; SU = id; renderUnit(id); return true; }
+  function renderUnit(id){
+    var u = unit(id); if (!u) return; var o = overlay('pm2Unit'), st = stOf(u), t = PMCS2.TYPES[u.type] || {}, b = '';
+    if (st.color === 'red') b += '<div class="pm2-ban red">NOT MISSION CAPABLE<div style="font-weight:600;font-size:13px;margin-top:4px">' + st.why.map(h).join('<br>') + '</div><button class="pm2-btn" style="width:100%;margin-top:10px;color:#14361f" onclick="__pmcs2.sReturn(\'' + h(u.id) + '\')">Return to service</button></div>';
+    else if (st.why.length) b += '<div class="pm2-ban amb">' + st.why.slice(0, 6).map(h).join('<br>') + '</div>';
+    else b += '<div class="pm2-ban grn">Ready. Nothing due.</div>';
+    b += '<div class="pm2-lbl">PMCS today</div><div class="pm2-chips">' + phChip(u, 'B') + phChip(u, 'A') + phChip(u, 'W') + '</div>';
+    var fs = st.faults; b += '<div class="pm2-lbl">Open faults (' + fs.length + ')</div>' + (fs.length ? '<div class="pm2-card">' + fs.map(function(f){ return faultRow(f, true); }).join('') + '</div>' : '<div class="pm2-cs">None.</div>');
+    b += '<div class="pm2-lbl">Service (hours and calendar)</div><div class="pm2-card">' + (svcRows(u, true) || '<div class="pm2-cs">No tracked services.</div>') + '</div>';
+    var opts = PMCS2.services(u).filter(function(s){ return s.every > 0 || s.orDays > 0; });
+    b += '<div class="pm2-lbl">Log a service done</div><select class="pm2-in" id="pm2LogSvc"><option value="grease">Grease all fittings</option>' + opts.filter(function(s){ return s.group !== 'grease' || t.kind !== 'mower'; }).map(function(s){ return '<option value="' + h(s.id) + '">' + h(s.label) + '</option>'; }).join('') + '</select>'
+      + (PMCS2.meter(u) !== 'none' ? '<input class="pm2-in" id="pm2LogAt" type="number" inputmode="decimal" step="0.1" placeholder="' + (PMCS2.meter(u) === 'hours' ? 'Hour meter' : 'Odometer') + ' now" value="' + h(u.reading == null ? '' : u.reading) + '">' : '')
+      + '<button class="pm2-btn go" style="width:100%;margin-top:8px" onclick="__pmcs2.sLog(\'' + h(u.id) + '\')">Log service</button>';
+    o.innerHTML = '<div class="pm2-p">' + head('pm2Unit', u.id + ' ' + (u.name || t.short || ''), h([u.model || t.label, u.engine, PMCS2.meter(u) !== 'none' && u.reading !== '' && u.reading != null ? u.reading + (PMCS2.meter(u) === 'hours' ? ' h' : ' mi') + ' (' + (u.readingDate || '') + ')' : '', 'crew ' + (u.crew || '-')].filter(Boolean).join(' / ')), '__pmcs2.uClose()')
+      + '<div class="pm2-b">' + b + '</div></div>';
+  }
+  function sLog(id){
+    var sel = document.getElementById('pm2LogSvc'), at = document.getElementById('pm2LogAt'), u = unit(id); if (!sel || !u) return false;
+    var sid = sel.value; if (sid === 'grease' && !PMCS2.dueList(u, today()).some(function(x){ return x.id === 'grease'; })) sid = (PMCS2.services(u).filter(function(s){ return s.group === 'grease'; })[0] || {}).id;
+    return svcDone(id, sid, at ? at.value : '');
+  }
+  async function api(q){
+    try { q.adminToken = g('adminToken') || ''; var r = await fetch(g('SCRIPT_URL') + '?' + new URLSearchParams(q).toString()); return await r.json(); } catch (e) { return null; }
+  }
+  async function sFault(fid, to){
+    var f = F.faults.filter(function(x){ return x.id === fid; })[0]; if (!f) return false;
+    if ((to === 'verified' || to === 'open') && !boss()) { toast('Only the owner or a manager can verify.'); return false; }
+    var note = to === 'parts' ? (prompt('Parts ordered: what and from where? (optional)') || '') : to === 'fixed' ? (prompt('What was done? (optional)') || '') : '';
+    if (to === 'verified' && !confirm('Verify the fix on ' + f.unitId + '? A deadline unit goes back in service.')) return false;
+    var d = await api({ action:'pmcs2_fault_update', faultId:fid, status:to, note:note });
+    if (!(d && d.success)) { toast('Not saved: ' + ((d && d.error) || 'no signal, try again')); return false; }
+    f.status = to; (f.history = f.history || []).push({ s:to, by:me(), at:new Date().toISOString(), note:note }); save(); toast('Fault ' + fid + ': ' + to); rerender(); return true;
+  }
+  async function sReturn(id){
+    if (!boss()) { toast('Only the owner or a manager can return a unit to service.'); return false; }
+    var u = unit(id); if (!u || !confirm('Return ' + id + ' to service? Every open deadline fault on it is verified in your name.')) return false;
+    var d = await api({ action:'pmcs2_return_service', unitId:id });
+    if (!(d && d.success)) { toast('Not saved: ' + ((d && d.error) || 'no signal, try again')); return false; }
+    u.down = false; F.faults.forEach(function(f){ if (f.unitId === id && f.severity === 'deadline' && f.status !== 'verified') f.status = 'verified'; });
+    F.pending = F.pending.filter(function(p){ return p.unitId !== id || p.severity !== 'deadline'; }); save();
+    toast(id + ' is back in service'); rerender(); return true;
+  }
+  function sClose(){ close('pm2Status'); }
+  function uClose(){ close('pm2Unit'); SU = null; if (isOpen('pm2Status')) renderStatus(); }
+  async function sRefresh(){ await load(true); rerender(); }
+  function sCrew(){ close('pm2Status'); renderMenu(); }
+
+  window.__pmcs2 = { F:F, load:load, gate:gate, menu:menu, after:after, faultForm:faultForm, mine:mine, needHoursAtB:needHoursAtB, faultProblems:faultProblems, faultPayload:faultPayload, weeklyDue:weeklyDue,
+    gOk:gOk, gProblem:gProblem, gItem:gItem, gHours:gHours, gConf:gConf, gSubmit:gSubmit, gCancel:gCancel, fUnit:fUnit, fItem:fItem, fSev:fSev, fDesc:fDesc, fPhoto:fPhoto, fSubmit:fSubmit, fCancel:fCancel,
+    mClose:mClose, svcDone:svcDone, blades:blades, sharpen:sharpen, status:status, sUnit:sUnit, sFault:sFault, sReturn:sReturn, sLog:sLog, sClose:sClose, uClose:uClose, sRefresh:sRefresh, sCrew:sCrew, thumb:thumb, weekly:weekly, wAll:wAll, wSet:wSet, wSubmit:wSubmit, wClose:wClose, aVal:aVal, aConf:aConf, aBroken:aBroken, aSubmit:aSubmit, aCancel:aCancel, V1:V1, ff:function(){ return FF; } };
+  // v1 lock-down (with v2 live on this phone): crews cannot open or save the v1 checklist editor. The backend refuses
+  // set_pmcs_config from a crew login too, while EVG_FLAG_PMCS_V2 is on.
+  function v2Live(){ if (!F.loaded) restore(); return !!F.v2; }
+  if (typeof V1.editor === 'function') window.pmcsOpenEditor = function(){ if (v2Live() && !boss()) { toast('Only the owner or a manager can edit PMCS checklists.'); return false; } return V1.editor.apply(this, arguments); };
+  if (typeof V1.saveCfg === 'function') window.pmcsSaveConfig = function(){ if (v2Live() && !boss()) { toast('Only the owner or a manager can edit PMCS checklists.'); return false; } return V1.saveCfg.apply(this, arguments); };
+  window.pmcsGateForClockIn = gate;
+  window.pmcsOpenMenu = menu;
+  if (typeof V1.eod === 'function') window.endOfDayGate = eod;
+  if (typeof V1.tab === 'function') window.initPmcsTab = async function(){ await load(true); if (F.v2 && mine().length) return menu(); return V1.tab(); };
+})();
+/* PMCS2-FIELD:END */
 </script>
 </body>
 </html>
