@@ -26,14 +26,24 @@
   body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#e8f5e9;color:#1a2e1a;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
   .card{background:#fff;border:1px solid #d6e4d6;border-radius:14px;padding:26px;max-width:480px;width:100%;text-align:center}
   h1{font-size:1.5rem;margin-bottom:10px}p{margin-top:8px}a{color:#2d6a2d;font-weight:700}
+  .ok{width:54px;height:54px;border-radius:50%;background:#2d6a2d;color:#fff;font-size:30px;line-height:54px;margin:0 auto 12px}
+  .next{list-style:none;text-align:left;margin:18px 0 6px;padding:14px 16px;background:#f3f9f3;border-radius:10px}.next li{margin:6px 0;line-height:1.4}
+  .help{color:#4a5e4a;font-size:.95rem;margin-top:14px}.home{display:inline-block;margin-top:10px;font-size:.95rem}
 </style>
 <script>window.addEventListener('load', function(){ window.evgConv && window.evgConv(); });</script>
 </head>
 <body>
 <div class="card">
-  <h1 id="h">Checking your sign-up...</h1>
-  <p id="m"></p>
-  <p><a href="tel:+13524620627">Questions? (352) 462-0627</a></p>
+  <div class="ok" aria-hidden="true">&#10003;</div>
+  <h1 id="h">Confirming your sign-up...</h1>
+  <p id="m">This takes a few seconds.</p>
+  <ul id="next" class="next" hidden>
+    <li><b>Today:</b> your card is saved. Nothing is charged yet.</li>
+    <li><b>First cut:</b> <span id="fc">we will confirm the day with you by text.</span></li>
+    <li><b>That day:</b> your first month is charged after we mow.</li>
+  </ul>
+  <p class="help">Questions? Call or text <a href="tel:+13524620627">(352) 462-0627</a></p>
+  <p><a class="home" href="/">Back to the home page</a></p>
 </div>
 <script>
 (function () {
@@ -42,23 +52,29 @@
   var h = document.getElementById('h'), m = document.getElementById('m');
   var sid = new URLSearchParams(location.search).get('session_id') || '';
   if (window.EVG_GROWTH_FUNNEL !== true || !/^cs_(test|live)_[A-Za-z0-9]+$/.test(sid)) { h.textContent = 'Thanks!'; m.textContent = 'If you just signed up, we will be in touch shortly.'; return; }
-  var tries = 0;
-  (function check() {
+  var tries = 0, nx = document.getElementById('next'), fc = document.getElementById('fc');
+  function fallback() {
+    h.textContent = 'You are signed up';
+    m.textContent = 'Your card is saved and nothing has been charged.';
+    nx.hidden = false;
+  }
+  function retry() { if (++tries < 8) { setTimeout(check, 3000); return true; } fallback(); return false; }
+  function check() {
     fetch(API + '?action=growth_checkout_confirm&session_id=' + encodeURIComponent(sid)).then(function (r) { return r.json(); }).then(function (r) {
       if (r && r.confirmed) {
         h.textContent = 'You are signed up!';
-        var when = '';
+        m.textContent = (r.plan || 'Your lawn plan') + (r.monthly ? ', $' + r.monthly + ' a month.' : '.');
         if (/^\d{4}-\d{2}-\d{2}$/.test(r.firstCut || '')) {
           var p = r.firstCut.split('-'); var d = new Date(+p[0], +p[1] - 1, +p[2]);
-          when = 'Your first cut is ' + d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + (r.routeDay ? ' (we mow your street on ' + r.routeDay + 's)' : '') + '. ';
+          fc.textContent = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + (r.routeDay ? ' (we mow your street on ' + r.routeDay + 's).' : '.');
         }
-        m.textContent = (r.plan ? r.plan + (r.monthly ? ' at $' + r.monthly + ' a month' : '') + '. ' : '') + when + 'Your card is saved and nothing has been charged. Your first month is charged on the day of your first cut.' + (when ? '' : ' We will text you to set your first mow day.');
+        nx.hidden = false;
         return;
       }
-      if (++tries < 5) { setTimeout(check, 3000); return; }
-      h.textContent = 'Card saved'; m.textContent = 'Nothing has been charged. We are still confirming your sign-up on our side. You do not need to do anything; we will text you to set your first mow day.';
-    }).catch(function () { h.textContent = 'Thanks!'; m.textContent = 'We will text you to set your first mow day.'; });
-  })();
+      retry();
+    }).catch(retry);
+  }
+  check();
 })();
 </script>
 </body>
