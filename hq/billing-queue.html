@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- GROWTH 2027: monthly plan billing queue for the crew lead / VA. Uses the HQ login (localStorage eg_staff_session).
+     OFF while window.EVG_GROWTH_FUNNEL is false (sends nothing) and while EVG_FLAG_SELF_BOOK is not on (backend says off).
+     Not linked from HQ yet. See GROWTH-BUILD.md. -->
+<script>window.EVG_GROWTH_FUNNEL = true;</script>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex, nofollow"/>
+<title>Plan billing queue | Evergreen HQ</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f4f7f4;color:#1a2e1a;padding:16px}
+  h1{font-size:1.3rem;margin-bottom:4px}h2{font-size:1.05rem;margin:18px 0 8px}
+  .muted{color:#5b6b5b;font-size:.9rem}
+  .item{background:#fff;border:1px solid #d6e4d6;border-radius:12px;padding:12px;margin-bottom:10px}
+  .item.failed{border-color:#d9534f}
+  .top{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+  .tag{font-size:.8rem;font-weight:700;padding:2px 8px;border-radius:99px;background:#e8f5e9}
+  .tag.failed{background:#fde2e1;color:#8a1c1c}.tag.pending{background:#fff4d6;color:#7a5500}
+  .row{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  button{padding:8px 12px;border:0;border-radius:8px;background:#2d6a2d;color:#fff;font-weight:700;cursor:pointer}
+  button.alt{background:#e8f5e9;color:#1a3a1a}
+  input[type=date]{padding:6px;border:1px solid #b9cbb9;border-radius:8px}
+  .msg{margin-top:6px;font-weight:600}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<h1>Monthly plan billing queue</h1>
+<p class="muted">First cut done but billing not started, or billing failed. Starting billing charges the saved card (or sends the first Stripe invoice) for month 1.</p>
+<div id="off" class="item">Not available yet.</div>
+<div id="app" class="hide">
+  <h2>Rain day: move plan visits</h2>
+  <div class="item"><div class="row">From <input type="date" id="rain-old"/> to <input type="date" id="rain-new"/> <button class="alt" id="rain-go">Move and notify</button></div><div class="msg" id="rain-msg"></div>
+  <div class="muted">Moves every monthly-plan visit on that day (not per-cut visits, not visits on hold) and sends each customer the rain notice.</div></div>
+  <h2>Overflow visits by day (over the 22-stop target, emergency crew A)</h2><div id="over"></div>
+  <h2>Needs action</h2><div id="need"></div>
+  <h2>Signed up, waiting for the first cut</h2><div id="wait"></div>
+  <h2>Catch-up (overgrown) fee</h2><div id="catch"></div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var API = window.EVG_GROWTH_API || 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
+  if (window.EVG_GROWTH_FUNNEL !== true) return;
+  var sess = null; try { sess = JSON.parse(localStorage.getItem('eg_staff_session') || 'null'); } catch (e) {}
+  if (!sess || !sess.token) { document.getElementById('off').textContent = 'Log in to HQ first.'; return; }
+  var canBill = /^(owner|manager)$/i.test(String(sess.role || ''));
+  function get(p) { p.adminToken = sess.token; return fetch(API + '?' + new URLSearchParams(p).toString()).then(function (r) { return r.json(); }); }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function card(it, need) {
+    var failed = /^FAILED/.test(it.billingNote || '') || it.onHold;
+    var d = el('div', 'item' + (failed ? ' failed' : ''));
+    var top = el('div', 'top');
+    top.appendChild(el('b', null, it.name + ' · ' + it.town + ' · $' + it.monthly + '/mo'));
+    top.appendChild(el('span', 'tag' + (failed ? ' failed' : (need ? ' pending' : '')), it.onHold ? 'On hold: unpaid since ' + it.pastDueSince : (failed ? 'Billing failed' : (need ? 'Billing pending' : it.status))));
+    d.appendChild(top);
+    d.appendChild(el('div', 'muted', it.signupId + ' · ' + it.address + ' · ' + it.phone + ' · ' + (it.billingMethod === 'invoice' ? 'Invoice monthly' : 'Autopay')));
+    if (it.routeDay) d.appendChild(el('div', null, 'Route: ' + it.routeDay + 's' + (it.plannedFirstCut ? ' \u00b7 first cut planned ' + it.plannedFirstCut : '')));
+    if (it.firstCut) d.appendChild(el('div', null, 'First cut done: ' + it.firstCut));
+    if (it.billingNote) d.appendChild(el('div', 'muted', it.billingNote));
+    if (it.access) d.appendChild(el('div', 'muted', 'Access: ' + it.access));
+    d.appendChild(el('div', 'muted', 'Catch-up fee suggestion: $' + it.catchUpSuggested + (it.catchUpConfirmedBy ? ' (confirmed by ' + it.catchUpConfirmedBy + ')' : ' (not confirmed, never charged automatically)')));
+    if (canBill) {
+      var row = el('div', 'row'), msg = el('div', 'msg');
+      if (need && !it.onHold && /^(card saved|invoice)/.test(it.status)) {
+        var dt = el('input'); dt.type = 'date'; dt.value = it.firstCut;
+        var b = el('button', null, 'Start billing');
+        b.onclick = function () {
+          if (!confirm('Start the $' + it.monthly + '/month plan for ' + it.name + ' with first cut ' + dt.value + '? ' + (it.billingMethod === 'invoice' ? 'Stripe emails the first invoice now.' : 'The saved card is charged now.'))) return;
+          b.disabled = true;
+          get({ action: 'growth_start_subscription', signupId: it.signupId, firstCutDate: dt.value, idemKey: it.signupId + ':' + dt.value }).then(function (r) {
+            msg.textContent = r.success ? 'Billing started.' : (r.error || 'Failed'); b.disabled = !!r.success;
+          }).catch(function () { msg.textContent = 'Could not reach the server.'; b.disabled = false; });
+        };
+        row.appendChild(dt); row.appendChild(b);
+      }
+      if (/^NEEDS PLACEMENT/.test(it.billingNote || '')) {
+        var pl = el('button', 'alt', 'Place on route');
+        pl.onclick = function () { pl.disabled = true; get({ action: 'growth_place_subscriber', signupId: it.signupId }).then(function (r) { msg.textContent = r.success ? ('Placed on ' + r.routeDay + 's, first cut ' + (r.firstCut || '')) : (r.error || 'No route day with room yet'); pl.disabled = false; }); };
+        row.appendChild(pl);
+      }
+      var other = it.billingMethod === 'invoice' ? 'autopay' : 'invoice';
+      var t = el('button', 'alt', other === 'invoice' ? 'Invoice me monthly instead' : 'Switch back to autopay');
+      t.onclick = function () {
+        if (!confirm('Change billing for ' + it.name + ' to ' + other + '? Read them the plan terms for that method.')) return;
+        get({ action: 'growth_set_billing_method', signupId: it.signupId, method: other }).then(function (r) { msg.textContent = r.success ? 'Changed. Reload to refresh.' : (r.error || 'Failed'); });
+      };
+      row.appendChild(t); d.appendChild(row); d.appendChild(msg);
+    }
+    return d;
+  }
+  get({ action: 'growth_billing_queue' }).then(function (r) {
+    if (!r || !r.success) { document.getElementById('off').textContent = (r && r.route === 'off') ? 'Not available yet.' : ((r && r.error) || 'Could not load.'); return; }
+    document.getElementById('off').classList.add('hide'); document.getElementById('app').classList.remove('hide');
+    var need = document.getElementById('need'), wait = document.getElementById('wait'), over = document.getElementById('over');
+    document.getElementById('rain-go').onclick = function () {
+      var o = document.getElementById('rain-old').value, n = document.getElementById('rain-new').value, m = document.getElementById('rain-msg');
+      if (!o || !n) { m.textContent = 'Pick both dates.'; return; }
+      if (!confirm('Move every plan visit on ' + o + ' to ' + n + ' and text/email those customers?')) return;
+      get({ action: 'growth_rain_move', oldDate: o, newDate: n }).then(function (x) { m.textContent = x.success ? (x.moved + ' visits moved, ' + x.notified + ' customers notified.') : (x.error || 'Failed'); });
+    };
+    var od = Object.keys(r.overflowByDay || {}).sort();
+    if (!od.length) over.appendChild(el('div', 'muted', 'None.'));
+    od.forEach(function (d) { over.appendChild(el('div', 'item', d + ': ' + r.overflowByDay[d] + ' overflow visit' + (r.overflowByDay[d] > 1 ? 's' : ''))); });
+    if (!r.needsAction.length) need.appendChild(el('div', 'muted', 'Nothing to do.'));
+    r.needsAction.forEach(function (it) { need.appendChild(card(it, true)); });
+    if (!r.waitingFirstCut.length) wait.appendChild(el('div', 'muted', 'None.'));
+    r.waitingFirstCut.forEach(function (it) { wait.appendChild(card(it, false)); });
+    var cat = document.getElementById('catch'), cu = r.catchUp || [];
+    if (!cu.length) cat.appendChild(el('div', 'muted', 'None.'));
+    cu.forEach(function (c) {
+      var d = el('div', 'item'); d.appendChild(el('b', null, c.name + ' \u00b7 ' + c.town));
+      d.appendChild(el('div', 'muted', c.signupId + ' \u00b7 ' + (c.confirmedBy ? 'confirmed $' + c.amount + ' by ' + c.confirmedBy + ', added to the first month at the first cut' : 'suggested $' + c.suggested + ', not confirmed (no fee unless confirmed by the first cut)')));
+      var row = el('div', 'row'), msg = el('div', 'msg');
+      // Crew lead (any login): pick $49 / $69 / $99 / $149 or a custom whole-dollar amount (min $49), then confirm.
+      var sel = el('select'); (c.choices || [49, 69, 99, 149]).forEach(function (n) { var o = el('option', null, '$' + n); o.value = n; if (Number(c.amount) === n) o.selected = true; sel.appendChild(o); });
+      var oc = el('option', null, 'Custom'); oc.value = 'custom'; sel.appendChild(oc);
+      var cin = el('input'); cin.type = 'number'; cin.min = '49'; cin.step = '1'; cin.placeholder = '$'; cin.className = 'hide'; cin.style.width = '90px';
+      if ((c.choices || []).indexOf(Number(c.amount)) < 0) { sel.value = 'custom'; cin.value = c.amount; cin.classList.remove('hide'); }
+      sel.onchange = function () { cin.classList.toggle('hide', sel.value !== 'custom'); };
+      var cb = el('button', 'alt', 'Confirm fee');
+      cb.onclick = function () {
+        var amt = sel.value === 'custom' ? cin.value : sel.value;
+        get({ action: 'growth_set_catchup', signupId: c.signupId, amount: amt, photoLink: ph.value.trim() }).then(function (x) { msg.textContent = x.success ? ('Confirmed $' + x.amount + '. Reload to send.') : (x.error || 'Failed'); });
+      };
+      var ph = el('input'); ph.type = 'url'; ph.placeholder = 'Photo link (Drive)'; ph.style.width = '180px';
+      row.appendChild(sel); row.appendChild(cin); row.appendChild(ph); row.appendChild(cb);
+      // Normally the confirmed fee rides on the FIRST month's charge automatically. The separate invoice button is a
+      // fallback only, shown when EVG_FLAG_CATCHUP_INVOICE is on and billing already started.
+      if (canBill && c.confirmedBy && r.catchupFallback && /^(active|paused)/.test(c.status || '')) {
+        var b = el('button', null, 'Send catch-up invoice $' + c.amount);
+        b.onclick = function () {
+          if (!confirm('Stripe will email ' + c.name + ' a one-time invoice for $' + c.amount + ' (overgrown lawn catch-up). Send it?')) return;
+          b.disabled = true;
+          get({ action: 'growth_catchup_invoice', signupId: c.signupId, idemKey: c.signupId + ':catchup' }).then(function (x) {
+            msg.textContent = x.success ? (x.already ? 'Already sent.' : 'Invoice sent.') : (x.error || 'Failed'); b.disabled = !!x.success;
+          }).catch(function () { msg.textContent = 'Could not reach the server.'; b.disabled = false; });
+        };
+        row.appendChild(b);
+      }
+      d.appendChild(row); d.appendChild(msg); cat.appendChild(d);
+    });
+  }).catch(function () { document.getElementById('off').textContent = 'Could not reach the server.'; });
+})();
+</script>
+</body>
+</html>

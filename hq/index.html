@@ -1,7 +1,62 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-perf-page="hq" data-perf-url="https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec">
 <head>
 <meta charset="UTF-8"/>
+<!-- PERF 2027 switch (front end). false (as shipped) = this page sends exactly the requests it always did.
+     true = one perf_bootstrap request at the top of <head> answers the on-load reads, and the update check revalidates
+     (304, ~0 KB) instead of re-downloading the whole page. Turn on ONLY after Script Property EVG_FLAG_PERF = on. -->
+<script>window.EVG_PERF = false;</script>
+<!-- PERF-BOOT-SHIM -->
+<script>
+/* PERF 2027 boot shim (EVG_PERF). Inlined by tools/perf/inline-shim.py into field/index.html and hq/index.html between the
+   PERF-BOOT-SHIM markers; edit THIS file and re-run the inliner. Does nothing unless window.EVG_PERF === true.
+   ON: as soon as <head> is parsed (long before the 500+ KB page finishes parsing), ONE perf_bootstrap request starts.
+   The page's own on-load GETs for those actions are then answered from that one response, each at most once and only
+   within 20 s, only for the same token (and the same date for get_route). Anything missing, failed or different goes
+   to the network exactly as before. Writes (POST, or any action not listed) are never touched. */
+(function () {
+  if (window.EVG_PERF !== true) return;
+  try {
+    if (/[?&]test=1\b/.test(location.search)) return;
+    var page = document.documentElement.getAttribute('data-perf-page');
+    var URL0 = document.documentElement.getAttribute('data-perf-url');
+    var ACT = { field: { get_checklist_config: 1, bookings: 1, customers_list: 1, get_route: 1, get_schedule_config: 1 },
+                hq: { version: 1, get_route: 1, get_field_status: 1, bookings: 1, get_crew_pay: 1 } }[page];
+    if (!ACT || !URL0 || !window.fetch) return;
+    var s = JSON.parse(localStorage.getItem('eg_staff_session') || 'null');
+    var exp = s && (s.expiry || s.exp);
+    if (!s || !s.token || !exp || new Date() > new Date(exp)) return;
+    if (page === 'hq' && !/^(owner|manager)$/i.test(String(s.role || ''))) return;
+    var t = new Date(), day = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+    var rf = window.fetch.bind(window), t0 = Date.now(), used = {};
+    var boot = rf(URL0 + '?action=perf_bootstrap&page=' + page + '&date=' + day + '&adminToken=' + encodeURIComponent(s.token))
+      .then(function (r) { return r.json(); })
+      .then(function (d) { return (d && d.success === true && d.perf === 1 && d.parts) ? d.parts : null; })
+      .catch(function () { return null; });
+    var q = function (url, k) { var m = url.match(new RegExp('[?&]' + k + '=([^&]*)')); return m ? decodeURIComponent(m[1]) : ''; };
+    window.fetch = function (u, o) {
+      var url = String(u && u.url ? u.url : u);
+      var isGet = !o || !o.method || String(o.method).toUpperCase() === 'GET';
+      if (isGet && url.indexOf(URL0 + '?') === 0 && Date.now() - t0 < 20000) {
+        var a = q(url, 'action');
+        var same = q(url, 'adminToken') === String(s.token) || a === 'version';
+        if (a === 'get_route' && (q(url, 'date') !== day || q(url, 'crew'))) same = false;
+        if (a === 'bookings' && q(url, 'includeCompleted') !== 'false') same = false;
+        if (ACT[a] && same && !used[a]) {
+          used[a] = 1;
+          return boot.then(function (parts) {
+            var p = parts && parts[a];
+            if (p && typeof p === 'object') return new Response(JSON.stringify(p), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            return rf(u, o);
+          });
+        }
+      }
+      return rf(u, o);
+    };
+  } catch (e) {}
+})();
+</script>
+<!-- /PERF-BOOT-SHIM -->
 <link rel="preconnect" href="https://script.google.com"/><link rel="preconnect" href="https://script.googleusercontent.com"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <title>Evergreen — HQ</title>
@@ -10,14 +65,16 @@
 <meta name="theme-color" content="#0a1710"/>
 <link rel="apple-touch-icon" href="/field/apple-touch-icon.png"/>
 <link rel="icon" href="/field/icon-192.png"/>
+<link rel="preconnect" href="https://cdnjs.cloudflare.com"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Noto+Emoji:wght@400;500&display=swap" rel="stylesheet"/>
+<!-- PERF 2027: fonts no longer block the first paint (display=swap: system font first, Inter when it lands) -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Noto+Emoji:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'"/><noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Noto+Emoji:wght@400;500&display=swap" rel="stylesheet"/></noscript>
 <script>
-/* APP_VER:2026-11-11.2 */
-(function(){ var V='2026-11-11.2'; window.__LIVE_VER=V;
+/* APP_VER:2026-11-19.1 */
+(function(){ var V='2026-11-19.1'; window.__LIVE_VER=V;
   function check(){ if(document.hidden) return;
-    fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
+    fetch(window.EVG_PERF===true?'index.html':'index.html?_='+Date.now(),{cache:window.EVG_PERF===true?'no-cache':'no-store'}).then(function(r){return r.ok?r.text():null;}).then(function(h){
       if(!h) return; var m=h.match(/APP_VER:([0-9.\-]+)/); if(!m||!m[1]||m[1]===V) return;
       var done=''; try{ done=localStorage.getItem('evg_hq_updated_to')||''; }catch(e){}
       if(done===m[1]) return; try{ localStorage.setItem('evg_hq_updated_to', m[1]); }catch(e){}
@@ -796,6 +853,7 @@
 <div id="pane-dev" class="hq-pane">
     <div class="dev-wrap"><div class="dev-grid">
       <div class="dev-card"><div class="dev-h">🧬 Build &amp; session</div><div class="dev-b" id="devInfo"></div></div>
+      <div class="dev-card"><div class="dev-h">💾 HQ settings on this browser<span class="grow"></span><button class="dev-btn go" id="hqExportBtn" onclick="hqExportSettings()">Export HQ settings</button></div><div class="dev-b"><div class="dev-row" style="font-size:12px;color:var(--dim);">Crew bases, crew locks, yard minutes, waived balances, ended plans and every other hq_ setting live only in this browser. Download them as one JSON file (no session tokens, no customer caches) so they reach the new database at cutover. Do it on each device you use HQ on.</div><div class="dev-row" id="hqExportNote" style="font-size:12px;"></div></div></div>
       <div class="dev-card"><div class="dev-h">🩺 Backend health<span class="grow"></span><button class="dev-btn go" onclick="devPingAll()">Ping all</button></div><div class="dev-b">
         <div class="dev-row">bookings <span class="grow"></span><span id="devPing-bookings">—</span><button class="dev-btn" onclick="devPing('bookings')">ping</button></div>
         <div class="dev-row">get_field_status <span class="grow"></span><span id="devPing-get_field_status">—</span><button class="dev-btn" onclick="devPing('get_field_status')">ping</button></div>
@@ -969,7 +1027,9 @@ let token='', myEmail='', myName='', myRole='', myCrews='';
 let map=null, markers={}, _crews=[], _bookings=[], _expanded={}, _tick=null, _statusBad=false, _routeLayers=[];
 let _statusInt=null, _bookInt=null, _addCrew='', _jobBi=-1, _filter='all';
 let _routeSaved={}, _roLists={}, _roPushTimers={}, _roSyncState={}, _roDrag=null, _rightView='jobs', _routeInt=null;
-const CREW_COLORS={ A:'#22c55e', B:'#38bdf8', C:'#fbbf24', D:'#c084fc' };
+// 14 fixed crew colors (HQ overhaul P0). Red (#f87171) means unassigned and slate (#64748b) means done,
+// so no crew color is red or grey. Any other code gets a stable generated color (_crewColorGen).
+const CREW_COLORS={ A:'#22c55e', B:'#38bdf8', C:'#fbbf24', D:'#c084fc', E:'#fb923c', F:'#2dd4bf', G:'#f472b6', H:'#a3e635', I:'#818cf8', J:'#e879f9', K:'#fde047', L:'#67e8f9', M:'#d6a77a', N:'#86efac' };
 
 /* ── dev instrumentation: capture every fetch + console error ── */
 const _netLog=[], _conLog=[];
@@ -1011,7 +1071,16 @@ function durStr(fromIso){ if(!fromIso) return '—'; const ms=Date.now()-new Dat
 // by email + serviceDate, or fails visibly. A wrong-row write is never acceptable.
 function _ri(b){ const r=parseInt(b&&b._rowIndex,10); return (r&&r>=2)?r:0; }
 function initials(n){ const p=String(n||'').trim().split(/\s+/); return ((p[0]||'')[0]||'?').toUpperCase()+((p[1]||'')[0]||'').toUpperCase(); }
-function crewColor(cr){ return CREW_COLORS[String(cr||'').toUpperCase().split(/[^A-Z0-9]+/)[0]]||'#22c55e'; }
+function crewColor(cr){ const k=String(cr||'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean)[0]||''; return CREW_COLORS[k]||(k?_crewColorGen(k):'#22c55e'); }
+// Same code -> same color on every device. Always #rrggbb (callers append hex alpha, e.g. +'22').
+// Hue skips the red band (unassigned) and lightness stays high enough for the dark board.
+function _crewColorGen(k){
+  let h=0; for(let i=0;i<k.length;i++) h=(h*31+k.charCodeAt(i))>>>0;
+  const hue=30+((h*137.508)%300), sat=0.72, lig=0.62;
+  const f=function(n){ const kk=(n+hue/30)%12, a=sat*Math.min(lig,1-lig); const v=lig-a*Math.max(-1,Math.min(kk-3,9-kk,1)); return ('0'+Math.round(v*255).toString(16)).slice(-2); };
+  return '#'+f(0)+f(8)+f(4);
+}
+function _crewSort(a,b){ return (a.length-b.length)||String(a).localeCompare(String(b),'en',{numeric:true}); }   // A..Z, then AA; 2 before 10
 let _tt=null; function toast(m,ms){ const t=document.getElementById('toast'); if(!t) return; t.textContent=m; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(function(){t.classList.remove('show');},(ms>0?ms:3200)); }
 function closeSheet(id){ const e=document.getElementById(id); if(e) e.classList.remove('show'); }
 function openSheet(id){ const e=document.getElementById(id); if(e) e.classList.add('show'); }
@@ -1077,6 +1146,7 @@ async function refreshRouteOrder(){
   try{
     const d=await fetch(SCRIPT_URL+'?action=get_route&date='+todayISO()+'&adminToken='+encodeURIComponent(token)).then(r=>r.json()).catch(()=>null);
     if(d&&d.success&&Array.isArray(d.routes)){
+      try{ const _ti=todayISO(); d.routes.forEach(function(rt){ _adoptServerLocks(_ti,0,rt); }); }catch(eLk){}
       // THE PHONE OWNS THE ORDER: crews self-optimize from live GPS. Their
       // '(live route)' echoes always outrank HQ-side pushes, so the Live list
       // and Route-on-map show what the crew is ACTUALLY driving.
@@ -1177,15 +1247,25 @@ async function refreshBookings(){
 }
 async function refresh(force){ await Promise.all([refreshRouteOrder(), refreshStatus(), (force||!_bookings.length)?refreshBookings():Promise.resolve()]); }
 
+// Crew codes in play today: assigned on today's jobs or on a working crew's status row.
+function _hqCrewsToday(){
+  const s={}, t=todayISO(), add=function(v){ String(v||'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean).forEach(function(k){ s[k]=1; }); };
+  (_bookings||[]).forEach(function(b){ if(!b.rowCancelled && dateOf(b)===t) add(b.crew); });
+  (_crews||[]).forEach(function(c){ if(String(c.active)!=='0') add(c.crew); });
+  return Object.keys(s).sort(_crewSort);
+}
 function routeFor(crewStr){
   const set=new Set(String(crewStr||'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean));
   const t=todayISO();
+  // One crew out: unassigned stops are theirs (same as before). Two or more: an unassigned stop used to be
+  // listed under EVERY crew; now it stays out of every crew's run until someone assigns it.
+  const solo=_hqCrewsToday().length<=1;
   return (_bookings||[]).filter(function(b){
     if(b.rowCancelled) return false;
     if(dateOf(b)!==t) return false;
     const bc=String(b.crew||'').toUpperCase().trim();
     if(set.size===0) return true;
-    if(!bc) return true;
+    if(!bc) return solo;      // unassigned: only part of a crew's run when a single crew is out today (HQ overhaul P0)
     return set.has(bc);
   }).sort(function(a,b){
     const ord=_savedOrderFor(crewStr);
@@ -4050,6 +4130,27 @@ async function loadBizBookings(){
 /* Per-date route record (order + planned times pushed from /invoice) */
 const _dispRoute={};   // iso → { times:{key:HH:MM}, order:{crew:[keys]}, loading, at }
 function _recKey(zi,c){ return ((zi||0)?zi+'#':'')+((c==='un')?'':c); }
+/* 🔒 ANCHOR SYNC (11/24). Anchors used to live only in the browser that set them: an anchor set on
+   the computer never showed on Hunter's phone, and the phone's older copy (quote #1 only) could be
+   pushed back over the newer one. Now the server copy ('<crew>.LK' route) is adopted on every route
+   load unless this device edited that day's anchors more recently, and a device only pushes anchors
+   it has itself edited or adopted (hq_locks3_ts), so a stale device can never overwrite them. */
+function _lkTsGet(){ try{ return JSON.parse(localStorage.getItem('hq_locks3_ts')||'{}')||{}; }catch(e){ return {}; } }
+function _lkTsSet(kk,t){ try{ const m=_lkTsGet(); m[kk]=t||Date.now(); const tod=todayISO(); Object.keys(m).forEach(function(x){ if(x.slice(0,10)<tod) delete m[x]; }); localStorage.setItem('hq_locks3_ts',JSON.stringify(m)); }catch(e){} }
+function _adoptServerLocks(iso,zi,rt){
+  const cw=String(rt&&rt.crew||'').toUpperCase().trim(); if(cw.slice(-3)!=='.LK') return false;
+  const base=cw.slice(0,-3)||'un', kk=iso+'|'+_recKey(zi||0,base);
+  const srvAt=new Date(rt.updatedAt||0).getTime()||0, locAt=_lkTsGet()[kk]||0;
+  if(locAt&&srvAt&&locAt>srvAt) return false;                       // this device edited after the server copy
+  const m={}; (rt.stops||[]).forEach(function(st){ const n=parseInt(st.locked); const k=_wireKey(st); if(k&&n>0) m[k]=n; });
+  const cur=(_dayLockStore[kk]&&!Array.isArray(_dayLockStore[kk]))?_dayLockStore[kk]:{};
+  const sig=function(x){ return Object.keys(x).sort().map(function(k){ return k+'='+x[k]; }).join(','); };
+  _lkTsSet(kk,srvAt||Date.now());
+  if(sig(cur)===sig(m)) return false;
+  if(Object.keys(m).length) _dayLockStore[kk]=m; else delete _dayLockStore[kk];
+  try{ localStorage.setItem('hq_locks3',JSON.stringify(_dayLockStore)); }catch(e){}
+  return true;
+}
 function _bizUT(zi){ const z=_bizLoad()[zi||0]||_bizLoad()[0]; return (zi||0)?{u:_bizUrl(z),t:_bizTok(z)}:{u:SCRIPT_URL,t:token}; }
 function _ensureDayRoute(iso){
   const rec0=_dispRoute[iso];
@@ -4066,13 +4167,14 @@ function _ensureDayRoute(iso){
     return fetch(ut.u+'?action=get_route&date='+iso+'&adminToken='+encodeURIComponent(ut.t)).then(function(r){ return r.json(); }).catch(function(){ return null; });
   });
   Promise.all(_fetches).then(function(all){
-    const rec=_dispRoute[iso]; rec.loading=false; rec.at=Date.now();
+    const rec=_dispRoute[iso]; rec.loading=false; rec.at=Date.now(); let _lkAdopted=false;
     rec.times={}; rec.order={}; rec.badGeo={}; rec.drive={};   // fresh data arrived — replace the carried-over copy
     all.forEach(function(d,zi){
       if(!(d&&d.success&&Array.isArray(d.routes))) return;
       // newest push wins when stale rows ('' / unassigned crews from older pushes) share stops
       d.routes.slice().sort(function(a,b){ return (new Date(a.updatedAt||0).getTime()||0)-(new Date(b.updatedAt||0).getTime()||0); })
       .forEach(function(rt){
+        try{ if(_adoptServerLocks(iso,zi,rt)) _lkAdopted=true; }catch(eLk){}
         const cw=String(rt.crew||'').toUpperCase().trim();
         rec.order[_recKey(zi,cw||'un')]=(rt.stops||[]).map(_wireKey).filter(Boolean);
         (rt.stops||[]).forEach(function(st){
@@ -4083,7 +4185,7 @@ function _ensureDayRoute(iso){
         });
       });
     });
-    if(_activeTab==='dispatch'&&_dispView==='day') renderDispatch();
+    if(_activeTab==='dispatch'&&(_dispView==='day'||_lkAdopted)) renderDispatch();
   }).catch(function(){ if(_dispRoute[iso]) _dispRoute[iso].loading=false; });
 }
 function _dayTimeOf(b,iso){
@@ -4167,12 +4269,13 @@ function _allCrews(zi){
   try{ const rp=(_crewPay&&_crewPay[zi])||{}; Object.keys(rp).forEach(function(c){ const k=String(c).toUpperCase().trim(); const e=rp[c]; if(k&&e&&((e.who&&e.who.length)||e.rate>0||e.pct>0)) s[k]=1; }); }catch(e){}
   try{ Object.keys(_crewBases(zi)||{}).forEach(function(c){ const k=String(c).toUpperCase().trim(); if(k) s[k]=1; }); }catch(e){}
   try{ _dispJobs().forEach(function(b){ if((b._srcBiz||0)!==zi) return; const k=String(b.crew||'').toUpperCase().trim(); if(k) s[k]=1; }); }catch(e){}
-  const arr=Object.keys(s).sort();
-  return arr.length?arr:['A','B'];
+  try{ if(zi===0) (_crews||[]).forEach(function(c){ String(c.crew||'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean).forEach(function(k){ s[k]=1; }); }); }catch(e){}   // crews clocked in on the lawn backend
+  const arr=Object.keys(s).sort(_crewSort);
+  return arr.length?arr:['A'];   // nothing known yet: one crew, not an assumed A + B
 }
 function _allCrewsAny(){   // union across every business — for the global crew filter
   const s={}; try{ _bizLoad().forEach(function(z,i){ _allCrews(i).forEach(function(c){ s[c]=1; }); }); }catch(e){ return _allCrews(0); }
-  const arr=Object.keys(s).sort(); return arr.length?arr:['A','B'];
+  const arr=Object.keys(s).sort(_crewSort); return arr.length?arr:['A'];
 }
 function _activeCrews(rangeJobs){
   const s={}; (rangeJobs||_dispJobs()).forEach(function(b){ const c=String(b.crew||'').toUpperCase().trim(); if(c) s[c]=1; });
@@ -5651,7 +5754,7 @@ function dayLockToggle(ref,c,iso,zi){
   const n=parseInt(v);
   if(!(n>0)){ delete m[k]; toast('🔓 '+(b.name||'stop')+' unlocked — the crew\'s phone places it freely again'); }
   else { m[k]=n; toast('🔒 '+(b.name||'stop')+' anchored as stop #'+n+' — the crew\'s phone keeps it there through every re-route',6000); }
-  _dayLockStore[kk]=m;
+  _dayLockStore[kk]=m; _lkTsSet(kk);
   const _tod=todayISO(); Object.keys(_dayLockStore).forEach(function(x){ if(x.slice(0,10)<_tod) delete _dayLockStore[x]; });   // old days auto-purge
   try{ localStorage.setItem('hq_locks3',JSON.stringify(_dayLockStore)); }catch(e){}   // v3 — same key the store LOADS from (was saving to v2, so every lock died on reload)
   // push the lock to the crew's phone NOW — locking is usually the LAST tap, and
@@ -5694,7 +5797,8 @@ async function _lockReassert(){
     const g=_dayJobsInOrder(c,iso,zi); if(!g.length) continue;
     const stops=g.map(function(b,i){ return { order:i+1, email:String(b.email||'').toLowerCase().trim(), serviceDate:iso, name:b.name||'', address:b.address||'', zip:b.zip||'', crew:(c==='un')?'':c, jobTime:String(b.jobTime||''), locked:lm[_svKey(b)]||0 }; });
     const sig=kk+'~'+stops.map(function(x){ return x.email+':'+x.locked; }).join(',');
-    if(_lkPushed[kk]===sig) continue;                         // idempotent — only on change
+    if(_lkPushed[kk]===sig) continue;
+    if(!_lkTsGet()[kk]) continue;                            // never edited or synced here: a stale copy must not overwrite the server                         // idempotent — only on change
     try{
       const ut=_bizUT(zi);
       await fetch(ut.u+'?'+new URLSearchParams({ action:'put_route', date:iso, crew:((c==='un')?'':c)+'.LK', stops:JSON.stringify(stops), updatedBy:'HQ locks', idemKey:'hqlkr:'+kk+':'+Date.now(), adminToken:ut.t }));
@@ -6386,7 +6490,7 @@ function _dayApplyOrder(c,iso,g,legMap,zi){
       const ut=_bizUT(zi);
       const d=await fetch(ut.u+'?'+new URLSearchParams({ action:'put_route', date:iso, crew:crewKey, stops:JSON.stringify(stops), updatedBy:myName||'Owner', idemKey:'hqopt:'+iso+':'+crewKey+':'+Date.now(), adminToken:ut.t })).then(r=>r.json());
       if(!(d&&d.success)){ toast('⚠ Could not save order'); return; }
-      try{ await fetch(ut.u+'?'+new URLSearchParams({ action:'put_route', date:iso, crew:crewKey+'.LK', stops:JSON.stringify(_dayLocks(iso,zi,c).length?stops:[]), updatedBy:'HQ locks', idemKey:'hqlk:'+iso+':'+crewKey+':'+Date.now(), adminToken:ut.t })); }catch(e){}
+      if(_lkTsGet()[iso+'|'+_recKey(zi||0,c)]) try{ await fetch(ut.u+'?'+new URLSearchParams({ action:'put_route', date:iso, crew:crewKey+'.LK', stops:JSON.stringify(_dayLocks(iso,zi,c).length?stops:[]), updatedBy:'HQ locks', idemKey:'hqlk:'+iso+':'+crewKey+':'+Date.now(), adminToken:ut.t })); }catch(e){}
 
     }catch(e){ toast('⚠ Network error saving order'); return; }
     for(let i=0;i<jobs.length;i++){
@@ -6429,7 +6533,7 @@ function dayMove(c,iso,idx,dir,zi){
       const ut=_bizUT(zi);
       const d=await fetch(ut.u+'?'+new URLSearchParams({ action:'put_route', date:iso, crew:crewKey, stops:JSON.stringify(stops), updatedBy:myName||'Owner', idemKey:'hqday:'+iso+':'+crewKey+':'+Date.now(), adminToken:ut.t })).then(r=>r.json());
       if(!(d&&d.success)){ toast('⚠ Could not save order'); return; }
-      try{ await fetch(ut.u+'?'+new URLSearchParams({ action:'put_route', date:iso, crew:crewKey+'.LK', stops:JSON.stringify(_dayLocks(iso,zi,c).length?stops:[]), updatedBy:'HQ locks', idemKey:'hqlk:'+iso+':'+crewKey+':'+Date.now(), adminToken:ut.t })); }catch(e){}
+      if(_lkTsGet()[iso+'|'+_recKey(zi||0,c)]) try{ await fetch(ut.u+'?'+new URLSearchParams({ action:'put_route', date:iso, crew:crewKey+'.LK', stops:JSON.stringify(_dayLocks(iso,zi,c).length?stops:[]), updatedBy:'HQ locks', idemKey:'hqlk:'+iso+':'+crewKey+':'+Date.now(), adminToken:ut.t })); }catch(e){}
 
     }catch(e){ toast('⚠ Network error saving order'); return; }
     // 2. persist each stop's time onto its Bookings row too, so the order
@@ -6569,6 +6673,41 @@ function devInspect(what){
   document.getElementById('devInspectCount').textContent=Array.isArray(data)?(data.length+' items'):(data?'object':'—');
 }
 function devInspectCopy(){ const pre=document.getElementById('devInspectPre'); if(!pre) return; navigator.clipboard&&navigator.clipboard.writeText(pre.textContent).then(function(){toast('📋 Copied');},function(){toast('⚠ Copy failed');}); }
+/* HQ overhaul P0: export every hq_* localStorage key as one JSON file (B5: these settings exist only in
+   this browser). Excluded: caches that the server rebuilds (bookings, crews, geocodes) and anything that
+   looks like a secret (session or token fields, Stripe secret keys, long random strings). Read only:
+   nothing is changed or sent anywhere; the file is a local download. */
+const HQ_EXPORT_SKIP=/^hq_(cache_|geo5|zcta_v1$|tab$)/;
+const HQ_SECRET_KEY=/token|secret|passw|apikey|api_key|session|otp|cookie|bearer|^auth/i;
+const HQ_SECRET_VAL=/^(sk|rk)_(live|test)_|^whsec_|^bearer\s|^eyJ[A-Za-z0-9_-]{10,}\.|^[A-Za-z0-9_-]{40,}$/i;
+function _hqScrub(v,path,red){
+  if(Array.isArray(v)) return v.map(function(x,i){ return _hqScrub(x,path+'['+i+']',red); });
+  if(v&&typeof v==='object'){ const o={}; Object.keys(v).forEach(function(k){ if(HQ_SECRET_KEY.test(k)){ red.push(path+'.'+k); return; } o[k]=_hqScrub(v[k],path+'.'+k,red); }); return o; }
+  if(typeof v==='string'&&HQ_SECRET_VAL.test(v.trim())){ red.push(path); return '[redacted]'; }
+  return v;
+}
+function hqSettingsSnapshot(ls){
+  ls=ls||localStorage;
+  const keys=[]; for(let i=0;i<ls.length;i++){ const k=ls.key(i); if(k&&/^hq_/.test(k)) keys.push(k); }
+  keys.sort();
+  const settings={}, skipped=[], redacted=[];
+  keys.forEach(function(k){
+    if(HQ_EXPORT_SKIP.test(k)||HQ_SECRET_KEY.test(k)){ skipped.push(k); return; }
+    const raw=ls.getItem(k); let v=raw; try{ v=JSON.parse(raw); }catch(e){}
+    settings[k]=_hqScrub(v,k,redacted);
+  });
+  return { kind:'evergreen-hq-settings', version:1, exportedAt:new Date().toISOString(), exportedBy:(typeof myEmail!=='undefined'&&myEmail)||'', page:String((location&&location.pathname)||''),
+           count:Object.keys(settings).length, settings:settings, skipped:skipped, redacted:redacted };
+}
+function hqExportSettings(){
+  try{
+    const snap=hqSettingsSnapshot(), body=JSON.stringify(snap,null,2);
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([body],{type:'application/json'}));
+    a.download='hq-settings-'+todayISO()+'-'+Date.now()+'.json'; document.body.appendChild(a); a.click(); setTimeout(function(){ try{ URL.revokeObjectURL(a.href); a.remove(); }catch(e){} },1000);
+    const n=document.getElementById('hqExportNote'); if(n) n.textContent='Saved '+snap.count+' settings'+(snap.skipped.length?(' · skipped '+snap.skipped.length+' caches'):'')+(snap.redacted.length?(' · '+snap.redacted.length+' secret-looking values left out'):'')+'.';
+    toast('💾 HQ settings exported ('+snap.count+')');
+  }catch(e){ toast('Export failed: '+e.message); }
+}
 function devInspectDownload(){
   const pre=document.getElementById('devInspectPre'); if(!pre||!pre.textContent) return;
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([pre.textContent],{type:'application/json'}));
@@ -6814,6 +6953,7 @@ async function renderOps(force){
   ]);
   let equip=[];
   try{ const c=cfgR&&cfgR.config?JSON.parse(cfgR.config):[]; if(Array.isArray(c)) equip=c; }catch(e){}
+  window._opsPmcs2=!!(cfgR&&cfgR.pmcs2);   // PMCS v2: true only when the backend runs EVG_FLAG_PMCS_V2 (see the PMCS2-HQ block)
   let chkCfg={};
   try{ if(ckR&&ckR.success&&ckR.config){ chkCfg=(typeof ckR.config==='string')?(ckR.config?JSON.parse(ckR.config):{}):(ckR.config||{}); } }catch(e){}
   window._opsEquip=equip; window._opsChkCfg=chkCfg; window._opsChkSupported=!!(ckR&&ckR.success);
@@ -7996,6 +8136,495 @@ async function cdCharge(){
   }catch(e){ out.textContent='❌ '+e.message; }
   finally{ btn.disabled=false; btn.textContent='💵 Charge card'; }
 }
+</script>
+<script>/* PMCS2-SCRIPT: PMCS v2 (PMCS-REBUILD.md). Built from Website/pmcs2/ by tools/pmcs2-inline.py. Inactive unless switched on. */
+/* PMCS2-CORE:BEGIN */
+// PMCS v2 shared core (fleet register, model checklists, hour-meter math, service due, deadline status).
+// ONE source of truth: Website/pmcs2/pmcs2-core.js. tools/pmcs2-inline.py copies it byte for byte into
+// apps-script.txt, field/index.html, invoice.html, hq/index.html and hq-index.html; tests fail if a copy drifts.
+// Pure functions only: no network, no storage, no DOM. Behind EVG_FLAG_PMCS_V2 (backend) and the field switch.
+var PMCS2 = (function(){
+  // Manuals, read 2026-11-18 (PMCS-REBUILD.md section 3 has the per-model table). "p." = page printed in the manual.
+  var S = {
+    TC:  'Scag Tiger Cat II operator manual 03517 (2023): https://www.scag.com/wp-content/uploads/2020/04/2023-STCII_Book_03517.pdf',
+    VR:  'Scag V-Ride II operator manual 03511 Rev03 (2023): https://www.scag.com/wp-content/uploads/2020/04/2023-SVRII_Book_03511_Rev03.pdf',
+    KF:  'Kawasaki FX730V-EFI owner manual: https://kawasakienginesusa-com.netlify.app/sites/default/files/manuals/FX730V-EFI-English-Spanish.pdf',
+    KT:  'Kawasaki FT730V-EFI owner manual: https://kawasakienginesusa-com.netlify.app/sites/default/files/manuals/FT730V-EFI-English-Spanish.pdf',
+    PB:  'Echo PB-580 H/T operator manual: https://www.echo-usa.com/EchoUSA/files/63/635dc4ab-cbe0-4f87-8125-07cdcd4b25cc.pdf',
+    SRM: 'Echo SRM-2620 operator manual: https://www.echo-usa.com/getattachment/d09c4cfb-3588-426e-acee-2098a1dfa61d/filev2_',
+    OWN: 'owner practice (2026-11-18): grease every fitting about every 40 h',
+    DEF: 'default, verify against your unit\'s manual'
+  };
+  // Page numbers per manual for the same section (Tiger Cat II 03517 / V-Ride II 03511).
+  var PG = {
+    TC: { chart:'sec 7.1 p.34-35', lube:'sec 7.2 p.35-36', hyd:'sec 7.3 p.37-39', hydFilter:'sec 7.3 p.39', oil:'sec 7.4 p.39', fuel:'sec 7.5 p.40', air:'sec 7.6 p.40', battery:'sec 7.1 chart p.34 and 7.7 p.41', belts:'sec 7.8 p.41-42', blades:'sec 7.9 p.42-43', tires:'sec 7.10 p.43, spec p.13', pto:'sec 6.8', interlock:'sec 4.4', guards:'sec 2.6', leaks:'sec 2.7', hydSpec:'p.13 and p.37 (4 qt reservoir)', parts:'parts list p.47 (deck), p.59 (pump belt), p.67 (hyd filter)' },
+    VR: { chart:'sec 7.1 p.36-37', lube:'sec 7.2 p.37, fig 7-1 p.38', hyd:'sec 7.3 p.39', hydFilter:'sec 7.3 p.40', oil:'sec 7.4 p.40-41', fuel:'sec 7.5 p.41', air:'sec 7.6 p.42', battery:'sec 7.7 p.43 (no battery row in the V-Ride chart)', belts:'sec 7.8 p.43', blades:'sec 7.9 p.44-45', tires:'sec 7.10 p.45, spec sec 3.3 p.12', pto:'sec 6.7 p.33', interlock:'sec 2.4 p.4-5 and 4.4 p.17', guards:'sec 2.6 p.7', leaks:'sec 2.5', hydSpec:'sec 7.3 p.39', parts:'parts list p.50 (deck belt), p.51 (blade), p.67 (hyd filter)' }
+  };
+  var OWNER_GREASE_H = 40;   // owner 2026-11-18: hit every grease point about every 40 hours
+  // it(id, phase, label, deadline, src). Phases: B before-ops, A after-ops, W weekly.
+  function it(id, ph, label, dl, src){ return { id:id, ph:ph, label:label, dl:!!dl, src:src||S.DEF }; }
+  // sv(id, label, every, orDays, opts). every = engine hours (mowers) or miles (truck); orDays = calendar backstop.
+  // opts.man = { every, orDays } is the manual's own interval when the default differs (owner practice is more frequent).
+  function sv(id, label, every, orDays, o){ o=o||{}; return { id:id, label:label, every:every||0, orDays:orDays||0, part:o.part||'', spec:o.spec||'', src:o.src||S.DEF, verify:!!o.verify, kaw:!!o.kaw, first:o.first||0,
+    group:o.group||'', fittings:o.fittings||0, man:o.man||null, note:o.note||'' }; }
+  var KAW = 'Kawasaki default, confirm against your engine\'s model plate';
+  // Engine family from the register's Engine field: FT730V uses a foam pre-cleaner + paper element; FX730V a primary +
+  // secondary element. Unknown engine: the FX set (Scag 52V-23FX), tagged K until the owner enters the engine plate.
+  function engFam(u){ var e = String((u && u.engine) || '').toUpperCase(); return /FT\s*\d|\bFT\b|24FT|26FT/.test(e) ? 'FT' : (/FX\s*\d|\bFX\b|23FX|22FX|27FX/.test(e) ? 'FX' : ''); }
+  // Kawasaki engine services shared by both Scag models (owner 2026-11-18: both mowers are Kawasaki, model number TBD).
+  function kawServices(m, u){
+    var src = S[m], pg = PG[m], fam = engFam(u), K = fam === 'FT' ? S.KT : S.KF, known = !!fam;
+    var oilDays = m === 'TC' ? 14 : 30, airDays = m === 'TC' ? 14 : 30;
+    var out = [
+      sv('eng_oil', 'Change engine oil', 100, oilDays, { first:20, kaw:!known, spec:'API SJ or SL, SAE 10W-40; 1.9 US qt (2.2 qt with filter)', src:src+' '+pg.oil+' (first 20 h, then 100 h or '+(m === 'TC' ? 'bi-weekly' : 'monthly')+'); '+(fam === 'FT' ? S.KT+' p.21-25 (100 h, grade, capacity)' : S.KF+' p.12/14/24/26 (100 h or 1 year, grade, capacity)') }),
+      sv('oil_filter', 'Replace engine oil filter', 200, 30, { first:20, kaw:!known, spec:'Kawasaki filter for your engine model (Scag lists it as an engine-maker part)', src:src+' '+pg.oil+' (first 20 h, then 200 h or monthly); '+K+(fam === 'FT' ? ' p.22/26 (200 h)' : ' p.24/28 (200 h)') }),
+      sv('air_clean', 'Inspect and clean air cleaner', 100, airDays, { kaw:!known, src:src+' '+pg.air+' (100 h or '+(m === 'TC' ? 'bi-weekly' : 'monthly')+'; daily in extreme dust)' })
+    ];
+    if (fam === 'FT') out.push(
+      sv('air_foam', 'Clean air cleaner foam pre-cleaner', 50, 0, { src:S.KT+' p.21/26-27 (50 h)' }),
+      sv('air_primary', 'Replace air cleaner paper element', 250, 365, { spec:'Kawasaki element for FT730V', src:S.KT+' p.22/28 (250 h or yearly)' }));
+    else out.push(
+      sv('air_primary', 'Replace air cleaner primary element', 250, 0, { kaw:!known, spec:'Kawasaki element for your engine model', src:S.KF+' p.24/29 (250 h)' }),
+      sv('air_secondary', 'Replace air cleaner secondary element', 500, 0, { kaw:!known, spec:'Kawasaki element for your engine model', src:S.KF+' p.25/29 (500 h, sooner if dirty)' }));
+    out.push(
+      sv('spark_plug', 'Clean or replace spark plugs, reset gap', 100, 0, { kaw:!known, spec:'NGK BPR4ES, gap 0.030 in (0.75 mm), 16 ft-lb', src:(fam === 'FT' ? S.KT+' p.11/22/29-30' : S.KF+' p.11/24/32')+' (100 h)' }),
+      sv('cool_fins', 'Clean cooling fins and shrouds', 100, 0, { kaw:!known, src:(fam === 'FT' ? S.KT+' p.21/31-34' : S.KF+' p.24/34')+' (100 h)' }),
+      sv('fuel_filter', 'Replace in-line fuel filter', 500, 365, { spec:'Engine-maker part (Scag lists no part number)', src:src+' '+pg.fuel+' (500 h or yearly); Kawasaki: replace if clogged' }));
+    return out;
+  }
+  // Grease points, from the lubrication chart (sec 7.2) of each Scag manual. The default interval is the more
+  // frequent of the manual's and the owner's 40 h; the calendar backstop is the manual's. man = the manual's own figure.
+  function greasePoints(m){
+    var src = S[m], pg = PG[m].lube, CH = 'Scag Premium Chassis Grease 486257', SP = 'Scag Premium Spindle Grease 486258';
+    function gp(id, label, fit, every, days, part, note){ return sv(id, label + ' (' + fit + ' fittings)', Math.min(every, OWNER_GREASE_H), days, { group:'grease', fittings:fit, part:part, man:{ every:every, orDays:days },
+      src:src + ' ' + pg + ' (manual: ' + every + ' h or ' + ({ 7:'weekly', 14:'bi-weekly', 30:'monthly', 365:'yearly' }[days] || days + ' days') + ')' + (every > OWNER_GREASE_H ? '; ' + S.OWN : ''), note:note || '' }); }
+    return [
+      gp('grease_caster_pvt', 'Grease front caster pivots', 2, 500, 365, CH, m === 'TC' ? 'Pivot has a cap and plug, not a zerk: remove cap 484195 and plug 482028-01, fit a zerk, grease until it shows at the top of the caster extension, refit cap (tool 47007).' : ''),
+      gp('grease_caster_brg', 'Grease caster wheel bearings', 2, 100, 30, CH),
+      gp('grease_bellcrank', 'Grease cutter deck bellcranks', 4, 100, 14, CH),
+      gp('grease_pusharm', 'Grease cutter deck pusharms', 2, 100, 14, CH),
+      gp('grease_spindle', 'Grease blade spindles', 3, 40, 7, SP, '52 in deck: 3 spindles.')
+    ];
+  }
+  function scagChassis(m, o){
+    var src = S[m], pg = PG[m];
+    return greasePoints(m).concat([
+      sv('hyd_oil', 'Drain and replace hydraulic oil', 500, 365, { spec:'SAE 20W-50 motor oil' + (m === 'TC' ? ', 4 qt reservoir' : ''), part:'Scag 486255 (qt) / 486254 (gal)', src:src+' '+pg.hyd+' (500 h or yearly, sooner if black, milky or rancid)' }),
+      sv('hyd_filter', 'Replace hydraulic oil filter', 500, 365, { part:'Scag 48462-01', src:src+' '+pg.hydFilter+' and '+pg.parts+' (500 h or yearly)' }),
+      sv('belts_check', 'Check belts, idlers and tensioner for alignment and wear', 40, 7, { src:src+' '+pg.belts+' (after 2, 4, 8, 10 h, then 40 h or weekly)', note:'No grease fitting on the deck idler pivots or belt tensioner in this manual: check them here.' }),
+      sv('deck_belt', 'Replace cutter deck belt (as needed)', 0, 0, { part:o.deckBelt, src:src+' '+pg.parts }),
+      sv('pump_belt', 'Replace pump drive belt', 400, 730, { part:o.pumpBelt||'', verify:!o.pumpBelt, src:src+' '+pg.belts+' (400 h or 2 years)' }),
+      sv('pto_gap', 'Check electric PTO clutch air gap (0.015 in)', 500, 365, { src:src+' '+pg.pto+' (500 h or yearly)' }),
+      sv('blade_replace', 'Replace blades (as worn)', 0, 0, { part:o.blade, spec:'Replace at 1/2 original thickness or if bent, cracked or gouged. Sharpen top edge only, at the original bevel, not past 1/3 of the width. Balance to 1.5 oz-in. Torque 75 ft-lb.', src:src+' '+pg.blades })
+    ]).concat(kawServices(m, o.u));
+  }
+  // DAILY (B) is cut to the bone (owner 2026-11-18: 6 to 8 items for a full crew kit, under 90 seconds).
+  // Everything else is Weekly (W, one Monday session) or service-by-hours/days (H), shown only when due.
+  // After-ops (A) is not a checklist: hour meter per mower + one "anything broken or low?" tap.
+  // Handheld B items are ONE shared item for every handheld on the crew (blower, trimmers, edger).
+  var HANDHELD_B = it('hh_daily', 'B', 'Handhelds: fueled, guards and shields on, throttle snaps back to idle', true, S.SRM + ' p.13/34; ' + S.PB + ' p.34 (daily)');
+  function mowerItems(p, m){ var src = S[m], pg = PG[m]; return [
+      it(p + '_ready', 'B', 'Oil and fuel OK, no leaks', false, src + ' ' + pg.oil + ' (engine oil every 8 h or daily), ' + pg.leaks),
+      it(p + '_safe', 'B', 'Blades tight and not cracked, blade-kill safety switch works', true, src + ' ' + pg.interlock + ' (test the interlock before each use), ' + pg.blades),
+      it(p + '_hyd', 'W', 'Hydraulic oil level (2 to 2-1/4 in below the filler neck, cold)', false, src + ' ' + pg.hyd + ' (manual: every 200 h or monthly after break-in; weekly here)'),
+      it(p + '_tirep', 'W', 'Drive tires 12 psi with a gauge (front casters are flat-free)', false, src + ' ' + pg.tires + ' (manual: every 8 h or daily; weekly here, plus the daily walk-around)'),
+      it(p + '_guards', 'W', m === 'TC' ? 'Chute or mulch plate, belt covers, ROPS and seat belt OK' : 'Chute or mulch plate, belt covers, platform and presence switch OK', false, src + ' ' + pg.guards),
+      it(p + '_screen', 'W', 'Engine intake screen and cooling area clear', false, S.KF + ' p.24/34 (intake screen daily, fins 100 h)'),
+      it(p + '_batt', 'W', 'Battery posts and cables clean and tight', false, src + ' ' + pg.battery + (m === 'TC' ? ' (chart row sits in the 40 h group)' : '')),
+      it(p + '_hw', 'W', 'Hardware tight (deck, wheels, controls)', false, src + ' ' + pg.chart)
+  ]; }
+  var TYPES = {
+    tigercat2: { label:'Scag Tiger Cat II (52 in)', short:'Tiger Cat II', icon:'ZT', meter:'hours', kind:'mower', items:mowerItems('tc', 'TC'), services: function(u){ return scagChassis('TC', { u:u, blade:'Scag 482878 (18 in, 52V deck)', deckBelt:'Scag 486284 (52V)', pumpBelt:'Scag 485649' }); } },
+    vride2: { label:'Scag V-Ride II (52 in)', short:'V-Ride II', icon:'SO', meter:'hours', kind:'mower', items:mowerItems('vr', 'VR'), services: function(u){ return scagChassis('VR', { u:u, blade:'Scag 482878 (18 in, 52V deck)', deckBelt:'Scag 484100 (52V)', pumpBelt:'' }); } },
+    blower: { label:'Echo backpack blower', short:'Blower', icon:'BL', meter:'none', kind:'handheld', items:[
+      it('bl_air', 'W', 'Air filter clean, harness and straps intact, screws tight', false, S.PB+' p.34 (daily)')
+    ], services: function(){ return [
+      sv('air_filter', 'Replace air filter', 0, 90, { part:'Echo tune-up kit for your model', src:S.PB+' p.34-36 (3 months; inspect and clean daily)' }),
+      sv('spark_plug', 'Inspect, clean or replace spark plug', 0, 90, { spec:'PB-580: NGK BPM8Y, gap 0.026 in, 130-150 in-lb', src:S.PB+' p.35/37 (3 months)' }),
+      sv('spark_arrester', 'Clean muffler spark arrester screen', 0, 90, { src:S.PB+' p.30/35/39 (3 months; about every 40 h of use)' }),
+      sv('fuel_filter', 'Inspect fuel filter (replace yearly)', 0, 90, { part:'Echo tune-up kit for your model', src:S.PB+' p.35 (inspect 3 months, replace yearly)' }),
+      sv('exhaust_port', 'Inspect and de-carbon exhaust port', 0, 90, { src:S.PB+' p.35 (3 months)' }),
+      sv('cap_gasket', 'Replace fuel cap gasket', 0, 365, { src:S.PB+' p.35 (yearly)' })
+    ]; } },
+    trimmer: { label:'Echo string trimmer', short:'Trimmer', icon:'TR', meter:'none', kind:'handheld', items:[
+      it('tr_air', 'W', 'Air filter clean, head and line good, screws tight', false, S.SRM+' p.34/44')
+    ], services: function(){ return [
+      sv('air_filter', 'Replace air filter', 0, 90, { part:'Echo tune-up kit for your model', src:S.SRM+' p.34/36 (3 months; inspect and clean daily)' }),
+      sv('spark_plug', 'Inspect, clean or replace spark plug', 0, 90, { spec:'SRM-2620: NGK CMR7H, gap 0.026 in', src:S.SRM+' p.34/37 (3 months)' }),
+      sv('spark_arrester', 'Inspect and clean spark arrester screen', 0, 90, { src:S.SRM+' p.34/39 (3 months)' }),
+      sv('fuel_filter', 'Inspect fuel filter (replace yearly)', 0, 90, { part:'Echo tune-up kit for your model', src:S.SRM+' p.34/36 (inspect 3 months, replace yearly)' }),
+      sv('gear_grease', 'Grease gear case (if it has a grease plug)', 0, 90, { group:'grease', fittings:1, spec:'Lithium-based grease, do not overfill', man:{ every:50, orDays:90 }, src:S.SRM+' p.34 footnote 2 and p.42 (every 50 h of use, listed under 3 months)' })
+    ]; } },
+    edger: { label:'Echo edger', short:'Edger', icon:'ED', meter:'none', kind:'handheld', items:[
+      it('ed_air', 'W', 'Air filter clean, blade not badly worn, screws tight', false, S.DEF)
+    ], services: function(){ return [
+      sv('air_filter', 'Replace air filter', 0, 90, { verify:true, part:'Echo tune-up kit for your model', src:S.SRM+' p.34 (trimmer chart, verify for your edger)' }),
+      sv('spark_plug', 'Inspect, clean or replace spark plug', 0, 90, { verify:true, src:S.SRM+' p.34 (trimmer chart, verify for your edger)' }),
+      sv('spark_arrester', 'Inspect and clean spark arrester screen', 0, 90, { verify:true, src:S.SRM+' p.34 (trimmer chart, verify for your edger)' }),
+      sv('gear_grease', 'Grease edger gear case', 0, 90, { verify:true, group:'grease', fittings:1, spec:'Lithium-based grease', src:S.DEF }),
+      sv('edger_blade', 'Replace edger blade (as worn)', 0, 0, { verify:true, src:S.DEF })
+    ]; } },
+    truck: { label:'Work truck', short:'Truck', icon:'TK', meter:'miles', kind:'vehicle', items:[
+      it('t_walk', 'B', 'Walk-around: tires, lights and signals, nothing leaking', true, S.DEF),
+      it('t_fluids', 'W', 'Oil, coolant, washer fluid on the marks', false, S.DEF),
+      it('t_tread', 'W', 'Tire tread and pressure with a gauge (door-jamb sticker psi)', false, S.DEF),
+      it('t_glass', 'W', 'Wipers, horn, mirrors, battery terminals', false, S.DEF),
+      it('t_docs', 'W', 'Registration and insurance in the glovebox', false, S.DEF)
+    ], services: function(){ return [
+      sv('oil', 'Change engine oil and filter', 5000, 180, { verify:true, spec:'Per your truck owner manual' }),
+      sv('rotate', 'Rotate tires', 7500, 0, { verify:true }),
+      sv('air_filter', 'Replace engine air filter', 15000, 365, { verify:true }),
+      sv('lug', 'Check wheel lug torque', 0, 30, { verify:true })
+    ]; } },
+    trailer: { label:'Equipment trailer', short:'Trailer', icon:'TL', meter:'none', kind:'vehicle', items:[
+      it('r_hitch', 'B', 'Hitch locked, chains crossed, breakaway clipped, lights work, load strapped, gate latched', true, S.DEF),
+      it('r_tires', 'W', 'Tires: pressure (sidewall max or VIN plate), tread, lugs all there', false, S.DEF),
+      it('r_bear', 'W', 'Hubs not hot, no wheel play', false, S.DEF),
+      it('r_floor', 'W', 'Floor, ramp and frame solid, no cracks', false, S.DEF)
+    ], services: function(){ return [
+      sv('bearings', 'Repack or grease wheel bearings', 0, 365, { verify:true, group:'grease' }),
+      sv('lug', 'Check lug nut torque', 0, 30, { verify:true }),
+      sv('jack', 'Lube coupler and jack', 0, 90, { verify:true })
+    ]; } }
+  };
+  var ORDER = ['tigercat2', 'vride2', 'blower', 'trimmer', 'edger', 'truck', 'trailer'];
+
+  function n(v){ var x = parseFloat(String(v == null ? '' : v).replace(/,/g, '')); return isFinite(x) ? x : NaN; }
+  function iso(d){ return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function dayNum(s){ var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || '')); return m ? Math.round(Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000) : NaN; }
+  function days(a, b){ var x = dayNum(a), y = dayNum(b); return (isNaN(x) || isNaN(y)) ? NaN : y - x; }
+  function weekStart(s){ var d = dayNum(s); if (isNaN(d)) return ''; var dow = (new Date(d * 86400000).getUTCDay() + 6) % 7; var w = new Date((d - dow) * 86400000); return w.getUTCFullYear() + '-' + ('0' + (w.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + w.getUTCDate()).slice(-2); }
+  function type(u){ return TYPES[(u && u.type) || ''] || null; }
+  function meter(u){ var t = type(u); return (u && u.meter) || (t ? t.meter : 'none'); }
+
+  // Unit services = model template, with the owner's per-unit overrides ({ id: { every, orDays, part, spec } }).
+  function services(u){
+    var t = type(u); if (!t) return [];
+    var ov = (u && u.intervals) || {};
+    return t.services(u).map(function(s){
+      var o = ov[s.id]; if (!o) return s;
+      var c = {}; for (var k in s) c[k] = s[k];
+      if (o.every !== undefined && o.every !== '' && !isNaN(n(o.every))) c.every = n(o.every);
+      if (o.orDays !== undefined && o.orDays !== '' && !isNaN(n(o.orDays))) c.orDays = n(o.orDays);
+      if (o.part) c.part = String(o.part); if (o.spec) c.spec = String(o.spec);
+      c.custom = true; c.kaw = false; c.verify = false; c.src = s.src + '; owner override in the fleet register';
+      return c;
+    });
+  }
+  // Service due by hours (or miles) and/or calendar days, whichever comes first. "soon" at 90% of the interval used.
+  // Never-done services count from the unit's baseline (reading and date when registered), not from zero, unless
+  // the service has a run-in "first" figure and the unit was registered below it.
+  function due(u, today){
+    var r = n(u && u.reading), base = n(u && u.baseReading), last = (u && u.lastSvc) || {};
+    var baseDate = (u && (u.baseDate || u.readingDate)) || today;
+    return services(u).map(function(s){
+      var L = last[s.id] || null, lastAt = L ? n(L.at) : NaN, lastDate = L ? L.date : '';
+      var o = { id:s.id, label:s.label, part:s.part, spec:s.spec, src:s.src, verify:s.verify, kaw:s.kaw, custom:!!s.custom, every:s.every, orDays:s.orDays,
+        lastAt: isNaN(lastAt) ? null : lastAt, lastDate: lastDate || '', nextAt:null, left:null, daysLeft:null, frac:0, state:'ok', noRecord:!L,
+        group:s.group || '', fittings:s.fittings || 0, man:s.man || null, note:s.note || '' };
+      if (s.every > 0 && !isNaN(r)) {
+        var from = !isNaN(lastAt) ? lastAt : (!isNaN(base) ? base : r);
+        var every = s.every;
+        if (!L && s.first && !isNaN(base) && base < s.first) { from = 0; every = s.first; }
+        o.nextAt = Math.round((from + every) * 10) / 10; o.left = Math.round((o.nextAt - r) * 10) / 10;
+        o.frac = Math.max(o.frac, (r - from) / every);
+      }
+      if (s.orDays > 0) {
+        var dd = days(lastDate || baseDate, today);
+        if (!isNaN(dd)) { o.daysLeft = s.orDays - dd; o.frac = Math.max(o.frac, dd / s.orDays); }
+      }
+      if (!(s.every > 0) && !(s.orDays > 0)) o.state = 'asneeded';
+      else o.state = o.frac >= 1 ? 'due' : (o.frac >= 0.9 ? 'soon' : 'ok');
+      return o;
+    });
+  }
+  // ── BLADES: calendar, not hours (owner 2026-11-18: fresh blades about every other working day) ─────────────
+  // Per unit in the register: intervals.blades = { everyWorkDays (default 2), workDays ('12345' = Mon-Fri, ISO 1-7),
+  // sets (blade sets in rotation, default 3: one on the deck + spares) }. lastSvc.blades = { date, at, by, sharp, dull,
+  // sharpDate }. The set on the deck is neither sharp nor dull in the counts: sharp + dull + 1 = sets.
+  var BLADE_DEF = { everyWorkDays:2, workDays:'12345', sets:3 };
+  function bladeCfg(u){
+    var o = (u && u.intervals && u.intervals.blades) || {}, e = n(o.everyWorkDays), st = n(o.sets), wd = String(o.workDays || '').replace(/[^1-7]/g, '');
+    return { everyWorkDays: e >= 1 ? Math.round(e) : BLADE_DEF.everyWorkDays, workDays: wd || BLADE_DEF.workDays, sets: st >= 1 ? Math.round(st) : BLADE_DEF.sets, custom: !!(o.everyWorkDays || o.workDays || o.sets) };
+  }
+  function isoDow(d){ return ((new Date(d * 86400000).getUTCDay() + 6) % 7) + 1; }
+  // Working days in [from, to): the day the set went on counts, today does not (it is the day you would swap).
+  function workDaysBetween(from, to, wd){ var a = dayNum(from), b = dayNum(to), c = 0; if (isNaN(a) || isNaN(b)) return NaN; for (var d = a; d < b && c < 999; d++) if (String(wd || '12345').indexOf(String(isoDow(d))) >= 0) c++; return c; }
+  function bladeRec(u){ var L = (u && u.lastSvc && u.lastSvc.blades) || null, c = bladeCfg(u);
+    var sharp = L && L.sharp !== undefined && L.sharp !== '' && !isNaN(n(L.sharp)) ? n(L.sharp) : c.sets - 1, dull = L && L.dull !== undefined && L.dull !== '' && !isNaN(n(L.dull)) ? n(L.dull) : 0;
+    return { L:L, cfg:c, sharp:Math.max(0, sharp), dull:Math.max(0, dull) }; }
+  function bladeState(u, today){
+    var t = type(u); if (!t || t.kind !== 'mower') return null;
+    var r = bladeRec(u), from = (r.L && r.L.date) || (u && (u.baseDate || u.readingDate)) || today, used = workDaysBetween(from, today, r.cfg.workDays);
+    if (isNaN(used)) used = 0;
+    var dueNow = used >= r.cfg.everyWorkDays, wk = weekStart(today);
+    var sharpenDue = r.dull > 0 && (r.sharp === 0 || !(r.L && r.L.sharpDate && r.L.sharpDate >= wk));
+    return { id:'blades', label:'Swap blades', cal:true, every:r.cfg.everyWorkDays, workDays:r.cfg.workDays, sets:r.cfg.sets, used:used, wdLeft:r.cfg.everyWorkDays - used, left:null, daysLeft:null, frac:used / r.cfg.everyWorkDays, state: dueNow ? 'due' : 'ok',
+      lastDate:(r.L && r.L.date) || '', lastBy:(r.L && r.L.by) || '', noRecord:!(r.L && r.L.date), sharp:r.sharp, dull:r.dull, noSharp:r.sharp === 0, sharpenDue:sharpenDue, sharpDate:(r.L && r.L.sharpDate) || '',
+      src:(t === TYPES.tigercat2 ? S.TC + ' ' + PG.TC.blades : S.VR + ' ' + PG.VR.blades) + ' (how to sharpen and when to replace); every ' + r.cfg.everyWorkDays + ' working days is owner practice (2026-11-18), set per unit' };
+  }
+  // Service done. 'blades' = a swap: the set on the deck goes to the dull pile and a sharp set goes on.
+  function logService(u, ids, at, date, by){
+    u.lastSvc = u.lastSvc || {};
+    (ids || []).forEach(function(id){
+      id = String(id);
+      if (id === 'blades') { var r = bladeRec(u), o = {}; for (var k in (r.L || {})) o[k] = r.L[k];
+        o.at = at; o.date = date; o.by = by; o.sharp = Math.max(0, r.sharp - 1); o.dull = Math.min(r.cfg.sets - 1, r.dull + 1); u.lastSvc.blades = o; return; }
+      u.lastSvc[id] = { at:at, date:date, by:by };
+    });
+    return u;
+  }
+  function sharpen(u, k, date, by){
+    var r = bladeRec(u), o = {}; for (var x in (r.L || {})) o[x] = r.L[x];
+    k = Math.max(0, Math.min(r.dull, Math.round(n(k) || 0)));
+    if (!o.date) o.date = (u && (u.baseDate || u.readingDate)) || date;
+    o.sharp = r.sharp + k; o.dull = r.dull - k; o.sharpDate = date; o.sharpBy = by;
+    u.lastSvc = u.lastSvc || {}; u.lastSvc.blades = o; return k;
+  }
+  // What the crew and the owner see: due() with every grease point folded into ONE line ("Grease all fittings"),
+  // one Done tap logs every point, plus the blade swap (calendar). Each grease point keeps its own interval.
+  function dueList(u, today){
+    var all = due(u, today), out = [], g = all.filter(function(x){ return x.group === 'grease'; });
+    all.forEach(function(x){ if (x.group !== 'grease') out.push(x); });
+    if (g.length > 1) {
+      var w = g.slice().sort(function(a, b){ return b.frac - a.frac; })[0], hl = g.filter(function(x){ return x.left !== null; }), dl = g.filter(function(x){ return x.daysLeft !== null; });
+      var fit = g.reduce(function(s, x){ return s + (x.fittings || 0); }, 0), dueN = g.filter(function(x){ return x.state === 'due'; }).length;
+      out.push({ id:'grease', ids:g.map(function(x){ return x.id; }), label:'Grease all fittings (' + fit + ')', points:g, group:'grease', state:w.state, frac:w.frac, dueCount:dueN,
+        left: hl.length ? Math.min.apply(null, hl.map(function(x){ return x.left; })) : null, daysLeft: dl.length ? Math.min.apply(null, dl.map(function(x){ return x.daysLeft; })) : null,
+        part: g.map(function(x){ return x.part; }).filter(function(v, i, a){ return v && a.indexOf(v) === i; }).join(' + '), spec:'', verify:g.some(function(x){ return x.verify; }), kaw:false, noRecord:g.some(function(x){ return x.noRecord; }), src:g[0].src });
+    } else g.forEach(function(x){ out.push(x); });
+    var b = bladeState(u, today); if (b) out.push(b);
+    return out;
+  }
+  // Hour meter / odometer sanity. Never backward. More than 14 h (500 mi) per elapsed day needs a confirm.
+  var PER_DAY = { hours:14, miles:500 };
+  function checkReading(prev, prevDate, next, nextDate, m){
+    var a = n(prev), b = n(next);
+    if (isNaN(b) || b < 0) return { ok:false, confirm:false, msg:'Enter the number on the meter.' };
+    if (isNaN(a)) return { ok:true, confirm:false, msg:'' };
+    if (b < a) return { ok:false, confirm:false, msg:'Meter can\'t go backward (last ' + a + '). Check the number, or ask the owner to correct it in HQ.' };
+    var dd = days(prevDate, nextDate); dd = (isNaN(dd) || dd < 1) ? 1 : dd;
+    var lim = (PER_DAY[m] || 14) * dd;
+    if (b - a > lim) return { ok:true, confirm:true, msg:'That is ' + (Math.round((b - a) * 10) / 10) + ' since the last entry (' + a + ', ' + (prevDate || 'unknown date') + '). More than ' + lim + ' in ' + dd + ' day' + (dd === 1 ? '' : 's') + '. Sure?' };
+    return { ok:true, confirm:false, msg:'' };
+  }
+  var OPEN = { open:1, parts:1, fixed:1 };
+  function openFaults(u, faults){ return (faults || []).filter(function(f){ return f && f.unitId === u.id && OPEN[f.status || 'open']; }); }
+  function isDown(u, faults){ return !!(u && (u.down === true || u.down === 'TRUE' || openFaults(u, faults).some(function(f){ return f.severity === 'deadline'; }))); }
+  // Fleet board color: red = not mission capable, amber = open non-deadline fault or service due or soon, green = ready.
+  function status(u, faults, today){
+    var why = [], f = openFaults(u, faults), d = due(u, today), bl = bladeState(u, today);
+    if (isDown(u, faults)) { f.filter(function(x){ return x.severity === 'deadline'; }).forEach(function(x){ why.push('DEADLINE: ' + (x.item || x.description || 'fault')); }); if (u.down === true || u.down === 'TRUE') why.push('Marked down in HQ'); return { color:'red', why:why, due:d, faults:f, blades:bl }; }
+    f.forEach(function(x){ why.push('Fault: ' + (x.item || x.description || '')); });
+    dueList(u, today).forEach(function(x){ if (x.state === 'due') why.push(x.label + ' due'); else if (x.state === 'soon') why.push(x.label + ' due soon'); });
+    return { color: why.length ? 'amber' : 'green', why:why, due:d, faults:f, blades:bl };
+  }
+  function crewList(s){ return String(s || '').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean); }
+  function forCrew(fleet, crews){
+    var want = crewList(crews);
+    return (fleet || []).filter(function(u){ if (!u || u.active === false || u.active === 'FALSE') return false; var c = crewList(u.crew); return c.some(function(x){ return want.indexOf(x) >= 0; }); });
+  }
+  // Old v1 logs (equipKey truck/trailer/mower/edger/whacker) -> unit types. A legacy row maps to a unit only when the
+  // fleet has exactly ONE active unit of those types; otherwise it stays as history with no unit.
+  var LEGACY = { truck:['truck'], trailer:['trailer'], mower:['tigercat2', 'vride2'], edger:['edger'], whacker:['trimmer'], trimmer:['trimmer'], blower:['blower'] };
+  var LEGACY_PH = { daily:'B', weekly:'W', monthly:'W' };
+  function mapLegacy(fleet, equipKey){
+    var ts = LEGACY[String(equipKey || '').toLowerCase()] || [];
+    var hits = (fleet || []).filter(function(u){ return u && u.active !== false && u.active !== 'FALSE' && ts.indexOf(u.type) >= 0; });
+    return hits.length === 1 ? hits[0].id : '';
+  }
+  // Average use per day from the readings (for "needed this week"); 6 h/day default when there's no history yet.
+  function perDay(u){
+    var r = n(u.reading), b = n(u.baseReading), dd = days(u.baseDate, u.readingDate);
+    if (!isNaN(r) && !isNaN(b) && dd >= 7 && r > b) return (r - b) / dd;
+    return meter(u) === 'miles' ? 60 : 6;
+  }
+  // Parts and fluids needed this week: every service due now, or projected due within `horizon` days.
+  function needed(fleet, today, horizon){
+    horizon = horizon || 7; var out = [];
+    (fleet || []).forEach(function(u){
+      if (!u || u.active === false || u.active === 'FALSE') return;
+      var pd = perDay(u);
+      due(u, today).forEach(function(d){
+        if (d.state === 'asneeded') return;
+        var soon = d.state === 'due' || d.state === 'soon' || (d.left !== null && d.left <= pd * horizon * 5 / 7) || (d.daysLeft !== null && d.daysLeft <= horizon);
+        if (!soon) return;
+        // grease points that share a grease on one unit fold into one line ("Grease 4 points, 10 fittings")
+        var g = d.group === 'grease' && d.fittings ? out.filter(function(x){ return x.unitId === u.id && x.part === d.part && x.points; })[0] : null;
+        if (g) { g.points++; g.fittings += d.fittings; g.service = 'Grease ' + g.points + ' points, ' + g.fittings + ' fittings'; if (d.state === 'due') g.state = 'due'; g.left = Math.min(g.left === null ? 1e9 : g.left, d.left === null ? 1e9 : d.left); if (g.left === 1e9) g.left = null; return; }
+        var o = { unitId:u.id, unit:u.name || u.id, service:d.label, part:d.part, spec:d.spec, state:d.state, left:d.left, daysLeft:d.daysLeft, verify:d.verify || d.kaw };
+        if (d.group === 'grease' && d.fittings) { o.points = 1; o.fittings = d.fittings; }
+        out.push(o);
+      });
+    });
+    return out;
+  }
+  function blankUnit(typeKey, id, crew){
+    var t = TYPES[typeKey];
+    return { id:id, type:typeKey, name:(t ? t.short : typeKey), model:'', engine:'', serial:'', crew:crew || '', meter:t ? t.meter : 'none', reading:'', readingDate:'', baseReading:'', baseDate:'', intervals:{}, lastSvc:{}, down:false, active:true, notes:'' };
+  }
+  // The Before-ops gate for a crew: one card per vehicle and mower, ONE card for all handhelds together.
+  // Returns [{ key, units:[unit], items:[B items] }]. Down units are listed but can't be cleared.
+  function gateCards(units){
+    var cards = [], hh = [];
+    (units || []).forEach(function(u){ var t = type(u); if (!t) return; if (t.kind === 'handheld') { hh.push(u); return; }
+      var b = t.items.filter(function(i){ return i.ph === 'B'; }); if (b.length) cards.push({ key:u.id, units:[u], items:b }); });
+    var rank = { truck:0, trailer:1, tigercat2:2, vride2:3 };
+    cards.sort(function(a, b){ var ra = a.units[0].type in rank ? rank[a.units[0].type] : 9, rb = b.units[0].type in rank ? rank[b.units[0].type] : 9; return ra - rb || String(a.key).localeCompare(String(b.key)); });
+    if (hh.length) cards.push({ key:'HANDHELDS', units:hh, items:[HANDHELD_B] });
+    return cards;
+  }
+  function itemsFor(u, ph){ var t = type(u); if (!t) return []; if (ph === 'B' && t.kind === 'handheld') return [HANDHELD_B]; return t.items.filter(function(i){ return i.ph === ph; }); }
+  return { VERSION:'2026-11-18.2', SRC:S, KAW:KAW, TYPES:TYPES, HANDHELD_B:HANDHELD_B, gateCards:gateCards, itemsFor:itemsFor, ORDER:ORDER, services:services, due:due, checkReading:checkReading, isDown:isDown, openFaults:openFaults,
+    status:status, dueList:dueList, bladeState:bladeState, bladeCfg:bladeCfg, workDaysBetween:workDaysBetween, logService:logService, sharpen:sharpen, OWNER_GREASE_H:OWNER_GREASE_H, PG:PG, engFam:engFam, forCrew:forCrew, crewList:crewList, mapLegacy:mapLegacy, LEGACY_PH:LEGACY_PH, needed:needed, perDay:perDay, days:days, weekStart:weekStart, iso:iso, meter:meter, num:n, blankUnit:blankUnit };
+})();
+/* PMCS2-CORE:END */
+/* PMCS2-HQ:BEGIN */
+// PMCS v2 on the HQ Ops tab (PMCS-REBUILD.md): fleet status board, fleet register editor, faults workflow,
+// service due by hours, last PMCS per unit per day, parts and fluids needed this week.
+// Runs only when the business's backend answers get_pmcs_config with pmcs2:true (EVG_FLAG_PMCS_V2 on).
+// Flag off: renderOps draws exactly what it drew before and this block sends no request.
+(function(){
+  if (typeof renderOps !== 'function') return;
+  var orig = renderOps, D = null, ED = null;
+  function E(s){ return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
+  function biz(){ return _bizLoad()[_opsBiz] || _bizLoad()[0]; }
+  function tdy(){ var d = new Date(); return PMCS2.iso(d); }
+  async function post(z, body){ body.adminToken = _bizTok(z); try { return await fetch(_bizUrl(z), { method:'POST', body:JSON.stringify(body) }).then(function(r){ return r.json(); }); } catch (e) { return null; } }
+  window.renderOps = async function(force){
+    await orig(force);
+    if (!window._opsPmcs2) return;
+    var z = biz(), grid = document.getElementById('opsGrid'); if (!grid) return;
+    D = await bizGet(z, { action:'pmcs2_fleet' });
+    if (!(D && D.success && D.v2)) return;
+    // the v1 equipment board and v1 fault list are replaced by the v2 board below
+    Array.prototype.slice.call(grid.querySelectorAll('.dev-card')).forEach(function(c){ var t = (c.querySelector('.dev-h') || {}).textContent || ''; if (/equipment readiness|Open faults/.test(t)) c.remove(); });
+    var box = document.createElement('div'); box.id = 'pm2Hq'; box.style.cssText = 'grid-column:1/-1;display:contents;';
+    box.innerHTML = board() + faultsCard() + neededCard();
+    grid.insertBefore(box, grid.firstChild);
+  };
+  function thumb(url){ var m = /\/d\/([\w-]{10,})/.exec(String(url || '')) || /[?&]id=([\w-]{10,})/.exec(String(url || '')); return m ? 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w200' : String(url || ''); }
+  function pill(c){ return c === 'red' ? 'r' : c === 'amber' ? 'y' : 'g'; }
+  function dueTxt(d){ if (!d) return 'no service tracked';
+    if (d.cal) return d.state === 'due' ? 'Blades: swap due (' + d.used + ' working days on this set; ' + d.sharp + ' sharp, ' + d.dull + ' dull)' : 'Blades: swap in ' + d.wdLeft + ' working day' + (d.wdLeft === 1 ? '' : 's') + ' (' + d.sharp + ' sharp, ' + d.dull + ' dull)'; var hrs = d.left !== null ? (d.left < 0 ? 'OVERDUE ' + Math.abs(d.left) + ' h' : d.left === 0 ? 'due now' : 'due in ' + d.left + ' h') : '', dys = d.daysLeft !== null ? (d.daysLeft < 0 ? 'OVERDUE ' + Math.abs(d.daysLeft) + ' d' : d.daysLeft === 0 ? 'due today' : 'due in ' + d.daysLeft + ' d') : ''; return d.label + ': ' + [hrs, dys].filter(Boolean).join(' or ') + (d.noRecord ? ' (no record yet, counted from registration)' : ''); }
+  function board(){
+    var t = D.today || tdy(), fleet = D.fleet || [], faults = D.faults || [];
+    var n = { red:0, amber:0, green:0 }, tiles = '';
+    fleet.filter(function(u){ return u.active !== false; }).forEach(function(u){
+      var st = PMCS2.status(u, faults, t); n[st.color]++;
+      var due = PMCS2.dueList(u, t).filter(function(d){ return d.state !== 'asneeded'; }).sort(function(a, b){ return b.frac - a.frac; });
+      var L = (D.last || {})[u.id] || {}, lp = function(ph, lbl){ var x = L[ph]; return '<span class="dev-pill ' + (x && x.date >= t ? 'g' : '') + '" title="' + E(lbl) + '">' + ph + ' ' + (x ? (x.date === t ? 'today' : E(x.date.slice(5))) + ' ' + E(x.by || '') + (x.src === 'v1' ? ' (v1)' : '') : '-') + '</span>'; };
+      tiles += '<div style="background:rgba(255,255,255,.04);border:1.5px solid ' + (st.color === 'red' ? 'rgba(248,113,113,.7)' : st.color === 'amber' ? 'rgba(251,191,36,.55)' : 'rgba(52,211,153,.45)') + ';border-radius:12px;padding:11px 12px;">'
+        + '<div style="display:flex;align-items:center;gap:8px;"><span class="dev-pill ' + pill(st.color) + '">' + (st.color === 'red' ? 'DOWN' : st.color === 'amber' ? 'ATTN' : 'READY') + '</span><b style="font-size:13.5px;">' + E(u.id + ' ' + (u.name || '')) + '</b><span class="grow"></span><span style="font-size:11px;color:var(--dim);">crew ' + E(u.crew || '-') + '</span></div>'
+        + '<div style="font-size:11.5px;color:var(--dim);margin-top:4px;">' + E([u.model, u.engine, u.serial ? 'SN ' + u.serial : ''].filter(Boolean).join(' / ') || (PMCS2.TYPES[u.type] || {}).label || u.type) + (u.reading !== '' && u.reading != null ? ' / ' + E(u.reading) + (PMCS2.meter(u) === 'hours' ? ' h' : ' mi') + ' (' + E(u.readingDate || '') + ')' : '') + '</div>'
+        + due.filter(function(d, i){ return i === 0 || d.state !== 'ok'; }).slice(0, 3).map(function(d){ return '<div style="font-size:12px;margin-top:5px;' + (d.state !== 'ok' ? 'color:#fbbf24;font-weight:700;' : '') + '">' + E(dueTxt(d)) + '</div>'; }).join('')
+        + (st.why.length ? '<div style="font-size:11.5px;margin-top:5px;color:' + (st.color === 'red' ? '#fca5a5' : '#fde68a') + ';">' + st.why.slice(0, 4).map(E).join('<br>') + '</div>' : '')
+        + '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:7px;">' + lp('B', 'Before-ops') + lp('A', 'After-ops') + lp('W', 'Weekly') + '</div>'
+        + (st.color === 'red' ? '<button class="dev-btn go" style="margin-top:8px;font-size:11.5px" onclick="pm2HqReturn(\'' + E(u.id) + '\')">Return to service</button>' : '') + '</div>';
+    });
+    var lg = D.legacy || {};
+    return '<div class="dev-card" style="grid-column:1/-1;"><div class="dev-h">Fleet status (PMCS v2)<span class="grow"></span><span class="dev-pill g">' + n.green + ' ready</span> <span class="dev-pill y">' + n.amber + ' attention</span> <span class="dev-pill r">' + n.red + ' down</span> <button class="dev-btn" style="margin-left:8px" onclick="pm2HqEdit()">Fleet register</button></div><div class="dev-b">'
+      + (fleet.length ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;">' + tiles + '</div>' : '<div class="dev-row" style="color:var(--dim);">No units yet. Open <b>Fleet register</b> and add each crew\'s kit (one tap per crew).</div>')
+      + '<div style="margin-top:8px;font-size:11.5px;color:var(--dim);">B = Before-ops, A = After-ops, W = Weekly: last date and who. Old v1 checks mapped to a unit: ' + (lg.mapped || 0) + ', not mappable (several units of that kind): ' + (lg.unmapped || 0) + '.</div></div></div>';
+  }
+  var NEXT = { open:[['parts', 'Parts ordered'], ['fixed', 'Fixed']], parts:[['fixed', 'Fixed']], fixed:[['verified', 'Verify + return to service'], ['open', 'Reopen']], verified:[['open', 'Reopen']] };
+  function faultsCard(){
+    var f = (D.faults || []).slice().sort(function(a, b){ return (a.status === 'verified') - (b.status === 'verified') || (b.severity === 'deadline') - (a.severity === 'deadline') || String(b.opened).localeCompare(String(a.opened)); });
+    // One stacked block per fault (not a 5-column table): readable at 390 px, still compact on a desktop.
+    var rows = f.map(function(x){
+      return '<div style="border-top:1px solid var(--line);padding:9px 0;display:flex;gap:9px;align-items:flex-start;">'
+        + (x.photoUrl ? '<a href="' + E(x.photoUrl) + '" target="_blank" rel="noopener" style="flex:0 0 auto"><img src="' + E(thumb(x.photoUrl)) + '" alt="photo" loading="lazy" style="width:54px;height:54px;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block"></a>' : '')
+        + '<div style="flex:1;min-width:0;font-size:12.5px;">'
+        + '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;"><b>' + E(x.unitId) + '</b>' + (x.severity === 'deadline' ? '<span class="dev-pill r">DEADLINE</span>' : '<span class="dev-pill y">fix later</span>') + '<span class="dev-pill' + (x.status === 'verified' ? ' g' : '') + '">' + E(x.status) + '</span><span style="color:var(--dim);font-size:11px;">' + E(x.id || '') + '</span></div>'
+        + '<div style="margin-top:3px;overflow-wrap:anywhere;">' + E(x.item || '') + (x.description ? '<br><span style="color:var(--dim)">' + E(x.description) + '</span>' : '') + '</div>'
+        + '<div style="color:var(--dim);font-size:11px;margin-top:2px;">' + E((x.by || '') + ' ' + (x.opened || '')) + '</div>'
+        + '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;">' + (NEXT[x.status] || []).map(function(n){ return '<button class="dev-btn' + (n[0] === 'verified' ? ' go' : '') + '" style="font-size:12px;padding:6px 10px;" onclick="pm2HqFault(\'' + E(x.id) + '\',\'' + n[0] + '\')">' + n[1] + '</button>'; }).join('') + '</div></div></div>';
+    }).join('');
+    var open = f.filter(function(x){ return x.status !== 'verified'; }).length;
+    return '<div class="dev-card"><div class="dev-h">Faults (5988-E)<span class="grow"></span><span class="ph-c">' + open + ' open</span></div><div class="dev-b" style="max-height:340px;overflow:auto;">'
+      + (rows ? rows : '<div class="dev-row" style="color:var(--dim);">No faults. Fleet is GO.</div>') + '</div></div>';
+  }
+  function neededCard(){
+    var nd = D.needed || PMCS2.needed(D.fleet || [], D.today || tdy(), 7), by = {};
+    nd.forEach(function(x){ var k = (x.part || x.spec || x.service); (by[k] = by[k] || []).push(x); });
+    var rows = Object.keys(by).map(function(k){ var l = by[k]; return '<div style="border-top:1px solid var(--line);padding:8px 0;font-size:12.5px;"><b>' + E(k) + '</b>' + (l.some(function(x){ return x.verify; }) ? ' <span style="color:#fde68a" title="Default or Kawasaki default: confirm against the manual / engine plate">(verify)</span>' : '')
+      + '<div style="color:var(--dim);margin-top:2px;">' + l.map(function(x){ return E(x.unitId + ': ' + x.service.replace(/ \(\d+ fittings\)$/, '') + (x.state === 'due' ? ' (due now)' : x.left !== null ? ' (' + x.left + ' h left)' : x.daysLeft !== null ? ' (' + x.daysLeft + ' d left)' : '')); }).join('<br>') + '</div></div>'; }).join('');
+    return '<div class="dev-card"><div class="dev-h">Parts and fluids needed this week<span class="grow"></span><span class="ph-c">' + nd.length + ' services</span></div><div class="dev-b" style="max-height:340px;overflow:auto;">'
+      + (rows ? rows : '<div class="dev-row" style="color:var(--dim);">Nothing coming due in the next 7 days.</div>') + '</div></div>';
+  }
+  window.pm2HqFault = async function(id, to){
+    var note = to === 'parts' ? (prompt('Parts ordered: what and from where? (optional)') || '') : to === 'fixed' ? (prompt('What was done? (optional)') || '') : '';
+    if (to === 'verified' && !confirm('Verify the fix and return the unit to service?')) return;
+    var d = await bizGet(biz(), { action:'pmcs2_fault_update', faultId:id, status:to, note:note });
+    toast(d && d.success ? 'Fault ' + id + ': ' + to : 'Not saved: ' + ((d && d.error) || 'no answer'));
+    if (d && d.success) renderOps(true);
+  };
+  window.pm2HqReturn = async function(id){
+    if (!confirm('Return ' + id + ' to service? Every open deadline fault on it is verified in your name.')) return;
+    var d = await bizGet(biz(), { action:'pmcs2_return_service', unitId:id });
+    toast(d && d.success ? id + ' back in service' + (d.verified && d.verified.length ? ' (' + d.verified.join(', ') + ' verified)' : '') : 'Not saved: ' + ((d && d.error) || 'no answer'));
+    if (d && d.success) renderOps(true);
+  };
+  // ── FLEET REGISTER EDITOR ────────────────────────────────────────────────────────────────────────────────
+  window.pm2HqEdit = function(){
+    ED = { list: JSON.parse(JSON.stringify((D && D.fleet) || [])), open:-1 };
+    var o = document.getElementById('pm2HqEd');
+    if (!o) { o = document.createElement('div'); o.id = 'pm2HqEd'; o.style.cssText = 'display:none;position:fixed;inset:0;z-index:960;background:rgba(0,0,0,.7);align-items:center;justify-content:center;padding:14px;'; document.body.appendChild(o); }
+    o.style.display = 'flex'; edRender();
+  };
+  function inp(i, k, v, w, ph){ return '<input class="dev-inp" style="width:' + w + ';min-width:0;" value="' + E(v == null ? '' : v) + '" placeholder="' + E(ph || '') + '" oninput="pm2HqSet(' + i + ',\'' + k + '\',this.value)">'; }
+  function edRender(){
+    var o = document.getElementById('pm2HqEd'), rows = '';
+    ED.list.forEach(function(u, i){
+      rows += '<div style="border:1px solid var(--line);border-radius:10px;padding:8px;margin-bottom:8px;">'
+        + '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' + inp(i, 'id', u.id, '74px', 'M-01')
+        + '<select class="dev-inp" style="width:170px;" onchange="pm2HqSet(' + i + ',\'type\',this.value)">' + PMCS2.ORDER.map(function(t){ return '<option value="' + t + '"' + (u.type === t ? ' selected' : '') + '>' + E(PMCS2.TYPES[t].label) + '</option>'; }).join('') + '</select>'
+        + inp(i, 'name', u.name, '110px', 'Name') + inp(i, 'crew', u.crew, '54px', 'Crew') + inp(i, 'model', u.model, '120px', 'Model no.') + inp(i, 'engine', u.engine, '110px', (PMCS2.TYPES[u.type] || {}).kind === 'mower' ? 'FX730V?' : 'Engine') + inp(i, 'serial', u.serial, '110px', 'Serial (optional)')
+        + (PMCS2.meter(u) !== 'none' ? inp(i, 'reading', u.reading, '86px', PMCS2.meter(u) === 'hours' ? 'Hours' : 'Miles') : '')
+        + '<label style="font-size:11px;display:flex;gap:3px;align-items:center;color:#f87171;"><input type="checkbox" ' + (u.down ? 'checked' : '') + ' onchange="pm2HqSet(' + i + ',\'down\',this.checked)">down</label>'
+        + '<label style="font-size:11px;display:flex;gap:3px;align-items:center;"><input type="checkbox" ' + (u.active !== false ? 'checked' : '') + ' onchange="pm2HqSet(' + i + ',\'active\',this.checked)">active</label>'
+        + '<button class="dev-btn" style="font-size:11px;" onclick="pm2HqSvc(' + i + ')">' + (ED.open === i ? 'Hide' : 'Service intervals') + '</button><button class="dev-btn" onclick="pm2HqDel(' + i + ')">&#10005;</button></div>'
+        + (ED.open === i ? svcRows(u, i) : '') + '</div>';
+    });
+    o.innerHTML = '<div style="background:var(--panel,#0b1220);border:1px solid var(--line,#26324a);border-radius:16px;width:100%;max-width:1100px;max-height:90vh;display:flex;flex-direction:column;">'
+      + '<div style="display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line);"><b style="font-size:15px;flex:1">Fleet register</b><button class="dev-btn" onclick="pm2HqKit()">+ Standard crew kit</button><button class="dev-btn" onclick="pm2HqAdd()">+ Unit</button><button class="dev-btn" onclick="pm2HqClose()">&#10005;</button></div>'
+      + '<div style="overflow-y:auto;padding:12px 16px;flex:1;">' + (rows || '<div class="empty">No units yet. Tap <b>+ Standard crew kit</b>.</div>')
+      + '<div style="font-size:11.5px;color:var(--dim);margin-top:6px;">Crews see only units whose Crew matches their crew code. Changing a reading here is an owner correction (it can go down). Intervals marked K are Kawasaki defaults: confirm against the engine model plate and enter the engine model.</div></div>'
+      + '<div style="padding:11px 16px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px;"><button class="dev-btn" onclick="pm2HqClose()">Cancel</button><button class="dev-btn go" onclick="pm2HqSave()">Save register</button></div></div>';
+  }
+  function svcRows(u, i){
+    var ov = u.intervals || {};
+    var bl = PMCS2.TYPES[u.type] && PMCS2.TYPES[u.type].kind === 'mower' ? PMCS2.bladeCfg(u) : null, bo = ov.blades || {};
+    var bladeTr = bl ? '<div style="margin-top:8px;font-size:11.5px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;"><b>Blades (calendar):</b> swap every <input class="dev-inp" style="width:44px" value="' + E(bo.everyWorkDays !== undefined ? bo.everyWorkDays : bl.everyWorkDays) + '" oninput="pm2HqIv(' + i + ',\'blades\',\'everyWorkDays\',this.value)"> working days; work days (1=Mon..7=Sun) <input class="dev-inp" style="width:70px" value="' + E(bo.workDays !== undefined ? bo.workDays : bl.workDays) + '" oninput="pm2HqIv(' + i + ',\'blades\',\'workDays\',this.value)">; sets in rotation <input class="dev-inp" style="width:44px" value="' + E(bo.sets !== undefined ? bo.sets : bl.sets) + '" oninput="pm2HqIv(' + i + ',\'blades\',\'sets\',this.value)"><span style="color:var(--dim)">Owner practice. The manual covers how to sharpen and when to replace, not how often.</span></div>' : '';
+    return bladeTr + '<table class="dev-tbl" style="margin-top:8px;font-size:11.5px;"><tr><th>service</th><th>every (' + (PMCS2.meter(u) === 'miles' ? 'mi' : 'h') + ')</th><th>or days</th><th>manual</th><th>last done at</th><th>part / spec</th><th>source</th></tr>'
+      + PMCS2.services({ type:u.type, engine:u.engine }).map(function(s){ var o = ov[s.id] || {}, L = (u.lastSvc || {})[s.id] || {};
+        return '<tr><td>' + E(s.label) + (s.kaw ? ' <b title="' + E(PMCS2.KAW) + '" style="color:#fde68a">K</b>' : '') + (s.verify ? ' <span style="color:#fde68a" title="' + E(PMCS2.SRC.DEF) + '">verify</span>' : '') + (s.note ? '<br><span style="color:var(--dim)">' + E(s.note) + '</span>' : '') + '</td>'
+          + '<td><input class="dev-inp" style="width:64px" value="' + E(o.every !== undefined ? o.every : s.every) + '" oninput="pm2HqIv(' + i + ',\'' + s.id + '\',\'every\',this.value)"></td>'
+          + '<td><input class="dev-inp" style="width:56px" value="' + E(o.orDays !== undefined ? o.orDays : s.orDays) + '" oninput="pm2HqIv(' + i + ',\'' + s.id + '\',\'orDays\',this.value)"></td>'
+          + '<td style="color:var(--dim)">' + (s.man ? E(s.man.every + ' h / ' + s.man.orDays + ' d') + (s.man.every > s.every && s.every === PMCS2.OWNER_GREASE_H ? '<br><span style="color:#fde68a">owner 40 h</span>' : '') : 'same') + '</td>'
+          + '<td><input class="dev-inp" style="width:70px" value="' + E(L.at !== undefined ? L.at : '') + '" placeholder="' + E(L.date || '') + '" oninput="pm2HqLast(' + i + ',\'' + s.id + '\',this.value)"></td>'
+          + '<td>' + E([s.part, s.spec].filter(Boolean).join(' / ')) + '</td><td style="max-width:260px;color:var(--dim)">' + E(s.src) + '</td></tr>'; }).join('') + '</table>';
+  }
+  window.pm2HqSet = function(i, k, v){ var u = ED.list[i]; if (k === 'type') { u.type = v; u.meter = PMCS2.TYPES[v].meter; edRender(); return; } u[k] = v; if (k === 'down' || k === 'active') edRender(); };
+  window.pm2HqIv = function(i, sid, k, v){ var u = ED.list[i]; u.intervals = u.intervals || {}; u.intervals[sid] = u.intervals[sid] || {}; u.intervals[sid][k] = v; };
+  window.pm2HqLast = function(i, sid, v){ var u = ED.list[i]; u.lastSvc = u.lastSvc || {}; if (String(v).trim() === '') delete u.lastSvc[sid]; else u.lastSvc[sid] = { at:Number(v), date:tdy(), by:'HQ' }; };
+  window.pm2HqSvc = function(i){ ED.open = ED.open === i ? -1 : i; edRender(); };
+  window.pm2HqDel = function(i){ if (confirm('Remove ' + (ED.list[i].id || 'this unit') + ' from the register? (Its logs stay in the sheet.)')) { ED.list.splice(i, 1); edRender(); } };
+  window.pm2HqAdd = function(){ ED.list.push(PMCS2.blankUnit('tigercat2', '', '')); edRender(); };
+  window.pm2HqKit = function(){
+    var c = prompt('Crew code for this kit (as on the crew\'s login, e.g. A, B, C):'); if (!c || !c.trim()) return; c = c.trim().toUpperCase();
+    var n = ED.list.length, pad = function(k){ var x = 1, id; do { id = k + '-' + c + (x > 1 ? x : ''); x++; } while (ED.list.some(function(u){ return u.id === id; })); return id; };
+    [['truck', 'TRK'], ['trailer', 'TRL'], ['tigercat2', 'ZT'], ['vride2', 'SO'], ['blower', 'BL'], ['trimmer', 'TR'], ['trimmer', 'TR'], ['edger', 'ED']].forEach(function(p){ ED.list.push(PMCS2.blankUnit(p[0], pad(p[1]), c)); });
+    edRender(); toast('Added ' + (ED.list.length - n) + ' units for crew ' + c + '. Enter models, engines and hour meters, then Save.');
+  };
+  window.pm2HqClose = function(){ var o = document.getElementById('pm2HqEd'); if (o) o.style.display = 'none'; ED = null; };
+  window.pm2HqSave = async function(){
+    var d = await post(biz(), { action:'pmcs2_set_fleet', fleet:ED.list });
+    toast(d && d.success ? 'Fleet register saved (' + d.units + ' units)' : 'Not saved: ' + ((d && d.error) || 'no answer'), 5000);
+    if (d && d.success) { pm2HqClose(); renderOps(true); }
+  };
+})();
+/* PMCS2-HQ:END */
 </script>
 </body>
 </html>
