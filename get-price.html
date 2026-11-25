@@ -1,12 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<!-- Google Ads tag (same account and conversion as the home page, AW-18107107722) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=AW-18107107722"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'AW-18107107722');
+  /* Fires the Ads lead conversion at most once per page view. Never throws, so a blocked tag can never break a signup. */
+  window.evgConv = function () { try { if (window._evgConvSent) return; window._evgConvSent = true; gtag('event', 'conversion', { 'send_to': 'AW-18107107722/s6saCNGGwKccEIqTkrpD' }); } catch (e) {} };
+</script>
+
 <!-- GROWTH 2027 funnel page. OFF until BOTH switches are on:
        1. window.EVG_GROWTH_FUNNEL below = true   (this file, needs a site push)
-       2. Script Property EVG_FLAG_INSTANT_PRICE = on (backend; self-booking and photo quotes have their own flags)
+       2. Script Property EVG_FLAG_INSTANT_PRICE = on (backend; self-booking and photo quotes have their own flags;
+        EVG_FLAG_ONSITE_QUOTE = on replaces every photo ask with a free on-site quote form, see ONSITE-QUOTE.md)
      While off, the page only shows "call us" and sends nothing but one read-only growth_config request.
      Not linked from any page yet. See GROWTH-BUILD.md. -->
-<script>window.EVG_GROWTH_FUNNEL = false;</script>
+<script>window.EVG_GROWTH_FUNNEL = true;</script>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta name="robots" content="noindex, nofollow"/>
@@ -54,6 +66,8 @@
   .thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.thumbs img{width:72px;height:72px;object-fit:cover;border-radius:10px}
   a{color:var(--gb)}
   a.call{display:block;text-align:center;margin-top:14px;font-weight:700;color:var(--g);border:2px solid var(--g);border-radius:999px;padding:13px;text-decoration:none}
+  .days{display:flex;gap:6px;flex-wrap:wrap}.days label{flex:1;min-width:52px;margin:0;border:1px solid var(--line);border-radius:12px;padding:11px 4px;text-align:center;font-weight:500;cursor:pointer;background:#fff}
+  .days input{position:absolute;opacity:0;pointer-events:none}.days label:has(input:checked){border-color:var(--g);background:var(--lime);font-weight:700;color:var(--g)}
 </style>
 </head>
 <body>
@@ -69,7 +83,7 @@
   <!-- STEP 1: address + 2 screening questions -->
   <section id="v-start" class="hide">
     <h1>See your monthly price</h1>
-    <p class="sub">Citrus Springs, Dunnellon and Beverly Hills. One flat price every month, mowing all year.</p>
+    <p class="sub">Citrus Springs and Beverly Hills. One flat price every month, mowing all year.</p>
     <form id="f-price" class="card" novalidate>
       <label for="addr">Street address</label>
       <input id="addr" type="text" autocomplete="street-address" placeholder="1234 W Example Dr" required/>
@@ -90,7 +104,7 @@
       <p id="i-grass" class="muted hide" style="margin-bottom:6px"></p>
       <div class="price"><span id="i-price"></span> <small>/ month</small></div>
       <!-- Overgrown lawn (backend flag EVG_FLAG_OVERGROWN_WEB with per-yard pricing): same monthly price plus the one-time catch-up line, like the phone -->
-      <div id="i-overgrown" class="over hide"><p id="i-over-line"></p><p class="muted">After you sign up, our crew lead will ask for a few photos to confirm the catch-up fee before your first cut. Nothing is charged until then.</p></div>
+      <div id="i-overgrown" class="over hide"><p id="i-over-line"></p><p class="muted" id="i-over-crew">After you sign up, our crew lead will ask for a few photos to confirm the catch-up fee before your first cut. Nothing is charged until then.</p></div>
       <div id="i-meas" class="meas hide">
         <img id="i-map" class="hide" alt="Satellite view at the county parcel point"/>
         <p id="i-meas-txt"></p>
@@ -150,6 +164,35 @@
     <div id="p-callonly" class="card hide"><p>This yard needs a custom price. Call or text and we will quote it today.</p><a class="call" href="tel:+13524620627">Call (352) 462-0627</a></div>
   </section>
 
+  <!-- STEP 2c: free on-site quote (backend flag EVG_FLAG_ONSITE_QUOTE). Replaces the photo ask when on. -->
+  <section id="v-onsite" class="hide">
+    <form id="f-onsite" class="card" novalidate>
+      <h1 style="font-size:1.35rem">Your yard needs a quick look.</h1>
+      <p class="sub" style="margin-bottom:8px">We'll come out and give you a free quote, usually within 1 to 2 days.</p>
+      <p class="muted" id="o-why"></p>
+      <p class="muted" id="o-addr" style="margin-top:6px"></p>
+      <label for="o-name">Name</label><input id="o-name" type="text" autocomplete="name"/>
+      <div class="row"><div><label for="o-phone">Mobile phone</label><input id="o-phone" type="tel" autocomplete="tel"/></div>
+      <div><label for="o-email">Email (optional)</label><input id="o-email" type="email" autocomplete="email"/></div></div>
+      <div class="q"><p>Best days for us to come by</p>
+        <div class="days" id="o-days"><label><input type="checkbox" value="Mon"/><span>Mon</span></label><label><input type="checkbox" value="Tue"/><span>Tue</span></label><label><input type="checkbox" value="Wed"/><span>Wed</span></label><label><input type="checkbox" value="Thu"/><span>Thu</span></label><label><input type="checkbox" value="Fri"/><span>Fri</span></label></div></div>
+      <div class="q"><p>Time of day</p>
+        <div class="seg"><label><input type="radio" name="o-time" value="morning"/><span>Morning</span></label><label><input type="radio" name="o-time" value="afternoon"/><span>Afternoon</span></label><label><input type="radio" name="o-time" value="either" checked/><span>Either</span></label></div></div>
+      <label for="o-notes">Gate code or notes (optional)</label>
+      <input id="o-notes" type="text" maxlength="300" placeholder="Gate code 1234, side gate on the left, dog inside"/>
+      <p class="muted" style="margin-top:12px">We'll call you at this number to set up the visit. You don't need to be home.</p>
+      <label class="chk"><input id="o-text" type="checkbox"/><span>Text me about my quote (scheduling and the price). Message frequency varies. Message and data rates may apply. Reply STOP to opt out, HELP for help. Consent is not required to buy.</span></label>
+      <div id="e-onsite" class="err" role="alert"></div>
+      <button id="b-onsite" type="submit">Request my free quote</button>
+    </form>
+  </section>
+
+  <section id="v-onsite-done" class="card hide">
+    <h1 style="font-size:1.35rem">You're all set</h1>
+    <p>We'll call you to pick a time, then come out and give you a free quote, usually within 1 to 2 days. Reference <b id="od-id"></b>.</p>
+    <p class="muted" style="margin-top:8px">Questions? Call or text (352) 462-0627.</p>
+  </section>
+
   <section id="v-photo-done" class="card hide">
     <h1 style="font-size:1.35rem">Photos received</h1>
     <p>Our crew lead will price your yard and reach out within one business day. Reference <b id="pd-id"></b>.</p>
@@ -163,7 +206,26 @@
 
   <section id="v-out" class="card hide">
     <h1 style="font-size:1.35rem">Outside our mowing area</h1>
-    <p>We mow in Citrus Springs, Dunnellon and Beverly Hills. If you think that is a mistake, call (352) 462-0627.</p>
+    <p>We mow in Citrus Springs and Beverly Hills. If you think that is a mistake, call (352) 462-0627.</p>
+  </section>
+
+  <!-- Not taking new customers at this ZIP yet (backend EVG_EXCLUDE_ZIPS): waitlist, no price, no sign-up. -->
+  <section id="v-wait" class="hide">
+    <form id="f-wait" class="card" novalidate>
+      <h1 style="font-size:1.35rem">We don't service that area yet.</h1>
+      <p class="sub" style="margin-bottom:8px">Leave your name and number and we'll let you know when we do.</p>
+      <p class="muted" id="w-addr"></p>
+      <label for="w-name">Name</label><input id="w-name" type="text" autocomplete="name"/>
+      <div class="row"><div><label for="w-phone">Phone</label><input id="w-phone" type="tel" autocomplete="tel"/></div>
+      <div><label for="w-email">Email (optional)</label><input id="w-email" type="email" autocomplete="email"/></div></div>
+      <div id="e-wait" class="err" role="alert"></div>
+      <button id="b-wait" type="submit">Join the waitlist</button>
+    </form>
+  </section>
+
+  <section id="v-wait-done" class="card hide">
+    <h1 style="font-size:1.35rem">You're on the list</h1>
+    <p>We'll let you know when we start mowing in your area. Questions? Call or text (352) 462-0627.</p>
   </section>
 </main>
 <script>
@@ -185,9 +247,39 @@
     grass_estimate_unsure: 'We could not get a reliable grass measurement from the county record, so we price it from photos.',
     customer_says_off: 'Send a few photos and our crew lead will price your actual lawn.'
   };
+  // Free on-site quote (backend flag EVG_FLAG_ONSITE_QUOTE): the same reasons, without asking for photos.
+  var ONSITE_REASON = {
+    overgrown: 'Overgrown lawns need a first cut that we price in person.',
+    lot_too_big: 'Your lot is larger than our standard sizes, so we price it in person.',
+    lot_too_small: 'We could not confirm the mowable area from county records.',
+    lookup_failed: 'We could not find this lot in county records.',
+    no_house_number: 'We need the house number to look up the lot.',
+    address_mismatch: 'The county record we found does not match your address exactly, so we would rather see it than guess.',
+    multiple_parcels: 'The county shows more than one lot at this address.',
+    adjacent_same_owner: 'The county shows more than one lot at this address.',
+    not_single_family: 'The county lists this property as something other than a single-family home.',
+    grass_estimate_unsure: 'We could not get a reliable grass measurement from the county record.',
+    customer_says_off: 'No problem. We will measure your actual lawn in person.',
+    onsite_priced: 'We have already been out to this address. Ask us and we will send your price and sign-up link again.'
+  };
+  // EXTRA ZIPS: when the backend opens a town beyond the printed ones (EVG_EXTRA_ZIPS, launch 34442 Hernando / Citrus Hills),
+  // the two area lines name it too. No new town in growth_config.towns: nothing on the page changes.
+  function areaCopy(towns) {
+    if (!towns) return;
+    var t = [], base = ['Citrus Springs', 'Beverly Hills', 'Dunnellon'], extra = false;
+    Object.keys(towns).forEach(function (z) { var n = towns[z]; if (t.indexOf(n) < 0) t.push(n); if (base.indexOf(n) < 0) extra = true; });
+    if (!extra) return;
+    t.sort(function (x, y) { var i = base.indexOf(x), j = base.indexOf(y); return (i < 0 ? 99 : i) - (j < 0 ? 99 : j); });   // ZIP keys iterate numerically: usual order, new towns last
+    t = t.map(function (n) { return n === 'Hernando' ? 'Hernando (Citrus Hills)' : n; });
+    var list = t.length > 2 ? t.slice(0, -1).join(', ') + ' and ' + t[t.length - 1] : t.join(' and ');
+    var a = document.querySelector('#v-start .sub'), b = document.querySelector('#v-out p');
+    if (a) a.textContent = list + '. One flat price every month, mowing all year.';
+    if (b) b.textContent = 'We mow in ' + list + '. If you think that is a mistake, call (352) 462-0627.';
+  }
   var S = { flags: null, quote: null, address: '', zip: '', overgrown: '', reason: '', acres: '', photos: [] };
   var $ = function (id) { return document.getElementById(id); };
-  function show(id) { ['v-off', 'v-start', 'v-instant', 'v-photo', 'v-photo-done', 'v-inv-done', 'v-out'].forEach(function (v) { $(v).classList.toggle('hide', v !== id); }); window.scrollTo(0, 0); }
+  var CONV_VIEWS = { 'v-onsite-done': 1, 'v-photo-done': 1, 'v-inv-done': 1 };
+  function show(id) { if (CONV_VIEWS[id] && window.evgConv) window.evgConv(); ['v-off', 'v-start', 'v-instant', 'v-photo', 'v-photo-done', 'v-onsite', 'v-onsite-done', 'v-inv-done', 'v-out', 'v-wait', 'v-wait-done'].forEach(function (v) { $(v).classList.toggle('hide', v !== id); }); window.scrollTo(0, 0); }
   function money(n) { return '$' + (Math.round(n) === n ? n : n.toFixed(2)); }
   function get(params) {
     var u = API + '?' + new URLSearchParams(params).toString();
@@ -224,6 +316,9 @@
   var SW = (new URLSearchParams(location.search).get('switch') || '').trim();
   var REF = (new URLSearchParams(location.search).get('ref') || '').trim().slice(0, 40);
   if (REF) $('b-ref').value = REF;   // referral link: get-price.html?ref=CODE
+  // Free on-site quote link from our quoter (get-price.html?onsite=<token>): the plan at the price set in person.
+  var OS = (new URLSearchParams(location.search).get('onsite') || '').trim();
+  // Links (switch / on-site) must not return early: the sign-up form's submit handler is attached further down.
   if (/^[0-9a-f]{40}$/.test(SW)) {
     get({ action: 'growth_switch_offer', switch: SW }).then(function (r) {
       if (!r || !r.success) { $('v-off').querySelector('p').textContent = (r && r.error) || 'This link is not available. Call (352) 462-0627.'; show('v-off'); return; }
@@ -236,10 +331,19 @@
       else $('i-percut').classList.add('hide');
       $('i-catch').classList.add('hide');   // no catch-up fee for existing customers who switch
     }).catch(function () { show('v-off'); });
-    return;
-  }
-  get({ action: 'growth_config' }).then(function (c) {
+  } else if (/^[0-9a-f]{40}$/.test(OS)) {
+    get({ action: 'growth_onsite_offer', onsite: OS }).then(function (r) {
+      if (!r || !r.success) { $('v-off').querySelector('p').textContent = (r && r.error) || 'This link is not available. Call (352) 462-0627.'; show('v-off'); return; }
+      S.flags = { instantPrice: true, selfBook: true }; S.address = r.address || '';
+      renderInstant(r);
+      $('i-grass').classList.add('hide');
+      $('i-lot').textContent = r.town + ' \u00b7 Priced at your free on-site quote';
+      $('b-name').value = r.name || ''; $('b-email').value = r.email || ''; $('b-phone').value = r.phone || '';
+    }).catch(function () { show('v-off'); });
+  } else get({ action: 'growth_config' }).then(function (c) {
     S.flags = (c && c.flags) || {};
+    areaCopy(c && c.towns);   // EXTRA ZIPS (backend EVG_EXTRA_ZIPS): unset = page copy untouched
+    if (S.flags.onsiteQuote) { $('i-notmine').textContent = 'Not your lawn, or looks off? Get a free on-site quote instead'; $('i-over-crew').textContent = 'Our crew confirms the catch-up fee at your first visit, before anything is charged. Nothing is charged until then.'; }
     if (S.flags.instantPrice) { show('v-start'); autoPrice(); } else show('v-off');
   }).catch(function () { show('v-off'); });
   // Address and ZIP came from the site's address form: ask for the price right away. If the overgrown question was
@@ -270,6 +374,7 @@
       if (!r) throw new Error('x');
       if (r.route === 'instant') return renderInstant(r);
       if (r.route === 'photo_quote') return renderPhoto(r);
+      if (r.route === 'out_of_area' && r.waitlist) return renderWait(r);
       if (r.route === 'out_of_area') return show('v-out');
       if (r.route === 'off') return show('v-off');
       e.textContent = r.error || 'Something went wrong. Call (352) 462-0627.';
@@ -321,6 +426,7 @@
   $('b-autopay').addEventListener('change', setAutopay);
   $('i-notmine').addEventListener('click', function (ev) {
     ev.preventDefault();
+    if (S.flags && S.flags.onsiteQuote) return renderOnsite({ reason: 'customer_says_off', acres: S.quote && S.quote.acres });
     renderPhoto({ reason: 'customer_says_off', photoQuote: !!(S.flags && S.flags.photoQuote), acres: S.quote && S.quote.acres });
   });
   function niceDate(iso) { var p = String(iso || '').split('-'); if (p.length !== 3) return ''; return new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); }
@@ -346,6 +452,7 @@
   });
 
   function renderPhoto(r) {
+    if (r.onsiteQuote || (S.flags && S.flags.onsiteQuote)) return renderOnsite(r);
     S.reason = r.reason || ''; S.acres = r.acres || '';
     $('p-why').textContent = REASON[S.reason] || 'This yard needs a custom price.';
     var on = !!(r.photoQuote && S.flags && S.flags.photoQuote);
@@ -354,6 +461,62 @@
     S.idem = rid();
     show('v-photo');
   }
+  // Free on-site quote: no photos. Name and phone required, email optional, best days, time of day, gate code / notes.
+  function renderOnsite(r) {
+    S.reason = r.reason || ''; S.acres = r.acres || '';
+    $('o-why').textContent = ONSITE_REASON[S.reason] || '';
+    $('o-why').classList.toggle('hide', !ONSITE_REASON[S.reason]);
+    $('o-addr').textContent = S.address ? 'Address: ' + S.address + (S.zip ? ', ' + S.zip : '') : '';
+    $('e-onsite').textContent = '';
+    S.idem = rid();
+    show('v-onsite');
+  }
+  // Waitlist (backend EVG_EXCLUDE_ZIPS): name, phone, email optional. Nothing is priced or charged; nothing is emailed to the visitor.
+  function renderWait(r) {
+    S.waitZip = (r && r.zip) || S.zip; S.idemW = rid();
+    $('w-addr').textContent = S.address ? 'Address: ' + S.address + (S.waitZip ? ', ' + S.waitZip : '') : '';
+    $('e-wait').textContent = '';
+    show('v-wait');
+  }
+  $('f-wait').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var e = $('e-wait'); e.textContent = '';
+    var name = $('w-name').value.trim(), phone = $('w-phone').value.trim(), email = $('w-email').value.trim();
+    if (!name) { e.textContent = 'Enter your name.'; return; }
+    if (phone.replace(/\D/g, '').length < 10) { e.textContent = 'Enter a 10 digit phone number.'; return; }
+    if (email && !/^\S+@\S+\.\S+$/.test(email)) { e.textContent = 'That email does not look right. Leave it blank or fix it.'; return; }
+    var b = $('b-wait'); b.disabled = true; b.textContent = 'Sending...';
+    var body = withAttr({ action: 'growth_waitlist', idemKey: S.idemW, name: name, phone: phone, email: email, address: S.address, zip: S.waitZip });
+    fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json(); }).then(function (r) {
+        if (r && r.success) return show('v-wait-done');
+        b.disabled = false; b.textContent = 'Join the waitlist';
+        e.textContent = (r && r.error) || 'Could not send. Call (352) 462-0627.';
+      }).catch(function () { b.disabled = false; b.textContent = 'Join the waitlist'; e.textContent = 'Could not reach us. Try again or call (352) 462-0627.'; });
+  });
+  $('f-onsite').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var e = $('e-onsite'); e.textContent = '';
+    var name = $('o-name').value.trim(), phone = $('o-phone').value.trim(), email = $('o-email').value.trim();
+    if (!name) { e.textContent = 'Enter your name.'; return; }
+    if (phone.replace(/\D/g, '').length < 10) { e.textContent = 'Enter a 10 digit phone number so we can call you.'; return; }
+    if (email && !/^\S+@\S+\.\S+$/.test(email)) { e.textContent = 'That email does not look right. Leave it blank or fix it.'; return; }
+    var days = Array.prototype.map.call(document.querySelectorAll('#o-days input:checked'), function (i) { return i.value; });
+    var t = document.querySelector('input[name=o-time]:checked');
+    var b = $('b-onsite'); b.disabled = true; b.textContent = 'Sending...';
+    var body = withAttr({ action: 'growth_onsite_quote', idemKey: S.idem, name: name, phone: phone, email: email, address: S.address, zip: S.zip,
+      reason: S.reason, days: days.join(','), time: t ? t.value : 'either', access: $('o-notes').value.trim(), textOk: $('o-text').checked ? 'yes' : 'no',
+      overgrown: S.overgrown, acres: S.acres });
+    // text/plain keeps this a "simple" request (no CORS preflight, which Apps Script cannot answer).
+    fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json(); }).then(function (r) {
+        if (r && r.success) { $('od-id').textContent = r.requestId; show('v-onsite-done'); return; }
+        b.disabled = false; b.textContent = 'Request my free quote';
+        if (r && r.waitlist) return renderWait(r);
+        if (r && r.outOfArea) return show('v-out');
+        e.textContent = (r && r.error) || 'Could not send. Call (352) 462-0627.';
+      }).catch(function () { b.disabled = false; b.textContent = 'Request my free quote'; e.textContent = 'Could not reach us. Try again or call (352) 462-0627.'; });
+  });
   // Shrink each photo in the browser to at most 1600px JPEG so uploads stay small on cell data.
   function shrink(file) {
     return new Promise(function (res, rej) {

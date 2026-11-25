@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google Ads tag (same account and conversion as the home page, AW-18107107722) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=AW-18107107722"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'AW-18107107722');
+  /* Fires the Ads lead conversion at most once per page view. Never throws, so a blocked tag can never break a signup. */
+  window.evgConv = function () { try { if (window._evgConvSent) return; window._evgConvSent = true; gtag('event', 'conversion', { 'send_to': 'AW-18107107722/s6saCNGGwKccEIqTkrpD' }); } catch (e) {} };
+</script>
+
+<!-- GROWTH 2027: Stripe Checkout sends subscribers here with ?session_id=cs_...
+     The page asks the backend to confirm the session WITH STRIPE (read-only) and shows the result.
+     Off with the same front-end switch as get-price.html. See GROWTH-BUILD.md. -->
+<script>window.EVG_GROWTH_FUNNEL = true;</script>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex, nofollow"/>
+<title>You're signed up | Evergreen Lawn Care</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#e8f5e9;color:#1a2e1a;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .card{background:#fff;border:1px solid #d6e4d6;border-radius:14px;padding:26px;max-width:480px;width:100%;text-align:center}
+  h1{font-size:1.5rem;margin-bottom:10px}p{margin-top:8px}a{color:#2d6a2d;font-weight:700}
+</style>
+<script>window.addEventListener('load', function(){ window.evgConv && window.evgConv(); });</script>
+</head>
+<body>
+<div class="card">
+  <h1 id="h">Checking your sign-up...</h1>
+  <p id="m"></p>
+  <p><a href="tel:+13524620627">Questions? (352) 462-0627</a></p>
+</div>
+<script>
+(function () {
+  'use strict';
+  var API = window.EVG_GROWTH_API || 'https://script.google.com/macros/s/AKfycbwAbZCSvrFrB9AT7P0elSBueERyllZuYOOgV6wGVld54al3aBQNCxYonGuiDDdrvJ7suw/exec';
+  var h = document.getElementById('h'), m = document.getElementById('m');
+  var sid = new URLSearchParams(location.search).get('session_id') || '';
+  if (window.EVG_GROWTH_FUNNEL !== true || !/^cs_(test|live)_[A-Za-z0-9]+$/.test(sid)) { h.textContent = 'Thanks!'; m.textContent = 'If you just signed up, we will be in touch shortly.'; return; }
+  var tries = 0;
+  (function check() {
+    fetch(API + '?action=growth_checkout_confirm&session_id=' + encodeURIComponent(sid)).then(function (r) { return r.json(); }).then(function (r) {
+      if (r && r.confirmed) {
+        h.textContent = 'You are signed up!';
+        var when = '';
+        if (/^\d{4}-\d{2}-\d{2}$/.test(r.firstCut || '')) {
+          var p = r.firstCut.split('-'); var d = new Date(+p[0], +p[1] - 1, +p[2]);
+          when = 'Your first cut is ' + d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + (r.routeDay ? ' (we mow your street on ' + r.routeDay + 's)' : '') + '. ';
+        }
+        m.textContent = (r.plan ? r.plan + (r.monthly ? ' at $' + r.monthly + ' a month' : '') + '. ' : '') + when + 'Your card is saved and nothing has been charged. Your first month is charged on the day of your first cut.' + (when ? '' : ' We will text you to set your first mow day.');
+        return;
+      }
+      if (++tries < 5) { setTimeout(check, 3000); return; }
+      h.textContent = 'Card saved'; m.textContent = 'Nothing has been charged. We are still confirming your sign-up on our side. You do not need to do anything; we will text you to set your first mow day.';
+    }).catch(function () { h.textContent = 'Thanks!'; m.textContent = 'We will text you to set your first mow day.'; });
+  })();
+})();
+</script>
+</body>
+</html>
