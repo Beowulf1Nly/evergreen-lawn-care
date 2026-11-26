@@ -66,14 +66,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-11-25.3 */
+/* APP_VER:2026-11-25.4 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-11-25.3'; window.__APP_VER=V;
+  var V='2026-11-25.4'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -4333,7 +4333,7 @@ function _fmRenderJob(stops,idx){
     +(jobNotes&&jobNotes!==custNotes?'<div class="fm-note-box"><b>Job notes</b>'+esc(jobNotes)+'</div>':'');
   const phone=String(bk.phone||'').trim(), phoneDigits=phone.replace(/[^0-9+]/g,'');
   const phoneRow=phone?('<a class="fm-btn fm-btn-sm fm-btn-ghost" href="tel:'+esc(phoneDigits)+'">'+_ic('phone')+'Call</a><a class="fm-btn fm-btn-sm fm-btn-ghost" href="sms:'+esc(phoneDigits)+'">'+_ic('msg')+'Text</a>'):'';
-  window._fmCurBk=bk;
+  window._fmCurBk=bk; window._fmGateNotes=noteHtml;
   const _navBtn=done
     ? '<button class="fm-btn fm-btn-lg" style="background:#eef0ec;color:#68726c;cursor:not-allowed;" disabled>'+_ic('check')+'Completed — no need to drive</button>'
     : '<button class="fm-btn fm-btn-lg fm-btn-nav" onclick="fmNavigate('+idx+')">'+_ic('nav')+'Navigate</button>';
@@ -4341,7 +4341,7 @@ function _fmRenderJob(stops,idx){
   try{ _fmWireTapCounter(); }catch(e){}
   document.getElementById('fmJobBody').innerHTML=
     '<div class="fm-card" style="'+(done?'opacity:.5;filter:grayscale(.6);':'')+'"><div class="fm-card-stopno">'+(idx+1)+'</div><div class="fm-card-name">'+esc(bk.name||'Customer')+'</div>'+
-    '<div class="fm-card-addr">'+_ic('pin')+'<span>'+esc(bk.address||'—')+(bk.zip?', '+esc(bk.zip):'')+'</span></div>'+(!done?_fmOwesBanner(bk):'')+(_isQuoteJob(bk)&&!done&&!skipped?'<div style="margin:10px 0;padding:13px 14px;border-radius:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;"><div style="font-size:16px;font-weight:900;letter-spacing:.02em;">\ud83d\udccb QUOTE VISIT \u2014 DO NOT MOW</div><div style="font-size:12.5px;font-weight:700;opacity:.92;margin-top:3px;">No equipment. Walk it with the customer, then tap \u201cBuild Estimate\u201d and Book / Email / Declined.</div></div>':'')+'<div class="fm-pills">'+pills+'</div>'+noteHtml+
+    '<div class="fm-card-addr">'+_ic('pin')+'<span>'+esc(bk.address||'—')+(bk.zip?', '+esc(bk.zip):'')+'</span></div>'+(_isQuoteJob(bk)&&!done&&!skipped?'<div style="margin:10px 0;padding:13px 14px;border-radius:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;"><div style="font-size:16px;font-weight:900;letter-spacing:.02em;">\ud83d\udccb QUOTE VISIT \u2014 DO NOT MOW</div><div style="font-size:12.5px;font-weight:700;opacity:.92;margin-top:3px;">No equipment. Walk it with the customer, then tap \u201cBuild Estimate\u201d and Book / Email / Declined.</div></div>':'')+'<div class="fm-pills">'+pills+'</div>'+((done||skipped)?noteHtml:'<div id="fmGate"></div>')+
     '<div class="fm-card-actions">'+_navBtn+
     '<div class="fm-secondary-row">'+phoneRow+'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmTapToPay(window._fmCurBk)">'+_ic('tap')+'Tap to Pay</button><button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmCardOpen(window._fmCurBk)">'+_ic('card')+'Card on file</button>'+(_isQuoteJob(bk)&&isDone(bk)&&_qjBookedStore[_stopKey(bk)]?'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmQuoteCloser(window._fmCurBk)">'+_ic('pencil')+'Edit booked plan</button>':'')+(_fmIsBoss()?'<button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmEditNotes()">'+_ic('pencil')+'Notes</button><button class="fm-btn fm-btn-sm fm-btn-ghost" onclick="fmRemainingMap()">'+_ic('map')+'Remaining</button>':'')+'</div></div></div>'+
     '<div class="fm-jobnav"><button onclick="fmPrevStop()" '+(idx===0?'disabled':'')+'>'+_ic('chev-l','sm')+'Prev</button>'
@@ -4374,7 +4374,7 @@ function _fmRenderJob(stops,idx){
   })();
   const hop=document.getElementById('fmSkipHopBtn'); if(hop) hop.style.display='';   // everyone gets it — emergencies happen
   const doneBtn=document.getElementById('fmDoneBtn'); if(doneBtn){ doneBtn.style.display=(done||skipped)?'none':''; if(_isQuoteJob(bk)){ doneBtn.textContent='📝 Build Estimate →'; doneBtn.style.background='#2563eb'; } else { doneBtn.textContent=_fmIsFinalOpenStop()?'✓ Done — Finish Route':'✓ Done — Next Stop'; doneBtn.style.background=''; } }
-  try{ _fmYardCard(bk, !(done||skipped)); }catch(e){}
+  try{ if(!(done||skipped)) _fmRenderGate(bk); else _fmYardCard(bk, false); }catch(e){}
   _fmSyncTimerSlots(); _fmHeartbeat();
 }
 function _fmUpdateTotalsChip(){ const el=document.getElementById('fmTotalsChip'); if(!el) return; const dm=_fmDriveLeftMin(); const drv=(dm!=null)?(' · ~'+(dm>=60?(Math.floor(dm/60)+'h '+String(dm%60).padStart(2,'0')+'m'):(dm+'m'))+' drive left'):''; el.innerHTML='Collected <b>$'+(_fmCashTotal||0).toFixed(0)+'</b> cash'+(_isMoneyRole()?(' · Billed <b>$'+(_fmBilledTotal||0).toFixed(0)+'</b> today'):'')+drv; }
@@ -4555,7 +4555,7 @@ function _fmWireTapCounter(){
     if(v) v.textContent='v'+(window.__APP_VER||'?');
   }catch(e){}
 }
-function fmTapDone(){ _fmTapGuard('Done', 'fmCompleteSheet', fmOpenComplete); }
+function fmTapDone(){ try{ const bk=window._fmCurBk; if(bk&&!isDone(bk)&&!_fmIsSkipped(bk)&&!_isQuoteJob(bk)&&!_fmGateReady(bk)){ showToast('Finish the checklist at the top first'); try{ const g=document.getElementById('fmGate'); if(g) g.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){} return; } }catch(e){} _fmTapGuard('Done', 'fmCompleteSheet', fmOpenComplete); }
 function fmTapSkip(){ _fmTapGuard("Couldn't service", 'fmSkipSheet', fmOpenSkip); }
 function _fmTapGuard(label, sheetId, fn){
   /* Clear anything left over the app first. fmCardOv / fmCardOfferOv / fmTapOv sit
@@ -4708,11 +4708,12 @@ function _fmYardCard(bk, open){
   let el=document.getElementById('fmYardCard');
   const id=_fmYardSignupId(bk);
   if(!id||!open){ if(el) el.remove(); return; }
-  if(!el||el.parentNode!==body){ if(el) el.remove(); el=document.createElement('div'); el.id='fmYardCard'; body.insertBefore(el, body.firstChild); }
+  const slot=document.getElementById('fmGateYardSlot')||body;
+  if(!el||el.parentNode!==slot){ if(el) el.remove(); el=document.createElement('div'); el.id='fmYardCard'; slot.insertBefore(el, slot.firstChild); }
   el.dataset.sid=id;
   const pre=_fmYardPre[id];
   window.__fmYardBk=bk;
-  if(!pre){ _fmYardPrefetch(id, function(){ const c=document.getElementById('fmYardCard'); if(c&&c.dataset.sid===id) _fmYardCard(bk, true); }); }
+  if(!pre){ _fmYardPrefetch(id, function(){ const c=document.getElementById('fmYardCard'); if(c&&c.dataset.sid===id){ if(document.getElementById('fmGate')) _fmRenderGate(bk); else _fmYardCard(bk, true); } }); }
   const p=_fmYardPre[id]||{ st:'loading' };
   const box='margin:0 0 12px;padding:12px 14px;border-radius:12px;background:#fff7ed;border:2px solid #f59e0b;color:#1f2937;';
   if(p.st==='none'||p.st==='none_err'){ el.remove(); return; }
@@ -4727,8 +4728,85 @@ function _fmYardCard(bk, open){
   h+='<div style="font-size:12px;color:#64748b;margin-top:6px;">'+(p.verdict?'✓ Saved. Add a lawn photo when you tap Done.':'You add a lawn photo when you tap Done.')+'</div>';
   el.style.cssText=box; el.innerHTML=h;
 }
-function fmYardPreVerdict(id,k){ const p=_fmYardPre[id]; if(!p) return; p.verdict=k; if(k==='matches') p.sqft=''; try{ _fmYardCard(window.__fmYardBk, true); }catch(e){} }
-function fmYardPreSqft(id,v){ const p=_fmYardPre[id]; if(p) p.sqft=String(v||''); }
+function fmYardPreVerdict(id,k){ const p=_fmYardPre[id]; if(!p) return; p.verdict=k; if(k==='matches') p.sqft=''; try{ if(document.getElementById('fmGate')) _fmRenderGate(window.__fmYardBk); else _fmYardCard(window.__fmYardBk, true); }catch(e){} }
+function fmYardPreSqft(id,v){ const p=_fmYardPre[id]; if(!p) return; const was=_fmYardPreOk(p); p.sqft=String(v||''); if(was!==_fmYardPreOk(p)){ try{ _fmRenderGateRest(window.__fmYardBk); }catch(e){} } }
+function _fmYardPreOk(p){
+  if(!p||p.st!=='needed') return true;
+  if(p.verdict==='matches') return true;
+  if(p.verdict!=='smaller'&&p.verdict!=='bigger') return false;
+  const n=_fmAcToSqft(p.sqft); if(!(n>=500&&n<=60000)) return false;
+  if(p.record&&p.verdict==='smaller'&&n>=p.record) return false;
+  if(p.record&&p.verdict==='bigger'&&n<=p.record) return false;
+  return true;
+}
+/* ── Pre-job checklist (2026-11-25.4). Before the job details: 1) yard check (plan first visit), 2) read the notes,
+   3) payment status. Each step shows only after the one before it; Done stays locked until all are cleared.
+   Acks are per stop and survive a reload. ── */
+const _fmAck=(function(){ try{ return JSON.parse(localStorage.getItem('evg_fm_ack')||'{}')||{}; }catch(e){ return {}; } })();
+function _fmAckSave(){ try{ const cut=Date.now()-3*86400000; Object.keys(_fmAck).forEach(function(k){ if((_fmAck[k].t||0)<cut) delete _fmAck[k]; }); localStorage.setItem('evg_fm_ack', JSON.stringify(_fmAck)); }catch(e){} }
+function _fmYardPending(bk){
+  const id=_fmYardSignupId(bk); if(!id) return false;
+  const p=_fmYardPre[id]; if(!p) return navigator.onLine!==false;
+  if(p.st==='loading') return true;
+  if(p.st==='needed') return !_fmYardPreOk(p);
+  return false;
+}
+function _fmPayStep(bk){
+  if(_isQuoteJob(bk)) return null;
+  const see=_seeMoney(bk), amt=_fmAmt(bk), pt=_payType(bk), o=_fmOwes(bk);
+  let line, tone='ok';
+  if(/ON HOLD: unpaid/i.test(String(bk.notes||''))){ line='On hold: unpaid. Do not mow this yard. Tap Couldn\'t service.'; tone='bad'; }
+  else if(/monthly plan/i.test(String(bk.payMethod||'')+' '+String(bk.notes||''))) line='Monthly plan: nothing to collect today. The office bills the plan.';
+  else if(_fmIsPaid(bk)) line='Already paid: nothing to collect today.';
+  else if(pt==='cash'){ line='Not paid yet: collect '+(see&&amt?('$'+amt.toFixed(0)+' '):'')+'cash at this visit.'; tone='warn'; }
+  else if(pt==='autopay'){ line='Not paid yet: the card on file is charged '+(see&&amt?('$'+amt.toFixed(0)+' '):'')+'when you tap Done.'; tone='warn'; }
+  else { line='Not paid yet: an invoice '+(see&&amt?('for $'+amt.toFixed(0)+' '):'')+'is sent when you tap Done.'; tone='warn'; }
+  return { line:line, tone:tone, owes:o?_fmOwesBanner(bk):'' };
+}
+function _fmGateReady(bk){
+  if(_fmYardPending(bk)) return false;
+  const a=_fmAck[_stopKey(bk)]||{};
+  if(window._fmGateNotes&&!a.notes) return false;
+  if(_fmPayStep(bk)&&!a.pay) return false;
+  return true;
+}
+function fmGateAck(step){
+  const bk=window._fmCurBk; if(!bk) return;
+  const k=_stopKey(bk); const a=_fmAck[k]||(_fmAck[k]={}); a[step]=true; a.t=Date.now(); _fmAckSave();
+  _fmRenderGateRest(bk);
+}
+function _fmRenderGate(bk){
+  const g=document.getElementById('fmGate'); if(!g) return;
+  if(!document.getElementById('fmGateYardSlot')) g.innerHTML='<div id="fmGateYardSlot"></div><div id="fmGateRest"></div>';
+  _fmYardCard(bk, true);
+  _fmRenderGateRest(bk);
+}
+function _fmRenderGateRest(bk){
+  const r=document.getElementById('fmGateRest'); if(!r||!bk) return;
+  const a=_fmAck[_stopKey(bk)]||{};
+  const ackBtn=function(step,label){ return '<button onclick="fmGateAck(\''+step+'\')" style="width:100%;min-height:46px;margin-top:8px;border:none;border-radius:12px;background:#15803d;color:#fff;font-weight:800;font-size:15px;cursor:pointer;">'+label+'</button>'; };
+  const doneTag=function(t){ return '<div style="font-size:12.5px;font-weight:800;color:#15803d;margin-top:6px;">✓ '+t+'</div>'; };
+  let h='';
+  let open=!_fmYardPending(bk);
+  if(open&&window._fmGateNotes){
+    h+='<div style="margin:0 0 10px;">'+window._fmGateNotes+(a.notes?doneTag('Notes read'):ackBtn('notes','I read the notes'))+'</div>';
+    if(!a.notes) open=false;
+  }
+  const ps=open?_fmPayStep(bk):null;
+  if(open&&ps){
+    const bg=ps.tone==='bad'?'#fee2e2':(ps.tone==='warn'?'#fef3c7':'#dcfce7'), bd=ps.tone==='bad'?'#b91c1c':(ps.tone==='warn'?'#d97706':'#16a34a');
+    h+=ps.owes+'<div style="margin:0 0 10px;padding:12px 14px;border-radius:12px;background:'+bg+';border:2px solid '+bd+';color:#1f2937;font-weight:800;font-size:15px;">💳 '+esc(ps.line)
+      +(a.pay?doneTag('Payment checked'):ackBtn('pay','Got it'))+'</div>';
+  }
+  r.innerHTML=h;
+  _fmGateLockDone(bk);
+}
+function _fmGateLockDone(bk){
+  const b=document.getElementById('fmDoneBtn'); if(!b||_isQuoteJob(bk)) return;
+  const ok=_fmGateReady(bk);
+  b.disabled=!ok; b.style.opacity=ok?'':'.55';
+  if(!ok) b.textContent='Finish the checklist above'; else b.textContent=_fmIsFinalOpenStop()?'✓ Done — Finish Route':'✓ Done — Next Stop';
+}
 function _fmYardSignupId(bk){ const m=String((bk&&bk.payMethod)||'').match(/Monthly plan (SUB-[0-9A-F]{12})\b/); return m?m[1]:''; }
 async function _fmYardLookup(bk){
   const id=_fmYardSignupId(bk); if(!id) return;
