@@ -66,14 +66,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-11-25.1 */
+/* APP_VER:2026-11-25.2 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-11-25.1'; window.__APP_VER=V;
+  var V='2026-11-25.2'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -4689,19 +4689,23 @@ function fmOpenComplete(){
 function _fmYardSignupId(bk){ const m=String((bk&&bk.payMethod)||'').match(/Monthly plan (SUB-[0-9A-F]{12})\b/); return m?m[1]:''; }
 async function _fmYardLookup(bk){
   const id=_fmYardSignupId(bk); if(!id||navigator.onLine===false) return;
+  // Show the block right away and hold Complete while we ask (the lookup takes a few seconds). Cleared on any non-yes answer.
+  _fmcYard={ signupId:id, loading:true }; _fmcRenderYard(); _fmcUpdateSubmit();
+  const clear=function(){ if(_fmcStop&&_fmcStop.bk===bk&&_fmcYard&&_fmcYard.loading){ _fmcYard=null; _fmcRenderYard(); _fmcUpdateSubmit(); } };
   try{
     const res=await _fmFetchT(SCRIPT_URL+'?'+new URLSearchParams({ action:'growth_yard_check_status', signupId:id, adminToken }).toString(), {}, 8000);
-    if(!res.ok) return; const j=await res.json();
-    if(!j||j.success!==true||j.needed!==true) return;
+    if(!res.ok) return clear(); const j=await res.json();
+    if(!j||j.success!==true||j.needed!==true) return clear();
     if(!_fmcStop||_fmcStop.bk!==bk) return;   // sheet moved on to another stop
     _fmcYard={ signupId:id, record:+j.recordGrassSqft||0, biggerPct:+j.biggerPct||15, min:+j.photosMin||1, max:+j.photosMax||2, verdict:'', sqft:'', photos:[] };
     _fmcRenderYard(); _fmcUpdateSubmit();
-  }catch(e){ /* offline / slow: no yard check asked; the office sees "WAITING: crew yard check" on the billing queue */ }
+  }catch(e){ clear(); /* offline / slow: no yard check asked; the office sees "WAITING: crew yard check" on the billing queue */ }
 }
 function _fmAc(sqft){ return (Math.round((+sqft||0)/43560*100)/100).toFixed(2); }
 function _fmAcToSqft(v){ const a=parseFloat(String(v||'').replace(/[^\d.]/g,'')); return (a>0)?Math.round(a*43560):0; }
 function _fmYardReady(y){
   if(!y) return true;
+  if(y.loading) return false;
   if(['matches','smaller','bigger'].indexOf(y.verdict)<0) return false;
   if(!(y.photos.length>=y.min&&y.photos.length<=y.max)) return false;
   if(y.verdict==='matches') return true;
@@ -4722,6 +4726,7 @@ function _fmcRenderYard(){
   if(!blk||!wrap) return;
   const y=_fmcYard; if(!y){ blk.style.display='none'; wrap.innerHTML=''; return; }
   blk.style.display='';
+  if(y.loading){ wrap.innerHTML='<div style="font-size:14px;color:#64748b;padding:6px 0;">Checking the county yard record...</div>'; if(st){ st.textContent='checking'; st.className='req'; } return; }
   const btn=function(k,l){ const on=y.verdict===k; return '<button onclick="fmYardVerdict(\''+k+'\')" style="flex:1;min-height:44px;border-radius:10px;border:1px solid '+(on?'#15803d':'#cfd5cd')+';background:'+(on?'#e7f3eb':'#fff')+';font-weight:700;font-size:14px;cursor:pointer;">'+(on?'✓ ':'')+l+'</button>'; };
   let h='<div style="font-size:14px;margin-bottom:8px;">'+(y.record?('County record: about <b>'+_fmAc(y.record)+' acres</b> of grass (not counting the house and driveway).'):'County record grass area not on file.')+' Does the lawn match?</div>'
     +'<div style="display:flex;gap:7px;margin-bottom:8px;">'+btn('matches','Matches')+btn('smaller','Smaller')+btn('bigger','Bigger')+'</div>';
@@ -4859,7 +4864,7 @@ function _fmcUpdateSubmit(){
   const btn=document.getElementById('fmcSubmitBtn'); if(!btn) return;
   const ok=_fmcCanFinish(); btn.disabled=!ok;
   const last=_fmIsFinalOpenStop(); // last OPEN stop, not last by position (skipped stops stay open)
-  btn.textContent=ok?(last?'✓ Complete & Finish Route':'✓ Complete & Go to Next House'):(!_fmcPayResolved()?'Take payment to finish':(!_fmYardReady(_fmcYard)?'Finish the yard check':'Finish the checklist'));
+  btn.textContent=ok?(last?'✓ Complete & Finish Route':'✓ Complete & Go to Next House'):(!_fmcPayResolved()?'Take payment to finish':(!_fmYardReady(_fmcYard)?(_fmcYard&&_fmcYard.loading?'Checking yard record...':'Finish the yard check'):'Finish the checklist'));
 }
 function fmPhotoSelected(input){
   const file=input.files[0]; if(!file) return;
