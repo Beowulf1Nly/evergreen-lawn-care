@@ -66,14 +66,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-11-25.2 */
+/* APP_VER:2026-11-25.3 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-11-25.2'; window.__APP_VER=V;
+  var V='2026-11-25.3'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -4374,6 +4374,7 @@ function _fmRenderJob(stops,idx){
   })();
   const hop=document.getElementById('fmSkipHopBtn'); if(hop) hop.style.display='';   // everyone gets it — emergencies happen
   const doneBtn=document.getElementById('fmDoneBtn'); if(doneBtn){ doneBtn.style.display=(done||skipped)?'none':''; if(_isQuoteJob(bk)){ doneBtn.textContent='📝 Build Estimate →'; doneBtn.style.background='#2563eb'; } else { doneBtn.textContent=_fmIsFinalOpenStop()?'✓ Done — Finish Route':'✓ Done — Next Stop'; doneBtn.style.background=''; } }
+  try{ _fmYardCard(bk, !(done||skipped)); }catch(e){}
   _fmSyncTimerSlots(); _fmHeartbeat();
 }
 function _fmUpdateTotalsChip(){ const el=document.getElementById('fmTotalsChip'); if(!el) return; const dm=_fmDriveLeftMin(); const drv=(dm!=null)?(' · ~'+(dm>=60?(Math.floor(dm/60)+'h '+String(dm%60).padStart(2,'0')+'m'):(dm+'m'))+' drive left'):''; el.innerHTML='Collected <b>$'+(_fmCashTotal||0).toFixed(0)+'</b> cash'+(_isMoneyRole()?(' · Billed <b>$'+(_fmBilledTotal||0).toFixed(0)+'</b> today'):'')+drv; }
@@ -4686,9 +4687,58 @@ function fmOpenComplete(){
    Only for a monthly-plan visit ("Monthly plan SUB-..." on the visit) and only when the backend says this signup still needs it
    (growth_yard_check_status answers only while EVG_FLAG_PARCEL_CHECK is on). The crew taps Matches / Smaller / Bigger and adds
    1 to 2 photos; Complete is blocked until it is done. Billing for month 1 waits for it on the backend. */
+/* Yard check BEFORE mowing (2026-11-25.3): the stop screen asks it as soon as the crew opens the stop.
+   The answer is kept per signup and carried into the Complete sheet, where only the photo is left to add. */
+const _fmYardPre={};   // signupId -> { st:'loading'|'needed'|'none', record, biggerPct, min, max, verdict, sqft }
+function _fmYardPrefetch(id, onDone){
+  const cur=_fmYardPre[id]; if(cur&&cur.st!=='none_err') { if(cur.st!=='loading'&&onDone) onDone(); return; }
+  if(navigator.onLine===false) return;
+  _fmYardPre[id]={ st:'loading' };
+  _fmFetchT(SCRIPT_URL+'?'+new URLSearchParams({ action:'growth_yard_check_status', signupId:id, adminToken }).toString(), {}, 8000)
+    .then(function(r){ return r.ok?r.json():null; })
+    .then(function(j){
+      if(j&&j.success===true&&j.needed===true) _fmYardPre[id]={ st:'needed', record:+j.recordGrassSqft||0, biggerPct:+j.biggerPct||15, min:+j.photosMin||1, max:+j.photosMax||2, verdict:'', sqft:'' };
+      else if(j&&j.success===true) _fmYardPre[id]={ st:'none' };
+      else _fmYardPre[id]={ st:'none_err' };
+    }).catch(function(){ _fmYardPre[id]={ st:'none_err' }; })
+    .then(function(){ if(onDone) onDone(); });
+}
+function _fmYardCard(bk, open){
+  const body=document.getElementById('fmJobBody'); if(!body) return;
+  let el=document.getElementById('fmYardCard');
+  const id=_fmYardSignupId(bk);
+  if(!id||!open){ if(el) el.remove(); return; }
+  if(!el||el.parentNode!==body){ if(el) el.remove(); el=document.createElement('div'); el.id='fmYardCard'; body.insertBefore(el, body.firstChild); }
+  el.dataset.sid=id;
+  const pre=_fmYardPre[id];
+  window.__fmYardBk=bk;
+  if(!pre){ _fmYardPrefetch(id, function(){ const c=document.getElementById('fmYardCard'); if(c&&c.dataset.sid===id) _fmYardCard(bk, true); }); }
+  const p=_fmYardPre[id]||{ st:'loading' };
+  const box='margin:0 0 12px;padding:12px 14px;border-radius:12px;background:#fff7ed;border:2px solid #f59e0b;color:#1f2937;';
+  if(p.st==='none'||p.st==='none_err'){ el.remove(); return; }
+  if(p.st==='loading'){ el.style.cssText=box; el.innerHTML='<div style="font-weight:800;font-size:14px;">📏 First visit: yard check</div><div style="font-size:13px;color:#64748b;margin-top:4px;">Checking the county yard record...</div>'; return; }
+  const btn=function(k,l){ const on=p.verdict===k; return '<button onclick="fmYardPreVerdict(\''+id+'\',\''+k+'\')" style="flex:1;min-height:44px;border-radius:10px;border:1px solid '+(on?'#15803d':'#cfd5cd')+';background:'+(on?'#e7f3eb':'#fff')+';font-weight:700;font-size:14px;cursor:pointer;">'+(on?'✓ ':'')+l+'</button>'; };
+  let h='<div style="font-weight:800;font-size:14px;">📏 First visit: check the yard before you mow</div>'
+    +'<div style="font-size:14px;margin:6px 0 8px;">'+(p.record?('County record: about <b>'+_fmAc(p.record)+' acres</b> of grass (not counting the house and driveway).'):'County record grass area not on file.')+' Does the lawn match?</div>'
+    +'<div style="display:flex;gap:7px;margin-bottom:6px;">'+btn('matches','Matches')+btn('smaller','Smaller')+btn('bigger','Bigger')+'</div>';
+  if(p.verdict==='smaller'||p.verdict==='bigger') h+='<label style="display:block;font-size:13px;font-weight:700;margin:6px 0 4px;">Your estimate of the grass area (acres, like 0.25)</label>'
+    +'<input type="number" inputmode="decimal" step="0.01" min="0.01" max="1.4" value="'+esc(String(p.sqft||''))+'" oninput="fmYardPreSqft(\''+id+'\',this.value)" style="width:100%;min-height:44px;font-size:16px;border-radius:10px;border:1px solid #cfd5cd;padding:0 10px;">'
+    +(p.verdict==='bigger'?'<div style="font-size:12px;color:#b45309;margin-top:6px;font-weight:700;">More than '+p.biggerPct+'% bigger: mow it as normal. Nothing is charged, the office reviews the price with the customer.</div>':'<div style="font-size:12px;color:#64748b;margin-top:6px;">Smaller: the customer\'s price goes down automatically.</div>');
+  h+='<div style="font-size:12px;color:#64748b;margin-top:6px;">'+(p.verdict?'✓ Saved. Add a lawn photo when you tap Done.':'You add a lawn photo when you tap Done.')+'</div>';
+  el.style.cssText=box; el.innerHTML=h;
+}
+function fmYardPreVerdict(id,k){ const p=_fmYardPre[id]; if(!p) return; p.verdict=k; if(k==='matches') p.sqft=''; try{ _fmYardCard(window.__fmYardBk, true); }catch(e){} }
+function fmYardPreSqft(id,v){ const p=_fmYardPre[id]; if(p) p.sqft=String(v||''); }
 function _fmYardSignupId(bk){ const m=String((bk&&bk.payMethod)||'').match(/Monthly plan (SUB-[0-9A-F]{12})\b/); return m?m[1]:''; }
 async function _fmYardLookup(bk){
-  const id=_fmYardSignupId(bk); if(!id||navigator.onLine===false) return;
+  const id=_fmYardSignupId(bk); if(!id) return;
+  const pre=_fmYardPre[id];
+  if(pre&&pre.st==='needed'){   // asked on the stop screen already: carry the answer over, only the photo is left
+    _fmcYard={ signupId:id, record:pre.record, biggerPct:pre.biggerPct, min:pre.min, max:pre.max, verdict:pre.verdict||'', sqft:pre.sqft||'', photos:[] };
+    _fmcRenderYard(); _fmcUpdateSubmit(); return;
+  }
+  if(pre&&pre.st==='none') return;
+  if(navigator.onLine===false) return;
   // Show the block right away and hold Complete while we ask (the lookup takes a few seconds). Cleared on any non-yes answer.
   _fmcYard={ signupId:id, loading:true }; _fmcRenderYard(); _fmcUpdateSubmit();
   const clear=function(){ if(_fmcStop&&_fmcStop.bk===bk&&_fmcYard&&_fmcYard.loading){ _fmcYard=null; _fmcRenderYard(); _fmcUpdateSubmit(); } };
@@ -4738,8 +4788,8 @@ function _fmcRenderYard(){
   wrap.innerHTML=h;
   const ok=_fmYardReady(y); if(st){ st.textContent=ok?'✓ done':'required'; st.className=ok?'ok':'req'; }
 }
-function fmYardVerdict(k){ if(!_fmcYard) return; _fmcYard.verdict=k; if(k==='matches') _fmcYard.sqft=''; _fmcRenderYard(); _fmcUpdateSubmit(); }
-function fmYardSqft(v){ if(!_fmcYard) return; _fmcYard.sqft=String(v||''); const st=document.getElementById('fmcYardState'); const ok=_fmYardReady(_fmcYard); if(st){ st.textContent=ok?'✓ done':'required'; st.className=ok?'ok':'req'; } _fmcUpdateSubmit(); }
+function fmYardVerdict(k){ if(!_fmcYard) return; _fmcYard.verdict=k; if(k==='matches') _fmcYard.sqft=''; try{ const pp=_fmYardPre[_fmcYard.signupId]; if(pp){ pp.verdict=k; pp.sqft=_fmcYard.sqft; } }catch(e){} _fmcRenderYard(); _fmcUpdateSubmit(); }
+function fmYardSqft(v){ if(!_fmcYard) return; _fmcYard.sqft=String(v||''); try{ const pp=_fmYardPre[_fmcYard.signupId]; if(pp) pp.sqft=_fmcYard.sqft; }catch(e){} const st=document.getElementById('fmcYardState'); const ok=_fmYardReady(_fmcYard); if(st){ st.textContent=ok?'✓ done':'required'; st.className=ok?'ok':'req'; } _fmcUpdateSubmit(); }
 function fmYardRemovePhoto(i){ if(!_fmcYard) return; _fmcYard.photos.splice(i,1); _fmcRenderYard(); _fmcUpdateSubmit(); }
 function fmYardPhotoSelected(input){
   const file=input.files&&input.files[0]; input.value=''; if(!file||!_fmcYard) return;
