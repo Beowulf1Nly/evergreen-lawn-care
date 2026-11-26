@@ -66,14 +66,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-11-20.3 */
+/* APP_VER:2026-11-25.1 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-11-20.3'; window.__APP_VER=V;
+  var V='2026-11-25.1'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -4698,12 +4698,14 @@ async function _fmYardLookup(bk){
     _fmcRenderYard(); _fmcUpdateSubmit();
   }catch(e){ /* offline / slow: no yard check asked; the office sees "WAITING: crew yard check" on the billing queue */ }
 }
+function _fmAc(sqft){ return (Math.round((+sqft||0)/43560*100)/100).toFixed(2); }
+function _fmAcToSqft(v){ const a=parseFloat(String(v||'').replace(/[^\d.]/g,'')); return (a>0)?Math.round(a*43560):0; }
 function _fmYardReady(y){
   if(!y) return true;
   if(['matches','smaller','bigger'].indexOf(y.verdict)<0) return false;
   if(!(y.photos.length>=y.min&&y.photos.length<=y.max)) return false;
   if(y.verdict==='matches') return true;
-  const n=parseInt(String(y.sqft).replace(/[^\d]/g,''),10)||0;
+  const n=_fmAcToSqft(y.sqft);
   if(!(n>=500&&n<=60000)) return false;
   if(y.record&&y.verdict==='smaller'&&n>=y.record) return false;
   if(y.record&&y.verdict==='bigger'&&n<=y.record) return false;
@@ -4712,7 +4714,7 @@ function _fmYardReady(y){
 // The queued request for a finished yard check (sent after the Done call, like every follow-up).
 function _fmYardItem(y, svcDate, by){
   return { kind:'yardcheck', idemKey:'yardchk:'+y.signupId, method:'POST', body:{ action:'growth_yard_check', signupId:y.signupId, verdict:y.verdict,
-    crewSqft:(y.verdict==='matches'?'':String(parseInt(String(y.sqft).replace(/[^\d]/g,''),10)||'')), serviceDate:svcDate, markedBy:by,
+    crewSqft:(y.verdict==='matches'?'':String(_fmAcToSqft(y.sqft)||'')), serviceDate:svcDate, markedBy:by,
     photos:y.photos.map(function(p){ return { type:p.type, data:p.data }; }), adminToken } };
 }
 function _fmcRenderYard(){
@@ -4721,10 +4723,10 @@ function _fmcRenderYard(){
   const y=_fmcYard; if(!y){ blk.style.display='none'; wrap.innerHTML=''; return; }
   blk.style.display='';
   const btn=function(k,l){ const on=y.verdict===k; return '<button onclick="fmYardVerdict(\''+k+'\')" style="flex:1;min-height:44px;border-radius:10px;border:1px solid '+(on?'#15803d':'#cfd5cd')+';background:'+(on?'#e7f3eb':'#fff')+';font-weight:700;font-size:14px;cursor:pointer;">'+(on?'✓ ':'')+l+'</button>'; };
-  let h='<div style="font-size:14px;margin-bottom:8px;">'+(y.record?('County record: about <b>'+y.record.toLocaleString('en-US')+' sq ft</b> of grass.'):'County record grass area not on file.')+' Does the lawn match?</div>'
+  let h='<div style="font-size:14px;margin-bottom:8px;">'+(y.record?('County record: about <b>'+_fmAc(y.record)+' acres</b> of grass (not counting the house and driveway).'):'County record grass area not on file.')+' Does the lawn match?</div>'
     +'<div style="display:flex;gap:7px;margin-bottom:8px;">'+btn('matches','Matches')+btn('smaller','Smaller')+btn('bigger','Bigger')+'</div>';
-  if(y.verdict==='smaller'||y.verdict==='bigger') h+='<label style="display:block;font-size:13px;font-weight:700;margin-bottom:4px;">Your estimate of the grass area (sq ft)</label>'
-    +'<input id="fmcYardSqft" type="number" inputmode="numeric" min="500" max="60000" value="'+esc(String(y.sqft||''))+'" oninput="fmYardSqft(this.value)" style="width:100%;min-height:44px;font-size:16px;border-radius:10px;border:1px solid #cfd5cd;padding:0 10px;margin-bottom:8px;">'
+  if(y.verdict==='smaller'||y.verdict==='bigger') h+='<label style="display:block;font-size:13px;font-weight:700;margin-bottom:4px;">Your estimate of the grass area (acres, like 0.25)</label>'
+    +'<input id="fmcYardSqft" type="number" inputmode="decimal" step="0.01" min="0.01" max="1.4" value="'+esc(String(y.sqft||''))+'" oninput="fmYardSqft(this.value)" style="width:100%;min-height:44px;font-size:16px;border-radius:10px;border:1px solid #cfd5cd;padding:0 10px;margin-bottom:8px;">'
     +(y.verdict==='bigger'?'<div style="font-size:12px;color:#64748b;margin-bottom:8px;">More than '+y.biggerPct+'% bigger: nothing is charged, the office reviews the price with the customer.</div>':'<div style="font-size:12px;color:#64748b;margin-bottom:8px;">Smaller: the customer\'s price goes down automatically.</div>');
   h+='<div class="fm-photo-grid">'+y.photos.map(function(p,i){ return '<div class="fm-photo-cell"><img src="'+p.dataUrl+'"><button class="fm-photo-x" onclick="fmYardRemovePhoto('+i+')">×</button></div>'; }).join('')+'</div>';
   if(y.photos.length<y.max) h+='<button class="fm-toggle-btn" onclick="document.getElementById(\'fmcYardPhotoInput\').click()">'+_ic('camera')+'Lawn photo '+(y.photos.length+1)+' of '+y.max+(y.photos.length>=y.min?' (optional)':'')+'</button>';
@@ -4792,7 +4794,8 @@ function _fmcRenderPay(){
   const see=_isMoneyRole();
   const bk=_fmcStop&&_fmcStop.bk; const _l4=bk?String(bk.cardLast4||'').trim():''; const hasCard=(bk&&bk.hasCard===true)||!!_l4;
   if(_fmcPrepaid){   // already settled — collecting again would double-bill (2nd invoice / blocked charge = false "FAILED")
-    wrap.innerHTML='<div style="padding:12px 14px;border-radius:12px;background:#dcfce7;border:2px solid #16a34a;color:#14532d;font-weight:800;font-size:15px;">✅ Already paid — nothing to collect</div>';
+    const _plan=/monthly plan/i.test(String((bk&&bk.payMethod)||'')+' '+String((bk&&bk.notes)||''));
+    wrap.innerHTML='<div style="padding:12px 14px;border-radius:12px;background:#dcfce7;border:2px solid #16a34a;color:#14532d;font-weight:800;font-size:15px;">'+(_plan?'📅 Monthly plan: nothing to collect. The office bills the plan automatically.':'✅ Already paid, nothing to collect')+'</div>';
     if(state){ state.textContent='✓ done'; state.className='ok'; }
     _fmcUpdateSubmit(); return;
   }
