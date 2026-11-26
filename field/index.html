@@ -66,14 +66,14 @@
      param) and, if a newer APP_VER is live, reload once. Also reloads when a new service
      worker takes control. This is what un-sticks installed home-screen PWAs. Loop-guarded. -->
 <script>
-/* APP_VER:2026-11-25.4 */
+/* APP_VER:2026-11-25.5 */
 (function(){
   /* ⚠️ THIS STRING AND THE APP_VER COMMENT ONE LINE ABOVE MUST ALWAYS MATCH.
      check() below greps the FIRST "APP_VER:" out of the freshly-fetched index.html and
      compares it to V. They had drifted apart (comment .71 vs V .79), so tgt!==V was true
      on every single check — the 90s guard was the only thing standing between the crew and
      a reload every time they foregrounded the app. Bump BOTH together, every time. */
-  var V='2026-11-25.4'; window.__APP_VER=V;
+  var V='2026-11-25.5'; window.__APP_VER=V;
   // Loop-proof auto-update: fetch the newest index.html from the network (cache-bust so
   // the service worker can't answer with the old shell). If a newer APP_VER is live AND
   // we have not already reloaded for that exact version, reload ONCE. The localStorage
@@ -4763,13 +4763,7 @@ function _fmPayStep(bk){
   else { line='Not paid yet: an invoice '+(see&&amt?('for $'+amt.toFixed(0)+' '):'')+'is sent when you tap Done.'; tone='warn'; }
   return { line:line, tone:tone, owes:o?_fmOwesBanner(bk):'' };
 }
-function _fmGateReady(bk){
-  if(_fmYardPending(bk)) return false;
-  const a=_fmAck[_stopKey(bk)]||{};
-  if(window._fmGateNotes&&!a.notes) return false;
-  if(_fmPayStep(bk)&&!a.pay) return false;
-  return true;
-}
+function _fmGateReady(bk){ return !_fmYardPending(bk); }   // owner 2026-11-25: the yard check is the only required step
 function fmGateAck(step){
   const bk=window._fmCurBk; if(!bk) return;
   const k=_stopKey(bk); const a=_fmAck[k]||(_fmAck[k]={}); a[step]=true; a.t=Date.now(); _fmAckSave();
@@ -4783,22 +4777,8 @@ function _fmRenderGate(bk){
 }
 function _fmRenderGateRest(bk){
   const r=document.getElementById('fmGateRest'); if(!r||!bk) return;
-  const a=_fmAck[_stopKey(bk)]||{};
-  const ackBtn=function(step,label){ return '<button onclick="fmGateAck(\''+step+'\')" style="width:100%;min-height:46px;margin-top:8px;border:none;border-radius:12px;background:#15803d;color:#fff;font-weight:800;font-size:15px;cursor:pointer;">'+label+'</button>'; };
-  const doneTag=function(t){ return '<div style="font-size:12.5px;font-weight:800;color:#15803d;margin-top:6px;">✓ '+t+'</div>'; };
-  let h='';
-  let open=!_fmYardPending(bk);
-  if(open&&window._fmGateNotes){
-    h+='<div style="margin:0 0 10px;">'+window._fmGateNotes+(a.notes?doneTag('Notes read'):ackBtn('notes','I read the notes'))+'</div>';
-    if(!a.notes) open=false;
-  }
-  const ps=open?_fmPayStep(bk):null;
-  if(open&&ps){
-    const bg=ps.tone==='bad'?'#fee2e2':(ps.tone==='warn'?'#fef3c7':'#dcfce7'), bd=ps.tone==='bad'?'#b91c1c':(ps.tone==='warn'?'#d97706':'#16a34a');
-    h+=ps.owes+'<div style="margin:0 0 10px;padding:12px 14px;border-radius:12px;background:'+bg+';border:2px solid '+bd+';color:#1f2937;font-weight:800;font-size:15px;">💳 '+esc(ps.line)
-      +(a.pay?doneTag('Payment checked'):ackBtn('pay','Got it'))+'</div>';
-  }
-  r.innerHTML=h;
+  // Notes and any past balance show once the yard check is answered (right away when there is none). No extra taps.
+  r.innerHTML=_fmYardPending(bk)?'':((_fmOwes(bk)?_fmOwesBanner(bk):'')+(window._fmGateNotes||''));
   _fmGateLockDone(bk);
 }
 function _fmGateLockDone(bk){
